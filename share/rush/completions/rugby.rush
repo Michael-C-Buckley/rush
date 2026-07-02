@@ -1,0 +1,7 @@
+# Complete Rugby plan names from the local plans file.
+__rush_complete_rugby_plans() {
+    rugby plan list 2>/dev/null | while IFS= read -r plan; do
+        [ -n "$plan" ] || continue
+        rush_complete candidate "$plan" --description "run plan $plan"
+    done
+}

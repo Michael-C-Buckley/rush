@@ -1,0 +1,1115 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "rugby",
+    "description": "cache CocoaPods for faster Xcode rebuilds",
+    "options": [
+      {
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "name",
+          "description": "name of plan to run",
+          "index": 0,
+          "provider": "rugby.plans"
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "cache",
+        "description": "run the build and use commands",
+        "options": [
+          {
+            "long": "ignore-cache",
+            "description": "ignore shared cache",
+            "inherit": false
+          },
+          {
+            "long": "delete-sources",
+            "description": "delete target groups from project",
+            "inherit": false
+          },
+          {
+            "long": "rollback",
+            "short": "r",
+            "description": "restore project state before last Rugby usage",
+            "inherit": false
+          },
+          {
+            "long": "sdk",
+            "short": "s",
+            "description": "set build SDK",
+            "inherit": false,
+            "value": {
+              "name": "sdk",
+              "provider": "rugby.sdks"
+            }
+          },
+          {
+            "long": "arch",
+            "short": "a",
+            "description": "set build architecture",
+            "inherit": false,
+            "value": {
+              "name": "arch",
+              "provider": "rugby.architectures"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set build configuration",
+            "inherit": false,
+            "value": {
+              "name": "config"
+            }
+          },
+          {
+            "long": "strip",
+            "description": "build without debug symbols",
+            "inherit": false
+          },
+          {
+            "long": "targets",
+            "short": "t",
+            "description": "target to build",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "targets"
+            }
+          },
+          {
+            "long": "targets-as-regex",
+            "short": "g",
+            "description": "target regex to build",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "targets-as-regex"
+            }
+          },
+          {
+            "long": "except",
+            "short": "e",
+            "description": "target to exclude",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "except"
+            }
+          },
+          {
+            "long": "except-as-regex",
+            "short": "x",
+            "description": "target regex to exclude",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "except-as-regex"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "set output mode",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "rugby.output-modes"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "increase log verbosity",
+            "repeatable": true,
+            "inherit": false
+          },
+          {
+            "long": "warmup",
+            "description": "warmup cache with this endpoint",
+            "inherit": false,
+            "value": {
+              "name": "warmup"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "shortcuts",
+        "description": "set of base commands combinations",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "umbrella",
+            "description": "run the plan command if plans file exists or run the cache command",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "arguments",
+                  "description": "any arguments of plan or cache commands",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "cache",
+            "description": "run the build and use commands",
+            "options": [
+              {
+                "long": "ignore-cache",
+                "description": "ignore shared cache",
+                "inherit": false
+              },
+              {
+                "long": "delete-sources",
+                "description": "delete target groups from project",
+                "inherit": false
+              },
+              {
+                "long": "rollback",
+                "short": "r",
+                "description": "restore project state before last Rugby usage",
+                "inherit": false
+              },
+              {
+                "long": "sdk",
+                "short": "s",
+                "description": "set build SDK",
+                "inherit": false,
+                "value": {
+                  "name": "sdk",
+                  "provider": "rugby.sdks"
+                }
+              },
+              {
+                "long": "arch",
+                "short": "a",
+                "description": "set build architecture",
+                "inherit": false,
+                "value": {
+                  "name": "arch",
+                  "provider": "rugby.architectures"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "set build configuration",
+                "inherit": false,
+                "value": {
+                  "name": "config"
+                }
+              },
+              {
+                "long": "strip",
+                "description": "build without debug symbols",
+                "inherit": false
+              },
+              {
+                "long": "targets",
+                "short": "t",
+                "description": "target to build",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "targets"
+                }
+              },
+              {
+                "long": "targets-as-regex",
+                "short": "g",
+                "description": "target regex to build",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "targets-as-regex"
+                }
+              },
+              {
+                "long": "except",
+                "short": "e",
+                "description": "target to exclude",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "except"
+                }
+              },
+              {
+                "long": "except-as-regex",
+                "short": "x",
+                "description": "target regex to exclude",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "except-as-regex"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "set output mode",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "rugby.output-modes"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "v",
+                "description": "increase log verbosity",
+                "repeatable": true,
+                "inherit": false
+              },
+              {
+                "long": "warmup",
+                "description": "warmup cache with this endpoint",
+                "inherit": false,
+                "value": {
+                  "name": "warmup"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "build",
+        "description": "build targets from Pods project",
+        "options": [
+          {
+            "long": "ignore-cache",
+            "description": "ignore shared cache",
+            "inherit": false
+          },
+          {
+            "long": "sdk",
+            "short": "s",
+            "description": "set build SDK",
+            "inherit": false,
+            "value": {
+              "name": "sdk",
+              "provider": "rugby.sdks"
+            }
+          },
+          {
+            "long": "arch",
+            "short": "a",
+            "description": "set build architecture",
+            "inherit": false,
+            "value": {
+              "name": "arch",
+              "provider": "rugby.architectures"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set build configuration",
+            "inherit": false,
+            "value": {
+              "name": "config"
+            }
+          },
+          {
+            "long": "strip",
+            "description": "build without debug symbols",
+            "inherit": false
+          },
+          {
+            "long": "targets",
+            "short": "t",
+            "description": "target to build",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "targets"
+            }
+          },
+          {
+            "long": "targets-as-regex",
+            "short": "g",
+            "description": "target regex to build",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "targets-as-regex"
+            }
+          },
+          {
+            "long": "except",
+            "short": "e",
+            "description": "target to exclude",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "except"
+            }
+          },
+          {
+            "long": "except-as-regex",
+            "short": "x",
+            "description": "target regex to exclude",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "except-as-regex"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "set output mode",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "rugby.output-modes"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "increase log verbosity",
+            "repeatable": true,
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "use",
+        "description": "use already built binaries instead of sources",
+        "options": [
+          {
+            "long": "delete-sources",
+            "description": "delete target groups from project",
+            "inherit": false
+          },
+          {
+            "long": "targets",
+            "short": "t",
+            "description": "target to build",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "targets"
+            }
+          },
+          {
+            "long": "targets-as-regex",
+            "short": "g",
+            "description": "target regex to build",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "targets-as-regex"
+            }
+          },
+          {
+            "long": "except",
+            "short": "e",
+            "description": "target to exclude",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "except"
+            }
+          },
+          {
+            "long": "except-as-regex",
+            "short": "x",
+            "description": "target regex to exclude",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "except-as-regex"
+            }
+          },
+          {
+            "long": "strip",
+            "description": "build without debug symbols",
+            "inherit": false
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "set output mode",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "rugby.output-modes"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "increase log verbosity",
+            "repeatable": true,
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "delete",
+        "description": "delete targets from the project",
+        "options": [
+          {
+            "long": "path",
+            "short": "p",
+            "description": "project location",
+            "inherit": false,
+            "value": {
+              "name": "path"
+            }
+          },
+          {
+            "long": "safe",
+            "description": "keep dependencies of excepted targets",
+            "inherit": false
+          },
+          {
+            "long": "delete-sources",
+            "description": "delete target groups from project",
+            "inherit": false
+          },
+          {
+            "long": "targets",
+            "short": "t",
+            "description": "target to build",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "targets"
+            }
+          },
+          {
+            "long": "targets-as-regex",
+            "short": "g",
+            "description": "target regex to build",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "targets-as-regex"
+            }
+          },
+          {
+            "long": "except",
+            "short": "e",
+            "description": "target to exclude",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "except"
+            }
+          },
+          {
+            "long": "except-as-regex",
+            "short": "x",
+            "description": "target regex to exclude",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "except-as-regex"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "set output mode",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "rugby.output-modes"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "increase log verbosity",
+            "repeatable": true,
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "warmup",
+        "description": "download remote binaries for targets from Pods project",
+        "options": [
+          {
+            "long": "analyse",
+            "description": "run only in analyse mode without downloading. The endpoint is optional",
+            "inherit": false
+          },
+          {
+            "long": "sdk",
+            "short": "s",
+            "description": "set build SDK",
+            "inherit": false,
+            "value": {
+              "name": "sdk",
+              "provider": "rugby.sdks"
+            }
+          },
+          {
+            "long": "arch",
+            "short": "a",
+            "description": "set build architecture",
+            "inherit": false,
+            "value": {
+              "name": "arch",
+              "provider": "rugby.architectures"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set build configuration",
+            "inherit": false,
+            "value": {
+              "name": "config"
+            }
+          },
+          {
+            "long": "strip",
+            "description": "build without debug symbols",
+            "inherit": false
+          },
+          {
+            "long": "targets",
+            "short": "t",
+            "description": "target to build",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "targets"
+            }
+          },
+          {
+            "long": "targets-as-regex",
+            "short": "g",
+            "description": "target regex to build",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "targets-as-regex"
+            }
+          },
+          {
+            "long": "except",
+            "short": "e",
+            "description": "target to exclude",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "except"
+            }
+          },
+          {
+            "long": "except-as-regex",
+            "short": "x",
+            "description": "target regex to exclude",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "except-as-regex"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "set output mode",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "rugby.output-modes"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "increase log verbosity",
+            "repeatable": true,
+            "inherit": false
+          },
+          {
+            "long": "timeout",
+            "description": "timeout for requests in seconds",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "max-connections",
+            "description": "the maximum number of simultaneous connections",
+            "inherit": false,
+            "value": {
+              "name": "max-connections"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "endpoint",
+              "description": "endpoint for your binaries storage (s3.eu-west-2.amazonaws.com)",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "rollback",
+        "description": "restore project state before last Rugby usage",
+        "options": [
+          {
+            "long": "output",
+            "short": "o",
+            "description": "set output mode",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "rugby.output-modes"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "increase log verbosity",
+            "repeatable": true,
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "plan",
+        "description": "run sequence of Rugby commands",
+        "options": [
+          {
+            "long": "path",
+            "short": "p",
+            "description": "set plans YAML path",
+            "inherit": false,
+            "value": {
+              "name": "path"
+            }
+          },
+          {
+            "long": "rollback",
+            "short": "r",
+            "description": "restore project state before last Rugby usage",
+            "inherit": false
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "set output mode",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "rugby.output-modes"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "increase log verbosity",
+            "repeatable": true,
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "name of plan to run",
+              "index": 0,
+              "provider": "rugby.plans"
+            }
+          ]
+        }
+      },
+      {
+        "name": "clear",
+        "description": "clear modules cache",
+        "options": [
+          {
+            "long": "modules",
+            "short": "m",
+            "description": "list of modules for deletion",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "modules"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "set output mode",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "rugby.output-modes"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "increase log verbosity",
+            "repeatable": true,
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "build",
+            "description": "delete .rugby/build folder",
+            "options": [
+              {
+                "long": "output",
+                "short": "o",
+                "description": "set output mode",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "rugby.output-modes"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "v",
+                "description": "increase log verbosity",
+                "repeatable": true,
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "shared",
+            "description": "delete .rugby/bin folder",
+            "options": [
+              {
+                "long": "output",
+                "short": "o",
+                "description": "set output mode",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "rugby.output-modes"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "v",
+                "description": "increase log verbosity",
+                "repeatable": true,
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "update",
+        "description": "update Rugby version",
+        "options": [
+          {
+            "long": "version",
+            "description": "version, like 2.0.0",
+            "inherit": false,
+            "value": {
+              "name": "version"
+            }
+          },
+          {
+            "long": "arch",
+            "short": "a",
+            "description": "binary architecture: x86_64 or arm64",
+            "inherit": false,
+            "value": {
+              "name": "arch",
+              "provider": "rugby.architectures"
+            }
+          },
+          {
+            "long": "beta",
+            "description": "allow install the latest pre-release version",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "short": "f",
+            "description": "force an install even if Rugby is already installed",
+            "inherit": false
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "set output mode",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "rugby.output-modes"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "increase log verbosity",
+            "repeatable": true,
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list of available versions",
+            "options": [
+              {
+                "long": "count",
+                "description": "maximum versions count",
+                "inherit": false,
+                "value": {
+                  "name": "count"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "set output mode",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "rugby.output-modes"
+                }
+              },
+              {
+                "long": "verbose",
+                "short": "v",
+                "description": "increase log verbosity",
+                "repeatable": true,
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "doctor",
+        "description": "heal your wounds after using Rugby (or not)",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "shell",
+        "description": "run shell command from Rugby",
+        "options": [
+          {
+            "long": "output",
+            "short": "o",
+            "description": "set output mode",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "rugby.output-modes"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "increase log verbosity",
+            "repeatable": true,
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "description": "shell script command",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "env",
+        "description": "print Rugby environment",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "rugby.output-modes": {
+        "values": [
+          {
+            "value": "fold"
+          },
+          {
+            "value": "multiline"
+          },
+          {
+            "value": "quiet"
+          }
+        ]
+      },
+      "rugby.sdks": {
+        "values": [
+          {
+            "value": "sim",
+            "description": "simulator SDK"
+          },
+          {
+            "value": "ios",
+            "description": "iOS SDK"
+          }
+        ]
+      },
+      "rugby.architectures": {
+        "values": [
+          {
+            "value": "auto"
+          },
+          {
+            "value": "x86_64"
+          },
+          {
+            "value": "arm64"
+          }
+        ]
+      },
+      "rugby.plans": {
+        "function": "__rush_complete_rugby_plans"
+      }
+    }
+  }
+}
