@@ -1,0 +1,60 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "top",
+    "description": "display Linux tasks",
+    "options": [
+      {
+        "short": "h",
+        "spellings": [
+          "-v"
+        ],
+        "description": "show library version and usage prompt",
+        "inherit": false
+      },
+      {
+        "short": "b",
+        "description": "starts top in Batch mode",
+        "inherit": false,
+        "value": {
+          "name": "operation"
+        }
+      },
+      {
+        "short": "c",
+        "description": "starts top with last remembered c state reversed",
+        "inherit": false,
+        "value": {
+          "name": "toggle"
+        }
+      },
+      {
+        "short": "i",
+        "description": "starts top with the last remembered 'i' state reversed. When this toggle is Off, tasks that are idled or zombied will not be displayed",
+        "inherit": false,
+        "value": {
+          "name": "toggle"
+        }
+      },
+      {
+        "short": "s",
+        "description": "starts top with secure mode forced",
+        "inherit": false,
+        "value": {
+          "name": "delay"
+        }
+      },
+      {
+        "spellings": [
+          "-pid"
+        ],
+        "description": "monitor pids",
+        "inherit": false,
+        "value": {
+          "name": "process-ids"
+        }
+      }
+    ]
+  }
+}
