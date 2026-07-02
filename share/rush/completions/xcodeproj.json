@@ -1,0 +1,163 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "xcodeproj",
+    "description": "create and modify Xcode projects",
+    "options": [
+      {
+        "long": "verbose",
+        "description": "show more debugging information"
+      },
+      {
+        "long": "version",
+        "description": "show the version of the tool"
+      },
+      {
+        "long": "no-ansi",
+        "description": "show output without ANSI codes"
+      },
+      {
+        "long": "help",
+        "description": "show help banner of specified command",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "config-dump",
+        "description": "dumps the build settings of all project targets for all configurations in directories named by the target in the given output directory",
+        "arguments": {
+          "states": [
+            {
+              "name": "project",
+              "index": 0,
+              "provider": "builtin.files"
+            },
+            {
+              "name": "output",
+              "provider": "builtin.directories",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "project-diff",
+        "description": "shows the difference between two projects",
+        "options": [
+          {
+            "long": "ignore",
+            "description": "a key to ignore in the comparison. Can be specified multiple times",
+            "repeatable": true,
+            "value": {
+              "name": "KEY"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "project1",
+              "index": 0,
+              "provider": "builtin.files"
+            },
+            {
+              "name": "project2",
+              "index": 1,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "show",
+        "description": "shows an overview of a project in a YAML representation",
+        "options": [
+          {
+            "long": "format",
+            "description": "yAML output format",
+            "value": {
+              "name": "FORMAT",
+              "provider": {
+                "values": [
+                  "hash",
+                  "tree_hash",
+                  "raw"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "project",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "sort",
+        "description": "sorts the given project",
+        "options": [
+          {
+            "long": "group-option",
+            "description": "the position of the groups when sorting. If no option is specified sorting will interleave groups and files",
+            "value": {
+              "name": "POSITION",
+              "provider": {
+                "values": [
+                  "above",
+                  "below"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "project",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "target-diff",
+        "description": "shows the difference between two targets",
+        "options": [
+          {
+            "long": "project",
+            "description": "the Xcode project document to use",
+            "value": {
+              "name": "PATH",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "target1",
+              "index": 0
+            },
+            {
+              "name": "target2",
+              "index": 1
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
