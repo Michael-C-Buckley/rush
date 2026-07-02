@@ -30,6 +30,10 @@ pub const Key = union(enum) {
     delete_to_end,
     delete_previous_word,
     delete_next_word,
+    argument_left,
+    argument_right,
+    delete_previous_argument,
+    delete_next_argument,
     yank,
     transpose_chars,
     word_left,
@@ -62,9 +66,10 @@ pub fn keyFromVaxis(codepoint: u21, modifiers: Modifiers) Key {
             'b' => return .word_left,
             'f' => return .word_right,
             'd' => return .delete_next_word,
-            vaxis.Key.backspace => return .delete_previous_word,
-            vaxis.Key.left => return .word_left,
-            vaxis.Key.right => return .word_right,
+            vaxis.Key.backspace => return .delete_previous_argument,
+            vaxis.Key.delete => return .delete_next_argument,
+            vaxis.Key.left => return .argument_left,
+            vaxis.Key.right => return .argument_right,
             else => {},
         }
     }
@@ -154,15 +159,16 @@ test "key mapping supports readline control keys" {
     try std.testing.expectEqual(Key.word_right, keyFromVaxis(vaxis.Key.right, ctrl));
 }
 
-test "key mapping supports readline meta word keys" {
+test "key mapping supports readline meta argument keys" {
     const alt: Modifiers = .{ .alt = true };
 
     try std.testing.expectEqual(Key.word_left, keyFromVaxis('b', alt));
     try std.testing.expectEqual(Key.word_right, keyFromVaxis('f', alt));
     try std.testing.expectEqual(Key.delete_next_word, keyFromVaxis('d', alt));
-    try std.testing.expectEqual(Key.delete_previous_word, keyFromVaxis(vaxis.Key.backspace, alt));
-    try std.testing.expectEqual(Key.word_left, keyFromVaxis(vaxis.Key.left, alt));
-    try std.testing.expectEqual(Key.word_right, keyFromVaxis(vaxis.Key.right, alt));
+    try std.testing.expectEqual(Key.delete_previous_argument, keyFromVaxis(vaxis.Key.backspace, alt));
+    try std.testing.expectEqual(Key.delete_next_argument, keyFromVaxis(vaxis.Key.delete, alt));
+    try std.testing.expectEqual(Key.argument_left, keyFromVaxis(vaxis.Key.left, alt));
+    try std.testing.expectEqual(Key.argument_right, keyFromVaxis(vaxis.Key.right, alt));
 }
 
 test "key mapping supports raw control bytes" {

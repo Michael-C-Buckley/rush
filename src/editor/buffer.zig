@@ -184,7 +184,21 @@ pub const Editor = struct {
             .delete_previous_word => self.buffer.deletePreviousWord(),
             .delete_next_word => self.buffer.deleteNextWord(),
             .transpose_chars => self.buffer.transposeChars(),
-            .enter, .up, .down, .tab, .escape, .ctrl_c, .ctrl_d, .ctrl_r, .clear_screen, .yank => {},
+            .enter,
+            .up,
+            .down,
+            .tab,
+            .escape,
+            .ctrl_c,
+            .ctrl_d,
+            .ctrl_r,
+            .clear_screen,
+            .argument_left,
+            .argument_right,
+            .delete_previous_argument,
+            .delete_next_argument,
+            .yank,
+            => {},
         }
     }
 };

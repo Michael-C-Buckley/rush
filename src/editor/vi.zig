@@ -119,6 +119,8 @@ pub const ViInputRepeatOp = union(enum) {
             .key => |key| switch (key) {
                 .backspace,
                 .delete_previous_word,
+                .delete_previous_argument,
+                .delete_next_argument,
                 .delete_to_start,
                 => true,
                 else => false,

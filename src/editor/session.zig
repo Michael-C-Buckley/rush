@@ -11,6 +11,9 @@ const menu = @import("menu.zig");
 const path = @import("path.zig");
 const render = @import("render.zig");
 const request_mod = @import("request.zig");
+const shell_lexer = @import("../shell/lexer.zig");
+const shell_source = @import("../shell/source.zig");
+const shell_token = @import("../shell/token.zig");
 const vi = @import("vi.zig");
 const vaxis = @import("vaxis");
 
@@ -305,6 +308,18 @@ pub const LineSession = struct {
                 try self.killRange(self.editor.buffer.cursor_byte, end, self.editor.buffer.cursor_byte);
                 self.completion_menu.clear(self.allocator);
             },
+            .argument_left => {
+                try self.movePreviousArgument();
+            },
+            .argument_right => {
+                try self.moveNextArgument();
+            },
+            .delete_previous_argument => {
+                try self.killPreviousArgument();
+            },
+            .delete_next_argument => {
+                try self.killNextArgument();
+            },
             .yank => {
                 if (self.kill_ring.items.len != 0) {
                     try self.editor.buffer.insertText(self.kill_ring.items);
@@ -381,6 +396,14 @@ pub const LineSession = struct {
                 try self.killRange(self.editor.buffer.cursor_byte, end, self.editor.buffer.cursor_byte);
                 try self.appendViInputRepeatKey(.delete_next_word);
             },
+            .delete_previous_argument => {
+                try self.killPreviousArgument();
+                try self.appendViInputRepeatKey(.delete_previous_argument);
+            },
+            .delete_next_argument => {
+                try self.killNextArgument();
+                try self.appendViInputRepeatKey(.delete_next_argument);
+            },
             .delete_to_start => {
                 try self.killRange(0, self.editor.buffer.cursor_byte, 0);
                 try self.appendViInputRepeatKey(.delete_to_start);
@@ -397,8 +420,14 @@ pub const LineSession = struct {
                 self.completion_menu.clear(self.allocator);
                 self.requests.put(self.allocator, .clear_screen);
             },
-            .left, .right, .home, .end, .word_left, .word_right => {
-                try self.editor.handleKey(event);
+            .left, .right, .home, .end, .word_left, .word_right, .argument_left, .argument_right => {
+                if (event.key == .argument_left) {
+                    try self.movePreviousArgument();
+                } else if (event.key == .argument_right) {
+                    try self.moveNextArgument();
+                } else {
+                    try self.editor.handleKey(event);
+                }
                 try self.appendViInputRepeatKey(event.key);
                 self.completion_menu.clear(self.allocator);
             },
@@ -992,8 +1021,12 @@ pub const LineSession = struct {
                 const end = nextWordEnd(self.editor.buffer.text(), self.editor.buffer.cursor_byte);
                 try self.killRange(self.editor.buffer.cursor_byte, end, self.editor.buffer.cursor_byte);
             },
+            .delete_previous_argument => try self.killPreviousArgument(),
+            .delete_next_argument => try self.killNextArgument(),
             .delete_to_start => try self.killRange(0, self.editor.buffer.cursor_byte, 0),
             .left, .right, .home, .end, .word_left, .word_right => try self.editor.handleKey(.{ .key = key }),
+            .argument_left => try self.movePreviousArgument(),
+            .argument_right => try self.moveNextArgument(),
             else => {},
         }
     }
@@ -1951,6 +1984,16 @@ pub const LineSession = struct {
                 if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
             },
             .left, .right, .home, .end, .word_left, .word_right => try self.editor.handleKey(event),
+            .argument_left => self.editor.buffer.cursor_byte = try previousShellArgumentStart(
+                self.allocator,
+                self.editor.buffer.text(),
+                self.editor.buffer.cursor_byte,
+            ),
+            .argument_right => self.editor.buffer.cursor_byte = try nextShellArgumentEnd(
+                self.allocator,
+                self.editor.buffer.text(),
+                self.editor.buffer.cursor_byte,
+            ),
             .delete_to_start => {
                 self.editor.buffer.deleteToStart();
                 if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
@@ -1965,6 +2008,24 @@ pub const LineSession = struct {
             },
             .delete_next_word => {
                 self.editor.buffer.deleteNextWord();
+                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
+            },
+            .delete_previous_argument => {
+                const start = try previousShellArgumentStart(
+                    self.allocator,
+                    self.editor.buffer.text(),
+                    self.editor.buffer.cursor_byte,
+                );
+                try self.editor.buffer.replaceRange(start, self.editor.buffer.cursor_byte, "");
+                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
+            },
+            .delete_next_argument => {
+                const end = try nextShellArgumentEnd(
+                    self.allocator,
+                    self.editor.buffer.text(),
+                    self.editor.buffer.cursor_byte,
+                );
+                try self.editor.buffer.replaceRange(self.editor.buffer.cursor_byte, end, "");
                 if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
             },
             else => {},
@@ -2234,6 +2295,42 @@ pub const LineSession = struct {
         try self.editor.buffer.replaceRange(start, end, "");
     }
 
+    fn movePreviousArgument(self: *LineSession) !void {
+        self.editor.buffer.cursor_byte = try previousShellArgumentStart(
+            self.allocator,
+            self.editor.buffer.text(),
+            self.editor.buffer.cursor_byte,
+        );
+        self.completion_menu.clear(self.allocator);
+    }
+
+    fn moveNextArgument(self: *LineSession) !void {
+        self.editor.buffer.cursor_byte = try nextShellArgumentEnd(
+            self.allocator,
+            self.editor.buffer.text(),
+            self.editor.buffer.cursor_byte,
+        );
+        self.completion_menu.clear(self.allocator);
+    }
+
+    fn killPreviousArgument(self: *LineSession) !void {
+        const start = try previousShellArgumentStart(
+            self.allocator,
+            self.editor.buffer.text(),
+            self.editor.buffer.cursor_byte,
+        );
+        try self.killRange(start, self.editor.buffer.cursor_byte, start);
+    }
+
+    fn killNextArgument(self: *LineSession) !void {
+        const end = try nextShellArgumentEnd(
+            self.allocator,
+            self.editor.buffer.text(),
+            self.editor.buffer.cursor_byte,
+        );
+        try self.killRange(self.editor.buffer.cursor_byte, end, self.editor.buffer.cursor_byte);
+    }
+
     fn killRange(self: *LineSession, start: usize, end: usize, cursor_byte: usize) !void {
         if (start == end) return;
         self.kill_ring.clearRetainingCapacity();
@@ -2251,6 +2348,41 @@ fn isRemovableSuffixTerminator(event: KeyEvent) bool {
         .text => std.mem.eql(u8, event.text, " ") or std.mem.eql(u8, event.text, "\n"),
         else => false,
     };
+}
+
+fn previousShellArgumentStart(allocator: std.mem.Allocator, text: []const u8, cursor_byte: usize) !usize {
+    std.debug.assert(cursor_byte <= text.len);
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+
+    const src: shell_source.Source = .{ .id = 0, .kind = .interactive, .name = "editor", .text = text };
+    const tokens = try shell_lexer.lex(arena.allocator(), src);
+    var start: ?usize = null;
+    for (tokens) |tok| {
+        if (tok.kind == .eof) break;
+        if (!isShellArgumentToken(tok.kind)) continue;
+        if (tok.span.start < cursor_byte) start = tok.span.start;
+    }
+    return start orelse cursor_byte;
+}
+
+fn nextShellArgumentEnd(allocator: std.mem.Allocator, text: []const u8, cursor_byte: usize) !usize {
+    std.debug.assert(cursor_byte <= text.len);
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+
+    const src: shell_source.Source = .{ .id = 0, .kind = .interactive, .name = "editor", .text = text };
+    const tokens = try shell_lexer.lex(arena.allocator(), src);
+    for (tokens) |tok| {
+        if (tok.kind == .eof) break;
+        if (!isShellArgumentToken(tok.kind)) continue;
+        if (tok.span.end > cursor_byte) return tok.span.end;
+    }
+    return cursor_byte;
+}
+
+fn isShellArgumentToken(kind: shell_token.Kind) bool {
+    return kind == .word;
 }
 
 const cloneHistoryEntry = history_mod.cloneEntry;
@@ -2354,6 +2486,28 @@ test "line session yanks killed previous and next words" {
     try std.testing.expectEqualStrings(" checkout main", session.editor.buffer.text());
     try session.handleKey(.{ .key = .yank });
     try std.testing.expectEqualStrings("git checkout main", session.editor.buffer.text());
+}
+
+test "line session moves and kills shell arguments" {
+    var session = try LineSession.init(std.testing.allocator, "");
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "cmd \"two words\" tail" });
+    try session.handleKey(.{ .key = .argument_left });
+    try std.testing.expectEqual(@as(usize, "cmd \"two words\" ".len), session.editor.buffer.cursor_byte);
+    try session.handleKey(.{ .key = .argument_left });
+    try std.testing.expectEqual(@as(usize, "cmd ".len), session.editor.buffer.cursor_byte);
+
+    try session.handleKey(.{ .key = .argument_right });
+    try std.testing.expectEqual(@as(usize, "cmd \"two words\"".len), session.editor.buffer.cursor_byte);
+    try session.handleKey(.{ .key = .delete_previous_argument });
+    try std.testing.expectEqualStrings("cmd  tail", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .yank });
+    try std.testing.expectEqualStrings("cmd \"two words\" tail", session.editor.buffer.text());
+
+    session.editor.buffer.cursor_byte = "cmd ".len;
+    try session.handleKey(.{ .key = .delete_next_argument });
+    try std.testing.expectEqualStrings("cmd  tail", session.editor.buffer.text());
 }
 
 test "line session emacs control keys edit command line" {
