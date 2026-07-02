@@ -1,0 +1,143 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "softwareupdate",
+    "description": "manage macOS software updates",
+    "options": [
+      {
+        "long": "no-scan",
+        "description": "do not scan when listing or installing updates (use available updates previously scanned)",
+        "inherit": true
+      },
+      {
+        "long": "product-types",
+        "description": "limit a scan to a particular product type only - ignoring all others",
+        "inherit": true,
+        "value": {
+          "name": "type"
+        }
+      },
+      {
+        "long": "products",
+        "description": "a comma-separated (no spaces) list of product keys to operate on",
+        "inherit": true
+      },
+      {
+        "long": "force",
+        "description": "force an operation to complete. Use with --background to trigger a background scan regardless of \"Automatically check\" pref",
+        "priority": -10,
+        "inherit": true
+      },
+      {
+        "long": "agree-to-license",
+        "description": "agree to the software license agreement without user interaction",
+        "inherit": true
+      },
+      {
+        "long": "verbose",
+        "description": "enable verbose output",
+        "inherit": true
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for softwareupdate",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "-l",
+        "aliases": [],
+        "description": "list all appropriate update labels"
+      },
+      {
+        "name": "-d",
+        "aliases": [],
+        "description": "download Only"
+      },
+      {
+        "name": "-i",
+        "aliases": [],
+        "description": "install",
+        "options": [
+          {
+            "short": "a",
+            "long": "all",
+            "description": "all appropriate updates",
+            "inherit": false
+          },
+          {
+            "short": "R",
+            "long": "restart",
+            "description": "automatically restart (or shut down) if required to complete installation",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "long": "recommended",
+            "description": "only recommended updates",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "label",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--list-full-installers",
+        "description": "list the available macOS Installers"
+      },
+      {
+        "name": "--fetch-full-installer",
+        "description": "install the latest recommended macOS Installer"
+      },
+      {
+        "name": "--full-installer-version",
+        "description": "the version of macOS to install",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "--install-rosetta",
+        "description": "install Rosetta 2"
+      },
+      {
+        "name": "--background",
+        "description": "trigger a background scan and update operation"
+      },
+      {
+        "name": "--dump-state",
+        "description": "log the internal state of the SU daemon to /var/log/install.log"
+      },
+      {
+        "name": "--evaluate-products",
+        "description": "evaluate a list of product keys specified by the --products option"
+      },
+      {
+        "name": "--history",
+        "description": "show the install history. By default, only displays updates installed by softwareupdate",
+        "options": [
+          {
+            "long": "all",
+            "description": "include all processes in history (including App installs)",
+            "inherit": false
+          }
+        ]
+      }
+    ]
+  }
+}
