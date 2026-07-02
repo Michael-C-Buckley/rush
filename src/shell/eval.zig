@@ -6,6 +6,7 @@ const uucode = @import("uucode");
 
 const ast = @import("ast.zig");
 const builtin = @import("builtin.zig");
+const editor_render = @import("../editor/render.zig");
 const host_mod = @import("../host.zig");
 const lexer = @import("lexer.zig");
 const parser = @import("parser.zig");
@@ -19,6 +20,8 @@ const CopyError = std.mem.Allocator.Error;
 const CommandLookupMode = enum { none, terse, verbose };
 const command_suggestion_limit = 2;
 const command_suggestion_max_distance = 2;
+const cd_suggestion_max_distance = 2;
+const cd_suggestion_confirm_timeout_ms = 5 * 1000;
 const job_control_signals = [_]u8{
     builtin.signalNumber("TSTP").?,
     builtin.signalNumber("TTIN").?,
@@ -1515,7 +1518,7 @@ fn evalCdBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Eval
     const allocator = shell.scratchAllocator();
     const old_pwd = try currentLogicalDir(shell);
     var print_new_dir = false;
-    const target = if (index >= args.len) target: {
+    var target = if (index >= args.len) target: {
         break :target parameterValue(shell, "HOME") orelse return .{ .status = 1 };
     } else if (std.mem.eql(u8, args[index], "-")) target: {
         print_new_dir = true;
@@ -1524,10 +1527,12 @@ fn evalCdBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Eval
         break :target try cdPathTarget(shell, args[index], &print_new_dir) orelse args[index];
     };
 
-    shell.host.changeDir(target) catch {
-        // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-        try shell.host.writeAll(.stderr, try std.fmt.allocPrint(allocator, "cd: {s}: cannot change directory\n", .{target}));
-        return .{ .status = 1 };
+    shell.host.changeDir(target) catch |err| {
+        target = try cdSuggestionRecoveryTarget(shell, target, err) orelse return .{ .status = 1 };
+        shell.host.changeDir(target) catch |recovery_err| {
+            try writeCdFailureDiagnostic(shell, target, recovery_err, null, .line);
+            return .{ .status = 1 };
+        };
     };
     const new_pwd = if (physical) try shell.host.currentDir(allocator) else try logicalPath(allocator, old_pwd, target);
     shell.state.putVariable(.{ .name = "OLDPWD", .value = old_pwd, .exported = exportedFlag(shell, "OLDPWD") }) catch {
@@ -1540,6 +1545,99 @@ fn evalCdBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Eval
 
     if (print_new_dir) try shell.host.writeAll(.stdout, try std.fmt.allocPrint(allocator, "{s}\n", .{new_pwd}));
     return .{};
+}
+
+fn cdSuggestionRecoveryTarget(shell: anytype, target: []const u8, err: anyerror) !?[]const u8 {
+    const suggestion = if (err == error.FileNotFound and shell.state.options.interactive)
+        try collectCdSuggestion(shell, target)
+    else
+        null;
+    const mode: CdSuggestionDiagnosticMode = if (suggestion != null and cdCanReadInteractiveKey(shell))
+        .confirm
+    else
+        .line;
+    try writeCdFailureDiagnostic(shell, target, err, suggestion, mode);
+    if (suggestion == null or mode != .confirm) return null;
+
+    const accepted = if (readCdConfirmationKey(shell)) |key|
+        key == 'y' or key == 'Y'
+    else
+        false;
+    try shell.host.writeAll(.stderr, "\n");
+    if (accepted) return suggestion;
+    try writeCdFailureDiagnostic(shell, target, err, null, .line);
+    return null;
+}
+
+const CdSuggestionDiagnosticMode = enum { line, confirm };
+
+fn writeCdFailureDiagnostic(
+    shell: anytype,
+    target: []const u8,
+    err: anyerror,
+    suggestion: ?[]const u8,
+    mode: CdSuggestionDiagnosticMode,
+) !void {
+    const allocator = shell.scratchAllocator();
+    const reason = cdFailureReason(err);
+
+    var message: std.ArrayList(u8) = .empty;
+    if (mode == .line) {
+        try message.appendSlice(allocator, "cd: ");
+        try message.appendSlice(allocator, target);
+        try message.appendSlice(allocator, ": ");
+        try message.appendSlice(allocator, reason);
+    }
+    if (suggestion) |path| {
+        if (mode == .line) try message.appendSlice(allocator, "; ");
+        try message.appendSlice(allocator, "did you mean: ");
+        const style = cdSuggestionDirectoryStyle(shell);
+        try editor_render.appendUiStyleStart(allocator, &message, style);
+        try message.appendSlice(allocator, path);
+        try editor_render.appendUiStyleEnd(allocator, &message, style);
+        try message.append(allocator, '?');
+    }
+    switch (mode) {
+        .line => try message.append(allocator, '\n'),
+        .confirm => try message.appendSlice(allocator, " [y,N] "),
+    }
+    try shell.host.writeAll(.stderr, message.items);
+}
+
+fn cdCanReadInteractiveKey(shell: anytype) bool {
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    return comptime @hasDecl(HostType, "readInteractiveKey");
+}
+
+fn readCdConfirmationKey(shell: anytype) ?u8 {
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    if (comptime !@hasDecl(HostType, "readInteractiveKey")) return null;
+    return shell.host.readInteractiveKey(cd_suggestion_confirm_timeout_ms);
+}
+
+fn cdSuggestionDirectoryStyle(shell: anytype) editor_render.UiStyle {
+    var style = (editor_render.UiTheme{}).directory;
+    if (shell.state.getVariable("rush_style_directory")) |variable| {
+        style = editor_render.parseUiStyle(variable.value) orelse style;
+    }
+    style.bold = true;
+    return style;
+}
+
+fn cdFailureReason(err: anyerror) []const u8 {
+    return switch (err) {
+        error.FileNotFound => "no such directory",
+        error.NotDir => "not a directory",
+        error.AccessDenied => "permission denied",
+        error.NameTooLong => "name too long",
+        else => "cannot change directory",
+    };
 }
 
 fn evalPwdBuiltin(shell: anytype, args: []const []const u8) EvalError!result.EvalResult {
@@ -2624,6 +2722,74 @@ fn cdPathTarget(shell: anytype, operand: []const u8, print_new_dir: *bool) !?[]c
         }
     }
     return null;
+}
+
+fn collectCdSuggestion(shell: anytype, target: []const u8) !?[]const u8 {
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    if (comptime !@hasDecl(HostType, "listDir")) return null;
+
+    const allocator = shell.scratchAllocator();
+    const trimmed = trimTrailingPathSeparators(target);
+    if (trimmed.len == 0 or std.mem.eql(u8, trimmed, "/")) return null;
+    if (containsCdSuggestionMeta(trimmed)) return null;
+
+    const wanted = std.fs.path.basename(trimmed);
+    if (wanted.len == 0) return null;
+    const parent = std.fs.path.dirname(trimmed) orelse ".";
+    var entries = shell.host.listDir(allocator, parent) catch return null;
+    defer entries.deinit();
+
+    var distance: EditDistance = .{};
+    defer distance.deinit(allocator);
+
+    var best_name: ?[]const u8 = null;
+    var best_distance: usize = cd_suggestion_max_distance + 1;
+    for (entries.entries) |entry| {
+        if (entry.name.len == 0) continue;
+        if (entry.name[0] == '.' and wanted[0] != '.') continue;
+        const candidate = try joinPathComponent(allocator, parent, entry.name);
+        if (!try pathIsDirectory(shell, candidate, entry.kind)) continue;
+        const entry_distance = try distance.atMost(
+            allocator,
+            wanted,
+            entry.name,
+            cd_suggestion_max_distance,
+        ) orelse continue;
+        if (best_name == null or cdSuggestionBefore(entry.name, entry_distance, best_name.?, best_distance)) {
+            best_name = entry.name;
+            best_distance = entry_distance;
+        }
+    }
+
+    const name = best_name orelse return null;
+    const suggestion: []const u8 = if (std.mem.eql(u8, parent, "."))
+        try allocator.dupe(u8, name)
+    else
+        try joinPathComponent(allocator, parent, name);
+    return suggestion;
+}
+
+fn trimTrailingPathSeparators(path: []const u8) []const u8 {
+    var end = path.len;
+    while (end > 1 and path[end - 1] == '/') end -= 1;
+    return path[0..end];
+}
+
+fn containsCdSuggestionMeta(path: []const u8) bool {
+    for (path) |byte| switch (byte) {
+        '*', '?', '[' => return true,
+        else => {},
+    };
+    return false;
+}
+
+fn cdSuggestionBefore(candidate: []const u8, candidate_distance: usize, best: []const u8, best_distance: usize) bool {
+    if (candidate_distance != best_distance) return candidate_distance < best_distance;
+    if (candidate.len != best.len) return candidate.len < best.len;
+    return std.mem.lessThan(u8, candidate, best);
 }
 
 fn startsWithDotPathComponent(path: []const u8) bool {
@@ -6686,3 +6852,149 @@ test "command suggestions keep the two nearest stable candidates" {
     try std.testing.expectEqualStrings("gt", suggestions.items[0].name);
     try std.testing.expectEqualStrings("gta", suggestions.items[1].name);
 }
+
+test "cd suggestions choose nearest directory in target parent" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var host: CdSuggestionTestHost = .{
+        .parent = "repos",
+        .entries = &.{
+            .{ .name = "fish", .kind = .directory },
+            .{ .name = "rush", .kind = .directory },
+            .{ .name = "bash", .kind = .file },
+        },
+    };
+    var sh: CdSuggestionTestShell = .{ .host = &host, .allocator = arena.allocator() };
+
+    const suggestion = try collectCdSuggestion(&sh, "repos/ruxh") orelse return error.MissingSuggestion;
+
+    try std.testing.expectEqualStrings("repos/rush", suggestion);
+}
+
+test "cd suggestions ignore weak matches and glob-like targets" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var host: CdSuggestionTestHost = .{
+        .parent = ".",
+        .entries = &.{.{ .name = "rush", .kind = .directory }},
+    };
+    var sh: CdSuggestionTestShell = .{ .host = &host, .allocator = arena.allocator() };
+
+    try std.testing.expect(try collectCdSuggestion(&sh, "very-different") == null);
+    try std.testing.expect(try collectCdSuggestion(&sh, "ru*") == null);
+}
+
+test "cd suggestion diagnostic styles the suggested directory" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var state = state_mod.State.init(arena.allocator(), .{ .interactive = true });
+    defer state.deinit();
+    try state.putVariable(.{ .name = "rush_style_directory", .value = "fg=red" });
+    var host: CdSuggestionTestHost = .{
+        .parent = "repos",
+        .entries = &.{.{ .name = "rush", .kind = .directory }},
+    };
+    defer host.stderr.deinit(std.testing.allocator);
+    var sh: CdSuggestionDiagnosticTestShell = .{
+        .host = &host,
+        .state = &state,
+        .allocator = arena.allocator(),
+    };
+
+    try writeCdFailureDiagnostic(&sh, "repos/ruxh", error.FileNotFound, "repos/rush", .line);
+
+    try std.testing.expectEqualStrings(
+        "cd: repos/ruxh: no such directory; did you mean: \x1b[1m\x1b[38;5;1mrepos/rush\x1b[22m\x1b[39m?\n",
+        host.stderr.items,
+    );
+}
+
+test "cd suggestion prompt accepts y and times out to no" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    var state = state_mod.State.init(arena.allocator(), .{ .interactive = true });
+    defer state.deinit();
+    var host: CdSuggestionTestHost = .{
+        .parent = "repos",
+        .entries = &.{.{ .name = "rush", .kind = .directory }},
+        .interactive_key = 'y',
+    };
+    defer host.stderr.deinit(std.testing.allocator);
+    var sh: CdSuggestionDiagnosticTestShell = .{
+        .host = &host,
+        .state = &state,
+        .allocator = arena.allocator(),
+    };
+
+    const accepted = try cdSuggestionRecoveryTarget(&sh, "repos/ruxh", error.FileNotFound) orelse
+        return error.MissingSuggestion;
+
+    try std.testing.expectEqualStrings("repos/rush", accepted);
+    try std.testing.expectEqual(@as(?u64, cd_suggestion_confirm_timeout_ms), host.interactive_key_timeout_ms);
+    try std.testing.expectEqualStrings(
+        "did you mean: \x1b[1m\x1b[38;5;4mrepos/rush\x1b[22m\x1b[39m? [y,N] \n",
+        host.stderr.items,
+    );
+
+    host.stderr.clearRetainingCapacity();
+    host.interactive_key = null;
+    host.interactive_key_timeout_ms = null;
+
+    try std.testing.expect(try cdSuggestionRecoveryTarget(&sh, "repos/ruxh", error.FileNotFound) == null);
+    try std.testing.expectEqual(@as(?u64, cd_suggestion_confirm_timeout_ms), host.interactive_key_timeout_ms);
+    try std.testing.expectEqualStrings(
+        "did you mean: \x1b[1m\x1b[38;5;4mrepos/rush\x1b[22m\x1b[39m? [y,N] \n" ++
+            "cd: repos/ruxh: no such directory\n",
+        host.stderr.items,
+    );
+}
+
+const CdSuggestionTestHost = struct {
+    parent: []const u8,
+    entries: []const host_mod.DirectoryEntry,
+    stderr: std.ArrayList(u8) = .empty,
+    interactive_key: ?u8 = null,
+    interactive_key_timeout_ms: ?u64 = null,
+
+    fn listDir(self: *CdSuggestionTestHost, allocator: std.mem.Allocator, path: []const u8) !host_mod.ListDirResult {
+        if (!std.mem.eql(u8, path, self.parent)) return error.FileNotFound;
+        const entries = try allocator.alloc(host_mod.DirectoryEntry, self.entries.len);
+        errdefer allocator.free(entries);
+        for (self.entries, 0..) |entry, index| {
+            entries[index] = .{
+                .name = try allocator.dupe(u8, entry.name),
+                .kind = entry.kind,
+            };
+        }
+        return .{ .allocator = allocator, .entries = entries };
+    }
+
+    fn writeAll(self: *CdSuggestionTestHost, fd: host_mod.Fd, bytes: []const u8) !void {
+        if (fd != .stderr) return;
+        try self.stderr.appendSlice(std.testing.allocator, bytes);
+    }
+
+    fn readInteractiveKey(self: *CdSuggestionTestHost, timeout_ms: u64) ?u8 {
+        self.interactive_key_timeout_ms = timeout_ms;
+        return self.interactive_key;
+    }
+};
+
+const CdSuggestionTestShell = struct {
+    host: *CdSuggestionTestHost,
+    allocator: std.mem.Allocator,
+
+    fn scratchAllocator(self: *CdSuggestionTestShell) std.mem.Allocator {
+        return self.allocator;
+    }
+};
+
+const CdSuggestionDiagnosticTestShell = struct {
+    host: *CdSuggestionTestHost,
+    state: *state_mod.State,
+    allocator: std.mem.Allocator,
+
+    fn scratchAllocator(self: *CdSuggestionDiagnosticTestShell) std.mem.Allocator {
+        return self.allocator;
+    }
+};

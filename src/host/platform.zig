@@ -82,6 +82,32 @@ pub fn read(fd: host.Fd, buffer: []u8) ReadError!usize {
     };
 }
 
+pub fn readInteractiveKey(fd: host.Fd, timeout_ms: u64) ?u8 {
+    if (!isTerminalFd(fd)) return null;
+    const raw_fd: std.posix.fd_t = @intCast(fd.raw());
+    const saved = std.posix.tcgetattr(raw_fd) catch return null;
+    var raw = saved;
+    raw.lflag.ECHO = false;
+    raw.lflag.ECHONL = false;
+    raw.lflag.ICANON = false;
+    raw.cc[@intFromEnum(std.posix.V.MIN)] = 0;
+    raw.cc[@intFromEnum(std.posix.V.TIME)] = 0;
+    std.posix.tcsetattr(raw_fd, .DRAIN, raw) catch return null;
+    defer std.posix.tcsetattr(raw_fd, .DRAIN, saved) catch {};
+
+    var fds = [_]std.posix.pollfd{.{
+        .fd = raw_fd,
+        .events = @intCast(std.c.POLL.IN),
+        .revents = 0,
+    }};
+    const timeout: i32 = @intCast(@min(timeout_ms, @as(u64, @intCast(std.math.maxInt(i32)))));
+    if ((std.posix.poll(&fds, timeout) catch return null) == 0) return null;
+    if ((fds[0].revents & @as(i16, @intCast(std.c.POLL.IN))) == 0) return null;
+
+    var byte: [1]u8 = undefined;
+    return if ((read(fd, &byte) catch return null) == 1) byte[0] else null;
+}
+
 pub fn writeAll(fd: host.Fd, bytes: []const u8) WriteError!void {
     var written: usize = 0;
     while (written < bytes.len) {

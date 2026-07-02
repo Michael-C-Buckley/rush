@@ -278,6 +278,10 @@ pub const RealHost = struct {
         return platform.read(fd, buffer);
     }
 
+    pub fn readInteractiveKey(_: *RealHost, timeout_ms: u64) ?u8 {
+        return platform.readInteractiveKey(.stdin, timeout_ms);
+    }
+
     pub fn writeAll(_: *RealHost, fd: Fd, bytes: []const u8) platform.WriteError!void {
         try platform.writeAll(fd, bytes);
     }
