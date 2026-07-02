@@ -1,0 +1,1915 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "swift",
+    "description": "compile Swift code and manage packages",
+    "options": [
+      {
+        "spellings": [
+          "--help",
+          "-h",
+          "-help"
+        ],
+        "description": "show help",
+        "inherit": true
+      },
+      {
+        "long": "version",
+        "description": "show version",
+        "inherit": true
+      },
+      {
+        "spellings": [
+          "-access-notes-path"
+        ],
+        "description": "set access notes YAML path",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-assert-config"
+        ],
+        "description": "specify the assert_configuration replacement",
+        "inherit": false,
+        "value": {
+          "name": "configuration",
+          "provider": {
+            "values": [
+              "Debug",
+              "Release",
+              "Unchecked",
+              "DisableReplacement"
+            ]
+          }
+        }
+      },
+      {
+        "spellings": [
+          "-async-main"
+        ],
+        "description": "resolve main function as if it were called from an asynchronous context",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-clang-target"
+        ],
+        "description": "separately set the target we should use for internal Clang instance",
+        "inherit": false,
+        "value": {
+          "name": "target"
+        }
+      },
+      {
+        "spellings": [
+          "-color-diagnostics"
+        ],
+        "description": "print diagnostics in color",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-continue-building-after-errors"
+        ],
+        "description": "continue after build errors",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-coverage-prefix-map"
+        ],
+        "description": "remap source paths in coverage info",
+        "inherit": false,
+        "value": {
+          "name": "prefix"
+        }
+      },
+      {
+        "spellings": [
+          "-debug-info-format"
+        ],
+        "description": "specify the debug info format type",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              "dwarf",
+              "codeview"
+            ]
+          }
+        }
+      },
+      {
+        "spellings": [
+          "-debug-info-store-invocation"
+        ],
+        "description": "emit the compiler invocation in the debug info",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-debug-prefix-map"
+        ],
+        "description": "remap source paths in debug info",
+        "inherit": false,
+        "value": {
+          "name": "prefix=replacement"
+        }
+      },
+      {
+        "spellings": [
+          "-diagnostic-style"
+        ],
+        "description": "the formatting style used when printing diagnostics",
+        "inherit": false,
+        "value": {
+          "name": "style",
+          "provider": {
+            "values": [
+              "swift",
+              "llvm"
+            ]
+          }
+        }
+      },
+      {
+        "spellings": [
+          "-disable-actor-data-race-checks"
+        ],
+        "description": "disable runtime checks for actor data races",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-disable-autolinking-runtime-compatibility-concurrency"
+        ],
+        "description": "do not use autolinking for the concurrency runtime compatibility library",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-disable-autolinking-runtime-compatibility-dynamic-replacements"
+        ],
+        "description": "do not use autolinking for the dynamic replacement runtime compatibility library",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-disable-autolinking-runtime-compatibility"
+        ],
+        "description": "do not use autolinking for runtime compatibility libraries",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-disable-clang-target"
+        ],
+        "description": "disable a separately specified target triple for Clang instance to use",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-disable-incremental-imports"
+        ],
+        "description": "disable cross-module incremental build metadata and driver scheduling for Swift modules",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-disable-only-one-dependency-file"
+        ],
+        "description": "disables incremental build optimization that only produces one dependencies file",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-disallow-use-new-driver"
+        ],
+        "description": "disable using new swift-driver",
+        "inherit": false
+      },
+      {
+        "short": "D",
+        "description": "marks a conditional compilation flag as true",
+        "inherit": false,
+        "value": {
+          "name": "flag"
+        }
+      },
+      {
+        "spellings": [
+          "-embed-tbd-for-module"
+        ],
+        "description": "embed symbols from the module in the emitted tbd file",
+        "inherit": false,
+        "value": {
+          "name": "module"
+        }
+      },
+      {
+        "spellings": [
+          "-enable-actor-data-race-checks"
+        ],
+        "description": "emit runtime checks for actor data races",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-enable-bare-slash-regex"
+        ],
+        "description": "enable the use of forward slash regular-expression literal syntax",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-enable-experimental-additive-arithmetic-derivation"
+        ],
+        "description": "enable experimental 'AdditiveArithmetic' derived conformances",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-enable-experimental-concise-pound-file"
+        ],
+        "description": "enable experimental concise '#file' identifier",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-enable-experimental-cxx-interop"
+        ],
+        "description": "allow importing C++ modules into Swift (experimental feature)",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-enable-experimental-forward-mode-differentiation"
+        ],
+        "description": "enable experimental forward mode differentiation",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-enable-incremental-imports"
+        ],
+        "description": "enable cross-module incremental build metadata and driver scheduling for Swift modules",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-enable-library-evolution"
+        ],
+        "description": "build the module to allow binary-compatible library evolution",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-enable-only-one-dependency-file"
+        ],
+        "description": "enables incremental build optimization that only produces one dependencies file",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-enforce-exclusivity"
+        ],
+        "description": "enforce law of exclusivity",
+        "inherit": false,
+        "value": {
+          "name": "enforcement"
+        }
+      },
+      {
+        "spellings": [
+          "-experimental-cxx-stdlib"
+        ],
+        "description": "c++ standard library to use; forwarded to Clang's -std lib flag",
+        "inherit": false,
+        "value": {
+          "name": "stdlib"
+        }
+      },
+      {
+        "spellings": [
+          "-file-compilation-dir"
+        ],
+        "description": "the compilation directory to embed in the debug info. Coverage mapping is not supported yet",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-file-prefix-map"
+        ],
+        "description": "remap source paths in debug, coverage, and index info",
+        "inherit": false,
+        "value": {
+          "name": "prefix"
+        }
+      },
+      {
+        "spellings": [
+          "-framework"
+        ],
+        "description": "specifies a framework which should be linked against",
+        "inherit": false,
+        "value": {
+          "name": "framework"
+        }
+      },
+      {
+        "spellings": [
+          "-Fsystem"
+        ],
+        "description": "add directory to system framework search path",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "F",
+        "description": "add directory to framework search path",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "spellings": [
+          "-gdwarf-types"
+        ],
+        "description": "emit full DWARF type info",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-gline-tables-only"
+        ],
+        "description": "emit minimal debug info for backtraces only",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-gnone"
+        ],
+        "description": "don't emit debug info",
+        "inherit": false
+      },
+      {
+        "short": "g",
+        "description": "emit debug info. This is the preferred setting for debugging with LLDB",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-index-ignore-clang-modules"
+        ],
+        "description": "avoid indexing clang modules (pcms)",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-index-store-path"
+        ],
+        "description": "store indexing data to path",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-index-unit-output-path"
+        ],
+        "description": "use the specified path as the output path in the produced index data",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "I",
+        "description": "add directory to the import search path",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "j",
+        "description": "number of commands to execute in parallel",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "spellings": [
+          "-libc"
+        ],
+        "description": "the libc runtime library to use",
+        "inherit": false,
+        "value": {
+          "name": "runtime"
+        }
+      },
+      {
+        "spellings": [
+          "-locale"
+        ],
+        "description": "choose a language for diagnostic messages",
+        "inherit": false,
+        "value": {
+          "name": "code"
+        }
+      },
+      {
+        "spellings": [
+          "-localization-path"
+        ],
+        "description": "path to localized diagnostic messages directory",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "L",
+        "description": "add directory to library link search path",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "l",
+        "description": "specifies a library which should be linked against",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-module-abi-name"
+        ],
+        "description": "aBI name to use for the contents of this module",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "spellings": [
+          "-module-alias"
+        ],
+        "description": "if a source file imports or references module <alias_name>, the <underlying_name> is used for the contents of the file",
+        "inherit": false,
+        "value": {
+          "name": "alias"
+        }
+      },
+      {
+        "spellings": [
+          "-module-cache-path"
+        ],
+        "description": "specifies the Clang module cache path",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-module-link-name"
+        ],
+        "description": "library to link against when using this module",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "spellings": [
+          "-module-name"
+        ],
+        "description": "name of the module to build",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "spellings": [
+          "-no-color-diagnostics"
+        ],
+        "description": "do not print diagnostics in color",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-no-warnings-as-errors"
+        ],
+        "description": "don't treat warnings as error",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-nostdimport"
+        ],
+        "description": "don't search the standard library import path for modules",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-num-threads"
+        ],
+        "description": "enable multi-threading and specify number of threads",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "spellings": [
+          "-Onone"
+        ],
+        "description": "compile without any optimization",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-Osize"
+        ],
+        "description": "compile with optimizations and target small code size",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-Ounchecked"
+        ],
+        "description": "compile with optimizations and remove runtime safety checks",
+        "inherit": false
+      },
+      {
+        "short": "O",
+        "description": "compile with optimizations",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-prefix-serialized-debugging-options"
+        ],
+        "description": "apply debug prefix mappings to serialized debug info in Swiftmodule files",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-pretty-print"
+        ],
+        "description": "pretty-print the output JSON",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-print-educational-notes"
+        ],
+        "description": "include educational notes in printed diagnostic output, if available",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-print-target-info"
+        ],
+        "description": "print target information for the given target <triple>, such as x86_64-apple-macos10.9",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-Rcross-import"
+        ],
+        "description": "emit a remark if a cross-import of a module is triggered",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-remove-runtime-asserts"
+        ],
+        "description": "remove runtime safety checks",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-requirement-machine-abstract-signatures"
+        ],
+        "description": "control usage of experimental generic signature minimization",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": {
+            "values": [
+              "on",
+              "off",
+              "verify",
+              "check"
+            ]
+          }
+        }
+      },
+      {
+        "spellings": [
+          "-requirement-machine-inferred-signatures"
+        ],
+        "description": "control usage of experimental generic signature minimization",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": {
+            "values": [
+              "on",
+              "off",
+              "verify",
+              "check"
+            ]
+          }
+        }
+      },
+      {
+        "spellings": [
+          "-requirement-machine-protocol-signatures"
+        ],
+        "description": "control usage of experimental protocol requirement signature minimization",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": {
+            "values": [
+              "on",
+              "off",
+              "verify",
+              "check"
+            ]
+          }
+        }
+      },
+      {
+        "spellings": [
+          "-Rmodule-loading"
+        ],
+        "description": "emit a remark and file path of each loaded module",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-Rpass-missed"
+        ],
+        "description": "report missed transformations by optimization passes whose name matches the given POSIX regular expression",
+        "inherit": false,
+        "value": {
+          "name": "regex"
+        }
+      },
+      {
+        "spellings": [
+          "-Rpass"
+        ],
+        "description": "report performed transformations by optimization passes whose name matches the given POSIX regular expression",
+        "inherit": false,
+        "value": {
+          "name": "regex"
+        }
+      },
+      {
+        "spellings": [
+          "-runtime-compatibility-version"
+        ],
+        "description": "link compatibility library for Swift runtime version, or 'none'",
+        "inherit": false,
+        "value": {
+          "name": "version"
+        }
+      },
+      {
+        "spellings": [
+          "-save-optimization-record-passes"
+        ],
+        "description": "only include passes which match a specified regular expression in the generated optimization record (by default, include all passes)",
+        "inherit": false,
+        "value": {
+          "name": "regex"
+        }
+      },
+      {
+        "spellings": [
+          "-save-optimization-record-path"
+        ],
+        "description": "specify the file name of any generated optimization record",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-save-optimization-record"
+        ],
+        "description": "generate an optimization record file in a specific format",
+        "inherit": false,
+        "value": {
+          "name": "format"
+        }
+      },
+      {
+        "spellings": [
+          "-save-optimization-record"
+        ],
+        "description": "generate a YAML optimization record file",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-sdk"
+        ],
+        "description": "compile against a specific SDK",
+        "inherit": false,
+        "value": {
+          "name": "sdk"
+        }
+      },
+      {
+        "spellings": [
+          "-serialize-diagnostics-path"
+        ],
+        "description": "emit a serialized diagnostics file",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-static-executable"
+        ],
+        "description": "statically link the executable",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-static-stdlib"
+        ],
+        "description": "statically link the Swift standard library",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-strict-concurrency"
+        ],
+        "description": "specify the how strict concurrency checking will be",
+        "inherit": false,
+        "value": {
+          "name": "concurrency",
+          "provider": {
+            "values": [
+              "minimal",
+              "targeted",
+              "complete"
+            ]
+          }
+        }
+      },
+      {
+        "spellings": [
+          "-suppress-warnings"
+        ],
+        "description": "suppress all warnings",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-swift-isa-ptrauth-mode"
+        ],
+        "description": "mode for staging isa/super signing",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "LegacyAndStrip",
+              "NewAndStrip",
+              "NewAndAuth"
+            ]
+          }
+        }
+      },
+      {
+        "spellings": [
+          "-swift-ptrauth-mode"
+        ],
+        "description": "mode for staging pointer authentication",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "LegacyAndStrip",
+              "NewAndStrip",
+              "NewAndAuth"
+            ]
+          }
+        }
+      },
+      {
+        "spellings": [
+          "-swift-version"
+        ],
+        "description": "interpret input according to a specific Swift language version number",
+        "inherit": false,
+        "value": {
+          "name": "version"
+        }
+      },
+      {
+        "spellings": [
+          "-target-cpu"
+        ],
+        "description": "generate code for a particular CPU variant",
+        "inherit": false,
+        "value": {
+          "name": "cpu"
+        }
+      },
+      {
+        "spellings": [
+          "-target-min-inlining-version"
+        ],
+        "description": "require inlinable code with no '@available' attribute to back-deploy to this version of the '-target' OS",
+        "inherit": false,
+        "value": {
+          "name": "version"
+        }
+      },
+      {
+        "spellings": [
+          "-target-variant"
+        ],
+        "description": "generate 'zippered' code for macCatalyst that can run on the specified variant target triple in addition to the main -target triple",
+        "inherit": false,
+        "value": {
+          "name": "variant"
+        }
+      },
+      {
+        "spellings": [
+          "-target"
+        ],
+        "description": "generate code for the given target <triple>, such as x86_64-apple-macos10.9",
+        "inherit": false,
+        "value": {
+          "name": "triple"
+        }
+      },
+      {
+        "spellings": [
+          "-use-ld"
+        ],
+        "description": "specifies the linker to be used",
+        "inherit": false,
+        "value": {
+          "name": "linker"
+        }
+      },
+      {
+        "spellings": [
+          "-user-module-version"
+        ],
+        "description": "module version specified from Swift module authors",
+        "inherit": false,
+        "value": {
+          "name": "module"
+        }
+      },
+      {
+        "spellings": [
+          "-vfsoverlay"
+        ],
+        "description": "add directory to VFS overlay file",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "v",
+        "description": "show verbose output",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-warn-concurrency"
+        ],
+        "description": "warn about code that is unsafe according to the Swift Concurrency model and will become ill-formed in a future language version",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-warn-implicit-overrides"
+        ],
+        "description": "warn about implicit overrides of protocol members",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-warn-swift3-objc-inference-complete"
+        ],
+        "description": "warn about deprecated @objc inference in Swift 3 for every declaration that will no longer be inferred as @objc in Swift 4",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-warn-swift3-objc-inference-minimal"
+        ],
+        "description": "warn about deprecated @objc inference in Swift 3 based on direct uses of the Objective-C entrypoint",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-warnings-as-errors"
+        ],
+        "description": "treat warnings as errors",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-working-directory"
+        ],
+        "description": "resolve file paths relative to the specified directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "spellings": [
+          "-Xcc"
+        ],
+        "description": "pass <arg> to the C/C++/Objective-C compiler",
+        "inherit": false,
+        "value": {
+          "name": "arg"
+        }
+      },
+      {
+        "spellings": [
+          "-Xlinker"
+        ],
+        "description": "specifies an option which should be passed to the linker",
+        "inherit": false,
+        "value": {
+          "name": "arg"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "build",
+        "description": "build sources into binary products",
+        "options": [
+          {
+            "long": "build-tests",
+            "description": "build both source and test targets",
+            "inherit": false
+          },
+          {
+            "long": "show-bin-path",
+            "description": "print the binary output path",
+            "inherit": false
+          },
+          {
+            "long": "target",
+            "description": "build the specified target",
+            "inherit": false,
+            "value": {
+              "name": "target"
+            }
+          },
+          {
+            "long": "product",
+            "description": "build the specified product",
+            "inherit": false,
+            "value": {
+              "name": "product"
+            }
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "build and run an executable product",
+        "options": [
+          {
+            "long": "skip-build",
+            "description": "skip building the executable product",
+            "inherit": false
+          },
+          {
+            "long": "build-tests",
+            "description": "build both source and test targets",
+            "inherit": false
+          },
+          {
+            "long": "repl",
+            "description": "launch Swift REPL for the package",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "executable",
+              "description": "The executable to run",
+              "index": 0
+            },
+            {
+              "name": "arguments",
+              "description": "The arguments to pass to the executable",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "test",
+        "description": "build and run tests",
+        "options": [
+          {
+            "long": "skip-build",
+            "description": "skip building the test target",
+            "inherit": false
+          },
+          {
+            "long": "parallel",
+            "description": "run the tests in parallel",
+            "inherit": false
+          },
+          {
+            "long": "num-workers",
+            "description": "number of tests to execute in parallel",
+            "inherit": false,
+            "value": {
+              "name": "num-workers"
+            }
+          },
+          {
+            "short": "l",
+            "long": "list-tests",
+            "description": "lists test methods in specifier format",
+            "inherit": false
+          },
+          {
+            "long": "show-codecov-path",
+            "description": "print the path of the exported code coverage JSON file",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "specifier",
+            "description": "",
+            "inherit": false
+          },
+          {
+            "long": "filter",
+            "description": "run test cases matching regular expression",
+            "inherit": false,
+            "value": {
+              "name": "regex"
+            }
+          },
+          {
+            "long": "skip",
+            "description": "skip test cases matching regular expression",
+            "inherit": false,
+            "value": {
+              "name": "regex"
+            }
+          },
+          {
+            "long": "xunit-output",
+            "description": "path where the xUnit xml file should be generated",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "test-product",
+            "description": "test the specified product",
+            "inherit": false,
+            "value": {
+              "name": "product"
+            }
+          }
+        ]
+      },
+      {
+        "name": "package",
+        "description": "perform operations on Swift packages",
+        "options": [
+          {
+            "spellings": [
+              "-Xcc"
+            ],
+            "description": "pass a flag through to all C compiler invocations",
+            "inherit": false,
+            "value": {
+              "name": "flag"
+            }
+          },
+          {
+            "spellings": [
+              "-Xswiftc"
+            ],
+            "description": "pass a flag through to all Swift compiler invocations",
+            "inherit": false,
+            "value": {
+              "name": "flag"
+            }
+          },
+          {
+            "spellings": [
+              "-Xlinker"
+            ],
+            "description": "pass a flag through to all linker invocations",
+            "inherit": false,
+            "value": {
+              "name": "flag"
+            }
+          },
+          {
+            "short": "c",
+            "long": "configuration",
+            "description": "build with configuration (default: debug)",
+            "inherit": false,
+            "value": {
+              "name": "configuration",
+              "provider": {
+                "values": [
+                  "debug",
+                  "release"
+                ]
+              }
+            }
+          },
+          {
+            "long": "build-path",
+            "description": "specify build/cache directory",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cache-path",
+            "description": "specify the shared cache directory",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "enable-repository-cache",
+            "description": "enable the use of a shared cache when fetching repositories (default: enabled)",
+            "inherit": false
+          },
+          {
+            "long": "disable-repository-cache",
+            "description": "disable the use of a shared cache when fetching repositories (default: enabled)",
+            "inherit": false
+          },
+          {
+            "short": "C",
+            "long": "chdir",
+            "description": "the custom working directory that the tool should operate in",
+            "inherit": false,
+            "deprecated": true,
+            "value": {
+              "name": "chdir"
+            }
+          },
+          {
+            "long": "package-path",
+            "description": "change working directory before any other operation",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "multiroot-data-file",
+            "description": "the path to the file containing multiroot package data. This is currently Xcode's workspace file",
+            "inherit": false,
+            "value": {
+              "name": "multiroot-data-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "enable-prefetching",
+            "description": "enable prefetching in resolver which will kick off parallel git cloning (default: enabled)",
+            "inherit": false
+          },
+          {
+            "long": "disable-prefetching",
+            "description": "disable prefetching in resolver which will kick off parallel git cloning (default: enabled)",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "increase verbosity of informational output",
+            "inherit": false
+          },
+          {
+            "long": "disable-sandbox",
+            "description": "disable using the sandbox when executing subprocesses",
+            "inherit": false
+          },
+          {
+            "long": "manifest-cache",
+            "description": "caching mode of Package.swift manifests",
+            "inherit": false,
+            "value": {
+              "name": "mode",
+              "provider": {
+                "values": [
+                  "shared",
+                  "local",
+                  "none"
+                ]
+              }
+            }
+          },
+          {
+            "long": "destination",
+            "description": "path to the compilation destination describing JSON file",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "triple",
+            "description": "the compilation destination's target triple",
+            "inherit": false,
+            "value": {
+              "name": "triple"
+            }
+          },
+          {
+            "long": "sdk",
+            "description": "path to the compilation destination's SDK",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "toolchain",
+            "description": "path to the compilation destination's toolchain",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "static-swift-stdlib",
+            "description": "link Swift stdlib statically (default: false)",
+            "inherit": false
+          },
+          {
+            "long": "no-static-swift-stdlib",
+            "description": "don't link Swift stdlib statically (default: false)",
+            "inherit": false
+          },
+          {
+            "long": "skip-update",
+            "description": "skip updating dependencies from their remote during a resolution",
+            "inherit": false
+          },
+          {
+            "long": "sanitize",
+            "description": "turn on runtime checks for erroneous behavior",
+            "inherit": false,
+            "value": {
+              "name": "type",
+              "provider": {
+                "values": [
+                  "address",
+                  "thread",
+                  "undefined",
+                  "scudo"
+                ]
+              }
+            }
+          },
+          {
+            "long": "enable-code-coverage",
+            "description": "enable code coverage (default: disabled)",
+            "inherit": false
+          },
+          {
+            "long": "disable-code-coverage",
+            "description": "disable code coverage (default: disabled)",
+            "inherit": false
+          },
+          {
+            "long": "force-resolved-versions",
+            "aliases": [
+              "disable-automatic-resolution",
+              "only-use-versions-from-resolved-file"
+            ],
+            "description": "only use versions from the Package.resolved file and fail resolution if it is out-of-date",
+            "inherit": false
+          },
+          {
+            "long": "auto-index-store",
+            "description": "enable or disable indexing-while-building feature (default: auto)",
+            "inherit": false
+          },
+          {
+            "long": "enable-index-store",
+            "description": "enable indexing-while-building feature (default: auto)",
+            "inherit": false
+          },
+          {
+            "long": "disable-index-store",
+            "description": "disable indexing-while-building feature (default: auto)",
+            "inherit": false
+          },
+          {
+            "long": "enable-parseable-module-interfaces",
+            "description": "whether to enable generation of `.swiftinterface`s alongside `.swiftmodule`s",
+            "inherit": false
+          },
+          {
+            "long": "trace-resolver",
+            "description": "write dependency resolver trace to a file",
+            "inherit": false
+          },
+          {
+            "short": "j",
+            "long": "jobs",
+            "description": "the number of jobs to spawn in parallel during the build process",
+            "inherit": false,
+            "value": {
+              "name": "jobs"
+            }
+          },
+          {
+            "long": "enable-build-manifest-caching",
+            "description": "whether to enable llbuild manifest caching (default: enabled)",
+            "inherit": false
+          },
+          {
+            "long": "disable-build-manifest-caching",
+            "description": "whether to disable llbuild manifest caching (default: enabled)",
+            "inherit": false
+          },
+          {
+            "long": "emit-swift-module-separately",
+            "description": "emit the Swift module separately from the object files",
+            "inherit": false
+          },
+          {
+            "long": "use-integrated-swift-driver",
+            "description": "whether to use the integrated Swift driver rather than shelling out to a separate process",
+            "inherit": false
+          },
+          {
+            "long": "experimental-explicit-module-build",
+            "description": "whether to use the explicit module build flow (with the integrated driver)",
+            "inherit": false
+          },
+          {
+            "long": "print-manifest-job-graph",
+            "description": "write the command graph for the build manifest as a graphviz file",
+            "inherit": false
+          },
+          {
+            "long": "build-system",
+            "description": "the build system to use (default: native)",
+            "inherit": false,
+            "value": {
+              "name": "build-system",
+              "provider": {
+                "values": [
+                  "native",
+                  "xcode"
+                ]
+              }
+            }
+          },
+          {
+            "long": "netrc",
+            "description": "whether to load .netrc files for authenticating with remote servers when downloading binary artifacts or communicating with a registry",
+            "inherit": false,
+            "value": {
+              "name": "bool"
+            }
+          },
+          {
+            "long": "netrc-file",
+            "description": "the path to the .netrc file used when `netrc` is `true`",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "clean",
+            "description": "Delete build artifacts"
+          },
+          {
+            "name": "purge-cache",
+            "description": "Purge the global repository cache"
+          },
+          {
+            "name": "reset",
+            "description": "Reset the complete cache/build directory"
+          },
+          {
+            "name": "update",
+            "description": "Update package dependencies",
+            "options": [
+              {
+                "short": "n",
+                "spellings": [
+                  "-dry-run"
+                ],
+                "description": "display the list of dependencies that can be updated",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "describe",
+            "description": "Describe the current package",
+            "options": [
+              {
+                "long": "type",
+                "description": "the output type",
+                "inherit": false,
+                "value": {
+                  "name": "type",
+                  "provider": {
+                    "values": [
+                      "json",
+                      "text"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "init",
+            "description": "Initialize a new package",
+            "options": [
+              {
+                "long": "type",
+                "description": "the package type",
+                "inherit": false,
+                "value": {
+                  "name": "type",
+                  "provider": {
+                    "values": [
+                      "empty",
+                      "library",
+                      "executable",
+                      "system-module",
+                      "manifest"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "name",
+                "description": "provide custom package name",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "experimental-api-diff",
+            "description": "Diagnose API-breaking changes to Swift modules in a package",
+            "options": [
+              {
+                "long": "invert-baseline",
+                "description": "invert the baseline which is helpful for determining API additions",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "treeish",
+                  "description": "The baseline treeish to compare to (e.g. a commit hash, branch name, tag, etc.)",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "dump-symbol-graph",
+            "description": "Dump Symbol Graph"
+          },
+          {
+            "name": "dump-pif",
+            "description": "Dump PIF",
+            "options": [
+              {
+                "long": "preserve-structure",
+                "description": "preserve the internal structure of PIF",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "dump-package",
+            "description": "Print parsed Package.swift as JSON"
+          },
+          {
+            "name": "edit",
+            "description": "Put a package in editable mode",
+            "options": [
+              {
+                "long": "revision",
+                "description": "the revision to edit",
+                "inherit": false,
+                "value": {
+                  "name": "revision"
+                }
+              },
+              {
+                "long": "branch",
+                "description": "the branch to create",
+                "inherit": false,
+                "value": {
+                  "name": "branch"
+                }
+              },
+              {
+                "long": "path",
+                "description": "create or use the checkout at this path",
+                "inherit": false,
+                "value": {
+                  "name": "path",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "unedit",
+            "description": "Remove a package from editable mode",
+            "options": [
+              {
+                "long": "force",
+                "description": "unedit the package even if it has uncommitted and unpushed changes",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "package-name",
+                  "description": "The name of the package to unedit",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "config",
+            "description": "Manipulate configuration of the package",
+            "subcommands": [
+              {
+                "name": "set-mirror",
+                "description": "Set a mirror for a dependency",
+                "options": [
+                  {
+                    "long": "package-url",
+                    "description": "the package dependency url",
+                    "inherit": false,
+                    "value": {
+                      "name": "package-url"
+                    }
+                  },
+                  {
+                    "long": "original-url",
+                    "description": "the original url",
+                    "inherit": false,
+                    "value": {
+                      "name": "original-url"
+                    }
+                  },
+                  {
+                    "long": "mirror-url",
+                    "description": "the mirror url",
+                    "inherit": false,
+                    "value": {
+                      "name": "original-url"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "unset-mirror",
+                "description": "Remove an existing mirror",
+                "options": [
+                  {
+                    "long": "package-url",
+                    "description": "the package dependency url",
+                    "inherit": false,
+                    "value": {
+                      "name": "package-url"
+                    }
+                  },
+                  {
+                    "long": "original-url",
+                    "description": "the original url",
+                    "inherit": false,
+                    "value": {
+                      "name": "original-url"
+                    }
+                  },
+                  {
+                    "long": "mirror-url",
+                    "description": "the mirror url",
+                    "inherit": false,
+                    "value": {
+                      "name": "original-url"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "get-mirror",
+                "description": "Print mirror configuration for the given package dependency",
+                "options": [
+                  {
+                    "long": "package-url",
+                    "description": "the package dependency url",
+                    "inherit": false,
+                    "value": {
+                      "name": "package-url"
+                    }
+                  },
+                  {
+                    "long": "original-url",
+                    "description": "the original url",
+                    "inherit": false,
+                    "value": {
+                      "name": "original-url"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "resolve",
+            "description": "Resolve package dependencies",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "spellings": [
+                  "-help"
+                ],
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "long": "version",
+                "description": "show version",
+                "inherit": false,
+                "value": {
+                  "name": "version",
+                  "required": false,
+                  "style": "optional"
+                }
+              },
+              {
+                "long": "branch",
+                "description": "the branch to resolve at",
+                "inherit": false,
+                "value": {
+                  "name": "branch"
+                }
+              },
+              {
+                "long": "revision",
+                "description": "the revision to resolve at",
+                "inherit": false,
+                "value": {
+                  "name": "revision"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "package-name",
+                  "description": "The name of the package to resolve",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "show-dependencies",
+            "description": "Print the resolved dependency graph",
+            "options": [
+              {
+                "long": "format",
+                "description": "the format type",
+                "inherit": false,
+                "value": {
+                  "name": "format",
+                  "provider": {
+                    "values": [
+                      "text",
+                      "dot",
+                      "json",
+                      "flatlist"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "tools-version",
+            "description": "Manipulate tools version of the current package",
+            "options": [
+              {
+                "long": "format",
+                "description": "the format type",
+                "inherit": false,
+                "value": {
+                  "name": "format",
+                  "provider": {
+                    "values": [
+                      "text",
+                      "dot",
+                      "json",
+                      "flatlist"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "set-current",
+                "description": "set tools version of package to the current tools version in use",
+                "inherit": false
+              },
+              {
+                "long": "set",
+                "description": "set tools version of package to the given value",
+                "inherit": false,
+                "value": {
+                  "name": "tools-version"
+                }
+              }
+            ]
+          },
+          {
+            "name": "generate-xcodeproj",
+            "description": "Generates an Xcode project (this command will be deprecated soon)",
+            "options": [
+              {
+                "long": "xcconfig-overrides",
+                "description": "path to xcconfig file",
+                "inherit": false,
+                "value": {
+                  "name": "path",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "output",
+                "description": "path where the Xcode project should be generated",
+                "inherit": false,
+                "value": {
+                  "name": "path",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "legacy-scheme-generator",
+                "description": "use the legacy scheme generator",
+                "inherit": false
+              },
+              {
+                "long": "watch",
+                "description": "watch for changes to the Package manifest to regenerate the Xcode project",
+                "inherit": false
+              },
+              {
+                "long": "skip-extra-files",
+                "description": "do not add file references for extra files to the generated Xcode project",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "compute-checksum",
+            "description": "Compute the checksum for a binary artifact"
+          },
+          {
+            "name": "archive-source",
+            "description": "Create a source archive for the package",
+            "options": [
+              {
+                "short": "o",
+                "long": "output",
+                "description": "the absolute or relative path for the generated source archive",
+                "inherit": false,
+                "value": {
+                  "name": "path",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "completion-tool",
+            "description": "Completion tool (for shell completions)",
+            "arguments": {
+              "states": [
+                {
+                  "name": "mode",
+                  "description": "The completion tool mode",
+                  "provider": {
+                    "values": [
+                      "generate-bash-script",
+                      "generate-zsh-script",
+                      "generate-fish-script",
+                      "list-dependencies",
+                      "list-executables"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
