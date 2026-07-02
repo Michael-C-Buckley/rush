@@ -55,6 +55,15 @@ pub const VariableAttributes = struct {
     }
 };
 
+pub const ProcessSubstitution = struct {
+    fd: host.Fd,
+    pid: host.Pid,
+};
+
+pub const ReapOnlyProcessSubstitution = struct {
+    pid: host.Pid,
+};
+
 pub const ArrayElement = struct {
     index: usize,
     value: []const u8,
@@ -212,6 +221,8 @@ pub const State = struct {
     command_hashes: std.StringHashMapUnmanaged(CommandHash) = .empty,
     signal_traps: std.StringHashMapUnmanaged([]const u8) = .empty,
     pending_traps: std.ArrayListUnmanaged([]const u8) = .empty,
+    process_substitutions: std.ArrayListUnmanaged(ProcessSubstitution) = .empty,
+    reap_process_substitutions: std.ArrayListUnmanaged(ReapOnlyProcessSubstitution) = .empty,
     background_pids: std.ArrayListUnmanaged(host.Pid) = .empty,
     background_jobs: std.ArrayListUnmanaged(BackgroundJob) = .empty,
     last_status: result.ExitStatus = 0,
@@ -282,6 +293,8 @@ pub const State = struct {
         while (signal_trap_iterator.next()) |entry| self.allocator.free(entry.value_ptr.*);
         self.signal_traps.deinit(self.allocator);
         self.pending_traps.deinit(self.allocator);
+        self.process_substitutions.deinit(self.allocator);
+        self.reap_process_substitutions.deinit(self.allocator);
         self.background_pids.deinit(self.allocator);
         for (self.background_jobs.items) |*job| job.deinit(self.allocator);
         self.background_jobs.deinit(self.allocator);

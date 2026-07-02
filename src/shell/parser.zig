@@ -951,7 +951,7 @@ const Parser = struct {
         text: []const u8,
         span: source_mod.Span,
     ) ParserError!ast.Word {
-        if (std.mem.indexOfAny(u8, text, "'\"$\\`") == null) {
+        if (std.mem.indexOfAny(u8, text, "'\"$\\`<>") == null) {
             const word: ast.Word = .{ .data = .{ .literal = text }, .span = span };
             word.validate();
             return word;
@@ -1052,6 +1052,26 @@ const Parser = struct {
                     try parts.append(self.allocator, .{
                         // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
                         .command_substitution = .{ .source_text = source_text, .parsed = parsed, .line_offset = line_offset },
+                    });
+                    index = substitution_end + 1;
+                    literal_start = index;
+                    continue;
+                },
+                '<', '>' => |operator| if (context == .plain and index + 1 < end and text[index + 1] == '(') {
+                    if (self.mode() == .posix) return error.UnexpectedToken;
+                    // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
+                    if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
+                    const substitution_end = try scanCommandSubstitution(text, index + 1, end);
+                    const source_text = text[index + 2 .. substitution_end];
+                    const line_offset = self.commandSubstitutionLineOffset(span, text, index + 2);
+                    const parsed = try self.parseCommandSubstitution(source_text, line_offset);
+                    try parts.append(self.allocator, .{
+                        .process_substitution = .{
+                            .kind = if (operator == '<') .input else .output,
+                            .source_text = source_text,
+                            .parsed = parsed,
+                            .line_offset = line_offset,
+                        },
                     });
                     index = substitution_end + 1;
                     literal_start = index;

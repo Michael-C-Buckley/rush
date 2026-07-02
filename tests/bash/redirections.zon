@@ -104,5 +104,55 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "process substitution supplies input paths",
+            .script =
+            \\cat <(printf 'arg\n')
+            \\read -r line < <(printf 'redir\n')
+            \\printf 'redir=<%s>\n' "$line"
+            ,
+            .stdout =
+            \\arg
+            \\redir=<redir>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "process substitution receives output paths",
+            .script =
+            \\printf 'right\n' > >(cat >out)
+            \\i=0
+            \\while [ ! -s out ] && [ "$i" -lt 1000 ]; do i=$((i + 1)); done
+            \\cat out
+            ,
+            .stdout =
+            \\right
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "process substitution is unquoted and not field split",
+            .script =
+            \\IFS=/
+            \\set -- <(printf x)
+            \\printf 'count=<%s>\n' "$#"
+            \\case "$1" in /dev/fd/*) printf 'path=<ok>\n' ;; *) printf 'path=<bad:%s>\n' "$1" ;; esac
+            \\printf 'quoted=<%s>\n' "<(printf no)"
+            \\printf 'escaped=<%s>\n' \<\(printf\ no\)
+            ,
+            .stdout =
+            \\count=<1>
+            \\path=<ok>
+            \\quoted=<<(printf no)>
+            \\escaped=<<(printf no)>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }

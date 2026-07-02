@@ -2049,5 +2049,25 @@
             .stderr_match = .nonempty,
             .status_match = .nonzero,
         },
+        .{
+            .name = "process substitution argument bashism is rejected in POSIX mode",
+            .script =
+            \\printf '%s\n' <(printf x)
+            \\printf bad
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "process substitution redirection bashism is rejected in POSIX mode",
+            .script =
+            \\read x < <(printf x)
+            \\printf bad
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
     },
 }

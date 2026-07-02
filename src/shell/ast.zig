@@ -149,6 +149,7 @@ pub const WordPart = union(enum) {
     double_quoted: []const WordPart,
     parameter: ParameterExpansion,
     command_substitution: CommandSubstitution,
+    process_substitution: ProcessSubstitution,
     arithmetic: []const u8,
 
     pub fn validate(self: WordPart) void {
@@ -157,6 +158,7 @@ pub const WordPart = union(enum) {
             .double_quoted => |parts| for (parts) |part| part.validate(),
             .parameter => |parameter| parameter.validate(),
             .command_substitution => |substitution| substitution.validate(),
+            .process_substitution => |substitution| substitution.validate(),
         }
     }
 };
@@ -167,6 +169,22 @@ pub const CommandSubstitution = struct {
     line_offset: usize = 0,
 
     pub fn validate(self: CommandSubstitution) void {
+        if (self.parsed) |program| program.validate();
+    }
+};
+
+pub const ProcessSubstitutionKind = enum {
+    input,
+    output,
+};
+
+pub const ProcessSubstitution = struct {
+    kind: ProcessSubstitutionKind,
+    source_text: []const u8,
+    parsed: ?*const Program = null,
+    line_offset: usize = 0,
+
+    pub fn validate(self: ProcessSubstitution) void {
         if (self.parsed) |program| program.validate();
     }
 };

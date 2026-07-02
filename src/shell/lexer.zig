@@ -317,7 +317,10 @@ const Lexer = struct {
             '{' => if (self.nextStartsWord()) try self.appendWord(tokens) else try self.appendSingle(tokens, .left_brace),
             // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
             '}' => if (self.nextStartsWord()) try self.appendWord(tokens) else try self.appendSingle(tokens, .right_brace),
-            '<', '>' => try self.appendRedirectionOperator(tokens),
+            '<', '>' => if (self.startsProcessSubstitution())
+                try self.appendWord(tokens)
+            else
+                try self.appendRedirectionOperator(tokens),
             '#' => self.skipComment(),
             else => if (self.startsIoNumber()) try self.appendIoNumber(tokens) else try self.appendWord(tokens),
         }
@@ -659,6 +662,12 @@ const Lexer = struct {
                 self.skipBackquoteSubstitution();
                 continue;
             }
+            if (self.startsProcessSubstitution()) {
+                self.advanceOne();
+                self.advanceOne();
+                self.skipCommandSubstitution();
+                continue;
+            }
             if (byte == '[' and self.skipBracketExpression()) continue;
             if (isWordTerminator(byte)) break;
             self.advanceOne();
@@ -809,6 +818,11 @@ const Lexer = struct {
     fn nextStartsWord(self: Lexer) bool {
         if (self.peekByte(1)) |next| return !isWordTerminator(next);
         return false;
+    }
+
+    fn startsProcessSubstitution(self: Lexer) bool {
+        const byte = self.peek();
+        return (byte == '<' or byte == '>') and self.peekNextIs('(');
     }
 
     fn skipArithmeticExpansion(self: *Lexer) void {

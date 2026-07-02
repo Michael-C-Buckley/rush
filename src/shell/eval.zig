@@ -628,11 +628,67 @@ fn pipelineFdActions(
 }
 
 fn evalCommand(shell: anytype, command: ast.Command) EvalError!result.EvalResult {
+    reapProcessSubstitutions(shell);
+    const process_substitution_start = shell.state.process_substitutions.items.len;
+    defer {
+        cleanupProcessSubstitutions(shell, process_substitution_start);
+        reapProcessSubstitutions(shell);
+    }
+
     return switch (command) {
         .simple => |simple| evalSimple(shell, simple),
         .compound => |compound| evalCompound(shell, compound),
         .function_definition => |definition| evalFunctionDefinition(shell, definition),
     };
+}
+
+fn cleanupProcessSubstitutions(shell: anytype, start: usize) void {
+    const substitutions = shell.state.process_substitutions.items[start..];
+    for (substitutions) |substitution| {
+        // ziglint-ignore: Z026 best-effort cleanup; command status must not depend on async process substitution
+        shell.host.close(substitution.fd) catch {};
+    }
+    for (substitutions) |substitution| {
+        reapOrDeferProcessSubstitution(shell, substitution.pid);
+    }
+    shell.state.process_substitutions.shrinkRetainingCapacity(start);
+}
+
+fn reapOrDeferProcessSubstitution(shell: anytype, pid: host_mod.Pid) void {
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    if (comptime @hasDecl(HostType, "waitNonBlocking")) {
+        if ((shell.host.waitNonBlocking(pid) catch null) != null) return;
+    }
+    // ziglint-ignore: Z026 best-effort reap queue; dropping it is preferable to failing the command
+    shell.state.reap_process_substitutions.append(shell.state.allocator, .{ .pid = pid }) catch {};
+}
+
+fn reapProcessSubstitutions(shell: anytype) void {
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    if (comptime !@hasDecl(HostType, "waitNonBlocking")) return;
+
+    var write_index: usize = 0;
+    for (shell.state.reap_process_substitutions.items) |substitution| {
+        if ((shell.host.waitNonBlocking(substitution.pid) catch null) == null) {
+            shell.state.reap_process_substitutions.items[write_index] = substitution;
+            write_index += 1;
+        }
+    }
+    shell.state.reap_process_substitutions.shrinkRetainingCapacity(write_index);
+}
+
+fn closeInheritedProcessSubstitutionFds(shell: anytype) void {
+    for (shell.state.process_substitutions.items) |substitution| {
+        // ziglint-ignore: Z026 best-effort child cleanup before replacing/evaluating the child body
+        shell.host.close(substitution.fd) catch {};
+    }
+    shell.state.process_substitutions.clearRetainingCapacity();
 }
 
 fn evalCompound(shell: anytype, command: ast.CompoundInvocation) EvalError!result.EvalResult {
@@ -1060,7 +1116,11 @@ fn expandForWordFields(shell: anytype, words: []const ast.Word) ![]const []const
                 }
             } else {
                 const expanded = try expandWordTracking(shell, word, null);
-                try appendSplitFields(shell, &fields, expanded, !wordExpandsLeadingTilde(shell, word));
+                if (wordHasFieldSplittingExpansion(word)) {
+                    try appendSplitFields(shell, &fields, expanded, !wordExpandsLeadingTilde(shell, word));
+                } else {
+                    try appendPathnameExpandedField(shell, &fields, expanded);
+                }
             }
         }
     }
@@ -4265,6 +4325,9 @@ fn copyWordParts(allocator: std.mem.Allocator, parts: []const ast.WordPart) Copy
             .command_substitution => |substitution| .{
                 .command_substitution = try copyCommandSubstitution(allocator, substitution),
             },
+            .process_substitution => |substitution| .{
+                .process_substitution = try copyProcessSubstitution(allocator, substitution),
+            },
             .arithmetic => |bytes| .{ .arithmetic = try allocator.dupe(u8, bytes) },
         };
     }
@@ -4305,6 +4368,18 @@ fn copyCommandSubstitution(
     substitution: ast.CommandSubstitution,
 ) CopyError!ast.CommandSubstitution {
     return .{
+        .source_text = try allocator.dupe(u8, substitution.source_text),
+        .parsed = if (substitution.parsed) |program| try copyProgramPtr(allocator, program.*) else null,
+        .line_offset = substitution.line_offset,
+    };
+}
+
+fn copyProcessSubstitution(
+    allocator: std.mem.Allocator,
+    substitution: ast.ProcessSubstitution,
+) CopyError!ast.ProcessSubstitution {
+    return .{
+        .kind = substitution.kind,
         .source_text = try allocator.dupe(u8, substitution.source_text),
         .parsed = if (substitution.parsed) |program| try copyProgramPtr(allocator, program.*) else null,
         .line_offset = substitution.line_offset,
@@ -4962,7 +5037,11 @@ fn appendExpandedWordFields(
             }
         } else {
             const expanded = try expandWordTracking(shell, word, substitution_status);
-            try appendSplitFields(shell, fields, expanded, !wordExpandsLeadingTilde(shell, word));
+            if (wordHasFieldSplittingExpansion(word)) {
+                try appendSplitFields(shell, fields, expanded, !wordExpandsLeadingTilde(shell, word));
+            } else {
+                try appendPathnameExpandedField(shell, fields, expanded);
+            }
         }
     }
 }
@@ -5366,8 +5445,24 @@ fn wordHasDynamicExpansion(word: ast.Word) bool {
 
 fn partsHaveDynamicExpansion(parts: []const ast.WordPart) bool {
     for (parts) |part| switch (part) {
-        .parameter, .command_substitution, .arithmetic => return true,
+        .parameter, .command_substitution, .process_substitution, .arithmetic => return true,
         .double_quoted => |nested| if (partsHaveDynamicExpansion(nested)) return true,
+        else => {},
+    };
+    return false;
+}
+
+fn wordHasFieldSplittingExpansion(word: ast.Word) bool {
+    return switch (word.data) {
+        .literal => false,
+        .parts => |parts| partsHaveFieldSplittingExpansion(parts),
+    };
+}
+
+fn partsHaveFieldSplittingExpansion(parts: []const ast.WordPart) bool {
+    for (parts) |part| switch (part) {
+        .parameter, .command_substitution, .arithmetic => return true,
+        .double_quoted => {},
         else => {},
     };
     return false;
@@ -5382,7 +5477,7 @@ fn wordDynamicExpansionsAreQuoted(word: ast.Word) bool {
 
 fn partsDynamicExpansionsAreQuoted(parts: []const ast.WordPart, quoted: bool) bool {
     for (parts) |part| switch (part) {
-        .parameter, .command_substitution, .arithmetic => if (!quoted) return false,
+        .parameter, .command_substitution, .process_substitution, .arithmetic => if (!quoted) return false,
         .double_quoted => |nested| if (!partsDynamicExpansionsAreQuoted(nested, true)) return false,
         else => {},
     };
@@ -5411,7 +5506,7 @@ fn appendStaticWordPathnameParts(
         .literal => |bytes| try appendPathnamePatternBytes(allocator, text, special, bytes, !quoted),
         .escaped, .single_quoted => |bytes| try appendPathnamePatternBytes(allocator, text, special, bytes, false),
         .double_quoted => |nested| try appendStaticWordPathnameParts(allocator, text, special, nested, true),
-        .parameter, .command_substitution, .arithmetic => unreachable,
+        .parameter, .command_substitution, .process_substitution, .arithmetic => unreachable,
     };
 }
 
@@ -5457,7 +5552,7 @@ fn appendExpandedWordPathnameParts(
             true,
             substitution_status,
         ),
-        .parameter, .command_substitution, .arithmetic => {
+        .parameter, .command_substitution, .process_substitution, .arithmetic => {
             std.debug.assert(quoted);
             const bytes = try expandWordPart(shell, part, substitution_status);
             try appendPathnamePatternBytes(allocator, text, special, bytes, false);
@@ -6280,6 +6375,7 @@ fn expandWordPart(shell: anytype, part: ast.WordPart, substitution_status: ?*?re
         .double_quoted => |parts| expandWordParts(shell, parts, substitution_status),
         .parameter => |parameter| expandParameter(shell, parameter),
         .command_substitution => |substitution| expandCommandSubstitution(shell, substitution, substitution_status),
+        .process_substitution => |substitution| expandProcessSubstitution(shell, substitution),
     };
 }
 
@@ -6298,6 +6394,74 @@ fn parseArithmeticValue(shell: anytype, text: []const u8) !i64 {
     const expanded = try expandArithmeticText(shell, text);
     var parser_state: ArithmeticParser(@TypeOf(shell)) = .{ .shell = shell, .text = expanded };
     return parser_state.parse();
+}
+
+fn expandProcessSubstitution(shell: anytype, substitution: ast.ProcessSubstitution) EvalError![]const u8 {
+    validateAst(substitution);
+    const program = if (substitution.parsed) |program| program.* else program: {
+        const src: source_mod.Source = .{
+            .id = 0,
+            .kind = .command_string,
+            .name = if (substitution.kind == .input) "<()" else ">()",
+            .text = substitution.source_text,
+        };
+        const ast_allocator = shell.astAllocator();
+        const tokens = try lexer.lexWithAliases(ast_allocator, src, shell.state);
+        break :program try parser.parseWithAliases(ast_allocator, src, tokens, shell.state);
+    };
+
+    const pipe_desc = try shell.host.pipe();
+    errdefer {
+        shell.host.close(pipe_desc.read) catch {};
+        shell.host.close(pipe_desc.write) catch {};
+    }
+
+    const parent_original = if (substitution.kind == .input) pipe_desc.read else pipe_desc.write;
+    const parent_fd = try shell.host.duplicateAtLeast(parent_original, 10);
+    errdefer shell.host.close(parent_fd) catch {};
+    try shell.host.setCloseOnExec(parent_fd, false);
+
+    var spawned_pid: ?host_mod.Pid = null;
+    errdefer if (spawned_pid) |spawned| reapOrDeferProcessSubstitution(shell, spawned);
+
+    const pid = switch (try shell.host.forkProcess()) {
+        .child => {
+            closeInheritedProcessSubstitutionFds(shell);
+            shell.host.close(parent_fd) catch shell.host.exit(127);
+            switch (substitution.kind) {
+                .input => {
+                    shell.host.close(pipe_desc.read) catch shell.host.exit(127);
+                    shell.host.duplicateTo(pipe_desc.write, .stdout) catch shell.host.exit(127);
+                    shell.host.close(pipe_desc.write) catch shell.host.exit(127);
+                },
+                .output => {
+                    shell.host.close(pipe_desc.write) catch shell.host.exit(127);
+                    shell.host.duplicateTo(pipe_desc.read, .stdin) catch shell.host.exit(127);
+                    shell.host.close(pipe_desc.read) catch shell.host.exit(127);
+                },
+            }
+            shell.state.loop_depth = 0;
+            shell.state.running_exit_trap = false;
+            shell.state.diagnostic_line_offset += substitution.line_offset;
+            shell.state.forgetActiveExitTrap();
+            shell.state.exit_trap_listing = null;
+            if (shell.state.options.mode == .bash) shell.state.options.errexit = false;
+            const evaluated = evalProgram(@TypeOf(shell.host), shell, program) catch shell.host.exit(2);
+            const status = runExitTrap(shell, evaluated.status) catch shell.host.exit(2);
+            shell.host.exit(status);
+        },
+        .parent => |child_pid| child_pid,
+    };
+    spawned_pid = pid;
+
+    try shell.host.close(parent_original);
+    switch (substitution.kind) {
+        .input => try shell.host.close(pipe_desc.write),
+        .output => try shell.host.close(pipe_desc.read),
+    }
+    try shell.state.process_substitutions.append(shell.state.allocator, .{ .fd = parent_fd, .pid = pid });
+    spawned_pid = null;
+    return std.fmt.allocPrint(shell.scratchAllocator(), "/dev/fd/{}", .{parent_fd.raw()});
 }
 
 fn expandArithmeticText(shell: anytype, text: []const u8) ![]const u8 {
@@ -6965,6 +7129,7 @@ fn evalCommandSubstitutionInChild(
             shell.host.close(pipe_desc.read) catch shell.host.exit(127);
             shell.host.duplicateTo(pipe_desc.write, .stdout) catch shell.host.exit(127);
             shell.host.close(pipe_desc.write) catch shell.host.exit(127);
+            closeInheritedProcessSubstitutionFds(shell);
             shell.state.loop_depth = 0;
             shell.state.running_exit_trap = false;
             shell.state.diagnostic_line_offset += substitution.line_offset;
@@ -7047,7 +7212,7 @@ fn partsAreSafeForSpeculativeExpansion(parts: []const ast.WordPart) bool {
         .literal, .escaped, .single_quoted => {},
         .double_quoted => |nested| if (!partsAreSafeForSpeculativeExpansion(nested)) return false,
         .parameter => |parameter| if (parameter.op != null) return false,
-        .command_substitution, .arithmetic => return false,
+        .command_substitution, .process_substitution, .arithmetic => return false,
     };
     return true;
 }
@@ -7600,7 +7765,7 @@ fn expandPatternParts(shell: anytype, parts: []const ast.WordPart) ![]const u8 {
         .single_quoted => |bytes| try appendPatternLiteral(allocator, &output, bytes),
         // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
         .double_quoted => |nested| try appendPatternLiteral(allocator, &output, try expandWordParts(shell, nested, null)),
-        .parameter, .command_substitution, .arithmetic => {
+        .parameter, .command_substitution, .process_substitution, .arithmetic => {
             try output.appendSlice(allocator, try expandWordPart(shell, part, null));
         },
     };
