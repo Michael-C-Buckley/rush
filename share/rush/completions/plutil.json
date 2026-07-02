@@ -1,0 +1,107 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "plutil",
+    "description": "check or convert property list files",
+    "options": [
+      {
+        "spellings": [
+          "-help"
+        ],
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "description": "print in human-readable form",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-lint"
+        ],
+        "description": "check property list syntax",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-convert"
+        ],
+        "description": "convert property list format",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "description": "Format to convert the named file to",
+          "provider": "plutil.formats"
+        }
+      },
+      {
+        "spellings": [
+          "--"
+        ],
+        "description": "treat remaining arguments as files",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "suppress success output",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "description": "pretty-print JSON output",
+        "inherit": false
+      },
+      {
+        "short": "o",
+        "description": "write converted output to path",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "e",
+        "description": "set converted file extension",
+        "inherit": false,
+        "value": {
+          "name": "extension"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "description": "property list file",
+          "index": 0,
+          "provider": "builtin.files",
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "plutil.formats": {
+        "values": [
+          {
+            "value": "xml1",
+            "description": "XML plist"
+          },
+          {
+            "value": "binary1",
+            "description": "binary plist"
+          },
+          {
+            "value": "json",
+            "description": "JSON"
+          }
+        ]
+      }
+    }
+  }
+}
