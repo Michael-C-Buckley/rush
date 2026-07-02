@@ -1,0 +1,36 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "xdg-open",
+    "description": "open a file or URL in the preferred application",
+    "options": [
+      {
+        "long": "help",
+        "description": "show command synopsis"
+      },
+      {
+        "long": "manual",
+        "description": "show manual page"
+      },
+      {
+        "long": "version",
+        "description": "show the xdg-utils version information"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file-or-url",
+          "provider": "builtin.files",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
