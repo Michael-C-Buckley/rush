@@ -2688,6 +2688,10 @@ fn evalReadBuiltin(shell: anytype, args: []const []const u8, assignments: []cons
                 };
                 break;
             },
+            's' => {
+                if (shell.state.options.mode == .posix) return .{ .status = 2 };
+                options.silent = true;
+            },
             't' => {
                 if (shell.state.options.mode == .posix) return .{ .status = 2 };
                 const timeout_text = if (option_index + 1 < arg.len) timeout: {
@@ -2711,6 +2715,9 @@ fn evalReadBuiltin(shell: anytype, args: []const []const u8, assignments: []cons
     if (options.prompt) |prompt| {
         if (shell.host.isTerminalFd(.stdin)) try shell.host.writeAll(.stderr, prompt);
     }
+
+    const saved_terminal_mode = if (options.silent) shell.host.disableTerminalEcho(.stdin) else null;
+    defer if (saved_terminal_mode) |mode| shell.host.restoreTerminalMode(.stdin, mode);
 
     const line_result = try readBuiltinLine(shell, options);
     const saved = try saveAssignmentVariables(shell, assignments);
@@ -2739,6 +2746,7 @@ const ReadOptions = struct {
     exact_count: bool = false,
     prompt: ?[]const u8 = null,
     timeout_ms: ?u64 = null,
+    silent: bool = false,
 };
 
 fn parseReadCount(text: []const u8) ?usize {

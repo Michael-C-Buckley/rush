@@ -173,6 +173,21 @@
             .status = 0,
         },
         .{
+            .name = "read -s accepts silent input mode",
+            .script =
+            \\printf 'secret\n' | {
+            \\    read -r -s value
+            \\    printf '<%s>:<%s>\n' "$value" "$?"
+            \\}
+            ,
+            .stdout =
+            \\<secret>:<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "read -t times out and preserves partial input",
             .script =
             \\{ sleep 0.1; printf x; } | {

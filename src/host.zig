@@ -295,6 +295,14 @@ pub const RealHost = struct {
         return platform.readInteractiveKey(.stdin, timeout_ms);
     }
 
+    pub fn disableTerminalEcho(_: *RealHost, fd: Fd) ?platform.TerminalMode {
+        return platform.disableTerminalEcho(fd);
+    }
+
+    pub fn restoreTerminalMode(_: *RealHost, fd: Fd, mode: platform.TerminalMode) void {
+        platform.restoreTerminalMode(fd, mode);
+    }
+
     pub fn writeAll(_: *RealHost, fd: Fd, bytes: []const u8) platform.WriteError!void {
         try platform.writeAll(fd, bytes);
     }

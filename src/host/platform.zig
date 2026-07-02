@@ -14,6 +14,8 @@ var pending_signal_bits: std.atomic.Value(u64) = .init(0);
 
 pub const ReadError = host.ReadError;
 
+pub const TerminalMode = std.posix.termios;
+
 pub const WriteError = error{
     BadFd,
     WouldBlock,
@@ -117,6 +119,22 @@ pub fn readInteractiveKey(fd: host.Fd, timeout_ms: u64) ?u8 {
 
     var byte: [1]u8 = undefined;
     return if ((read(fd, &byte) catch return null) == 1) byte[0] else null;
+}
+
+pub fn disableTerminalEcho(fd: host.Fd) ?TerminalMode {
+    if (!isTerminalFd(fd)) return null;
+    const raw_fd: std.posix.fd_t = @intCast(fd.raw());
+    const saved = std.posix.tcgetattr(raw_fd) catch return null;
+    var silent = saved;
+    silent.lflag.ECHO = false;
+    silent.lflag.ECHONL = false;
+    std.posix.tcsetattr(raw_fd, .DRAIN, silent) catch return null;
+    return saved;
+}
+
+pub fn restoreTerminalMode(fd: host.Fd, mode: TerminalMode) void {
+    const raw_fd: std.posix.fd_t = @intCast(fd.raw());
+    std.posix.tcsetattr(raw_fd, .DRAIN, mode) catch {};
 }
 
 pub fn writeAll(fd: host.Fd, bytes: []const u8) WriteError!void {
