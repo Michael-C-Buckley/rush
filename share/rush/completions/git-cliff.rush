@@ -1,0 +1,10 @@
+__rush_complete_git_cliff_revisions() {
+  git rev-list --all --oneline --abbrev-commit 2>/dev/null | while IFS= read -r line; do
+    test -n "$line" || continue
+    hash=${line%% *}
+    description=${line#* }
+    test -n "$hash" || continue
+    rush_complete candidate "$hash" --kind plain --description "$description"
+  done
+  rush_complete candidate HEAD --kind plain --description 'current commit' --priority 5
+}

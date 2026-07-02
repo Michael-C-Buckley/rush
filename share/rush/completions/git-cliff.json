@@ -1,0 +1,121 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "git-cliff",
+    "description": "generate customizable changelogs",
+    "providers": {
+      "git-cliff.strip-parts": {
+        "candidates": [
+          { "value": "header" },
+          { "value": "footer" },
+          { "value": "all" }
+        ]
+      },
+      "git-cliff.sort-orders": {
+        "candidates": [
+          { "value": "oldest" },
+          { "value": "newest" }
+        ]
+      },
+      "git-cliff.revisions": {
+        "function": "__rush_complete_git_cliff_revisions"
+      }
+    },
+    "arguments": {
+      "states": [
+        {
+          "name": "range",
+          "index": 0,
+          "description": "commit range to process",
+          "provider": "git-cliff.revisions"
+        }
+      ]
+    },
+    "optionGroups": [
+      { "name": "range-mode", "exclusive": true }
+    ],
+    "options": [
+      { "short": "v", "long": "verbose", "description": "increase logging verbosity" },
+      { "short": "i", "long": "init", "description": "write the default configuration to cliff.toml" },
+      { "short": "l", "long": "latest", "description": "process commits starting from the latest tag", "exclusiveGroup": "range-mode" },
+      { "long": "current", "description": "process commits that belong to the current tag", "exclusiveGroup": "range-mode" },
+      { "short": "u", "long": "unreleased", "description": "process commits that do not belong to a tag", "exclusiveGroup": "range-mode" },
+      { "long": "date-order", "description": "sort tags chronologically" },
+      { "long": "context", "description": "print changelog context as JSON" },
+      { "short": "h", "long": "help", "description": "print help information" },
+      { "short": "V", "long": "version", "description": "print version information" },
+      {
+        "short": "c",
+        "long": "config",
+        "description": "set the configuration file",
+        "value": { "name": "path", "provider": "builtin.files" }
+      },
+      {
+        "short": "w",
+        "long": "workdir",
+        "description": "set the working directory",
+        "value": { "name": "path", "provider": "builtin.directories" }
+      },
+      {
+        "short": "r",
+        "long": "repository",
+        "description": "set the git repository",
+        "value": { "name": "path", "provider": "builtin.directories" }
+      },
+      {
+        "long": "include-path",
+        "description": "include commits that touch a path pattern",
+        "repeatable": true,
+        "value": { "name": "pattern" }
+      },
+      {
+        "long": "exclude-path",
+        "description": "exclude commits that touch a path pattern",
+        "repeatable": true,
+        "value": { "name": "pattern" }
+      },
+      {
+        "long": "with-commit",
+        "description": "include a custom commit message in the changelog",
+        "repeatable": true,
+        "value": { "name": "msg" }
+      },
+      {
+        "short": "p",
+        "long": "prepend",
+        "description": "prepend entries to the given changelog file",
+        "value": { "name": "path", "provider": "builtin.files" }
+      },
+      {
+        "short": "o",
+        "long": "output",
+        "description": "write output to the given file",
+        "value": { "name": "path", "provider": "builtin.files" }
+      },
+      {
+        "short": "t",
+        "long": "tag",
+        "description": "set the tag for the latest version",
+        "value": { "name": "tag" }
+      },
+      {
+        "short": "b",
+        "long": "body",
+        "description": "set the changelog body template",
+        "value": { "name": "template" }
+      },
+      {
+        "short": "s",
+        "long": "strip",
+        "description": "strip parts from the changelog",
+        "value": { "name": "part", "provider": "git-cliff.strip-parts" }
+      },
+      {
+        "long": "sort",
+        "description": "set commit sort order inside sections",
+        "value": { "name": "sort", "provider": "git-cliff.sort-orders" }
+      }
+    ]
+  }
+}
