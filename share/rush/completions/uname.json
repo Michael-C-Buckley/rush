@@ -1,0 +1,45 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "uname",
+    "description": "print operating system information",
+    "options": [
+      {
+        "short": "a",
+        "description": "print all available system information",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "description": "print the machine hardware name",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "description": "print the system hostname",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "description": "print the machine processor architecture name",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "description": "print the operating system release",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "print the operating system name",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "description": "print the operating system version",
+        "inherit": false
+      }
+    ]
+  }
+}
