@@ -1320,7 +1320,8 @@ const Parser = struct {
             };
         }
 
-        const prefix = parseBracedParameterPrefix(content) orelse return null;
+        const prefix = (try self.parseBracedArrayParameterPrefix(content)) orelse
+            (parseBracedParameterPrefix(content) orelse return null);
         const rest = content[prefix.end..];
         if (rest.len == 0) return .{ .parameter = prefix.parameter, .span = span };
 
@@ -1345,22 +1346,34 @@ const Parser = struct {
     }
 
     fn parseBracedArrayParameter(self: *Parser, content: []const u8) ParserError!?ast.Parameter {
+        const prefix = (try self.parseBracedArrayParameterPrefix(content)) orelse return null;
+        if (prefix.end != content.len) return null;
+        return prefix.parameter;
+    }
+
+    fn parseBracedArrayParameterPrefix(self: *Parser, content: []const u8) ParserError!?BracedParameterPrefix {
         if (self.mode() == .posix) return null;
         const open_index = std.mem.indexOfScalar(u8, content, '[') orelse return null;
-        if (open_index == 0 or content[content.len - 1] != ']') return null;
+        if (open_index == 0) return null;
+        const close_index = std.mem.indexOfScalarPos(u8, content, open_index + 1, ']') orelse return null;
         const name = content[0..open_index];
         if (!isAssignmentName(name)) return null;
-        const subscript = content[open_index + 1 .. content.len - 1];
+        const subscript = content[open_index + 1 .. close_index];
         if (std.mem.eql(u8, subscript, "@")) return .{
-            .array = .{ .name = name, .subscript = .{ .all = .at } },
+            .parameter = .{ .array = .{ .name = name, .subscript = .{ .all = .at } } },
+            .end = close_index + 1,
         };
         if (std.mem.eql(u8, subscript, "*")) return .{
-            .array = .{ .name = name, .subscript = .{ .all = .star } },
+            .parameter = .{ .array = .{ .name = name, .subscript = .{ .all = .star } } },
+            .end = close_index + 1,
         };
-        return .{ .array = .{
-            .name = name,
-            .subscript = .{ .index = try self.parseWordText(subscript, .{}) },
-        } };
+        return .{
+            .parameter = .{ .array = .{
+                .name = name,
+                .subscript = .{ .index = try self.parseWordText(subscript, .{}) },
+            } },
+            .end = close_index + 1,
+        };
     }
 
     fn parseBashSubstring(

@@ -443,6 +443,31 @@
             .status = 0,
         },
         .{
+            .name = "indexed array substring expansion slices elements",
+            .script =
+            \\arr=("a a" b c d)
+            \\printf 'quoted-at=<%s>\n' "${arr[@]:1:2}"
+            \\printf 'quoted-star=<%s>\n' "${arr[*]:1:2}"
+            \\printf 'unquoted=<%s>\n' ${arr[@]:1:2}
+            \\printf 'negative=<%s>\n' "${arr[@]: -2:1}"
+            \\sparse=([2]=a [5]=b [7]=c)
+            \\printf 'sparse=<%s>\n' "${sparse[@]:3:2}"
+            ,
+            .stdout =
+            \\quoted-at=<b>
+            \\quoted-at=<c>
+            \\quoted-star=<b c>
+            \\unquoted=<b>
+            \\unquoted=<c>
+            \\negative=<c>
+            \\sparse=<b>
+            \\sparse=<c>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "parameter pattern substitution supports bash operators",
             .script =
             \\value=abcabc

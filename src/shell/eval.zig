@@ -1264,20 +1264,20 @@ fn appendQuotedArrayAtPartsFields(
     for (quoted, 0..) |part, index| {
         const expansion = wordPartArrayAtExpansion(part) orelse continue;
         try appendTextToLastField(shell, fields, try expandWordParts(shell, quoted[segment_start..index], null));
-        if (shell.state.getArray(expansion.name)) |array| if (array.elements.len != 0) {
+        if (try arrayExpansionElements(shell, expansion.parameter)) |elements| if (elements.len != 0) {
             expanded_array = true;
             if (expansion.indices) {
                 try appendTextToLastField(
                     shell,
                     fields,
-                    try std.fmt.allocPrint(allocator, "{}", .{array.elements[0].index}),
+                    try std.fmt.allocPrint(allocator, "{}", .{elements[0].index}),
                 );
-                for (array.elements[1..]) |element| {
+                for (elements[1..]) |element| {
                     try fields.append(allocator, try std.fmt.allocPrint(allocator, "{}", .{element.index}));
                 }
             } else {
-                try appendTextToLastField(shell, fields, array.elements[0].value);
-                for (array.elements[1..]) |element| try fields.append(allocator, element.value);
+                try appendTextToLastField(shell, fields, elements[0].value);
+                for (elements[1..]) |element| try fields.append(allocator, element.value);
             }
         };
         segment_start = index + 1;
@@ -1305,18 +1305,19 @@ fn wordPartsContainArrayAtParameter(parts: []const ast.WordPart) bool {
 }
 
 const ArrayAtExpansion = struct {
-    name: []const u8,
+    parameter: ast.ParameterExpansion,
     indices: bool,
 };
 
 fn wordPartArrayAtExpansion(part: ast.WordPart) ?ArrayAtExpansion {
     return switch (part) {
         .parameter => |parameter| {
-            if (parameter.length or parameter.op != null or parameter.parameter != .array) return null;
+            if (parameter.length or parameter.parameter != .array) return null;
+            if (parameter.op != null and parameter.op.? != .substring) return null;
             const array = parameter.parameter.array;
             return switch (array.subscript) {
                 .all => |special| if (special == .at) .{
-                    .name = array.name,
+                    .parameter = parameter,
                     .indices = parameter.array_indices,
                 } else null,
                 else => null,
@@ -7731,6 +7732,43 @@ fn arrayParameterValue(shell: anytype, parameter: ast.ArrayParameter) !?[]const 
     };
 }
 
+fn arrayExpansionElements(shell: anytype, expansion: ast.ParameterExpansion) EvalError!?[]const state_mod.ArrayElement {
+    std.debug.assert(expansion.parameter == .array);
+    const array_parameter = expansion.parameter.array;
+    const array = shell.state.getArray(array_parameter.name) orelse return null;
+    const elements = switch (array_parameter.subscript) {
+        .all => array.elements,
+        .index => return null,
+    };
+    if (expansion.op == null) return elements;
+    std.debug.assert(expansion.op.? == .substring);
+    const offset = try parameterArithmeticValue(shell, expansion.word.?);
+    const maybe_length = if (expansion.second_word) |word| try parameterArithmeticValue(shell, word) else null;
+    return arraySubstringElements(elements, offset, maybe_length) catch |err| switch (err) {
+        error.NegativeArraySubstringLength => return error.ExpansionError,
+    };
+}
+
+const ArraySubstringError = error{NegativeArraySubstringLength};
+
+fn arraySubstringElements(
+    elements: []const state_mod.ArrayElement,
+    offset: i64,
+    maybe_length: ?i64,
+) ArraySubstringError![]const state_mod.ArrayElement {
+    if (elements.len == 0) return elements;
+    if (maybe_length) |length| if (length < 0) return error.NegativeArraySubstringLength;
+
+    const max_index_plus_one = elements[elements.len - 1].index + 1;
+    const start_index = normalizeSubstringIndex(offset, max_index_plus_one);
+    var start_position: usize = 0;
+    while (start_position < elements.len and elements[start_position].index < start_index) : (start_position += 1) {}
+
+    const length = maybe_length orelse return elements[start_position..];
+    const selected_len = @min(elements.len - start_position, @as(usize, @intCast(length)));
+    return elements[start_position .. start_position + selected_len];
+}
+
 fn arrayIndicesParameterValue(shell: anytype, parameter: ast.ArrayParameter) !?[]const u8 {
     return switch (parameter.subscript) {
         .all => |special| if (shell.state.getArray(parameter.name)) |array| {
@@ -7860,6 +7898,15 @@ fn expandParameterPatternRemoval(
 }
 
 fn expandParameterSubstring(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {
+    if (parameter.parameter == .array) {
+        const elements = (try arrayExpansionElements(shell, parameter)) orelse return "";
+        const array = parameter.parameter.array;
+        const separator = switch (array.subscript) {
+            .all => |special| if (special == .star) ifsFirstCharacter(shell) else " ",
+            .index => unreachable,
+        };
+        return joinArrayElements(shell, elements, separator);
+    }
     const value = (try parameterCurrentValue(shell, parameter.parameter)) orelse "";
     const offset = try parameterArithmeticValue(shell, parameter.word.?);
     const maybe_length = if (parameter.second_word) |word| try parameterArithmeticValue(shell, word) else null;
