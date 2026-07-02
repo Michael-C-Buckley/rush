@@ -1,0 +1,32 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "which",
+    "description": "locate executables in PATH",
+    "options": [
+      {
+        "short": "s",
+        "description": "no output, return 0 if all the executables are found, 1 if not"
+      },
+      {
+        "short": "a",
+        "description": "list all instances of executables found, instead of just the first"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "names",
+          "repeatable": true,
+          "provider": "executables"
+        }
+      ]
+    },
+    "providers": {
+      "executables": {
+        "builtin": "executables"
+      }
+    }
+  }
+}
