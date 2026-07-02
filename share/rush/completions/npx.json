@@ -1,0 +1,150 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "npx",
+    "description": "execute binaries from npm packages",
+    "options": [
+      {
+        "long": "package",
+        "short": "p",
+        "description": "Package to be installed",
+        "inherit": false,
+        "value": {
+          "name": "package"
+        }
+      },
+      {
+        "long": "cache",
+        "description": "location of the npm cache",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "always-spawn",
+        "description": "Always spawn a child process to execute the command",
+        "inherit": false
+      },
+      {
+        "short": "y",
+        "description": "Execute npx command without prompting for confirmation",
+        "inherit": false
+      },
+      {
+        "long": "no-install",
+        "description": "Skip installation if a package is missing",
+        "inherit": false
+      },
+      {
+        "long": "userconfig",
+        "description": "path to user npmrc",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "call",
+        "short": "c",
+        "description": "Execute string as if inside `npm run-script`",
+        "inherit": false,
+        "value": {
+          "name": "script"
+        }
+      },
+      {
+        "long": "shell",
+        "short": "s",
+        "description": "Shell to execute the command with, if any",
+        "inherit": false,
+        "value": {
+          "name": "shell",
+          "provider": "npx.shells"
+        }
+      },
+      {
+        "long": "shell-auto-fallback",
+        "description": "Generate shell code to use npx as the \"command not found\" fallback",
+        "inherit": false,
+        "value": {
+          "name": "shell-fallback",
+          "provider": "npx.shells"
+        }
+      },
+      {
+        "long": "ignore-existing",
+        "description": "ignore existing binaries in path or the local project",
+        "inherit": false
+      },
+      {
+        "long": "quiet",
+        "short": "q",
+        "description": "Suppress output from npx itself. Subcommands will not be affected",
+        "inherit": false
+      },
+      {
+        "long": "npm",
+        "description": "npm binary to use",
+        "inherit": false,
+        "value": {
+          "name": "path-to-binary",
+          "provider": "builtin.executables"
+        }
+      },
+      {
+        "long": "node-arg",
+        "short": "n",
+        "description": "Extra node argument when calling a node binary",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "show version number",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "command",
+          "provider": "npx.commands",
+          "index": 0,
+          "required": false,
+          "description": "command to execute"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "npx.commands": {
+        "function": "__rush_complete_npx_commands"
+      },
+      "npx.shells": {
+        "values": [
+          "bash",
+          "fish",
+          "zsh"
+        ]
+      }
+    }
+  }
+}
