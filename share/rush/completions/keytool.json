@@ -1,0 +1,2273 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "keytool",
+    "description": "key and certificate management tool",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "spellings": [
+          "-?",
+          "-help"
+        ],
+        "description": "show help message",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-conf"
+        ],
+        "description": "specify pre-configured options file",
+        "inherit": false,
+        "value": {
+          "name": "url"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "-certreq",
+        "description": "Generates a certificate request",
+        "options": [
+          {
+            "spellings": [
+              "-alias"
+            ],
+            "description": "entry alias",
+            "inherit": false,
+            "value": {
+              "name": "alias"
+            }
+          },
+          {
+            "spellings": [
+              "-keystore"
+            ],
+            "description": "keystore name",
+            "inherit": false,
+            "value": {
+              "name": "keystore",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-storepass"
+            ],
+            "description": "keystore password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-storetype"
+            ],
+            "description": "keystore type",
+            "inherit": false,
+            "value": {
+              "name": "type"
+            }
+          },
+          {
+            "spellings": [
+              "-providername"
+            ],
+            "description": "provider name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-addprovider"
+            ],
+            "description": "add security provider by name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-providerclass"
+            ],
+            "description": "add security provider by class name",
+            "inherit": false,
+            "value": {
+              "name": "class"
+            }
+          },
+          {
+            "spellings": [
+              "-providerarg"
+            ],
+            "description": "provider argument",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-providerpath"
+            ],
+            "description": "provider classpath",
+            "inherit": false,
+            "value": {
+              "name": "list",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-protected"
+            ],
+            "description": "password through protected mechanism",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "spellings": [
+              "-?",
+              "-help"
+            ],
+            "description": "show help message",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-v"
+            ],
+            "description": "verbose output",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-sigalg"
+            ],
+            "description": "signature algorithm name",
+            "inherit": false,
+            "value": {
+              "name": "alg"
+            }
+          },
+          {
+            "spellings": [
+              "-file"
+            ],
+            "description": "output file name",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-keypass"
+            ],
+            "description": "key password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-dname"
+            ],
+            "description": "distinguished name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-ext"
+            ],
+            "description": "x.509 extension",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          }
+        ]
+      },
+      {
+        "name": "-changealias",
+        "description": "Changes an entry's alias",
+        "options": [
+          {
+            "spellings": [
+              "-alias"
+            ],
+            "description": "entry alias",
+            "inherit": false,
+            "value": {
+              "name": "alias"
+            }
+          },
+          {
+            "spellings": [
+              "-keystore"
+            ],
+            "description": "keystore name",
+            "inherit": false,
+            "value": {
+              "name": "keystore",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-storepass"
+            ],
+            "description": "keystore password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-storetype"
+            ],
+            "description": "keystore type",
+            "inherit": false,
+            "value": {
+              "name": "type"
+            }
+          },
+          {
+            "spellings": [
+              "-providername"
+            ],
+            "description": "provider name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-addprovider"
+            ],
+            "description": "add security provider by name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-providerclass"
+            ],
+            "description": "add security provider by class name",
+            "inherit": false,
+            "value": {
+              "name": "class"
+            }
+          },
+          {
+            "spellings": [
+              "-providerarg"
+            ],
+            "description": "provider argument",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-providerpath"
+            ],
+            "description": "provider classpath",
+            "inherit": false,
+            "value": {
+              "name": "list",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-protected"
+            ],
+            "description": "password through protected mechanism",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "spellings": [
+              "-?",
+              "-help"
+            ],
+            "description": "show help message",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-v"
+            ],
+            "description": "verbose output",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-destalias"
+            ],
+            "description": "destination alias",
+            "inherit": false,
+            "value": {
+              "name": "alias"
+            }
+          },
+          {
+            "spellings": [
+              "-keypass"
+            ],
+            "description": "key password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-cacerts"
+            ],
+            "description": "access the cacerts keystore",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "-delete",
+        "description": "Deletes an entry",
+        "options": [
+          {
+            "spellings": [
+              "-alias"
+            ],
+            "description": "entry alias",
+            "inherit": false,
+            "value": {
+              "name": "alias"
+            }
+          },
+          {
+            "spellings": [
+              "-keystore"
+            ],
+            "description": "keystore name",
+            "inherit": false,
+            "value": {
+              "name": "keystore",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-storepass"
+            ],
+            "description": "keystore password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-storetype"
+            ],
+            "description": "keystore type",
+            "inherit": false,
+            "value": {
+              "name": "type"
+            }
+          },
+          {
+            "spellings": [
+              "-providername"
+            ],
+            "description": "provider name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-addprovider"
+            ],
+            "description": "add security provider by name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-providerclass"
+            ],
+            "description": "add security provider by class name",
+            "inherit": false,
+            "value": {
+              "name": "class"
+            }
+          },
+          {
+            "spellings": [
+              "-providerarg"
+            ],
+            "description": "provider argument",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-providerpath"
+            ],
+            "description": "provider classpath",
+            "inherit": false,
+            "value": {
+              "name": "list",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-protected"
+            ],
+            "description": "password through protected mechanism",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "spellings": [
+              "-?",
+              "-help"
+            ],
+            "description": "show help message",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-v"
+            ],
+            "description": "verbose output",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-cacerts"
+            ],
+            "description": "access the cacerts keystore",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "-exportcert",
+        "description": "Exports certificate",
+        "options": [
+          {
+            "spellings": [
+              "-alias"
+            ],
+            "description": "entry alias",
+            "inherit": false,
+            "value": {
+              "name": "alias"
+            }
+          },
+          {
+            "spellings": [
+              "-keystore"
+            ],
+            "description": "keystore name",
+            "inherit": false,
+            "value": {
+              "name": "keystore",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-storepass"
+            ],
+            "description": "keystore password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-storetype"
+            ],
+            "description": "keystore type",
+            "inherit": false,
+            "value": {
+              "name": "type"
+            }
+          },
+          {
+            "spellings": [
+              "-providername"
+            ],
+            "description": "provider name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-addprovider"
+            ],
+            "description": "add security provider by name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-providerclass"
+            ],
+            "description": "add security provider by class name",
+            "inherit": false,
+            "value": {
+              "name": "class"
+            }
+          },
+          {
+            "spellings": [
+              "-providerarg"
+            ],
+            "description": "provider argument",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-providerpath"
+            ],
+            "description": "provider classpath",
+            "inherit": false,
+            "value": {
+              "name": "list",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-protected"
+            ],
+            "description": "password through protected mechanism",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "spellings": [
+              "-?",
+              "-help"
+            ],
+            "description": "show help message",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-v"
+            ],
+            "description": "verbose output",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-rfc"
+            ],
+            "description": "output in RFC style",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-file"
+            ],
+            "description": "output file name",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-cacerts"
+            ],
+            "description": "access the cacerts keystore",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "-genkeypair",
+        "description": "Generate a key pair",
+        "options": [
+          {
+            "spellings": [
+              "-alias"
+            ],
+            "description": "entry alias",
+            "inherit": false,
+            "value": {
+              "name": "alias"
+            }
+          },
+          {
+            "spellings": [
+              "-keystore"
+            ],
+            "description": "keystore name",
+            "inherit": false,
+            "value": {
+              "name": "keystore",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-storepass"
+            ],
+            "description": "keystore password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-storetype"
+            ],
+            "description": "keystore type",
+            "inherit": false,
+            "value": {
+              "name": "type"
+            }
+          },
+          {
+            "spellings": [
+              "-providername"
+            ],
+            "description": "provider name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-addprovider"
+            ],
+            "description": "add security provider by name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-providerclass"
+            ],
+            "description": "add security provider by class name",
+            "inherit": false,
+            "value": {
+              "name": "class"
+            }
+          },
+          {
+            "spellings": [
+              "-providerarg"
+            ],
+            "description": "provider argument",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-providerpath"
+            ],
+            "description": "provider classpath",
+            "inherit": false,
+            "value": {
+              "name": "list",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-protected"
+            ],
+            "description": "password through protected mechanism",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "spellings": [
+              "-?",
+              "-help"
+            ],
+            "description": "show help message",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-v"
+            ],
+            "description": "verbose output",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-keyalg"
+            ],
+            "description": "key algorithm name",
+            "inherit": false,
+            "value": {
+              "name": "alg"
+            }
+          },
+          {
+            "spellings": [
+              "-keysize"
+            ],
+            "description": "key bit size",
+            "inherit": false,
+            "value": {
+              "name": "size"
+            }
+          },
+          {
+            "spellings": [
+              "-groupname"
+            ],
+            "description": "group name. For example, an Elliptic Curve name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-sigalg"
+            ],
+            "description": "signature algorithm name",
+            "inherit": false,
+            "value": {
+              "name": "alg"
+            }
+          },
+          {
+            "spellings": [
+              "-destalias"
+            ],
+            "description": "destination alias",
+            "inherit": false,
+            "value": {
+              "name": "alias"
+            }
+          },
+          {
+            "spellings": [
+              "-dname"
+            ],
+            "description": "distinguished name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-startdate"
+            ],
+            "description": "certificate validity start date/time",
+            "inherit": false,
+            "value": {
+              "name": "date"
+            }
+          },
+          {
+            "spellings": [
+              "-ext"
+            ],
+            "description": "x.509 extension name",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "spellings": [
+              "-validity"
+            ],
+            "description": "validity number of days",
+            "inherit": false,
+            "value": {
+              "name": "days"
+            }
+          },
+          {
+            "spellings": [
+              "-keypass"
+            ],
+            "description": "key password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          }
+        ]
+      },
+      {
+        "name": "-genseckey",
+        "description": "Generates a secret key",
+        "options": [
+          {
+            "spellings": [
+              "-alias"
+            ],
+            "description": "entry alias",
+            "inherit": false,
+            "value": {
+              "name": "alias"
+            }
+          },
+          {
+            "spellings": [
+              "-keystore"
+            ],
+            "description": "keystore name",
+            "inherit": false,
+            "value": {
+              "name": "keystore",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-storepass"
+            ],
+            "description": "keystore password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-storetype"
+            ],
+            "description": "keystore type",
+            "inherit": false,
+            "value": {
+              "name": "type"
+            }
+          },
+          {
+            "spellings": [
+              "-providername"
+            ],
+            "description": "provider name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-addprovider"
+            ],
+            "description": "add security provider by name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-providerclass"
+            ],
+            "description": "add security provider by class name",
+            "inherit": false,
+            "value": {
+              "name": "class"
+            }
+          },
+          {
+            "spellings": [
+              "-providerarg"
+            ],
+            "description": "provider argument",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-providerpath"
+            ],
+            "description": "provider classpath",
+            "inherit": false,
+            "value": {
+              "name": "list",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-protected"
+            ],
+            "description": "password through protected mechanism",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "spellings": [
+              "-?",
+              "-help"
+            ],
+            "description": "show help message",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-v"
+            ],
+            "description": "verbose output",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-keypass"
+            ],
+            "description": "key password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-keyalg"
+            ],
+            "description": "key algorithm name",
+            "inherit": false,
+            "value": {
+              "name": "alg"
+            }
+          },
+          {
+            "spellings": [
+              "-keysize"
+            ],
+            "description": "key bit size",
+            "inherit": false,
+            "value": {
+              "name": "size"
+            }
+          }
+        ]
+      },
+      {
+        "name": "-gencert",
+        "description": "Generates certificate from a certificate request",
+        "options": [
+          {
+            "spellings": [
+              "-alias"
+            ],
+            "description": "entry alias",
+            "inherit": false,
+            "value": {
+              "name": "alias"
+            }
+          },
+          {
+            "spellings": [
+              "-keystore"
+            ],
+            "description": "keystore name",
+            "inherit": false,
+            "value": {
+              "name": "keystore",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-storepass"
+            ],
+            "description": "keystore password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-storetype"
+            ],
+            "description": "keystore type",
+            "inherit": false,
+            "value": {
+              "name": "type"
+            }
+          },
+          {
+            "spellings": [
+              "-providername"
+            ],
+            "description": "provider name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-addprovider"
+            ],
+            "description": "add security provider by name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-providerclass"
+            ],
+            "description": "add security provider by class name",
+            "inherit": false,
+            "value": {
+              "name": "class"
+            }
+          },
+          {
+            "spellings": [
+              "-providerarg"
+            ],
+            "description": "provider argument",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-providerpath"
+            ],
+            "description": "provider classpath",
+            "inherit": false,
+            "value": {
+              "name": "list",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-protected"
+            ],
+            "description": "password through protected mechanism",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "spellings": [
+              "-?",
+              "-help"
+            ],
+            "description": "show help message",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-v"
+            ],
+            "description": "verbose output",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-rfc"
+            ],
+            "description": "output in RFC style",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-infile"
+            ],
+            "description": "input file name",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-outfile"
+            ],
+            "description": "output file name",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-sigalg"
+            ],
+            "description": "signature algorithm name",
+            "inherit": false,
+            "value": {
+              "name": "alg"
+            }
+          },
+          {
+            "spellings": [
+              "-dname"
+            ],
+            "description": "distinguished name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-startdate"
+            ],
+            "description": "certificate validity start date/time",
+            "inherit": false,
+            "value": {
+              "name": "date"
+            }
+          },
+          {
+            "spellings": [
+              "-ext"
+            ],
+            "description": "x.509 extension name",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "spellings": [
+              "-validity"
+            ],
+            "description": "validity number of days",
+            "inherit": false,
+            "value": {
+              "name": "days"
+            }
+          },
+          {
+            "spellings": [
+              "-keypass"
+            ],
+            "description": "key password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          }
+        ]
+      },
+      {
+        "name": "-importcert",
+        "description": "Imports a certificate or a certificate chain",
+        "options": [
+          {
+            "spellings": [
+              "-alias"
+            ],
+            "description": "entry alias",
+            "inherit": false,
+            "value": {
+              "name": "alias"
+            }
+          },
+          {
+            "spellings": [
+              "-keystore"
+            ],
+            "description": "keystore name",
+            "inherit": false,
+            "value": {
+              "name": "keystore",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-storepass"
+            ],
+            "description": "keystore password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-storetype"
+            ],
+            "description": "keystore type",
+            "inherit": false,
+            "value": {
+              "name": "type"
+            }
+          },
+          {
+            "spellings": [
+              "-providername"
+            ],
+            "description": "provider name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-addprovider"
+            ],
+            "description": "add security provider by name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-providerclass"
+            ],
+            "description": "add security provider by class name",
+            "inherit": false,
+            "value": {
+              "name": "class"
+            }
+          },
+          {
+            "spellings": [
+              "-providerarg"
+            ],
+            "description": "provider argument",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-providerpath"
+            ],
+            "description": "provider classpath",
+            "inherit": false,
+            "value": {
+              "name": "list",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-protected"
+            ],
+            "description": "password through protected mechanism",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "spellings": [
+              "-?",
+              "-help"
+            ],
+            "description": "show help message",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-v"
+            ],
+            "description": "verbose output",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-noprompt"
+            ],
+            "description": "do not prompt",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-trustcacerts"
+            ],
+            "description": "trust certificates from cacerts",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-file"
+            ],
+            "description": "output file name",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-keypass"
+            ],
+            "description": "key password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-cacerts"
+            ],
+            "description": "access the cacerts keystore",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "-importpass",
+        "description": "Imports a password",
+        "options": [
+          {
+            "spellings": [
+              "-alias"
+            ],
+            "description": "entry alias",
+            "inherit": false,
+            "value": {
+              "name": "alias"
+            }
+          },
+          {
+            "spellings": [
+              "-keystore"
+            ],
+            "description": "keystore name",
+            "inherit": false,
+            "value": {
+              "name": "keystore",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-storepass"
+            ],
+            "description": "keystore password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-storetype"
+            ],
+            "description": "keystore type",
+            "inherit": false,
+            "value": {
+              "name": "type"
+            }
+          },
+          {
+            "spellings": [
+              "-providername"
+            ],
+            "description": "provider name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-addprovider"
+            ],
+            "description": "add security provider by name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-providerclass"
+            ],
+            "description": "add security provider by class name",
+            "inherit": false,
+            "value": {
+              "name": "class"
+            }
+          },
+          {
+            "spellings": [
+              "-providerarg"
+            ],
+            "description": "provider argument",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-providerpath"
+            ],
+            "description": "provider classpath",
+            "inherit": false,
+            "value": {
+              "name": "list",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-protected"
+            ],
+            "description": "password through protected mechanism",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "spellings": [
+              "-?",
+              "-help"
+            ],
+            "description": "show help message",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-v"
+            ],
+            "description": "verbose output",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-keypass"
+            ],
+            "description": "key password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-keyalg"
+            ],
+            "description": "key algorithm name",
+            "inherit": false,
+            "value": {
+              "name": "alg"
+            }
+          },
+          {
+            "spellings": [
+              "-keysize"
+            ],
+            "description": "key bit size",
+            "inherit": false,
+            "value": {
+              "name": "size"
+            }
+          }
+        ]
+      },
+      {
+        "name": "-importkeystore",
+        "description": "Imports one or all entries from another keystore",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "spellings": [
+              "-?",
+              "-help"
+            ],
+            "description": "show help message",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-v"
+            ],
+            "description": "verbose output",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-srckeystore"
+            ],
+            "description": "source keystore name",
+            "inherit": false,
+            "value": {
+              "name": "keystore"
+            }
+          },
+          {
+            "spellings": [
+              "-destkeystore"
+            ],
+            "description": "destination keystore name",
+            "inherit": false,
+            "value": {
+              "name": "keystore"
+            }
+          },
+          {
+            "spellings": [
+              "-srcstoretype"
+            ],
+            "description": "source keystore type",
+            "inherit": false,
+            "value": {
+              "name": "type"
+            }
+          },
+          {
+            "spellings": [
+              "-deststoretype"
+            ],
+            "description": "destination keystore type",
+            "inherit": false,
+            "value": {
+              "name": "type"
+            }
+          },
+          {
+            "spellings": [
+              "-srcstorepass"
+            ],
+            "description": "source keystore password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-deststorepass"
+            ],
+            "description": "destination keystore password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-srcprotected"
+            ],
+            "description": "source keystore password protected",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-destprotected"
+            ],
+            "description": "destination keystore password protected",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-srcprovidername"
+            ],
+            "description": "source keystore provider name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-destprovidername"
+            ],
+            "description": "destination keystore provider name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-srcalias"
+            ],
+            "description": "source alias",
+            "inherit": false,
+            "value": {
+              "name": "alias"
+            }
+          },
+          {
+            "spellings": [
+              "-destalias"
+            ],
+            "description": "destination alias",
+            "inherit": false,
+            "value": {
+              "name": "alias"
+            }
+          },
+          {
+            "spellings": [
+              "-srckeypass"
+            ],
+            "description": "source key password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-destkeypass"
+            ],
+            "description": "destination key password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-noprompt"
+            ],
+            "description": "do not prompt",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-addprovider"
+            ],
+            "description": "add security provider by name (e.g. SunPKCS11)",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-providerclass"
+            ],
+            "description": "add security provider by fully-qualified class name",
+            "inherit": false,
+            "value": {
+              "name": "class"
+            }
+          },
+          {
+            "spellings": [
+              "-providerarg"
+            ],
+            "description": "configure argument for -addprovider or -providerclass",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-providerpath"
+            ],
+            "description": "provider classpath",
+            "inherit": false,
+            "value": {
+              "name": "list"
+            }
+          }
+        ]
+      },
+      {
+        "name": "-keypasswd",
+        "description": "Changes the key password of an entry",
+        "options": [
+          {
+            "spellings": [
+              "-alias"
+            ],
+            "description": "entry alias",
+            "inherit": false,
+            "value": {
+              "name": "alias"
+            }
+          },
+          {
+            "spellings": [
+              "-keystore"
+            ],
+            "description": "keystore name",
+            "inherit": false,
+            "value": {
+              "name": "keystore",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-storepass"
+            ],
+            "description": "keystore password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-storetype"
+            ],
+            "description": "keystore type",
+            "inherit": false,
+            "value": {
+              "name": "type"
+            }
+          },
+          {
+            "spellings": [
+              "-providername"
+            ],
+            "description": "provider name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-addprovider"
+            ],
+            "description": "add security provider by name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-providerclass"
+            ],
+            "description": "add security provider by class name",
+            "inherit": false,
+            "value": {
+              "name": "class"
+            }
+          },
+          {
+            "spellings": [
+              "-providerarg"
+            ],
+            "description": "provider argument",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-providerpath"
+            ],
+            "description": "provider classpath",
+            "inherit": false,
+            "value": {
+              "name": "list",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "spellings": [
+              "-?",
+              "-help"
+            ],
+            "description": "show help message",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-v"
+            ],
+            "description": "verbose output",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-keypass"
+            ],
+            "description": "key password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-new"
+            ],
+            "description": "new password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          }
+        ]
+      },
+      {
+        "name": "-list",
+        "description": "Lists entries in a keystore",
+        "options": [
+          {
+            "spellings": [
+              "-alias"
+            ],
+            "description": "entry alias",
+            "inherit": false,
+            "value": {
+              "name": "alias"
+            }
+          },
+          {
+            "spellings": [
+              "-keystore"
+            ],
+            "description": "keystore name",
+            "inherit": false,
+            "value": {
+              "name": "keystore",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-storepass"
+            ],
+            "description": "keystore password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-storetype"
+            ],
+            "description": "keystore type",
+            "inherit": false,
+            "value": {
+              "name": "type"
+            }
+          },
+          {
+            "spellings": [
+              "-providername"
+            ],
+            "description": "provider name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-addprovider"
+            ],
+            "description": "add security provider by name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-providerclass"
+            ],
+            "description": "add security provider by class name",
+            "inherit": false,
+            "value": {
+              "name": "class"
+            }
+          },
+          {
+            "spellings": [
+              "-providerarg"
+            ],
+            "description": "provider argument",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-providerpath"
+            ],
+            "description": "provider classpath",
+            "inherit": false,
+            "value": {
+              "name": "list",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-protected"
+            ],
+            "description": "password through protected mechanism",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "spellings": [
+              "-?",
+              "-help"
+            ],
+            "description": "show help message",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-v"
+            ],
+            "description": "verbose output",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-rfc"
+            ],
+            "description": "output in RFC style",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-cacerts"
+            ],
+            "description": "access the cacerts keystore",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "-printcert",
+        "description": "Prints the content of a certificate",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "spellings": [
+              "-?",
+              "-help"
+            ],
+            "description": "show help message",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-v"
+            ],
+            "description": "verbose output",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-rfc"
+            ],
+            "description": "output in RFC style",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-file"
+            ],
+            "description": "input file name",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-sslserver"
+            ],
+            "description": "sSL server host and port",
+            "inherit": false,
+            "value": {
+              "name": "server:[port]"
+            }
+          },
+          {
+            "spellings": [
+              "-jarfile"
+            ],
+            "description": "signed jar file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "-printcertreq",
+        "description": "Prints the content of a certificate request",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "spellings": [
+              "-?",
+              "-help"
+            ],
+            "description": "show help message",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-v"
+            ],
+            "description": "verbose output",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-file"
+            ],
+            "description": "input file name",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "-printcrl",
+        "description": "Prints the content of a CRL file",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "spellings": [
+              "-?",
+              "-help"
+            ],
+            "description": "show help message",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-v"
+            ],
+            "description": "verbose output",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-file"
+            ],
+            "description": "input file name",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "-storepasswd",
+        "description": "Changes the store password of a keystore",
+        "options": [
+          {
+            "spellings": [
+              "-alias"
+            ],
+            "description": "entry alias",
+            "inherit": false,
+            "value": {
+              "name": "alias"
+            }
+          },
+          {
+            "spellings": [
+              "-keystore"
+            ],
+            "description": "keystore name",
+            "inherit": false,
+            "value": {
+              "name": "keystore",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-storepass"
+            ],
+            "description": "keystore password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-storetype"
+            ],
+            "description": "keystore type",
+            "inherit": false,
+            "value": {
+              "name": "type"
+            }
+          },
+          {
+            "spellings": [
+              "-providername"
+            ],
+            "description": "provider name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-addprovider"
+            ],
+            "description": "add security provider by name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "spellings": [
+              "-providerclass"
+            ],
+            "description": "add security provider by class name",
+            "inherit": false,
+            "value": {
+              "name": "class"
+            }
+          },
+          {
+            "spellings": [
+              "-providerarg"
+            ],
+            "description": "provider argument",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-providerpath"
+            ],
+            "description": "provider classpath",
+            "inherit": false,
+            "value": {
+              "name": "list",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "spellings": [
+              "-?",
+              "-help"
+            ],
+            "description": "show help message",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-v"
+            ],
+            "description": "verbose output",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-new"
+            ],
+            "description": "new password",
+            "inherit": false,
+            "value": {
+              "name": "arg"
+            }
+          },
+          {
+            "spellings": [
+              "-cacerts"
+            ],
+            "description": "access the cacerts keystore",
+            "inherit": false
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
