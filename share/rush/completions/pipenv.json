@@ -1,0 +1,1018 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pipenv",
+    "description": "manage Python virtualenv packages",
+    "options": [
+      {
+        "long": "where",
+        "description": "show project home",
+        "inherit": false
+      },
+      {
+        "long": "venv",
+        "description": "show virtualenv path",
+        "inherit": false
+      },
+      {
+        "long": "py",
+        "description": "show Python interpreter",
+        "inherit": false
+      },
+      {
+        "long": "envs",
+        "description": "show environment variables",
+        "inherit": false
+      },
+      {
+        "long": "rm",
+        "description": "remove virtualenv",
+        "inherit": false
+      },
+      {
+        "long": "bare",
+        "description": "show minimal output",
+        "inherit": false
+      },
+      {
+        "long": "completion",
+        "description": "output shell completion",
+        "inherit": false
+      },
+      {
+        "long": "man",
+        "description": "show manpage",
+        "inherit": false
+      },
+      {
+        "long": "support",
+        "description": "show diagnostic information",
+        "inherit": false
+      },
+      {
+        "long": "site-packages",
+        "description": "enable site packages",
+        "inherit": false
+      },
+      {
+        "long": "no-site-packages",
+        "description": "disable site packages",
+        "inherit": false
+      },
+      {
+        "long": "python",
+        "description": "set Python version",
+        "inherit": false,
+        "value": {
+          "name": "version",
+          "description": "Python version",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "three",
+        "description": "use Python 3",
+        "inherit": false
+      },
+      {
+        "long": "two",
+        "description": "use Python 2",
+        "inherit": false
+      },
+      {
+        "long": "clear",
+        "description": "clear pipenv and pip caches",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "show verbose output",
+        "inherit": false
+      },
+      {
+        "long": "pypi-mirror",
+        "description": "set PyPI mirror URL",
+        "inherit": false,
+        "value": {
+          "name": "mirror"
+        }
+      },
+      {
+        "long": "version",
+        "description": "show pipenv version",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "check",
+        "description": "check security and PEP 508 markers",
+        "options": [
+          {
+            "long": "unused",
+            "description": "given a code path, show potentially unused dependencies",
+            "inherit": false,
+            "value": {
+              "name": "code-path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "db",
+            "description": "path to a local PyUp Safety vulnerabilities database. Default: ENV...",
+            "inherit": false,
+            "value": {
+              "name": "database",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "i",
+            "long": "ignore",
+            "description": "ignore specified vulnerability during PyUp Safety checks",
+            "inherit": false,
+            "value": {
+              "name": "vulnerability-id"
+            }
+          },
+          {
+            "long": "output",
+            "description": "translates to \u2013json, \u2013full-report or \u2013bare from PyUp Safety check",
+            "inherit": false
+          },
+          {
+            "long": "key",
+            "description": "safety API key from PyUp.io for scanning dependencies against a liv...",
+            "inherit": false,
+            "value": {
+              "name": "api-key"
+            }
+          },
+          {
+            "long": "quiet",
+            "description": "quiet standard output, except vulnerability report",
+            "inherit": false
+          },
+          {
+            "long": "python",
+            "description": "set Python version",
+            "inherit": false,
+            "value": {
+              "name": "py-version",
+              "description": "Python version"
+            }
+          },
+          {
+            "long": "three",
+            "description": "use Python 3",
+            "inherit": false
+          },
+          {
+            "long": "two",
+            "description": "use Python 2",
+            "inherit": false
+          },
+          {
+            "long": "clear",
+            "description": "clear pipenv and pip caches",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "show verbose output",
+            "inherit": false
+          },
+          {
+            "long": "pypi-mirror",
+            "description": "set PyPI mirror URL",
+            "inherit": false,
+            "value": {
+              "name": "mirror"
+            }
+          },
+          {
+            "long": "system",
+            "description": "install into system environment",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "clean",
+        "description": "remove packages not in Pipfile.lock",
+        "options": [
+          {
+            "long": "bare",
+            "description": "show minimal output",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "show changes without applying them",
+            "inherit": false
+          },
+          {
+            "long": "python",
+            "description": "set Python version",
+            "inherit": false,
+            "value": {
+              "name": "py-version",
+              "description": "Python version"
+            }
+          },
+          {
+            "long": "three",
+            "description": "use Python 3",
+            "inherit": false
+          },
+          {
+            "long": "two",
+            "description": "use Python 2",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "show verbose output",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "graph",
+        "description": "show dependency graph",
+        "options": [
+          {
+            "long": "bare",
+            "description": "show minimal output",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "output JSON",
+            "inherit": false
+          },
+          {
+            "long": "json-tree",
+            "description": "output JSON in nested tree",
+            "inherit": false
+          },
+          {
+            "long": "reverse",
+            "description": "reversed dependency graph",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "install packages",
+        "options": [
+          {
+            "long": "system",
+            "description": "install into system environment",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "code",
+            "description": "install packages automatically discovered from import statements",
+            "inherit": false
+          },
+          {
+            "long": "deploy",
+            "description": "enforce that your Pipfile.lock is up to date in deployment",
+            "inherit": false
+          },
+          {
+            "long": "site-packages",
+            "description": "enable site packages",
+            "inherit": false
+          },
+          {
+            "long": "no-site-packages",
+            "description": "disable site packages",
+            "inherit": false
+          },
+          {
+            "long": "skip-lock",
+            "description": "skip locking",
+            "inherit": false
+          },
+          {
+            "short": "e",
+            "long": "editable",
+            "description": "use editable package path or URL",
+            "inherit": false,
+            "value": {
+              "name": "package-url-or-path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "ignore-pipfile",
+            "description": "ignore Pipfile",
+            "inherit": false
+          },
+          {
+            "long": "selective-upgrade",
+            "description": "update selected packages",
+            "inherit": false,
+            "value": {
+              "name": "package"
+            }
+          },
+          {
+            "short": "r",
+            "long": "requirements",
+            "description": "import requirements file",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "extra-index-url",
+            "description": "add package index URL",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "short": "i",
+            "long": "index",
+            "description": "target PyPI-compatible package index url",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "sequential",
+            "description": "install dependencies one-at-a-time, instead of concurrently",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "dev",
+            "description": "include development packages",
+            "inherit": false
+          },
+          {
+            "long": "keep-outdated",
+            "description": "keep outdated dependencies",
+            "inherit": false
+          },
+          {
+            "long": "pre",
+            "description": "allow prereleases",
+            "inherit": false
+          },
+          {
+            "long": "python",
+            "description": "set Python version",
+            "inherit": false,
+            "value": {
+              "name": "py-version",
+              "description": "Python version"
+            }
+          },
+          {
+            "long": "three",
+            "description": "use Python 3",
+            "inherit": false
+          },
+          {
+            "long": "two",
+            "description": "use Python 2",
+            "inherit": false
+          },
+          {
+            "long": "clear",
+            "description": "clear pipenv and pip caches",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "show verbose output",
+            "inherit": false
+          },
+          {
+            "long": "pypi-mirror",
+            "description": "set PyPI mirror URL",
+            "inherit": false,
+            "value": {
+              "name": "mirror-url"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "package to install",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "lock",
+        "description": "generate Pipfile.lock",
+        "options": [
+          {
+            "long": "dev-only",
+            "description": "generate a requirements file with only the development requirements",
+            "inherit": false
+          },
+          {
+            "long": "header",
+            "description": "add header to generated requirements",
+            "inherit": false
+          },
+          {
+            "long": "no-header",
+            "description": "generate requirements with no header",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "long": "requirements",
+            "description": "import requirements file",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "dev",
+            "description": "include development packages",
+            "inherit": false
+          },
+          {
+            "long": "keep-outdated",
+            "description": "keep outdated dependencies",
+            "inherit": false
+          },
+          {
+            "long": "pre",
+            "description": "allow prereleases",
+            "inherit": false
+          },
+          {
+            "long": "python",
+            "description": "set Python version",
+            "inherit": false
+          },
+          {
+            "long": "three",
+            "description": "use Python 3",
+            "inherit": false
+          },
+          {
+            "long": "two",
+            "description": "use Python 2",
+            "inherit": false
+          },
+          {
+            "long": "clear",
+            "description": "clear pipenv and pip caches",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "show verbose output",
+            "inherit": false
+          },
+          {
+            "long": "pypi-mirror",
+            "description": "set PyPI mirror URL",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "output",
+              "description": "requirements output file",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "open",
+        "description": "open a module in an editor",
+        "options": [
+          {
+            "long": "python",
+            "description": "set Python version",
+            "inherit": false
+          },
+          {
+            "long": "three",
+            "description": "use Python 3",
+            "inherit": false
+          },
+          {
+            "long": "two",
+            "description": "use Python 2",
+            "inherit": false
+          },
+          {
+            "long": "clear",
+            "description": "clear pipenv and pip caches",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "show verbose output",
+            "inherit": false
+          },
+          {
+            "long": "pypi-mirror",
+            "description": "set PyPI mirror URL",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "module",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "run",
+        "description": "run a virtualenv command",
+        "options": [
+          {
+            "long": "python",
+            "description": "set Python version",
+            "inherit": false,
+            "value": {
+              "name": "py-version",
+              "description": "Python version"
+            }
+          },
+          {
+            "long": "three",
+            "description": "use Python 3",
+            "inherit": false
+          },
+          {
+            "long": "two",
+            "description": "use Python 2",
+            "inherit": false
+          },
+          {
+            "long": "clear",
+            "description": "clear pipenv and pip caches",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "show verbose output",
+            "inherit": false
+          },
+          {
+            "long": "pypi-mirror",
+            "description": "set PyPI mirror URL",
+            "inherit": false,
+            "value": {
+              "name": "mirror-url"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "command"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "description": "command to run",
+              "provider": "builtin.executables",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "scripts",
+        "description": "list configured scripts",
+        "options": [
+          {
+            "long": "python",
+            "description": "set Python version",
+            "inherit": false,
+            "value": {
+              "name": "py-version",
+              "description": "Python version"
+            }
+          },
+          {
+            "long": "three",
+            "description": "use Python 3",
+            "inherit": false
+          },
+          {
+            "long": "two",
+            "description": "use Python 2",
+            "inherit": false
+          },
+          {
+            "long": "clear",
+            "description": "clear pipenv and pip caches",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "show verbose output",
+            "inherit": false
+          },
+          {
+            "long": "pypi-mirror",
+            "description": "set PyPI mirror URL",
+            "inherit": false,
+            "value": {
+              "name": "mirror-url"
+            }
+          }
+        ]
+      },
+      {
+        "name": "shell",
+        "description": "start a virtualenv shell",
+        "options": [
+          {
+            "long": "fancy",
+            "description": "run in shell in fancy mode. Make sure the shell have no path manipu...",
+            "inherit": false
+          },
+          {
+            "long": "python",
+            "description": "set Python version",
+            "inherit": false,
+            "value": {
+              "name": "py-version",
+              "description": "Python version"
+            }
+          },
+          {
+            "long": "three",
+            "description": "use Python 3",
+            "inherit": false
+          },
+          {
+            "long": "two",
+            "description": "use Python 2",
+            "inherit": false
+          },
+          {
+            "long": "anyway",
+            "description": "always spawn a sub-shell, even if one is already spawned",
+            "inherit": false
+          },
+          {
+            "long": "pypi-mirror",
+            "description": "set PyPI mirror URL",
+            "inherit": false,
+            "value": {
+              "name": "mirror-url"
+            }
+          }
+        ]
+      },
+      {
+        "name": "sync",
+        "description": "install packages from Pipfile.lock",
+        "options": [
+          {
+            "long": "system",
+            "description": "install into system environment",
+            "inherit": false
+          },
+          {
+            "long": "bare",
+            "description": "show minimal output",
+            "inherit": false
+          },
+          {
+            "long": "sequential",
+            "description": "install dependencies one-at-a-time, instead of concurrently",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "dev",
+            "description": "include development packages",
+            "inherit": false
+          },
+          {
+            "long": "keep-outdated",
+            "description": "keep outdated dependencies",
+            "inherit": false
+          },
+          {
+            "long": "pre",
+            "description": "allow prereleases",
+            "inherit": false
+          },
+          {
+            "long": "python",
+            "description": "set Python version",
+            "inherit": false,
+            "value": {
+              "name": "py-version",
+              "description": "Python version"
+            }
+          },
+          {
+            "long": "three",
+            "description": "use Python 3",
+            "inherit": false
+          },
+          {
+            "long": "two",
+            "description": "use Python 2",
+            "inherit": false
+          },
+          {
+            "long": "clear",
+            "description": "clear pipenv and pip caches",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "show verbose output",
+            "inherit": false
+          },
+          {
+            "long": "pypi-mirror",
+            "description": "set PyPI mirror URL",
+            "inherit": false,
+            "value": {
+              "name": "mirror-url"
+            }
+          }
+        ]
+      },
+      {
+        "name": "uninstall",
+        "description": "uninstall packages",
+        "options": [
+          {
+            "long": "all-dev",
+            "description": "uninstall all package from [dev-packages]",
+            "inherit": false
+          },
+          {
+            "long": "all",
+            "description": "purge all package(s) from virtualenv. Does not edit Pipfile",
+            "inherit": false
+          },
+          {
+            "short": "e",
+            "long": "editable",
+            "description": "use editable package path or URL",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "skip-lock",
+            "description": "skip locking",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "dev",
+            "description": "include development packages",
+            "inherit": false
+          },
+          {
+            "long": "keep-outdated",
+            "description": "keep outdated dependencies",
+            "inherit": false
+          },
+          {
+            "long": "pre",
+            "description": "allow prereleases",
+            "inherit": false
+          },
+          {
+            "long": "python",
+            "description": "set Python version",
+            "inherit": false,
+            "value": {
+              "name": "py-version",
+              "description": "Python version"
+            }
+          },
+          {
+            "long": "three",
+            "description": "use Python 3",
+            "inherit": false
+          },
+          {
+            "long": "two",
+            "description": "use Python 2",
+            "inherit": false
+          },
+          {
+            "long": "clear",
+            "description": "clear pipenv and pip caches",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "show verbose output",
+            "inherit": false
+          },
+          {
+            "long": "pypi-mirror",
+            "description": "set PyPI mirror URL",
+            "inherit": false,
+            "value": {
+              "name": "mirror-url"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "package to uninstall",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "update",
+        "description": "lock and sync packages",
+        "options": [
+          {
+            "long": "bare",
+            "description": "show minimal output",
+            "inherit": false
+          },
+          {
+            "long": "outdated",
+            "description": "list outdated dependencies",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "show changes without applying them",
+            "inherit": false
+          },
+          {
+            "short": "e",
+            "long": "editable",
+            "description": "use editable package path or URL",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "ignore-pipfile",
+            "description": "ignore Pipfile",
+            "inherit": false
+          },
+          {
+            "long": "selective-upgrade",
+            "description": "update selected packages",
+            "inherit": false,
+            "value": {
+              "name": "packages"
+            }
+          },
+          {
+            "short": "r",
+            "long": "requirements",
+            "description": "import requirements file",
+            "inherit": false
+          },
+          {
+            "long": "extra-index-url",
+            "description": "add package index URL",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "short": "i",
+            "long": "index",
+            "description": "target PyPI-compatible package index url",
+            "inherit": false,
+            "value": {
+              "name": "index"
+            }
+          },
+          {
+            "long": "sequential",
+            "description": "install dependencies one-at-a-time, instead of concurrently",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "dev",
+            "description": "include development packages",
+            "inherit": false
+          },
+          {
+            "long": "keep-outdated",
+            "description": "keep outdated dependencies",
+            "inherit": false
+          },
+          {
+            "long": "pre",
+            "description": "allow prereleases",
+            "inherit": false
+          },
+          {
+            "long": "python",
+            "description": "set Python version",
+            "inherit": false,
+            "value": {
+              "name": "py-version",
+              "description": "Python version"
+            }
+          },
+          {
+            "long": "three",
+            "description": "use Python 3",
+            "inherit": false
+          },
+          {
+            "long": "two",
+            "description": "use Python 2",
+            "inherit": false
+          },
+          {
+            "long": "clear",
+            "description": "clear pipenv and pip caches",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "show verbose output",
+            "inherit": false
+          },
+          {
+            "long": "pypi-mirror",
+            "description": "set PyPI mirror URL",
+            "inherit": false,
+            "value": {
+              "name": "mirror-url"
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      }
+    }
+  }
+}
