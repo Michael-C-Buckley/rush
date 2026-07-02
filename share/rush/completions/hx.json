@@ -1,0 +1,84 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "hx",
+    "description": "post-modern text editor",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "tutor",
+        "description": "open the tutorial",
+        "inherit": false
+      },
+      {
+        "long": "health",
+        "description": "check for errors in editor setup",
+        "inherit": false,
+        "value": {
+          "name": "language",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "short": "v",
+        "description": "increases logging verbosity",
+        "repeatable": true,
+        "inherit": false
+      },
+      {
+        "short": "g",
+        "long": "grammar",
+        "description": "fetch or build tree-sitter grammars",
+        "inherit": false,
+        "value": {
+          "name": "action",
+          "provider": "hx-grammar-actions"
+        }
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "print version information",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "files",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "hx-grammar-actions": {
+        "values": [
+          {
+            "value": "fetch"
+          },
+          {
+            "value": "build"
+          }
+        ]
+      }
+    }
+  }
+}
