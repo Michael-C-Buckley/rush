@@ -1,0 +1,661 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "prisma",
+    "description": "query, migrate, and model databases",
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "setup Prisma for your app",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "long": "datasource-provider",
+            "description": "define the datasource provider to use",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "description": "Choose provider",
+              "provider": "prisma.datasource-providers"
+            }
+          },
+          {
+            "long": "url",
+            "description": "define a custom datasource url",
+            "inherit": false,
+            "value": {
+              "name": "full-url",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "generate",
+        "description": "generate artifacts (e.g. Prisma Client)",
+        "options": [
+          {
+            "description": "set Prisma schema path",
+            "inherit": false,
+            "long": "schema",
+            "value": {
+              "name": "schema",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "long": "data-proxy",
+            "description": "enable the Data Proxy in the Prisma Client",
+            "inherit": false
+          },
+          {
+            "long": "no-hints",
+            "description": "hides the hint messages but still outputs errors and warnings",
+            "inherit": false
+          },
+          {
+            "long": "no-engine",
+            "description": "generate a client for use with Accelerate only",
+            "inherit": false
+          },
+          {
+            "long": "watch",
+            "description": "watch the Prisma schema and rerun after a change",
+            "inherit": false
+          },
+          {
+            "long": "allow-no-models",
+            "description": "allow generating a client without models",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "studio",
+        "description": "open Prisma Studio",
+        "options": [
+          {
+            "description": "set Prisma schema path",
+            "inherit": false,
+            "long": "schema",
+            "value": {
+              "name": "schema",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "short": "p",
+            "long": "port",
+            "description": "port to start Studio on",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "short": "b",
+            "long": "browser",
+            "description": "browser to open Studio in",
+            "inherit": false,
+            "value": {
+              "name": "Browser-choice",
+              "provider": "prisma.browsers"
+            }
+          },
+          {
+            "short": "n",
+            "long": "hostname",
+            "description": "hostname to bind the Express server to",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          }
+        ]
+      },
+      {
+        "name": "format",
+        "description": "format your schema",
+        "options": [
+          {
+            "description": "set Prisma schema path",
+            "inherit": false,
+            "long": "schema",
+            "value": {
+              "name": "schema",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          }
+        ]
+      },
+      {
+        "name": "migrate",
+        "description": "migrate your database",
+        "subcommands": [
+          {
+            "name": "dev",
+            "description": "the migrate dev command updates your database using migrations files during d...",
+            "options": [
+              {
+                "description": "skip seed command",
+                "inherit": false,
+                "long": "skip-seed"
+              },
+              {
+                "description": "skip generators",
+                "inherit": false,
+                "long": "skip-generate"
+              },
+              {
+                "description": "set Prisma schema path",
+                "inherit": false,
+                "long": "schema",
+                "value": {
+                  "name": "schema",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "long": "create-only",
+                "description": "create a new migration but do not apply it. The migration will be empty...",
+                "inherit": false
+              },
+              {
+                "short": "n",
+                "long": "name",
+                "description": "the name of the migration. If no name is provided, the CLI will prompt you",
+                "inherit": false,
+                "value": {
+                  "name": "filename",
+                  "required": false,
+                  "style": "optional"
+                }
+              }
+            ]
+          },
+          {
+            "name": "reset",
+            "description": "reset your database and apply all migrations, all data will be lost",
+            "options": [
+              {
+                "description": "skip seed command",
+                "inherit": false,
+                "long": "skip-seed"
+              },
+              {
+                "description": "skip generators",
+                "inherit": false,
+                "long": "skip-generate"
+              },
+              {
+                "description": "set Prisma schema path",
+                "inherit": false,
+                "long": "schema",
+                "value": {
+                  "name": "schema",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "short": "f",
+                "long": "force",
+                "description": "skip the confirmation prompt",
+                "priority": -10,
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "deploy",
+            "description": "apply pending migrations to update the database schema in production/staging",
+            "options": [
+              {
+                "description": "set Prisma schema path",
+                "inherit": false,
+                "long": "schema",
+                "value": {
+                  "name": "schema",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              }
+            ]
+          },
+          {
+            "name": "resolve",
+            "description": "resolve issues with database migrations in deployment databases",
+            "options": [
+              {
+                "description": "set Prisma schema path",
+                "inherit": false,
+                "long": "schema",
+                "value": {
+                  "name": "schema",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "long": "applied",
+                "description": "record a specific migration as applied",
+                "inherit": false,
+                "value": {
+                  "name": "migration-file-path",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "rolled-back",
+                "description": "record a specific migration as rolled back",
+                "inherit": false,
+                "value": {
+                  "name": "migration-file-path",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "status",
+            "description": "check the status of your database migrations",
+            "options": [
+              {
+                "description": "set Prisma schema path",
+                "inherit": false,
+                "long": "schema",
+                "value": {
+                  "name": "schema",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              }
+            ]
+          },
+          {
+            "name": "diff",
+            "description": "compares the database schema from two arbitrary sources, and outputs the diff...",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "long": "from-url",
+                "description": "a datasource url",
+                "inherit": false,
+                "value": {
+                  "name": "full-url",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "to-url",
+                "description": "a datasource url",
+                "inherit": false,
+                "value": {
+                  "name": "full-url",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "from-empty",
+                "description": "flag to assume from is an empty datamodel",
+                "inherit": false
+              },
+              {
+                "long": "to-empty",
+                "description": "flag to assume to is an empty datamodel",
+                "inherit": false
+              },
+              {
+                "long": "from-schema-datamodel",
+                "description": "path to a Prisma schema file, uses the 'datamodel' for the diff",
+                "inherit": false,
+                "value": {
+                  "name": "filepath",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "to-schema-datamodel",
+                "description": "path to a Prisma schema file, uses the 'datamodel' for the diff",
+                "inherit": false,
+                "value": {
+                  "name": "filepath",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "from-schema-datasource",
+                "description": "path to a Prisma schema file, uses the 'datasource url' for the diff",
+                "inherit": false,
+                "value": {
+                  "name": "filepath",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "to-schema-datasource",
+                "description": "path to a Prisma schema file, uses the 'datasource url' for the diff",
+                "inherit": false,
+                "value": {
+                  "name": "filepath",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "from-migrations",
+                "description": "path to the Prisma Migrate migrations directory",
+                "inherit": false,
+                "value": {
+                  "name": "folder",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "to-migrations",
+                "description": "path to the Prisma Migrate migrations directory",
+                "inherit": false,
+                "value": {
+                  "name": "folder",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "shadow-database-url",
+                "description": "uRL for the shadow database. Only required if using --from-migrations or...",
+                "inherit": false,
+                "value": {
+                  "name": "full-url",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "script",
+                "description": "render a SQL script to stdout instead of the default human readable summ...",
+                "inherit": false,
+                "value": {
+                  "name": "filepath",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "exit-code",
+                "description": "change the exit code behavior to signal if the diff is empty or not (Emp...",
+                "inherit": false
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          }
+        ]
+      },
+      {
+        "name": "db",
+        "description": "manage your database schema and lifecycle (Preview)",
+        "subcommands": [
+          {
+            "name": "pull",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set Prisma schema path",
+                "inherit": false,
+                "long": "schema",
+                "value": {
+                  "name": "schema",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "force",
+                "description": "ignore current Prisma schema file",
+                "priority": -10,
+                "inherit": false
+              },
+              {
+                "long": "print",
+                "description": "print the introspected Prisma schema to stdout",
+                "inherit": false
+              },
+              {
+                "long": "url",
+                "description": "the datasource url",
+                "inherit": false,
+                "value": {
+                  "name": "full-url",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "composite-type-depth",
+                "description": "specify the depth for introspecting composite types (e.g. Embedded Docum...",
+                "inherit": false,
+                "value": {
+                  "name": "number"
+                }
+              }
+            ]
+          },
+          {
+            "name": "push",
+            "description": "this command pushes the state of your Prisma schema file to the database with...",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set Prisma schema path",
+                "inherit": false,
+                "long": "schema",
+                "value": {
+                  "name": "schema",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "skip-generate",
+                "description": "skip generation of artifacts such as Prisma Client",
+                "inherit": false
+              },
+              {
+                "long": "force-reset",
+                "description": "resets the database and then updates the schema - useful if you need to...",
+                "priority": -10,
+                "inherit": false
+              },
+              {
+                "long": "accept-data-loss",
+                "description": "ignore data loss warnings. This option is required if as a result of mak...",
+                "priority": -10,
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "seed",
+            "description": "seed your database",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set Prisma schema path",
+                "inherit": false,
+                "long": "schema",
+                "value": {
+                  "name": "schema",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "execute",
+            "description": "execute native commands to your database",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set Prisma schema path",
+                "inherit": false,
+                "long": "schema",
+                "value": {
+                  "name": "schema",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "url",
+                "description": "the datasource url",
+                "inherit": false,
+                "value": {
+                  "name": "full-url",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "file",
+                "description": "path to a file. The content will be sent as the script to be executed",
+                "inherit": false,
+                "value": {
+                  "name": "filepath",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "stdin",
+                "description": "use the terminal standard input as the script to be executed",
+                "inherit": false
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "aliases": [],
+        "description": "print current version of Prisma components",
+        "subcommands": [
+          {
+            "name": "--json",
+            "description": "output JSON"
+          }
+        ],
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "prisma.datasource-providers": {
+        "values": [
+          "PostgreSQL",
+          "MySQL",
+          "SQLite",
+          "SQLServer",
+          "MongoDB",
+          "CockroachDB"
+        ]
+      },
+      "prisma.browsers": {
+        "values": [
+          "firefox",
+          "chrome",
+          "safari",
+          "none"
+        ]
+      }
+    }
+  }
+}
