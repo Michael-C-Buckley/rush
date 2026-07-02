@@ -1,0 +1,6 @@
+__rush_complete_login_users() {
+  while IFS=: read -r username _; do
+    test -n "$username" || continue
+    rush_complete candidate "$username" --kind plain --description "user"
+  done < /etc/passwd
+}

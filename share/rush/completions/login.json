@@ -1,0 +1,45 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "login",
+    "description": "begin a system login session",
+    "options": [
+      {
+        "short": "p",
+        "description": "preserve environment",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "description": "perform autologin protocol for rlogin",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "description": "specify host",
+        "inherit": false,
+        "value": {
+          "name": "host"
+        }
+      },
+      {
+        "short": "f",
+        "description": "don't authenticate user, user is preauthenticated",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "username",
+          "index": 0,
+          "description": "user name",
+          "provider": {
+            "function": "__rush_complete_login_users"
+          }
+        }
+      ]
+    }
+  }
+}
