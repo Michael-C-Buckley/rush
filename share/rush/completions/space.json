@@ -1,0 +1,370 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "space",
+    "description": "work with JetBrains Space",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "display help",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "completion",
+        "description": "generate the autocompletion script for the specified shell",
+        "subcommands": [
+          {
+            "name": "bash",
+            "description": "generate the autocompletion script for bash",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "fish",
+            "description": "generate the autocompletion script for fish",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "powershell",
+            "description": "generate the autocompletion script for powershell",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "zsh",
+            "description": "generate the autocompletion script for zsh",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "link",
+        "description": "link code to project",
+        "options": [
+          {
+            "long": "dir",
+            "short": "d",
+            "description": "src of project to link",
+            "inherit": false,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "id",
+            "short": "i",
+            "description": "project id of project to link",
+            "inherit": false,
+            "value": {
+              "name": "id"
+            }
+          }
+        ]
+      },
+      {
+        "name": "login",
+        "description": "login to space"
+      },
+      {
+        "name": "new",
+        "description": "create new project",
+        "options": [
+          {
+            "long": "blank",
+            "short": "b",
+            "description": "create blank project",
+            "inherit": false
+          },
+          {
+            "long": "dir",
+            "short": "d",
+            "description": "src of project to release",
+            "inherit": false,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "name",
+            "short": "n",
+            "description": "project name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "open",
+        "description": "open current project in browser",
+        "options": [
+          {
+            "long": "dir",
+            "short": "d",
+            "description": "src of project to open",
+            "inherit": false,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "id",
+            "short": "i",
+            "description": "project id of project to open",
+            "inherit": false,
+            "value": {
+              "name": "id"
+            }
+          }
+        ]
+      },
+      {
+        "name": "push",
+        "description": "push code for project",
+        "options": [
+          {
+            "long": "dir",
+            "short": "d",
+            "description": "src of project to push",
+            "inherit": false,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "id",
+            "short": "i",
+            "description": "project id of project to push",
+            "inherit": false,
+            "value": {
+              "name": "id"
+            }
+          },
+          {
+            "long": "open",
+            "short": "o",
+            "description": "open builder instance/project in browser after push",
+            "inherit": false
+          },
+          {
+            "long": "skip-logs",
+            "description": "skip following logs after push",
+            "inherit": false
+          },
+          {
+            "long": "tag",
+            "short": "t",
+            "description": "tag to identify this push",
+            "inherit": false,
+            "value": {
+              "name": "tag"
+            }
+          }
+        ]
+      },
+      {
+        "name": "release",
+        "description": "create release for a project",
+        "options": [
+          {
+            "long": "confirm",
+            "short": "c",
+            "description": "release latest revision",
+            "inherit": false
+          },
+          {
+            "long": "dir",
+            "short": "d",
+            "description": "src of project to release",
+            "inherit": false,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "id",
+            "short": "i",
+            "description": "project id of an existing project",
+            "inherit": false,
+            "value": {
+              "name": "id"
+            }
+          },
+          {
+            "long": "listed",
+            "short": "l",
+            "description": "listed on discovery",
+            "inherit": false
+          },
+          {
+            "long": "notes",
+            "short": "n",
+            "description": "release notes",
+            "inherit": false,
+            "value": {
+              "name": "notes"
+            }
+          },
+          {
+            "long": "rid",
+            "short": "r",
+            "description": "revision id for release",
+            "inherit": false,
+            "value": {
+              "name": "rid"
+            }
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "version for the release",
+            "inherit": false,
+            "value": {
+              "name": "version"
+            }
+          }
+        ]
+      },
+      {
+        "name": "validate",
+        "description": "validate spacefile in dir",
+        "options": [
+          {
+            "long": "dir",
+            "short": "d",
+            "description": "src of project to validate",
+            "inherit": false,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "space CLI version",
+        "subcommands": [
+          {
+            "name": "upgrade",
+            "description": "upgrade Space CLI version",
+            "options": [
+              {
+                "long": "version",
+                "short": "v",
+                "description": "version number",
+                "inherit": false,
+                "value": {
+                  "name": "version"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "help about any command",
+        "subcommands": [
+          {
+            "name": "completion",
+            "description": "generate the autocompletion script for the specified shell",
+            "subcommands": [
+              {
+                "name": "bash",
+                "description": "generate the autocompletion script for bash"
+              },
+              {
+                "name": "fish",
+                "description": "generate the autocompletion script for fish"
+              },
+              {
+                "name": "powershell",
+                "description": "generate the autocompletion script for powershell"
+              },
+              {
+                "name": "zsh",
+                "description": "generate the autocompletion script for zsh"
+              }
+            ]
+          },
+          {
+            "name": "link",
+            "description": "link code to project"
+          },
+          {
+            "name": "login",
+            "description": "login to space"
+          },
+          {
+            "name": "new",
+            "description": "create new project"
+          },
+          {
+            "name": "open",
+            "description": "open current project in browser"
+          },
+          {
+            "name": "push",
+            "description": "push code for project"
+          },
+          {
+            "name": "release",
+            "description": "create release for a project"
+          },
+          {
+            "name": "validate",
+            "description": "validate spacefile in dir"
+          },
+          {
+            "name": "version",
+            "description": "space CLI version",
+            "subcommands": [
+              {
+                "name": "upgrade",
+                "description": "upgrade Space CLI version"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
