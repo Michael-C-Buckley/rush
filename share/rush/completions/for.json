@@ -1,0 +1,33 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "for",
+    "description": "iterate over values",
+    "arguments": {
+      "states": [
+        {
+          "name": "var",
+          "index": 0,
+          "description": "loop variable"
+        },
+        {
+          "name": "in",
+          "provider": {
+            "values": [
+              "in"
+            ]
+          },
+          "index": 1,
+          "description": "for-loop separator"
+        },
+        {
+          "name": "values",
+          "index": 2,
+          "repeatable": true,
+          "description": "values to iterate"
+        }
+      ]
+    }
+  }
+}
