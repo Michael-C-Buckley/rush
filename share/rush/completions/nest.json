@@ -1,0 +1,1417 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "nest",
+    "description": "manage NestJS projects",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "Show help for nest",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "new",
+        "aliases": [
+          "n"
+        ],
+        "description": "Creates a new nest project",
+        "arguments": {
+          "states": [
+            {
+              "name": "project",
+              "description": "The name of the project",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "generate",
+        "aliases": [
+          "g"
+        ],
+        "description": "Generate and/or modifies files based on a schematic",
+        "subcommands": [
+          {
+            "name": "application",
+            "description": "Generate a new application workspace",
+            "arguments": {
+              "states": [
+                {
+                  "name": "application",
+                  "description": "The name of the application",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "d",
+                "long": "dry-run",
+                "description": "show actions without writing files",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "project in which to generate files",
+                "inherit": false,
+                "value": {
+                  "name": "project"
+                }
+              },
+              {
+                "long": "flat",
+                "description": "generate a flat file structure",
+                "inherit": false
+              },
+              {
+                "long": "spec",
+                "description": "generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "no-spec"
+                ]
+              },
+              {
+                "long": "no-spec",
+                "description": "do not generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "spec"
+                ]
+              },
+              {
+                "short": "c",
+                "long": "collection",
+                "description": "schematics collection to use",
+                "inherit": false,
+                "value": {
+                  "name": "collection"
+                }
+              }
+            ]
+          },
+          {
+            "name": "class",
+            "aliases": [
+              "cl"
+            ],
+            "description": "Generate a new class",
+            "arguments": {
+              "states": [
+                {
+                  "name": "class",
+                  "description": "The name of the class",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "d",
+                "long": "dry-run",
+                "description": "show actions without writing files",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "project in which to generate files",
+                "inherit": false,
+                "value": {
+                  "name": "project"
+                }
+              },
+              {
+                "long": "flat",
+                "description": "generate a flat file structure",
+                "inherit": false
+              },
+              {
+                "long": "spec",
+                "description": "generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "no-spec"
+                ]
+              },
+              {
+                "long": "no-spec",
+                "description": "do not generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "spec"
+                ]
+              },
+              {
+                "short": "c",
+                "long": "collection",
+                "description": "schematics collection to use",
+                "inherit": false,
+                "value": {
+                  "name": "collection"
+                }
+              }
+            ]
+          },
+          {
+            "name": "configuration",
+            "aliases": [
+              "config"
+            ],
+            "description": "Generate a CLI configuration file",
+            "arguments": {
+              "states": [
+                {
+                  "name": "configuration",
+                  "description": "The name of the configuration",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "d",
+                "long": "dry-run",
+                "description": "show actions without writing files",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "project in which to generate files",
+                "inherit": false,
+                "value": {
+                  "name": "project"
+                }
+              },
+              {
+                "long": "flat",
+                "description": "generate a flat file structure",
+                "inherit": false
+              },
+              {
+                "long": "spec",
+                "description": "generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "no-spec"
+                ]
+              },
+              {
+                "long": "no-spec",
+                "description": "do not generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "spec"
+                ]
+              },
+              {
+                "short": "c",
+                "long": "collection",
+                "description": "schematics collection to use",
+                "inherit": false,
+                "value": {
+                  "name": "collection"
+                }
+              }
+            ]
+          },
+          {
+            "name": "controller",
+            "aliases": [
+              "co"
+            ],
+            "description": "Generate a controller declaration",
+            "arguments": {
+              "states": [
+                {
+                  "name": "controller",
+                  "description": "The name of the controller",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "d",
+                "long": "dry-run",
+                "description": "show actions without writing files",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "project in which to generate files",
+                "inherit": false,
+                "value": {
+                  "name": "project"
+                }
+              },
+              {
+                "long": "flat",
+                "description": "generate a flat file structure",
+                "inherit": false
+              },
+              {
+                "long": "spec",
+                "description": "generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "no-spec"
+                ]
+              },
+              {
+                "long": "no-spec",
+                "description": "do not generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "spec"
+                ]
+              },
+              {
+                "short": "c",
+                "long": "collection",
+                "description": "schematics collection to use",
+                "inherit": false,
+                "value": {
+                  "name": "collection"
+                }
+              }
+            ]
+          },
+          {
+            "name": "decorator",
+            "aliases": [
+              "d"
+            ],
+            "description": "Generate a custom decorator",
+            "arguments": {
+              "states": [
+                {
+                  "name": "decorator",
+                  "description": "The name of the decorator",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "d",
+                "long": "dry-run",
+                "description": "show actions without writing files",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "project in which to generate files",
+                "inherit": false,
+                "value": {
+                  "name": "project"
+                }
+              },
+              {
+                "long": "flat",
+                "description": "generate a flat file structure",
+                "inherit": false
+              },
+              {
+                "long": "spec",
+                "description": "generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "no-spec"
+                ]
+              },
+              {
+                "long": "no-spec",
+                "description": "do not generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "spec"
+                ]
+              },
+              {
+                "short": "c",
+                "long": "collection",
+                "description": "schematics collection to use",
+                "inherit": false,
+                "value": {
+                  "name": "collection"
+                }
+              }
+            ]
+          },
+          {
+            "name": "filter",
+            "aliases": [
+              "f"
+            ],
+            "description": "Generate a filter declaration",
+            "arguments": {
+              "states": [
+                {
+                  "name": "filter",
+                  "description": "The name of the filter",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "d",
+                "long": "dry-run",
+                "description": "show actions without writing files",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "project in which to generate files",
+                "inherit": false,
+                "value": {
+                  "name": "project"
+                }
+              },
+              {
+                "long": "flat",
+                "description": "generate a flat file structure",
+                "inherit": false
+              },
+              {
+                "long": "spec",
+                "description": "generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "no-spec"
+                ]
+              },
+              {
+                "long": "no-spec",
+                "description": "do not generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "spec"
+                ]
+              },
+              {
+                "short": "c",
+                "long": "collection",
+                "description": "schematics collection to use",
+                "inherit": false,
+                "value": {
+                  "name": "collection"
+                }
+              }
+            ]
+          },
+          {
+            "name": "gateway",
+            "aliases": [
+              "ga"
+            ],
+            "description": "Generate a gateway declaration",
+            "arguments": {
+              "states": [
+                {
+                  "name": "gateway",
+                  "description": "The name of the gateway",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "d",
+                "long": "dry-run",
+                "description": "show actions without writing files",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "project in which to generate files",
+                "inherit": false,
+                "value": {
+                  "name": "project"
+                }
+              },
+              {
+                "long": "flat",
+                "description": "generate a flat file structure",
+                "inherit": false
+              },
+              {
+                "long": "spec",
+                "description": "generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "no-spec"
+                ]
+              },
+              {
+                "long": "no-spec",
+                "description": "do not generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "spec"
+                ]
+              },
+              {
+                "short": "c",
+                "long": "collection",
+                "description": "schematics collection to use",
+                "inherit": false,
+                "value": {
+                  "name": "collection"
+                }
+              }
+            ]
+          },
+          {
+            "name": "guard",
+            "aliases": [
+              "gu"
+            ],
+            "description": "Generate a guard declaration",
+            "arguments": {
+              "states": [
+                {
+                  "name": "guard",
+                  "description": "The name of the guard",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "d",
+                "long": "dry-run",
+                "description": "show actions without writing files",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "project in which to generate files",
+                "inherit": false,
+                "value": {
+                  "name": "project"
+                }
+              },
+              {
+                "long": "flat",
+                "description": "generate a flat file structure",
+                "inherit": false
+              },
+              {
+                "long": "spec",
+                "description": "generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "no-spec"
+                ]
+              },
+              {
+                "long": "no-spec",
+                "description": "do not generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "spec"
+                ]
+              },
+              {
+                "short": "c",
+                "long": "collection",
+                "description": "schematics collection to use",
+                "inherit": false,
+                "value": {
+                  "name": "collection"
+                }
+              }
+            ]
+          },
+          {
+            "name": "interceptor",
+            "aliases": [
+              "in"
+            ],
+            "description": "Generate an interceptor declaration",
+            "arguments": {
+              "states": [
+                {
+                  "name": "interceptor",
+                  "description": "The name of the interceptor",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "d",
+                "long": "dry-run",
+                "description": "show actions without writing files",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "project in which to generate files",
+                "inherit": false,
+                "value": {
+                  "name": "project"
+                }
+              },
+              {
+                "long": "flat",
+                "description": "generate a flat file structure",
+                "inherit": false
+              },
+              {
+                "long": "spec",
+                "description": "generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "no-spec"
+                ]
+              },
+              {
+                "long": "no-spec",
+                "description": "do not generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "spec"
+                ]
+              },
+              {
+                "short": "c",
+                "long": "collection",
+                "description": "schematics collection to use",
+                "inherit": false,
+                "value": {
+                  "name": "collection"
+                }
+              }
+            ]
+          },
+          {
+            "name": "interface",
+            "description": "Generate an interface",
+            "arguments": {
+              "states": [
+                {
+                  "name": "interface",
+                  "description": "The name of the interface",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "d",
+                "long": "dry-run",
+                "description": "show actions without writing files",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "project in which to generate files",
+                "inherit": false,
+                "value": {
+                  "name": "project"
+                }
+              },
+              {
+                "long": "flat",
+                "description": "generate a flat file structure",
+                "inherit": false
+              },
+              {
+                "long": "spec",
+                "description": "generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "no-spec"
+                ]
+              },
+              {
+                "long": "no-spec",
+                "description": "do not generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "spec"
+                ]
+              },
+              {
+                "short": "c",
+                "long": "collection",
+                "description": "schematics collection to use",
+                "inherit": false,
+                "value": {
+                  "name": "collection"
+                }
+              }
+            ]
+          },
+          {
+            "name": "middleware",
+            "aliases": [
+              "mi"
+            ],
+            "description": "Generate a middleware declaration",
+            "arguments": {
+              "states": [
+                {
+                  "name": "middleware",
+                  "description": "The name of the middleware",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "d",
+                "long": "dry-run",
+                "description": "show actions without writing files",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "project in which to generate files",
+                "inherit": false,
+                "value": {
+                  "name": "project"
+                }
+              },
+              {
+                "long": "flat",
+                "description": "generate a flat file structure",
+                "inherit": false
+              },
+              {
+                "long": "spec",
+                "description": "generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "no-spec"
+                ]
+              },
+              {
+                "long": "no-spec",
+                "description": "do not generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "spec"
+                ]
+              },
+              {
+                "short": "c",
+                "long": "collection",
+                "description": "schematics collection to use",
+                "inherit": false,
+                "value": {
+                  "name": "collection"
+                }
+              }
+            ]
+          },
+          {
+            "name": "module",
+            "aliases": [
+              "mo"
+            ],
+            "description": "Generate a module declaration",
+            "arguments": {
+              "states": [
+                {
+                  "name": "module",
+                  "description": "The name of the module",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "d",
+                "long": "dry-run",
+                "description": "show actions without writing files",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "project in which to generate files",
+                "inherit": false,
+                "value": {
+                  "name": "project"
+                }
+              },
+              {
+                "long": "flat",
+                "description": "generate a flat file structure",
+                "inherit": false
+              },
+              {
+                "long": "spec",
+                "description": "generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "no-spec"
+                ]
+              },
+              {
+                "long": "no-spec",
+                "description": "do not generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "spec"
+                ]
+              },
+              {
+                "short": "c",
+                "long": "collection",
+                "description": "schematics collection to use",
+                "inherit": false,
+                "value": {
+                  "name": "collection"
+                }
+              }
+            ]
+          },
+          {
+            "name": "pipe",
+            "aliases": [
+              "p"
+            ],
+            "description": "Generate a pipe declaration",
+            "arguments": {
+              "states": [
+                {
+                  "name": "pipe",
+                  "description": "The name of the pipe",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "d",
+                "long": "dry-run",
+                "description": "show actions without writing files",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "project in which to generate files",
+                "inherit": false,
+                "value": {
+                  "name": "project"
+                }
+              },
+              {
+                "long": "flat",
+                "description": "generate a flat file structure",
+                "inherit": false
+              },
+              {
+                "long": "spec",
+                "description": "generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "no-spec"
+                ]
+              },
+              {
+                "long": "no-spec",
+                "description": "do not generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "spec"
+                ]
+              },
+              {
+                "short": "c",
+                "long": "collection",
+                "description": "schematics collection to use",
+                "inherit": false,
+                "value": {
+                  "name": "collection"
+                }
+              }
+            ]
+          },
+          {
+            "name": "provider",
+            "aliases": [
+              "pr"
+            ],
+            "description": "Generate a provider declaration",
+            "arguments": {
+              "states": [
+                {
+                  "name": "provider",
+                  "description": "The name of the provider",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "d",
+                "long": "dry-run",
+                "description": "show actions without writing files",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "project in which to generate files",
+                "inherit": false,
+                "value": {
+                  "name": "project"
+                }
+              },
+              {
+                "long": "flat",
+                "description": "generate a flat file structure",
+                "inherit": false
+              },
+              {
+                "long": "spec",
+                "description": "generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "no-spec"
+                ]
+              },
+              {
+                "long": "no-spec",
+                "description": "do not generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "spec"
+                ]
+              },
+              {
+                "short": "c",
+                "long": "collection",
+                "description": "schematics collection to use",
+                "inherit": false,
+                "value": {
+                  "name": "collection"
+                }
+              }
+            ]
+          },
+          {
+            "name": "resolver",
+            "aliases": [
+              "r"
+            ],
+            "description": "Generate a GraphQL resolver declaration",
+            "arguments": {
+              "states": [
+                {
+                  "name": "resolver",
+                  "description": "The name of the resolver",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "d",
+                "long": "dry-run",
+                "description": "show actions without writing files",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "project in which to generate files",
+                "inherit": false,
+                "value": {
+                  "name": "project"
+                }
+              },
+              {
+                "long": "flat",
+                "description": "generate a flat file structure",
+                "inherit": false
+              },
+              {
+                "long": "spec",
+                "description": "generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "no-spec"
+                ]
+              },
+              {
+                "long": "no-spec",
+                "description": "do not generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "spec"
+                ]
+              },
+              {
+                "short": "c",
+                "long": "collection",
+                "description": "schematics collection to use",
+                "inherit": false,
+                "value": {
+                  "name": "collection"
+                }
+              }
+            ]
+          },
+          {
+            "name": "service",
+            "aliases": [
+              "s"
+            ],
+            "description": "Generate a service declaration",
+            "arguments": {
+              "states": [
+                {
+                  "name": "service",
+                  "description": "The name of the service",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "d",
+                "long": "dry-run",
+                "description": "show actions without writing files",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "project in which to generate files",
+                "inherit": false,
+                "value": {
+                  "name": "project"
+                }
+              },
+              {
+                "long": "flat",
+                "description": "generate a flat file structure",
+                "inherit": false
+              },
+              {
+                "long": "spec",
+                "description": "generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "no-spec"
+                ]
+              },
+              {
+                "long": "no-spec",
+                "description": "do not generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "spec"
+                ]
+              },
+              {
+                "short": "c",
+                "long": "collection",
+                "description": "schematics collection to use",
+                "inherit": false,
+                "value": {
+                  "name": "collection"
+                }
+              }
+            ]
+          },
+          {
+            "name": "library",
+            "aliases": [
+              "lib"
+            ],
+            "description": "Generate a new library within a monorepo",
+            "arguments": {
+              "states": [
+                {
+                  "name": "library",
+                  "description": "The name of the library",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "d",
+                "long": "dry-run",
+                "description": "show actions without writing files",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "project in which to generate files",
+                "inherit": false,
+                "value": {
+                  "name": "project"
+                }
+              },
+              {
+                "long": "flat",
+                "description": "generate a flat file structure",
+                "inherit": false
+              },
+              {
+                "long": "spec",
+                "description": "generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "no-spec"
+                ]
+              },
+              {
+                "long": "no-spec",
+                "description": "do not generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "spec"
+                ]
+              },
+              {
+                "short": "c",
+                "long": "collection",
+                "description": "schematics collection to use",
+                "inherit": false,
+                "value": {
+                  "name": "collection"
+                }
+              }
+            ]
+          },
+          {
+            "name": "sub-app",
+            "aliases": [
+              "app"
+            ],
+            "description": "Generate a new application within a monorepo",
+            "arguments": {
+              "states": [
+                {
+                  "name": "sub-app",
+                  "description": "The name of the sub-app",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "d",
+                "long": "dry-run",
+                "description": "show actions without writing files",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "project in which to generate files",
+                "inherit": false,
+                "value": {
+                  "name": "project"
+                }
+              },
+              {
+                "long": "flat",
+                "description": "generate a flat file structure",
+                "inherit": false
+              },
+              {
+                "long": "spec",
+                "description": "generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "no-spec"
+                ]
+              },
+              {
+                "long": "no-spec",
+                "description": "do not generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "spec"
+                ]
+              },
+              {
+                "short": "c",
+                "long": "collection",
+                "description": "schematics collection to use",
+                "inherit": false,
+                "value": {
+                  "name": "collection"
+                }
+              }
+            ]
+          },
+          {
+            "name": "resource",
+            "aliases": [
+              "res"
+            ],
+            "description": "Generate a new CRUD resource",
+            "arguments": {
+              "states": [
+                {
+                  "name": "resource",
+                  "description": "The name of the resource",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "d",
+                "long": "dry-run",
+                "description": "show actions without writing files",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "project in which to generate files",
+                "inherit": false,
+                "value": {
+                  "name": "project"
+                }
+              },
+              {
+                "long": "flat",
+                "description": "generate a flat file structure",
+                "inherit": false
+              },
+              {
+                "long": "spec",
+                "description": "generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "no-spec"
+                ]
+              },
+              {
+                "long": "no-spec",
+                "description": "do not generate spec files",
+                "inherit": false,
+                "excludes": [
+                  "spec"
+                ]
+              },
+              {
+                "short": "c",
+                "long": "collection",
+                "description": "schematics collection to use",
+                "inherit": false,
+                "value": {
+                  "name": "collection"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "build",
+        "description": "Builds Nest application",
+        "arguments": {
+          "states": [
+            {
+              "name": "app",
+              "description": "The name of the app",
+              "index": 0,
+              "required": false
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "d",
+            "long": "dry-run",
+            "description": "show actions without writing files",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "project",
+            "description": "project in which to generate files",
+            "inherit": false,
+            "value": {
+              "name": "project"
+            }
+          },
+          {
+            "long": "flat",
+            "description": "generate a flat file structure",
+            "inherit": false
+          },
+          {
+            "long": "spec",
+            "description": "generate spec files",
+            "inherit": false,
+            "excludes": [
+              "no-spec"
+            ]
+          },
+          {
+            "long": "no-spec",
+            "description": "do not generate spec files",
+            "inherit": false,
+            "excludes": [
+              "spec"
+            ]
+          },
+          {
+            "short": "c",
+            "long": "collection",
+            "description": "schematics collection to use",
+            "inherit": false,
+            "value": {
+              "name": "collection"
+            }
+          }
+        ]
+      },
+      {
+        "name": "start",
+        "description": "Run Nest application",
+        "arguments": {
+          "states": [
+            {
+              "name": "app",
+              "description": "The name of the app",
+              "index": 0,
+              "required": false
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "d",
+            "long": "dry-run",
+            "description": "show actions without writing files",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "project",
+            "description": "project in which to generate files",
+            "inherit": false,
+            "value": {
+              "name": "project"
+            }
+          },
+          {
+            "long": "flat",
+            "description": "generate a flat file structure",
+            "inherit": false
+          },
+          {
+            "long": "spec",
+            "description": "generate spec files",
+            "inherit": false,
+            "excludes": [
+              "no-spec"
+            ]
+          },
+          {
+            "long": "no-spec",
+            "description": "do not generate spec files",
+            "inherit": false,
+            "excludes": [
+              "spec"
+            ]
+          },
+          {
+            "short": "c",
+            "long": "collection",
+            "description": "schematics collection to use",
+            "inherit": false,
+            "value": {
+              "name": "collection"
+            }
+          }
+        ]
+      },
+      {
+        "name": "info",
+        "aliases": [
+          "i"
+        ],
+        "description": "Display Nest project details"
+      },
+      {
+        "name": "update",
+        "aliases": [
+          "u"
+        ],
+        "description": "Update Nest dependencies",
+        "options": [
+          {
+            "short": "d",
+            "long": "dry-run",
+            "description": "show actions without writing files",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "project",
+            "description": "project in which to generate files",
+            "inherit": false,
+            "value": {
+              "name": "project"
+            }
+          },
+          {
+            "long": "flat",
+            "description": "generate a flat file structure",
+            "inherit": false
+          },
+          {
+            "long": "spec",
+            "description": "generate spec files",
+            "inherit": false,
+            "excludes": [
+              "no-spec"
+            ]
+          },
+          {
+            "long": "no-spec",
+            "description": "do not generate spec files",
+            "inherit": false,
+            "excludes": [
+              "spec"
+            ]
+          },
+          {
+            "short": "c",
+            "long": "collection",
+            "description": "schematics collection to use",
+            "inherit": false,
+            "value": {
+              "name": "collection"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
