@@ -163,5 +163,82 @@
             .stderr_match = .nonempty,
             .status = 127,
         },
+        .{
+            .name = "brace expansion supports alternatives nesting and later expansions",
+            .script =
+            \\x=X
+            \\xa=AXA
+            \\xb=AXB
+            \\printf '<%s>\n' pre{a,b}post {{a,b},{c,d}} {,empty}
+            \\printf '<%s>\n' $x{a,b} ${x}{a,b} {$(printf cmd),word}
+            \\printf '<%s>\n' ${unset:-{n,o}} "{q,r}" \{e,f\}
+            ,
+            .stdout =
+            \\<preapost>
+            \\<prebpost>
+            \\<a>
+            \\<b>
+            \\<c>
+            \\<d>
+            \\<>
+            \\<empty>
+            \\<AXA>
+            \\<AXB>
+            \\<Xa>
+            \\<Xb>
+            \\<cmd>
+            \\<word>
+            \\<{n,o}>
+            \\<{q,r}>
+            \\<{e,f}>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "brace expansion supports numeric and alphabetic sequences",
+            .script =
+            \\printf '<%s>\n' {1..5..2} {05..1..2} {5..1..0} {a..e..2} {e..a..0} {1..5..x}
+            ,
+            .stdout =
+            \\<1>
+            \\<3>
+            \\<5>
+            \\<05>
+            \\<03>
+            \\<01>
+            \\<5>
+            \\<4>
+            \\<3>
+            \\<2>
+            \\<1>
+            \\<a>
+            \\<c>
+            \\<e>
+            \\<e>
+            \\<d>
+            \\<c>
+            \\<b>
+            \\<a>
+            \\<{1..5..x}>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "brace expansion does not apply to assignment values",
+            .script =
+            \\value=a{b,c}
+            \\printf '<%s>\n' "$value"
+            ,
+            .stdout =
+            \\<a{b,c}>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }

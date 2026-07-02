@@ -61,6 +61,17 @@ pub fn parseBracedParameterExpansion(
     return parser_state.parseBracedParameter(raw_content, span);
 }
 
+// ziglint-ignore: Z015 existing public API error set exposure; preserve API
+pub fn parseWordExpansionText(
+    allocator: std.mem.Allocator,
+    text: []const u8,
+    span: source_mod.Span,
+) ParserError!ast.Word {
+    const src: source_mod.Source = .{ .id = span.source_id, .kind = .command_string, .name = "word", .text = text };
+    var parser_state: Parser = .{ .allocator = allocator, .source = src, .tokens = &.{}, .alias_state = null };
+    return parser_state.parseWordText(text, span);
+}
+
 fn parseWithAliasState(
     allocator: std.mem.Allocator,
     src: source_mod.Source,

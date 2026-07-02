@@ -3633,39 +3633,410 @@ fn expandWordFields(
     var fields: std.ArrayList([]const u8) = .empty;
 
     for (words) |word| {
-        if (try appendUnquotedAtFields(shell, &fields, word) or
-            try appendUnquotedStarFields(shell, &fields, word) or
-            try appendEmbeddedUnquotedPositionalFields(shell, &fields, word) or
-            try appendSpecialQuotedFields(shell, &fields, word))
-        {
-            continue;
-        } else if (!wordHasDynamicExpansion(word)) {
-            try appendStaticWordField(shell, &fields, word);
-        } else {
-            if (wordContainsQuotes(word)) {
-                if (wordDynamicExpansionsAreQuoted(word)) {
-                    try appendPathnameExpandedPattern(
-                        shell,
-                        &fields,
-                        try expandQuotedDynamicWordPathnamePattern(shell, word, substitution_status),
-                    );
-                } else {
-                    const expanded = try expandWordTracking(shell, word, substitution_status);
-                    const ifs = parameterValue(shell, "IFS") orelse " \t\n";
-                    if (ifs.len == 0) {
-                        try appendPathnameExpandedField(shell, &fields, expanded);
-                    } else {
-                        try fields.append(allocator, expanded);
-                    }
-                }
-            } else {
-                const expanded = try expandWordTracking(shell, word, substitution_status);
-                try appendSplitFields(shell, &fields, expanded, !wordExpandsLeadingTilde(shell, word));
-            }
+        const brace_expanded = try braceExpandWord(shell, word);
+        for (brace_expanded) |expanded_word| {
+            try appendExpandedWordFields(shell, &fields, expanded_word, substitution_status);
         }
     }
 
     return fields.toOwnedSlice(allocator);
+}
+
+fn appendExpandedWordFields(
+    shell: anytype,
+    fields: *std.ArrayList([]const u8),
+    word: ast.Word,
+    substitution_status: ?*?result.ExitStatus,
+) EvalError!void {
+    const allocator = shell.scratchAllocator();
+
+    if (try appendUnquotedAtFields(shell, fields, word) or
+        try appendUnquotedStarFields(shell, fields, word) or
+        try appendEmbeddedUnquotedPositionalFields(shell, fields, word) or
+        try appendSpecialQuotedFields(shell, fields, word))
+    {
+        return;
+    } else if (!wordHasDynamicExpansion(word)) {
+        try appendStaticWordField(shell, fields, word);
+    } else {
+        if (wordContainsQuotes(word)) {
+            if (wordDynamicExpansionsAreQuoted(word)) {
+                try appendPathnameExpandedPattern(
+                    shell,
+                    fields,
+                    try expandQuotedDynamicWordPathnamePattern(shell, word, substitution_status),
+                );
+            } else {
+                const expanded = try expandWordTracking(shell, word, substitution_status);
+                const ifs = parameterValue(shell, "IFS") orelse " \t\n";
+                if (ifs.len == 0) {
+                    try appendPathnameExpandedField(shell, fields, expanded);
+                } else {
+                    try fields.append(allocator, expanded);
+                }
+            }
+        } else {
+            const expanded = try expandWordTracking(shell, word, substitution_status);
+            try appendSplitFields(shell, fields, expanded, !wordExpandsLeadingTilde(shell, word));
+        }
+    }
+}
+
+const BraceAtom = union(enum) {
+    byte: u8,
+    part: ast.WordPart,
+};
+
+const BraceExpansion = union(enum) {
+    alternatives: []const []const BraceAtom,
+    sequence: []const []const u8,
+};
+
+const BraceMatch = struct {
+    start: usize,
+    end: usize,
+    expansion: BraceExpansion,
+};
+
+fn braceExpandWord(shell: anytype, word: ast.Word) ![]const ast.Word {
+    if (shell.state.options.mode == .posix) {
+        const words = try shell.scratchAllocator().alloc(ast.Word, 1);
+        words[0] = word;
+        return words;
+    }
+
+    const atoms = try braceAtomsFromWord(shell, word);
+    var expanded: std.ArrayList(ast.Word) = .empty;
+    try appendBraceExpandedWords(shell, &expanded, atoms, word.span, word.quoted);
+    return expanded.toOwnedSlice(shell.scratchAllocator());
+}
+
+fn braceAtomsFromWord(shell: anytype, word: ast.Word) ![]const BraceAtom {
+    var atoms: std.ArrayList(BraceAtom) = .empty;
+    switch (word.data) {
+        .literal => |literal| try appendBraceTextAtoms(shell, &atoms, literal),
+        .parts => |parts| for (parts) |part| switch (part) {
+            .literal => |literal| try appendBraceTextAtoms(shell, &atoms, literal),
+            .parameter => |parameter| if (!try appendBraceParameterAtoms(shell, &atoms, parameter)) {
+                try atoms.append(shell.scratchAllocator(), .{ .part = part });
+            },
+            else => try atoms.append(shell.scratchAllocator(), .{ .part = part }),
+        },
+    }
+    return atoms.toOwnedSlice(shell.scratchAllocator());
+}
+
+fn appendBraceTextAtoms(shell: anytype, atoms: *std.ArrayList(BraceAtom), text: []const u8) !void {
+    for (text) |byte| try atoms.append(shell.scratchAllocator(), .{ .byte = byte });
+}
+
+fn appendBraceParameterAtoms(
+    shell: anytype,
+    atoms: *std.ArrayList(BraceAtom),
+    parameter: ast.ParameterExpansion,
+) !bool {
+    const text = try unbracedParameterExpansionText(shell, parameter) orelse return false;
+    try appendBraceTextAtoms(shell, atoms, text);
+    return true;
+}
+
+fn unbracedParameterExpansionText(shell: anytype, expansion: ast.ParameterExpansion) !?[]const u8 {
+    if (expansion.length or expansion.colon or expansion.op != null or expansion.word != null) return null;
+
+    const expected_len: usize = switch (expansion.parameter) {
+        .variable => |name| 1 + name.len,
+        .positional, .special => 2,
+    };
+    if (expansion.span.len() != expected_len) return null;
+
+    return switch (expansion.parameter) {
+        .variable => |name| try std.fmt.allocPrint(shell.scratchAllocator(), "${s}", .{name}),
+        .positional => |index| if (index < 10)
+            try std.fmt.allocPrint(shell.scratchAllocator(), "${}", .{index})
+        else
+            null,
+        .special => |special| try std.fmt.allocPrint(
+            shell.scratchAllocator(),
+            "${c}",
+            .{specialParameterByte(special)},
+        ),
+    };
+}
+
+fn specialParameterByte(parameter: ast.SpecialParameter) u8 {
+    return switch (parameter) {
+        .at => '@',
+        .star => '*',
+        .hash => '#',
+        .question => '?',
+        .hyphen => '-',
+        .dollar => '$',
+        .bang => '!',
+    };
+}
+
+fn appendBraceExpandedWords(
+    shell: anytype,
+    words: *std.ArrayList(ast.Word),
+    atoms: []const BraceAtom,
+    span: source_mod.Span,
+    quoted: bool,
+) !void {
+    const match = try firstBraceMatch(shell, atoms) orelse {
+        try words.append(shell.scratchAllocator(), try wordFromBraceAtoms(shell, atoms, span, quoted));
+        return;
+    };
+
+    switch (match.expansion) {
+        .alternatives => |alternatives| {
+            for (alternatives) |alternative| {
+                const expanded = try spliceBraceAtoms(
+                    shell,
+                    atoms[0..match.start],
+                    alternative,
+                    atoms[match.end + 1 ..],
+                );
+                try appendBraceExpandedWords(shell, words, expanded, span, quoted);
+            }
+        },
+        .sequence => |items| {
+            for (items) |item| {
+                const item_atoms = try textBraceAtoms(shell, item);
+                const expanded = try spliceBraceAtoms(
+                    shell,
+                    atoms[0..match.start],
+                    item_atoms,
+                    atoms[match.end + 1 ..],
+                );
+                try appendBraceExpandedWords(shell, words, expanded, span, quoted);
+            }
+        },
+    }
+}
+
+fn firstBraceMatch(shell: anytype, atoms: []const BraceAtom) !?BraceMatch {
+    var index: usize = 0;
+    while (index < atoms.len) : (index += 1) {
+        if (!braceAtomByteEquals(atoms[index], '{')) continue;
+        const end = matchingBraceEnd(atoms, index) orelse continue;
+        const content = atoms[index + 1 .. end];
+        if (try braceSequence(shell, content)) |sequence| {
+            return .{ .start = index, .end = end, .expansion = .{ .sequence = sequence } };
+        }
+        if (try braceAlternatives(shell, content)) |alternatives| {
+            return .{ .start = index, .end = end, .expansion = .{ .alternatives = alternatives } };
+        }
+    }
+    return null;
+}
+
+fn matchingBraceEnd(atoms: []const BraceAtom, start: usize) ?usize {
+    std.debug.assert(braceAtomByteEquals(atoms[start], '{'));
+    var depth: usize = 0;
+    for (atoms[start..], start..) |atom, index| {
+        if (braceAtomByteEquals(atom, '{')) {
+            depth += 1;
+        } else if (braceAtomByteEquals(atom, '}')) {
+            depth -= 1;
+            if (depth == 0) return index;
+        }
+    }
+    return null;
+}
+
+fn braceAlternatives(shell: anytype, content: []const BraceAtom) !?[]const []const BraceAtom {
+    var alternatives: std.ArrayList([]const BraceAtom) = .empty;
+    var depth: usize = 0;
+    var start: usize = 0;
+    var found_comma = false;
+
+    for (content, 0..) |atom, index| {
+        if (braceAtomByteEquals(atom, '{')) {
+            depth += 1;
+        } else if (braceAtomByteEquals(atom, '}')) {
+            if (depth == 0) return null;
+            depth -= 1;
+        } else if (depth == 0 and braceAtomByteEquals(atom, ',')) {
+            found_comma = true;
+            try alternatives.append(shell.scratchAllocator(), content[start..index]);
+            start = index + 1;
+        }
+    }
+    if (!found_comma) return null;
+    try alternatives.append(shell.scratchAllocator(), content[start..]);
+    return try alternatives.toOwnedSlice(shell.scratchAllocator());
+}
+
+fn braceSequence(shell: anytype, content: []const BraceAtom) !?[]const []const u8 {
+    const text = try braceAtomText(shell, content) orelse return null;
+    var parts: std.ArrayList([]const u8) = .empty;
+    var start: usize = 0;
+    var index: usize = 0;
+    while (index + 1 < text.len) : (index += 1) {
+        if (text[index] == '.' and text[index + 1] == '.') {
+            try parts.append(shell.scratchAllocator(), text[start..index]);
+            index += 1;
+            start = index + 1;
+        }
+    }
+    if (parts.items.len == 0) return null;
+    try parts.append(shell.scratchAllocator(), text[start..]);
+    if (parts.items.len == 2 or parts.items.len == 3) {
+        if (try numericBraceSequence(shell, parts.items)) |sequence| return sequence;
+        if (try alphabeticBraceSequence(shell, parts.items)) |sequence| return sequence;
+    }
+    return null;
+}
+
+const NumericBraceBound = struct {
+    value: i64,
+    width: usize,
+    padded: bool,
+};
+
+fn numericBraceSequence(shell: anytype, parts: []const []const u8) !?[]const []const u8 {
+    const start = parseNumericBraceBound(parts[0]) orelse return null;
+    const end = parseNumericBraceBound(parts[1]) orelse return null;
+    const raw_step = if (parts.len == 3) std.fmt.parseInt(i64, parts[2], 10) catch return null else 1;
+    const step_magnitude: i128 = if (raw_step == 0) 1 else @intCast(@abs(raw_step));
+    const step = if (start.value <= end.value) step_magnitude else -step_magnitude;
+    const width = @max(start.width, end.width);
+    const padded = start.padded or end.padded;
+
+    var items: std.ArrayList([]const u8) = .empty;
+    var value = start.value;
+    while (true) {
+        const text = if (padded)
+            try paddedNumericBraceValue(shell, value, width)
+        else
+            try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{value});
+        try items.append(shell.scratchAllocator(), text);
+
+        const next: i128 = @as(i128, value) + step;
+        if (step > 0) {
+            if (next > end.value) break;
+        } else if (next < end.value) break;
+        value = @intCast(next);
+    }
+    return try items.toOwnedSlice(shell.scratchAllocator());
+}
+
+fn paddedNumericBraceValue(shell: anytype, value: i64, width: usize) ![]const u8 {
+    const raw = try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{value});
+    const sign_len: usize = if (raw[0] == '-') 1 else 0;
+    if (raw.len - sign_len >= width) return raw;
+
+    const zero_count = width - (raw.len - sign_len);
+    const padded = try shell.scratchAllocator().alloc(u8, sign_len + zero_count + raw.len - sign_len);
+    if (sign_len != 0) padded[0] = raw[0];
+    @memset(padded[sign_len..][0..zero_count], '0');
+    @memcpy(padded[sign_len + zero_count ..], raw[sign_len..]);
+    return padded;
+}
+
+fn parseNumericBraceBound(text: []const u8) ?NumericBraceBound {
+    if (text.len == 0) return null;
+    var digit_start: usize = 0;
+    if (text[0] == '-' or text[0] == '+') digit_start = 1;
+    if (digit_start == text.len) return null;
+    for (text[digit_start..]) |byte| if (!std.ascii.isDigit(byte)) return null;
+    const digits = text[digit_start..];
+    return .{
+        .value = std.fmt.parseInt(i64, text, 10) catch return null,
+        .width = digits.len,
+        .padded = digits.len > 1 and digits[0] == '0',
+    };
+}
+
+fn alphabeticBraceSequence(shell: anytype, parts: []const []const u8) !?[]const []const u8 {
+    if (parts[0].len != 1 or parts[1].len != 1) return null;
+    if (!std.ascii.isAlphabetic(parts[0][0]) or !std.ascii.isAlphabetic(parts[1][0])) return null;
+    const raw_step = if (parts.len == 3) std.fmt.parseInt(i64, parts[2], 10) catch return null else 1;
+    const start: i64 = parts[0][0];
+    const end: i64 = parts[1][0];
+    const step_magnitude: i128 = if (raw_step == 0) 1 else @intCast(@abs(raw_step));
+    const step = if (start <= end) step_magnitude else -step_magnitude;
+
+    var items: std.ArrayList([]const u8) = .empty;
+    var value = start;
+    while (true) {
+        const text = try shell.scratchAllocator().alloc(u8, 1);
+        text[0] = @intCast(value);
+        try items.append(shell.scratchAllocator(), text);
+
+        const next: i128 = @as(i128, value) + step;
+        if (step > 0) {
+            if (next > end) break;
+        } else if (next < end) break;
+        value = @intCast(next);
+    }
+    return try items.toOwnedSlice(shell.scratchAllocator());
+}
+
+fn braceAtomText(shell: anytype, atoms: []const BraceAtom) !?[]const u8 {
+    for (atoms) |atom| if (atom != .byte) return null;
+    return try braceAtomsText(shell, atoms);
+}
+
+fn braceAtomByteEquals(atom: BraceAtom, byte: u8) bool {
+    return atom == .byte and atom.byte == byte;
+}
+
+fn textBraceAtoms(shell: anytype, text: []const u8) ![]const BraceAtom {
+    const atoms = try shell.scratchAllocator().alloc(BraceAtom, text.len);
+    for (text, 0..) |byte, index| atoms[index] = .{ .byte = byte };
+    return atoms;
+}
+
+fn spliceBraceAtoms(
+    shell: anytype,
+    prefix: []const BraceAtom,
+    middle: []const BraceAtom,
+    suffix: []const BraceAtom,
+) ![]const BraceAtom {
+    const atoms = try shell.scratchAllocator().alloc(BraceAtom, prefix.len + middle.len + suffix.len);
+    @memcpy(atoms[0..prefix.len], prefix);
+    @memcpy(atoms[prefix.len..][0..middle.len], middle);
+    @memcpy(atoms[prefix.len + middle.len ..], suffix);
+    return atoms;
+}
+
+fn wordFromBraceAtoms(shell: anytype, atoms: []const BraceAtom, span: source_mod.Span, quoted: bool) !ast.Word {
+    var has_part = false;
+    for (atoms) |atom| if (atom == .part) {
+        has_part = true;
+        break;
+    };
+    if (!has_part) {
+        var word = try parser.parseWordExpansionText(shell.scratchAllocator(), try braceAtomsText(shell, atoms), span);
+        word.quoted = quoted;
+        return word;
+    }
+
+    var parts: std.ArrayList(ast.WordPart) = .empty;
+    var text: std.ArrayList(u8) = .empty;
+    for (atoms) |atom| switch (atom) {
+        .byte => |byte| try text.append(shell.scratchAllocator(), byte),
+        .part => |part| {
+            if (text.items.len != 0) {
+                try parts.append(shell.scratchAllocator(), .{
+                    .literal = try text.toOwnedSlice(shell.scratchAllocator()),
+                });
+                text = .empty;
+            }
+            try parts.append(shell.scratchAllocator(), part);
+        },
+    };
+    if (text.items.len != 0) {
+        try parts.append(shell.scratchAllocator(), .{ .literal = try text.toOwnedSlice(shell.scratchAllocator()) });
+    }
+    return .{ .data = .{ .parts = try parts.toOwnedSlice(shell.scratchAllocator()) }, .span = span, .quoted = quoted };
+}
+
+fn braceAtomsText(shell: anytype, atoms: []const BraceAtom) ![]const u8 {
+    const text = try shell.scratchAllocator().alloc(u8, atoms.len);
+    for (atoms, 0..) |atom, index| text[index] = atom.byte;
+    return text;
 }
 
 fn appendStaticWordField(shell: anytype, fields: *std.ArrayList([]const u8), word: ast.Word) !void {
