@@ -1,0 +1,65 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "steadybit",
+    "description": "interact with the Steadybit API",
+    "options": [
+      { "short": "h", "long": "help", "description": "show help" }
+    ],
+    "subcommands": [
+      {
+        "name": "config",
+        "description": "show or modify CLI configuration",
+        "subcommands": [
+          { "name": "show", "description": "show active configuration" },
+          {
+            "name": "profile",
+            "description": "configure authentication profiles",
+            "subcommands": [
+              { "name": "add", "description": "add a profile" },
+              { "name": "list", "aliases": ["ls"], "description": "list profiles" },
+              { "name": "remove", "description": "remove a profile" },
+              { "name": "select", "description": "select active profile" }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "def-repo",
+        "description": "manage definition repository versions",
+        "subcommands": [
+          {
+            "name": "set-version",
+            "description": "set policy and task versions",
+            "options": [
+              { "short": "v", "long": "version", "description": "set version", "value": { "name": "version" } },
+              { "short": "d", "long": "directory", "description": "set definitions directory", "value": { "name": "directory", "provider": "builtin.directories" } }
+            ]
+          },
+          {
+            "name": "check",
+            "description": "validate tasks and policies",
+            "options": [
+              { "short": "v", "long": "version", "description": "set version", "value": { "name": "version" } },
+              { "short": "d", "long": "directory", "description": "set definitions directory", "value": { "name": "directory", "provider": "builtin.directories" } }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "service",
+        "aliases": ["service-definition"],
+        "description": "configure service definitions",
+        "subcommands": [
+          { "name": "apply", "description": "upload a service definition", "options": [ { "short": "f", "long": "file", "description": "set service definition file", "value": { "name": "file", "provider": "builtin.files" } } ] },
+          { "name": "delete", "description": "delete a service definition", "options": [ { "short": "f", "long": "file", "description": "set service definition file", "value": { "name": "file", "provider": "builtin.files" } }, { "short": "i", "long": "id", "description": "set service definition id", "value": { "name": "id" } } ] },
+          { "name": "init", "description": "initialize a service definition file" },
+          { "name": "open", "description": "open the service in Steadybit", "options": [ { "short": "f", "long": "file", "description": "set service definition file", "value": { "name": "file", "provider": "builtin.files" } } ] },
+          { "name": "verify", "description": "verify service definition state", "options": [ { "short": "f", "long": "file", "description": "set service definition file", "value": { "name": "file", "provider": "builtin.files" } }, { "spellings": ["-pp"], "long": "print-parameters", "description": "print task parameters" }, { "spellings": ["-pm"], "long": "print-matrix-context", "description": "print matrix execution context" } ] },
+          { "name": "show", "description": "show referenced tasks and policies", "options": [ { "short": "f", "long": "file", "description": "set service definition file", "value": { "name": "file", "provider": "builtin.files" } }, { "short": "n", "long": "name", "description": "filter by task name", "value": { "name": "name" } }, { "short": "v", "long": "version", "description": "filter by task version", "value": { "name": "version" } } ] }
+        ]
+      }
+    ]
+  }
+}
