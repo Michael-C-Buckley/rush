@@ -1,0 +1,69 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "visudo",
+    "description": "edit and validate sudoers files",
+    "options": [
+      {
+        "long": "check",
+        "short": "c",
+        "description": "checking existing sudoers file for syntax errors"
+      },
+      {
+        "long": "file",
+        "short": "f",
+        "description": "set an alternative sudoers file location",
+        "value": {
+          "name": "file",
+          "description": "Specify the alternate sudoers file location",
+          "provider": "files"
+        }
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "display a short help message"
+      },
+      {
+        "long": "quiet",
+        "short": "q",
+        "description": "enable quiet mode (syntax error not printed)"
+      },
+      {
+        "long": "strict",
+        "short": "s",
+        "description": "enable strict checking of the sudoers file"
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "display version and exit"
+      },
+      {
+        "long": "export",
+        "short": "x",
+        "description": "export JSON and write it to output_file",
+        "value": {
+          "name": "file",
+          "provider": "files"
+        }
+      },
+      {
+        "long": "perms",
+        "short": "P",
+        "description": "enforce default mode for the sudoers file"
+      },
+      {
+        "long": "owner",
+        "short": "O",
+        "description": "enforce the default ownership for the sudoers file"
+      }
+    ],
+    "providers": {
+      "files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
