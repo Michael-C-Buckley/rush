@@ -1,0 +1,20 @@
+__rush_complete_scc_language_lines() {
+  command -v scc >/dev/null 2>&1 || return
+  scc --language 2>/dev/null | sed -n 's/^  \([^:][^:]*\):[[:space:]]*\(.*\)$/\1\t\2/p'
+}
+
+__rush_complete_scc_languages() {
+  __rush_complete_scc_language_lines | while IFS=$(printf '\t') read -r language extensions; do
+    test -n "$language" && rush_complete candidate "$language" --kind plain --description "${extensions:-language}"
+  done
+}
+
+__rush_complete_scc_extensions() {
+  __rush_complete_scc_language_lines | while IFS=$(printf '\t') read -r language extensions; do
+    for extension in $extensions; do
+      extension=${extension#,}
+      extension=${extension%.}
+      test -n "$extension" && rush_complete candidate "$extension" --kind plain --description "$language"
+    done
+  done
+}

@@ -1,0 +1,436 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "scc",
+    "description": "count lines of code with scc",
+    "options": [
+      {
+        "long": "avg-wage",
+        "description": "average salary value used for COCOMO calculations",
+        "inherit": false,
+        "value": {
+          "name": "int"
+        }
+      },
+      {
+        "long": "binary",
+        "description": "disable binary file detection",
+        "inherit": false
+      },
+      {
+        "long": "by-file",
+        "description": "display output for every file",
+        "inherit": false
+      },
+      {
+        "long": "ci",
+        "description": "enable CI output settings where stdout is ASCII",
+        "inherit": false
+      },
+      {
+        "long": "cocomo-project-type",
+        "description": "change the COCOMO model type (allows custom models, eg. \"name,1,1,1,1\")",
+        "inherit": false,
+        "value": {
+          "name": "string",
+          "provider": {
+            "values": [
+              {
+                "value": "organic"
+              },
+              {
+                "value": "semi-detached"
+              },
+              {
+                "value": "embedded"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "count-as",
+        "description": "count a file extension as a language (comma-separated key:value list, eg. jst:js,tpl:Markdown)",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "debug",
+        "description": "enable debug output",
+        "inherit": false
+      },
+      {
+        "long": "exclude-dir",
+        "description": "directories to exclude",
+        "inherit": false,
+        "value": {
+          "name": "strings"
+        }
+      },
+      {
+        "long": "file-gc-count",
+        "description": "number of files to parse before turning the GC on",
+        "inherit": false,
+        "value": {
+          "name": "int"
+        }
+      },
+      {
+        "short": "f",
+        "long": "format",
+        "description": "set output format",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "format-multi",
+        "description": "multiple outputs with different formats (comma-separated key:value list, eg. tabular:stdout,csv:scc.csv)",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "gen",
+        "description": "identify generated files",
+        "inherit": false
+      },
+      {
+        "long": "generated-markers",
+        "description": "identify generated files by the presence of a string (comma-separated list)",
+        "inherit": false,
+        "value": {
+          "name": "strings"
+        }
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "help for scc",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "long": "include-ext",
+        "description": "limit to these file extensions (comma-separated list)",
+        "inherit": false,
+        "value": {
+          "name": "strings"
+        }
+      },
+      {
+        "long": "include-symlinks",
+        "description": "count symbolic links",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "long": "languages",
+        "description": "print supported languages and extensions",
+        "inherit": false
+      },
+      {
+        "long": "large-byte-count",
+        "description": "number of bytes a file can contain before being omitted",
+        "inherit": false,
+        "value": {
+          "name": "int"
+        }
+      },
+      {
+        "long": "large-line-count",
+        "description": "number of lines a file can contain before being omitted",
+        "inherit": false,
+        "value": {
+          "name": "int"
+        }
+      },
+      {
+        "long": "min",
+        "description": "identify minified files",
+        "inherit": false
+      },
+      {
+        "short": "z",
+        "long": "min-gen",
+        "description": "identify minified or generated files",
+        "inherit": false
+      },
+      {
+        "long": "min-gen-line-length",
+        "description": "number of bytes per average line for file to be considered minified or generated",
+        "inherit": false,
+        "value": {
+          "name": "int"
+        }
+      },
+      {
+        "long": "no-cocomo",
+        "description": "skip COCOMO calculation",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "long": "no-complexity",
+        "description": "skip code complexity calculation",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "long": "no-duplicates",
+        "description": "remove duplicate files from stats and output",
+        "inherit": false
+      },
+      {
+        "long": "no-gen",
+        "description": "ignore generated files in output (implies --gen)",
+        "inherit": false
+      },
+      {
+        "long": "no-gitignore",
+        "description": "disables .gitignore file logic",
+        "inherit": false
+      },
+      {
+        "long": "no-ignore",
+        "description": "disables .ignore file logic",
+        "inherit": false
+      },
+      {
+        "long": "no-large",
+        "description": "ignore files over certain byte and line size set by --max-line-count and --max-byte-count",
+        "inherit": false
+      },
+      {
+        "long": "no-min",
+        "description": "ignore minified files in output (implies --min)",
+        "inherit": false
+      },
+      {
+        "long": "no-min-gen",
+        "description": "ignore minified or generated files in output (implies --min-gen)",
+        "inherit": false
+      },
+      {
+        "long": "no-size",
+        "description": "remove size calculation output",
+        "inherit": false
+      },
+      {
+        "short": "M",
+        "long": "not-match",
+        "description": "ignore files and directories matching regular expression",
+        "inherit": false,
+        "value": {
+          "name": "regex"
+        }
+      },
+      {
+        "short": "o",
+        "long": "output",
+        "description": "output filename (defaults to stdout if not provided)",
+        "inherit": false,
+        "value": {
+          "name": "string",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "remap-all",
+        "description": "inspect every file and set its type by checking for a string (comma-separated key:value list, eg. \"-*- C++ -*-\":\"C Header\")",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "remap-unknown",
+        "description": "inspect files of unknown type and set its type by checking for a string (comma-separated key:value list, eg. \"-*- C++ -*-\":\"C Header\")",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "size-unit",
+        "description": "set the unit used for file size output",
+        "inherit": false,
+        "value": {
+          "name": "string",
+          "description": "see https://xkcd.com/394/",
+          "provider": {
+            "values": [
+              {
+                "value": "si",
+                "description": "1000^2 bytes"
+              },
+              {
+                "value": "binary",
+                "description": "1024^2 bytes"
+              },
+              {
+                "value": "mixed",
+                "description": "1,024,000 bytes (Binary kilobytes, SI megabytes)"
+              },
+              {
+                "value": "xkcd-kb",
+                "description": "1000 bytes during leap years, 1024 otherwise"
+              },
+              {
+                "value": "xkcd-kelly",
+                "description": "1012 bytes (a compromise between 1000 and 1024 bytes)"
+              },
+              {
+                "value": "xkcd-imaginary",
+                "description": "1024*sqrt(-1) bytes (used in quantum computing)"
+              },
+              {
+                "value": "xkcd-intel",
+                "description": "1023.937528 bytes (calculated on Pentium FPU)"
+              },
+              {
+                "value": "xkcd-drive"
+              },
+              {
+                "value": "xkcd-bakers",
+                "description": "1152 bytes (9 bits per byte, because you're such a good customer)"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "s",
+        "long": "sort",
+        "description": "column to sort by",
+        "inherit": false,
+        "value": {
+          "name": "string",
+          "provider": {
+            "values": [
+              {
+                "value": "files"
+              },
+              {
+                "value": "name"
+              },
+              {
+                "value": "lines"
+              },
+              {
+                "value": "blanks"
+              },
+              {
+                "value": "code"
+              },
+              {
+                "value": "comments"
+              },
+              {
+                "value": "complexity"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "sql-project",
+        "description": "use supplied name as the project identifier for the current run. Only valid with the '--format sql' or '--format sql-insert' option",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "short": "t",
+        "long": "trace",
+        "description": "enable trace output (not recommended when processing multiple files)",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "verbose output",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "version for scc",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "wide",
+        "description": "wider output with additional statistics (implies --complexity)",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "files-or-directories",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true,
+          "description": "file or directory to count"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "scc.languages": {
+        "function": "__rush_complete_scc_languages"
+      },
+      "scc.extensions": {
+        "function": "__rush_complete_scc_extensions"
+      },
+      "scc.output-formats": {
+        "values": [
+          {
+            "value": "tabular"
+          },
+          {
+            "value": "wide"
+          },
+          {
+            "value": "json"
+          },
+          {
+            "value": "json2"
+          },
+          {
+            "value": "csv"
+          },
+          {
+            "value": "cloc-yaml"
+          },
+          {
+            "value": "html"
+          },
+          {
+            "value": "html-table"
+          },
+          {
+            "value": "sql"
+          },
+          {
+            "value": "sql-insert"
+          },
+          {
+            "value": "openmetrics"
+          }
+        ]
+      }
+    }
+  }
+}
