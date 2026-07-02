@@ -1,0 +1,194 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "yalc",
+    "description": "manage local npm packages with yalc",
+    "options": [
+      {
+        "long": "help",
+        "description": "show help for yalc"
+      },
+      {
+        "long": "no-colors",
+        "description": "disable colors"
+      },
+      {
+        "long": "quiet",
+        "description": "fully disable output (except errors)"
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "publish",
+        "description": "copy all the files that should be published in remote NPM registry",
+        "options": [
+          {
+            "long": "push",
+            "description": "publish package to the store and propagate all changes to existing yalc package installations"
+          },
+          {
+            "long": "no-scripts",
+            "description": "publish without running scripts"
+          },
+          {
+            "long": "no-sig",
+            "description": "disable adding hash signature of all files when copying package content"
+          },
+          {
+            "long": "content",
+            "description": "show included files in the published package"
+          },
+          {
+            "long": "no-workspace-resolve",
+            "description": "do not resolve 'workspace:' protocol in dependencies"
+          },
+          {
+            "long": "private",
+            "description": "force publishing of private package"
+          }
+        ]
+      },
+      {
+        "name": "push",
+        "description": "publish your package to the store and propagate all changes to existing yalc package installations"
+      },
+      {
+        "name": "add",
+        "description": "copy the current version from the store to your project",
+        "options": [
+          {
+            "long": "link",
+            "description": "add a 'link:' dependency instead of 'file:'"
+          },
+          {
+            "long": "dev",
+            "description": "add yalc package to dev dependencies"
+          },
+          {
+            "long": "pure",
+            "description": "do not touch 'package.json' or 'node_modules'"
+          },
+          {
+            "long": "workspace",
+            "short": "W",
+            "description": "add dependency with 'workspace:' protocol"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "the package you want to add",
+              "index": 0,
+              "provider": "yalc.packages"
+            }
+          ]
+        }
+      },
+      {
+        "name": "link",
+        "description": "alterative to 'add', instead using local '.yalc' as symlink source"
+      },
+      {
+        "name": "update",
+        "description": "update package(s)",
+        "options": [
+          {
+            "long": "update",
+            "aliases": [
+              "upgrade",
+              "up"
+            ],
+            "description": "run package manager's update command for packages"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "the package to update",
+              "index": 0,
+              "provider": "yalc.packages"
+            }
+          ]
+        }
+      },
+      {
+        "name": "remove",
+        "description": "remove package info from 'package.json' & 'yalc.lock'",
+        "options": [
+          {
+            "long": "all",
+            "description": "remove all packages from project"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "the package you want to remove",
+              "index": 0,
+              "provider": "yalc.local-packages"
+            }
+          ]
+        }
+      },
+      {
+        "name": "installations",
+        "subcommands": [
+          {
+            "name": "clean",
+            "description": "unpublish a package published with yalc publish",
+            "arguments": {
+              "states": [
+                {
+                  "name": "package",
+                  "index": 0,
+                  "provider": "yalc.packages"
+                }
+              ]
+            }
+          },
+          {
+            "name": "show",
+            "description": "show all packages to which chosen package has been added",
+            "arguments": {
+              "states": [
+                {
+                  "name": "package",
+                  "index": 0,
+                  "provider": "yalc.packages"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "dir",
+        "description": "show yalc system directory"
+      },
+      {
+        "name": "check",
+        "description": "check 'package.json' for yalc packages"
+      },
+      {
+        "name": "restore",
+        "description": "restore retreated packages"
+      },
+      {
+        "name": "retreat",
+        "description": "remove packages from project, but leave in lock file (to be restored later)"
+      }
+    ],
+    "providers": {
+      "yalc.packages": {
+        "function": "__rush_complete_yalc_packages"
+      },
+      "yalc.local-packages": {
+        "function": "__rush_complete_yalc_local_packages"
+      }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+__rush_complete_yalc_packages() {
+    packages_dir=${YALC_PACKAGES_DIR:-$HOME/.yalc/packages}
+    [ -d "$packages_dir" ] || return 0
+
+    find "$packages_dir" -maxdepth 4 -name package.json -type f 2>/dev/null | while IFS= read -r package_json; do
+        rel=${package_json#"$packages_dir"/}
+        rel=${rel%/package.json}
+        version=${rel##*/}
+        name=${rel%/*}
+        [ -n "$name" ] || continue
+        [ "$name" != "$version" ] || continue
+        rush_complete candidate "$name@$version" --kind package --description "$name@$version"
+    done
+}
+
+__rush_complete_yalc_local_packages() {
+    [ -d .yalc ] || return 0
+
+    for package in .yalc/*; do
+        [ -e "$package" ] || continue
+        package=${package#.yalc/}
+        [ -n "$package" ] || continue
+        rush_complete candidate "$package" --kind package --description "$package"
+    done
+}
