@@ -1,0 +1,717 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "rg",
+    "description": "search files with ripgrep",
+    "options": [
+      {
+        "short": "A",
+        "long": "after-context",
+        "description": "shows NUM lines after each match",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "long": "auto-hybrid-regex",
+        "description": "when this flag is used, ripgrep will dynamically choose between supported regex engines depending on the features used in a pattern",
+        "inherit": false
+      },
+      {
+        "short": "B",
+        "long": "before-context",
+        "description": "shows NUM lines before each match",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "long": "binary",
+        "description": "enabling this flag will cause ripgrep to search binary files",
+        "inherit": false
+      },
+      {
+        "long": "block-buffered",
+        "description": "when enabled, ripgrep will use block buffering",
+        "inherit": false
+      },
+      {
+        "short": "b",
+        "long": "byte-offset",
+        "description": "prints the 0-based byte offset within the input file before each line of output",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "case-sensitive",
+        "description": "search case sensitively",
+        "inherit": false
+      },
+      {
+        "long": "color",
+        "description": "controls when to use colors",
+        "inherit": false,
+        "value": {
+          "name": "when",
+          "provider": {
+            "values": [
+              {
+                "value": "never",
+                "description": "Colors will never be used"
+              },
+              {
+                "value": "auto",
+                "description": "Ripgrep tries to be smart"
+              },
+              {
+                "value": "always",
+                "description": "Colors will always be used regardless of where output is sent"
+              },
+              {
+                "value": "ansi",
+                "description": "Colors will always be used, but emits ANSI escapes"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "colors",
+        "description": "specifies color settings for use in the output",
+        "inherit": false,
+        "value": {
+          "name": "color-spec",
+          "description": "{type}:{attribute}:{value}, ex: `match:fg:magenta`"
+        }
+      },
+      {
+        "long": "column",
+        "description": "shows column numbers for the first match on each line",
+        "inherit": false
+      },
+      {
+        "short": "C",
+        "long": "context",
+        "description": "shows NUM lines before and after each match",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "long": "context-separator",
+        "description": "the string used to separate non-contiguous context lines in the output",
+        "inherit": false,
+        "value": {
+          "name": "separator"
+        }
+      },
+      {
+        "short": "c",
+        "long": "count",
+        "description": "suppresses normal output and shows the number of lines that match the given pattersns for each file searched",
+        "inherit": false
+      },
+      {
+        "long": "count-matches",
+        "description": "suppresses normal output and shows the number of individual matches of the given patterns for each file searched",
+        "inherit": false
+      },
+      {
+        "long": "crlf",
+        "description": "treats CRLF as a line terminator instead of just a line break",
+        "inherit": false
+      },
+      {
+        "long": "debug",
+        "description": "shows debug messages",
+        "inherit": false
+      },
+      {
+        "long": "dfa-size-limit",
+        "description": "the upper size limit of the regex DFA",
+        "inherit": false,
+        "value": {
+          "name": "size"
+        }
+      },
+      {
+        "short": "E",
+        "long": "encoding",
+        "description": "specifies the text encoding that ripgrep will use on all files searched",
+        "inherit": false,
+        "value": {
+          "name": "encoding"
+        }
+      },
+      {
+        "long": "engine",
+        "description": "specifies which regular expression engine to use",
+        "inherit": false,
+        "value": {
+          "name": "engine",
+          "provider": {
+            "values": [
+              "default",
+              "pcre2",
+              "auto"
+            ]
+          }
+        }
+      },
+      {
+        "short": "f",
+        "long": "file",
+        "description": "searches for patterns from the given file, with one pattern per line",
+        "inherit": false,
+        "value": {
+          "name": "patternfile",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "files",
+        "description": "prints each file that would be searched without actually performing the search",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "long": "files-with-matches",
+        "description": "only prints the paths with at least one match",
+        "inherit": false
+      },
+      {
+        "long": "files-without-match",
+        "description": "only prints the paths that contains zero matches",
+        "inherit": false
+      },
+      {
+        "short": "F",
+        "long": "fixed-strings",
+        "description": "treats the pattern as a literal string instead of a regular expression",
+        "inherit": false
+      },
+      {
+        "short": "L",
+        "long": "follow",
+        "description": "follows symbolic links while traversing directories",
+        "inherit": false
+      },
+      {
+        "short": "g",
+        "long": "glob",
+        "description": "includes or excludes files and directories for searching that match the given glob",
+        "inherit": false,
+        "value": {
+          "name": "glob"
+        }
+      },
+      {
+        "long": "glob-case-insensitive",
+        "description": "processes glob patterns given with the -g/--glob flag",
+        "inherit": false,
+        "requires": [
+          "-g"
+        ]
+      },
+      {
+        "long": "heading",
+        "description": "prints the file path above clusters of matches from each file instead of printing the file path as a prefix for reach matched line",
+        "inherit": false
+      },
+      {
+        "long": "hidden",
+        "description": "searches hidden files and directories",
+        "inherit": false
+      },
+      {
+        "long": "iglob",
+        "description": "includes or excludes files and directories for searching that match given the glob",
+        "inherit": false,
+        "value": {
+          "name": "glob",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "ignore-file",
+        "description": "specifies a path to one or more .gitignore format rules files",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "ignore-file-case-insensitive",
+        "description": "process ignores files case insensitively",
+        "inherit": false
+      },
+      {
+        "long": "include-zero",
+        "description": "prints the number of matchesfor each file when used with --count or --count matches",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "invert-match",
+        "description": "inverts matching",
+        "inherit": false
+      },
+      {
+        "long": "json",
+        "description": "enables printing results in a JSON Lines format",
+        "inherit": false
+      },
+      {
+        "long": "no-json",
+        "description": "disables the JSON Lines format",
+        "inherit": false
+      },
+      {
+        "long": "line-buffered",
+        "description": "enables line buffering",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "long": "line-number",
+        "description": "shows the line numbers (1-based)",
+        "inherit": false
+      },
+      {
+        "short": "x",
+        "long": "line-regexp",
+        "description": "only shows matches surrounded by line boundaries",
+        "inherit": false
+      },
+      {
+        "short": "M",
+        "long": "max-columns",
+        "description": "don't print lines longer than this limit in bytes",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "long": "max-columns-preview",
+        "description": "completely replaces any line that is too long with a message indicating that a matching line was removed",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "long": "max-count",
+        "description": "limits the number of matching lines per file searched to NUM",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "long": "max-depth",
+        "description": "limits the depth of directory traversal to NUM levels beyond the paths given",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "long": "max-filesize",
+        "description": "ignores files larger than NUM in size",
+        "inherit": false,
+        "value": {
+          "name": "size"
+        }
+      },
+      {
+        "spellings": [
+          "-mmap"
+        ],
+        "description": "searches using memory maps when possible",
+        "inherit": false
+      },
+      {
+        "short": "U",
+        "long": "multiline",
+        "description": "enables matching across multiple lines",
+        "inherit": false
+      },
+      {
+        "long": "multiline-dotall",
+        "description": "enables dot all in your regex pattern",
+        "inherit": false
+      },
+      {
+        "long": "no-config",
+        "description": "never read configuration files",
+        "inherit": false
+      },
+      {
+        "short": "I",
+        "long": "no-filename",
+        "description": "never prints the file path with the matched lines",
+        "inherit": false
+      },
+      {
+        "long": "no-heading",
+        "description": "don't group matches by each file",
+        "inherit": false
+      },
+      {
+        "long": "no-ignore",
+        "description": "don't respect ignore files (.gitignore, .ignore, etc.)",
+        "inherit": false
+      },
+      {
+        "long": "no-ignore-dot",
+        "description": "don't respect .ignore files",
+        "inherit": false
+      },
+      {
+        "long": "no-ignore-excluded",
+        "description": "don't respect ignore files that are manually configured for the repository",
+        "inherit": false
+      },
+      {
+        "long": "no-ignore-files",
+        "description": "ignores any --ignore-file flags",
+        "inherit": false
+      },
+      {
+        "long": "no-ignore-global",
+        "description": "don't respect ignore files that come from `global` sources",
+        "inherit": false
+      },
+      {
+        "long": "no-ignore-messages",
+        "description": "suppresses all error messages related to parsing ignore files",
+        "inherit": false
+      },
+      {
+        "long": "no-ignore-parent",
+        "description": "don't repsect ignore files in parent directories",
+        "inherit": false
+      },
+      {
+        "long": "no-ignore-vcs",
+        "description": "don't respect version control ignore files",
+        "inherit": false
+      },
+      {
+        "short": "N",
+        "long": "no-line-number",
+        "description": "suppress line numbers",
+        "inherit": false
+      },
+      {
+        "long": "no-messages",
+        "description": "suppresses all error messages related to opening and reading files",
+        "inherit": false
+      },
+      {
+        "long": "no-map",
+        "description": "never use memory maps, even when they might be faster",
+        "inherit": false
+      },
+      {
+        "long": "no-pcre2-unicode",
+        "inherit": false
+      },
+      {
+        "long": "no-require-git",
+        "description": "will only respect global gitignore rules",
+        "inherit": false
+      },
+      {
+        "long": "no-unicode",
+        "description": "turn off unicode",
+        "inherit": false
+      },
+      {
+        "long": "unicode",
+        "description": "disables --no-unicode flag",
+        "inherit": false
+      },
+      {
+        "short": "0",
+        "long": "null",
+        "description": "whenever a file path is printed, follow it with a NUL byte",
+        "inherit": false
+      },
+      {
+        "long": "null-data",
+        "description": "uses NUL as a line terminator instead of the default line break",
+        "inherit": false
+      },
+      {
+        "long": "one-file-system",
+        "description": "will not cross file system boundaries relative to where the search started from",
+        "inherit": false
+      },
+      {
+        "long": "no-one-file-system",
+        "description": "disables `--one-file-system` flag",
+        "inherit": false
+      },
+      {
+        "short": "o",
+        "long": "only-matching",
+        "description": "prints only the matched (non-empty) parts of a matching line, with each such part on a separate output line",
+        "inherit": false
+      },
+      {
+        "long": "passthru",
+        "description": "prints both matching and non-matching lines",
+        "inherit": false
+      },
+      {
+        "long": "path-separator",
+        "description": "sets the path separator to use when printing file paths",
+        "inherit": false,
+        "value": {
+          "name": "separator"
+        }
+      },
+      {
+        "short": "P",
+        "long": "pcre2",
+        "description": "usess the PCRE2 regex engine instead of its default regex engine",
+        "inherit": false
+      },
+      {
+        "long": "pcre2-version",
+        "description": "prints the version of PCRE2 in use",
+        "inherit": false
+      },
+      {
+        "long": "pre",
+        "description": "for each input File, search the standard output of the command",
+        "inherit": false,
+        "value": {
+          "name": "command"
+        }
+      },
+      {
+        "long": "pre-glob",
+        "description": "only files that match the given set of globs will be handed to the command specified by the `--pre flag`",
+        "inherit": false,
+        "value": {
+          "name": "glob"
+        }
+      },
+      {
+        "short": "p",
+        "long": "pretty",
+        "description": "convenience alias for `--color always --heading --line-number`",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "do not print anything to stdout",
+        "inherit": false
+      },
+      {
+        "long": "regex-size-limit",
+        "description": "sets the upper size limit of the compiled regex",
+        "inherit": false,
+        "value": {
+          "name": "size"
+        }
+      },
+      {
+        "short": "e",
+        "long": "regexp",
+        "description": "a pattern to search for",
+        "inherit": false,
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "short": "r",
+        "long": "replace",
+        "description": "replace every match with the text given when printing results",
+        "inherit": false,
+        "value": {
+          "name": "replacement-text"
+        }
+      },
+      {
+        "short": "z",
+        "long": "search-zip",
+        "description": "search in compressed files",
+        "inherit": false
+      },
+      {
+        "short": "S",
+        "long": "smart-case",
+        "description": "searches case insensitively if the pattern is all lowercase",
+        "inherit": false
+      },
+      {
+        "long": "sort",
+        "inherit": false,
+        "description": "sort results",
+        "value": {
+          "name": "sort-by",
+          "provider": "rg.sort-fields"
+        }
+      },
+      {
+        "long": "sortr",
+        "description": "sort results in descending order",
+        "inherit": false,
+        "value": {
+          "name": "sort-by",
+          "provider": "rg.sort-fields"
+        }
+      },
+      {
+        "long": "stats",
+        "description": "prints aggregate statistics about this ripgrep search",
+        "inherit": false
+      },
+      {
+        "short": "a",
+        "long": "text",
+        "description": "searches binary files as if they were text",
+        "inherit": false
+      },
+      {
+        "short": "j",
+        "long": "threads",
+        "description": "the approximate number of threads to use",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "long": "trim",
+        "description": "all ASCII whitespace at the beginning of each line printed will be trimmed",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "long": "type",
+        "description": "only searches files matching TYPE",
+        "inherit": false,
+        "value": {
+          "name": "type"
+        }
+      },
+      {
+        "long": "type-add",
+        "description": "add a new glob for a particular file type",
+        "inherit": false,
+        "value": {
+          "name": "type-spec"
+        }
+      },
+      {
+        "long": "type-clear",
+        "description": "clear the file type globs previously defined for type",
+        "inherit": false,
+        "value": {
+          "name": "type"
+        }
+      },
+      {
+        "long": "type-list",
+        "description": "shows all supported file types and their corresponding globs",
+        "inherit": false
+      },
+      {
+        "short": "T",
+        "long": "type-not",
+        "description": "do not search files matching type",
+        "inherit": false,
+        "value": {
+          "name": "type"
+        }
+      },
+      {
+        "short": "u",
+        "long": "unrestricted",
+        "description": "reduce the level of smart searching, increase by adding `u`s, ex: -uuu",
+        "inherit": false
+      },
+      {
+        "long": "vimgrep",
+        "description": "shows results with every match on its own line, including line numbers and column nnumbers",
+        "inherit": false
+      },
+      {
+        "short": "H",
+        "long": "with-filename",
+        "description": "displays the file path for matches",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "word-regexp",
+        "description": "only shows the matches surrounded by word boundaries",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "pattern",
+          "description": "a regular expression used for searching",
+          "index": 0
+        },
+        {
+          "name": "path",
+          "description": "a file or directory to search",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 1,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "rg.sort-fields": {
+        "values": [
+          {
+            "value": "none",
+            "description": "do not sort results"
+          },
+          {
+            "value": "path",
+            "description": "sort by file path"
+          },
+          {
+            "value": "modified",
+            "description": "sort by modification time"
+          },
+          {
+            "value": "accessed",
+            "description": "sort by access time"
+          },
+          {
+            "value": "created",
+            "description": "sort by creation time"
+          }
+        ]
+      }
+    }
+  }
+}
