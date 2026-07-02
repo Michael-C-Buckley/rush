@@ -1,0 +1,181 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "mob",
+    "description": "handover git changes for mob programming",
+    "options": [
+      {
+        "long": "debug",
+        "description": "enable verbose logging",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "start",
+        "description": "start a session from the base branch",
+        "aliases": [
+          "s"
+        ],
+        "options": [
+          {
+            "long": "include-uncommitted-changes",
+            "description": "move uncommitted changes to the wip branch",
+            "inherit": false,
+            "short": "i"
+          },
+          {
+            "long": "branch",
+            "description": "set the wip branch postfix",
+            "inherit": false,
+            "short": "b",
+            "value": {
+              "name": "branch-postfix"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "minutes",
+              "index": 0,
+              "required": false
+            }
+          ]
+        }
+      },
+      {
+        "name": "next",
+        "description": "handover changes to the next person",
+        "aliases": [
+          "n"
+        ],
+        "options": [
+          {
+            "long": "stay",
+            "description": "stay on the wip branch",
+            "inherit": false,
+            "short": "s"
+          },
+          {
+            "long": "return-to-base-branch",
+            "description": "return to the base branch",
+            "inherit": false,
+            "short": "r"
+          },
+          {
+            "long": "message",
+            "description": "override the commit message",
+            "inherit": false,
+            "short": "m",
+            "value": {
+              "name": "commit-message"
+            }
+          }
+        ]
+      },
+      {
+        "name": "done",
+        "description": "squash wip changes back to the base branch",
+        "aliases": [
+          "d"
+        ],
+        "options": [
+          {
+            "long": "no-squash",
+            "description": "merge the wip branch without squashing",
+            "inherit": false
+          },
+          {
+            "long": "squash",
+            "description": "squash all commits from the wip branch",
+            "inherit": false
+          },
+          {
+            "long": "squash-wip",
+            "description": "squash wip commits and keep manual commits",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "reset",
+        "description": "remove local and remote wip branches",
+        "options": [
+          {
+            "long": "branch",
+            "description": "set the wip branch postfix",
+            "inherit": false,
+            "short": "b",
+            "value": {
+              "name": "branch-postfix"
+            }
+          }
+        ]
+      },
+      {
+        "name": "clean",
+        "description": "remove orphan wip branches"
+      },
+      {
+        "name": "timer",
+        "description": "start a timer",
+        "aliases": [
+          "t"
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "minutes",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "break",
+        "description": "start a break timer",
+        "arguments": {
+          "states": [
+            {
+              "name": "minutes",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "status",
+        "description": "show the current session status"
+      },
+      {
+        "name": "fetch",
+        "description": "fetch remote state"
+      },
+      {
+        "name": "branch",
+        "description": "show remote wip branches",
+        "aliases": [
+          "b"
+        ]
+      },
+      {
+        "name": "config",
+        "description": "show configuration options"
+      },
+      {
+        "name": "version",
+        "description": "show version information"
+      },
+      {
+        "name": "help",
+        "description": "show help"
+      },
+      {
+        "name": "moo",
+        "description": "moo"
+      }
+    ]
+  }
+}
