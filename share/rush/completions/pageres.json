@@ -1,0 +1,173 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pageres",
+    "description": "capture website screenshots",
+    "options": [
+      {
+        "long": "verbose",
+        "short": "v",
+        "description": "Verbose output to see errors if you need to troubleshoot",
+        "inherit": false
+      },
+      {
+        "long": "crop",
+        "short": "c",
+        "description": "Crop to the set height",
+        "inherit": false
+      },
+      {
+        "long": "delay",
+        "short": "d",
+        "description": "Delay screenshot capture",
+        "inherit": false,
+        "value": {
+          "name": "time"
+        }
+      },
+      {
+        "long": "filename",
+        "description": "Custom filename",
+        "inherit": false,
+        "value": {
+          "name": "template",
+          "description": "--filename='<%= date %> - <%= url %>'"
+        }
+      },
+      {
+        "long": "overwrite",
+        "description": "Overwrite destination file if it exists. Defaults to appending (n) to the file name if --overwrite is not set",
+        "inherit": false
+      },
+      {
+        "long": "selector",
+        "description": "Capture DOM element",
+        "inherit": false,
+        "value": {
+          "name": "element"
+        }
+      },
+      {
+        "long": "hide",
+        "description": "Hide DOM element. Can be set multiple times",
+        "inherit": false,
+        "value": {
+          "name": "element"
+        },
+        "repeatable": true
+      },
+      {
+        "long": "no-crop",
+        "description": "Override a global crop option within a group",
+        "inherit": false
+      },
+      {
+        "long": "css",
+        "description": "Apply custom CSS to the webpage. Specify some CSS or the path to a CSS file",
+        "inherit": false,
+        "value": {
+          "name": "string",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "cookie",
+        "description": "Browser cookie. Can be set multiple times",
+        "inherit": false,
+        "value": {
+          "name": "cookie"
+        },
+        "repeatable": true
+      },
+      {
+        "long": "header",
+        "description": "Custom HTTP request header. Can be set multiple times",
+        "inherit": false,
+        "value": {
+          "name": "header"
+        },
+        "repeatable": true
+      },
+      {
+        "long": "username",
+        "description": "Username for HTTP auth",
+        "inherit": false,
+        "value": {
+          "name": "username"
+        }
+      },
+      {
+        "long": "password",
+        "description": "Password for HTTP auth",
+        "inherit": false,
+        "value": {
+          "name": "password"
+        }
+      },
+      {
+        "long": "scale",
+        "description": "Scale webpage n of times",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "format",
+        "description": "Image format. Either png (default) or jpg",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "provider": "pageres.formats"
+        }
+      },
+      {
+        "long": "user-agent",
+        "description": "Custom user agent",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "transparent",
+        "description": "Set background color to transparent instead of white if no background is set",
+        "inherit": false
+      },
+      {
+        "long": "darkMode",
+        "description": "Emulate preference of dark color scheme",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "url-or-file",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true,
+          "description": "url or file path"
+        },
+        {
+          "name": "resolution",
+          "index": 1,
+          "repeatable": true,
+          "description": "screenshot resolution"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "pageres.formats": {
+        "values": [
+          "png",
+          "jpg"
+        ]
+      }
+    }
+  }
+}
