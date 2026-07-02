@@ -1,0 +1,466 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "taplo",
+    "description": "validate, format, and query TOML",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "long": "colors",
+        "inherit": false,
+        "value": {
+          "name": "colors",
+          "provider": {
+            "values": [
+              "auto",
+              "always",
+              "never"
+            ]
+          }
+        },
+        "description": "set output colors"
+      },
+      {
+        "long": "verbose",
+        "description": "enable verbose logging",
+        "inherit": false
+      },
+      {
+        "long": "log-spans",
+        "description": "enable logging spans",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "config",
+        "aliases": [
+          "cfg"
+        ],
+        "description": "operations with the Taplo config file",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "colors",
+            "description": "set output colors",
+            "inherit": false,
+            "value": {
+              "name": "colors",
+              "provider": {
+                "values": [
+                  "auto",
+                  "always",
+                  "never"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-spans",
+            "description": "enable logging spans",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "enable verbose logging",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "default",
+            "description": "Print the default `.taplo.toml` configuration file"
+          },
+          {
+            "name": "help",
+            "description": "Print this message or the help of the given subcommand(s)",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "schema",
+            "description": "Print the JSON schema of the `.taplo.toml` configuration file"
+          }
+        ]
+      },
+      {
+        "name": "format",
+        "aliases": [
+          "fmt"
+        ],
+        "description": "format TOML documents",
+        "options": [
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set config file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cache-path",
+            "description": "set cache path",
+            "inherit": false,
+            "value": {
+              "name": "cache_path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "check",
+            "description": "check formatting",
+            "inherit": false,
+            "value": {
+              "name": "cache_path",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "diff",
+            "description": "print formatting diff",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "spellings": [
+              "f"
+            ],
+            "description": "force formatting",
+            "inherit": false,
+            "value": {
+              "name": "files-...",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "no-auto-config",
+            "description": "Do not search for a configuration file",
+            "inherit": false
+          },
+          {
+            "long": "option",
+            "short": "o",
+            "description": "set formatter option",
+            "inherit": false,
+            "value": {
+              "name": "options",
+              "provider": {
+                "values": [
+                  "indent_tables=true",
+                  "indent_tables=false"
+                ]
+              }
+            }
+          },
+          {
+            "long": "stdin-filepath",
+            "description": "set stdin file path",
+            "inherit": false,
+            "value": {
+              "name": "stdin_filepath",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "colors",
+            "description": "set output colors",
+            "inherit": false,
+            "value": {
+              "name": "colors",
+              "provider": {
+                "values": [
+                  "auto",
+                  "always",
+                  "never"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-spans",
+            "description": "enable logging spans",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "enable verbose logging",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "description": "Paths or glob patterns to TOML documents",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "get",
+        "description": "extract a value from the given TOML document",
+        "options": [
+          {
+            "long": "file-path",
+            "short": "f",
+            "description": "set TOML document path",
+            "inherit": false,
+            "value": {
+              "name": "file_path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "short": "o",
+            "long": "output-format",
+            "description": "set output format",
+            "inherit": false,
+            "value": {
+              "name": "output_format",
+              "provider": {
+                "values": [
+                  "value",
+                  "json",
+                  "toml"
+                ]
+              }
+            }
+          },
+          {
+            "long": "strip-newline",
+            "short": "s",
+            "description": "strip trailing newline",
+            "inherit": false
+          },
+          {
+            "long": "colors",
+            "description": "set output colors",
+            "inherit": false,
+            "value": {
+              "name": "colors",
+              "provider": {
+                "values": [
+                  "auto",
+                  "always",
+                  "never"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-spans",
+            "description": "enable logging spans",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "enable verbose logging",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "print help information for taplo"
+      },
+      {
+        "name": "lint",
+        "aliases": [
+          "check",
+          "validate"
+        ],
+        "description": "lint a TOML documents",
+        "options": [
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set config file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cache-path",
+            "description": "set cache path",
+            "inherit": false,
+            "value": {
+              "name": "cache_path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "default-schema-catalogs",
+            "description": "Use the default online catalogs for schemas",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "no-schema",
+            "description": "Disable all schema validation",
+            "inherit": false
+          },
+          {
+            "long": "schema",
+            "description": "URL to the schema to be used for validation",
+            "inherit": false,
+            "value": {
+              "name": "schema"
+            }
+          },
+          {
+            "long": "schema-catalog",
+            "description": "URL to the schema catalog to be used for validation",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "schema_catalog"
+            }
+          },
+          {
+            "long": "colors",
+            "description": "set output colors",
+            "inherit": false,
+            "value": {
+              "name": "colors",
+              "provider": {
+                "values": [
+                  "auto",
+                  "always",
+                  "never"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-spans",
+            "description": "enable logging spans",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "enable verbose logging",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "lsp",
+        "description": "language server operations",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "colors",
+            "description": "set output colors",
+            "inherit": false,
+            "value": {
+              "name": "colors",
+              "provider": {
+                "values": [
+                  "auto",
+                  "always",
+                  "never"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-spans",
+            "description": "enable logging spans",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "enable verbose logging",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "help",
+            "description": "Print help information for lsp"
+          },
+          {
+            "name": "stdio",
+            "description": "Run the language server over the standard input and output"
+          },
+          {
+            "name": "tcp",
+            "description": "Run the language server and listen on a TCP address"
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
