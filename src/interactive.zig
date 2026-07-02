@@ -146,12 +146,14 @@ const InteractiveSession = struct {
     last_command_duration_ms: ?i64 = null,
     pending_event_exit_status: ?u8 = null,
     command_cache: PathCommandCache = .{},
+    history_cwd: []const u8 = "",
 
     fn runTerminal(self: *InteractiveSession) !u8 {
         var terminal = editor.driver.TerminalSession.init(self.allocator, self.io) catch {
             try self.sh.host.writeAll(.stderr, "rush: cannot initialize terminal\n");
             return 2;
         };
+        defer self.clearHistoryCurrentDirectory();
         defer self.command_cache.deinit(self.allocator);
         defer self.restoreTerminalProcessGroup();
         defer terminal.deinit();
@@ -215,9 +217,7 @@ const InteractiveSession = struct {
             else => {},
         };
 
-        const current_cwd = self.sh.host.currentDir(self.allocator) catch try self.allocator.dupe(u8, "");
-        defer self.allocator.free(current_cwd);
-        self.command_history.current_cwd = current_cwd;
+        try self.refreshHistoryCurrentDirectory();
         // ziglint-ignore: Z026 best-effort terminal metadata; the next directory change or prompt reports it again
         self.reportCurrentDirectory(terminal) catch {};
         try self.command_cache.refresh(self.allocator, self.sh);
@@ -253,6 +253,21 @@ const InteractiveSession = struct {
             self.sh.host.writeAll(.stderr, message) catch {};
             return error.EditorFailure;
         };
+    }
+
+    fn refreshHistoryCurrentDirectory(self: *InteractiveSession) !void {
+        const current_cwd = self.sh.host.currentDir(self.allocator) catch try self.allocator.dupe(u8, "");
+        errdefer self.allocator.free(current_cwd);
+        const previous_cwd = self.history_cwd;
+        self.history_cwd = current_cwd;
+        self.command_history.current_cwd = current_cwd;
+        if (previous_cwd.len != 0) self.allocator.free(previous_cwd);
+    }
+
+    fn clearHistoryCurrentDirectory(self: *InteractiveSession) void {
+        if (self.history_cwd.len != 0) self.allocator.free(self.history_cwd);
+        self.history_cwd = "";
+        self.command_history.current_cwd = "";
     }
 
     fn reportCurrentDirectory(self: *InteractiveSession, terminal: *editor.driver.TerminalSession) !void {
@@ -1136,6 +1151,44 @@ fn expandRushAbbreviation(
 
 fn unixTimestamp(io: std.Io) i64 {
     return std.Io.Clock.real.now(io).toSeconds();
+}
+
+test "interactive history cwd remains valid after prompt read" {
+    const path = "rush-interactive-history-cwd-lifetime-test.sqlite";
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+
+    var sh = RushShell.init(std.testing.allocator, .{}, .{});
+    defer sh.deinit();
+
+    var command_history = history.History.init(std.testing.allocator);
+    defer command_history.deinit();
+    try command_history.load(std.testing.io, path);
+    command_history.session_id = "test-session";
+    var history_service = history.InteractiveHistoryService.init(&command_history);
+    var source_id: shell.source.SourceId = 1;
+    var session: InteractiveSession = .{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .sh = &sh,
+        .source_id = &source_id,
+        .command_history = &command_history,
+        .history_service = &history_service,
+        .events = .{ .sh = &sh },
+    };
+    defer session.clearHistoryCurrentDirectory();
+
+    try session.refreshHistoryCurrentDirectory();
+    try history_service.addCommand(std.testing.io, "echo previous", 0, 10, 1);
+
+    const view = history_service.lineEditorView(std.testing.io);
+    const entry = (try view.previous.?(view.context.?, std.testing.allocator, "", null)) orelse return error.TestExpectedEqual;
+    defer entry.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("echo previous", entry.text);
 }
 
 test "interactive input analysis marks unresolved command tokens only" {
