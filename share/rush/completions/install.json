@@ -1,0 +1,105 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "install",
+    "description": "copy files to a target location",
+    "options": [
+      {
+        "short": "B",
+        "description": "use suffix as the backup suffix if -b is given",
+        "inherit": false,
+        "value": {
+          "name": "suffix"
+        }
+      },
+      {
+        "short": "b",
+        "description": "back up existing files before overwriting",
+        "inherit": false
+      },
+      {
+        "short": "C",
+        "description": "copy only when target differs",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "description": "copy the file",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "description": "create directories. Missing parent directories are created as required",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "description": "specify the target's file flags; see chflags(1) for a list of possible flags and their meanings",
+        "inherit": false
+      },
+      {
+        "short": "g",
+        "description": "specify a group. A numeric GID is allowed",
+        "inherit": false
+      },
+      {
+        "short": "M",
+        "description": "disable all use of mmap(2)",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "description": "set file mode",
+        "inherit": false
+      },
+      {
+        "short": "o",
+        "description": "specify an owner. A numeric UID is allowed",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "description": "preserve modification time",
+        "inherit": false
+      },
+      {
+        "short": "S",
+        "description": "use safe copy via temporary file",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "exec's the command strip(1) to strip binaries so that install can be portable over a large number of systems and binary types",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "description": "causes install to show when -C actually installs something",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file-or-directory",
+          "description": "File(s) or directory(ies) installation directive",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
