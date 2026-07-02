@@ -1,0 +1,901 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "forge",
+    "description": "manage Atlassian-hosted apps",
+    "options": [
+      {
+        "short": "V",
+        "long": "version",
+        "description": "output the version number",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "description": "enable verbose mode",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "display help for command",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "autocomplete",
+        "description": "configures autocomplete for the Forge CLI",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose mode",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "action",
+              "provider": "forge.autocomplete-actions",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "create",
+        "description": "create an app",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose mode",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "template",
+            "description": "specify the template to use",
+            "inherit": false,
+            "value": {
+              "name": "template-name"
+            }
+          },
+          {
+            "short": "d",
+            "long": "directory",
+            "description": "specify the directory to create (uses the template name by default)",
+            "inherit": false,
+            "value": {
+              "name": "directory-name",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "deploy",
+        "description": "deploy your app to an environment",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose mode",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "no-verify",
+            "description": "disable pre-deployment checks",
+            "inherit": false
+          },
+          {
+            "short": "e",
+            "long": "environment",
+            "description": "specify the environment from options: development, staging, production (default: development)",
+            "inherit": false,
+            "value": {
+              "name": "environment",
+              "required": false,
+              "style": "optional",
+              "provider": "forge.environments"
+            }
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command without input prompts",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "feedback",
+        "description": "let us know what you think about Forge",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose mode",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "manage app installations",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose mode",
+            "inherit": false
+          },
+          {
+            "short": "e",
+            "long": "environment",
+            "description": "specify the environment from options: development, staging, production (default: development)",
+            "inherit": false,
+            "value": {
+              "name": "environment",
+              "required": false,
+              "style": "optional",
+              "provider": "forge.environments"
+            }
+          },
+          {
+            "short": "s",
+            "long": "site",
+            "description": "site URL (example.atlassian.net)",
+            "inherit": false,
+            "value": {
+              "name": "site",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "short": "p",
+            "long": "product",
+            "description": "product (Jira, Confluence, Compass)",
+            "inherit": false,
+            "value": {
+              "name": "product",
+              "required": false,
+              "style": "optional",
+              "provider": "forge.products"
+            }
+          },
+          {
+            "long": "upgrade",
+            "description": "upgrade an existing installation",
+            "inherit": false
+          },
+          {
+            "long": "confirm-scopes",
+            "description": "skip confirmation of scopes for the app before installing or upgrading the app",
+            "inherit": false
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command without input prompts",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list app installations",
+            "options": [
+              {
+                "long": "verbose",
+                "description": "enable verbose mode",
+                "inherit": false
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for command",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "help",
+            "description": "display help for command",
+            "arguments": {
+              "states": [
+                {
+                  "name": "command",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "lint",
+        "description": "check the source files for common errors",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose mode",
+            "inherit": false
+          },
+          {
+            "long": "fix",
+            "description": "attempt to automatically fix any issues encountered",
+            "inherit": false
+          },
+          {
+            "short": "e",
+            "long": "environment",
+            "description": "specify the environment from options: development, staging, production (default: development)",
+            "inherit": false,
+            "value": {
+              "name": "environment",
+              "required": false,
+              "style": "optional",
+              "provider": "forge.environments"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "login",
+        "description": "log in to your Atlassian account",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose mode",
+            "inherit": false
+          },
+          {
+            "short": "u",
+            "long": "email",
+            "description": "specify the email to use",
+            "inherit": false,
+            "value": {
+              "name": "user-email"
+            }
+          },
+          {
+            "short": "t",
+            "long": "token",
+            "description": "specify the API token to use",
+            "inherit": false,
+            "value": {
+              "name": "api-token"
+            }
+          },
+          {
+            "long": "non-interactive",
+            "description": "run the command without input prompts",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "logout",
+        "description": "log out of your Atlassian account",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose mode",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "logs",
+        "description": "view app logs",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose mode",
+            "inherit": false
+          },
+          {
+            "short": "e",
+            "long": "environment",
+            "description": "specify the environment from options: development, staging, production (default: development)",
+            "inherit": false,
+            "value": {
+              "name": "environment",
+              "required": false,
+              "style": "optional",
+              "provider": "forge.environments"
+            }
+          },
+          {
+            "short": "i",
+            "long": "invocation",
+            "description": "view logs for a given invocation ID",
+            "inherit": false,
+            "value": {
+              "name": "invocation"
+            }
+          },
+          {
+            "short": "n",
+            "long": "limit",
+            "description": "number of invocations to return",
+            "inherit": false,
+            "value": {
+              "name": "limit"
+            }
+          },
+          {
+            "short": "s",
+            "long": "since",
+            "description": "view logs since the specified time. valid formats: YYYY-MM-DD, ISO 8061 timestamp or a relative time (e.g: 5m, 10h, 2d)",
+            "inherit": false,
+            "value": {
+              "name": "since"
+            }
+          },
+          {
+            "short": "g",
+            "long": "grouped",
+            "description": "group logs by invocation ID",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "providers",
+        "description": "manage external providers",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose mode",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "configure",
+            "description": "configure provider credentials",
+            "options": [
+              {
+                "long": "verbose",
+                "description": "enable verbose mode",
+                "inherit": false
+              },
+              {
+                "short": "s",
+                "long": "oauth-client-secret",
+                "description": "client secret",
+                "inherit": false,
+                "value": {
+                  "name": "oauthClientSecret",
+                  "required": false,
+                  "style": "optional"
+                }
+              },
+              {
+                "short": "e",
+                "long": "environment",
+                "description": "specify the environment from options: development, staging, production (default: development)",
+                "inherit": false,
+                "value": {
+                  "name": "environment",
+                  "required": false,
+                  "style": "optional",
+                  "provider": "forge.environments"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for command",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "providerKey",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "help",
+            "description": "display help for command",
+            "arguments": {
+              "states": [
+                {
+                  "name": "command",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "register",
+        "description": "register an app you didn't create so you can run commands for it",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose mode",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "settings",
+        "description": "manage Forge CLI settings",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose mode",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list Forge CLI settings",
+            "options": [
+              {
+                "long": "verbose",
+                "description": "enable verbose mode",
+                "inherit": false
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for command",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "set",
+            "description": "update Forge CLI setting (choices: usage-analytics)",
+            "options": [
+              {
+                "long": "verbose",
+                "description": "enable verbose mode",
+                "inherit": false
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for command",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "setting",
+                  "index": 0,
+                  "provider": "forge.settings"
+                },
+                {
+                  "name": "boolean",
+                  "index": 1,
+                  "provider": "forge.booleans"
+                }
+              ]
+            }
+          },
+          {
+            "name": "help",
+            "description": "display help for command",
+            "arguments": {
+              "states": [
+                {
+                  "name": "command",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "tunnel",
+        "description": "start a tunnel to connect your local code with the app running in the development environment",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose mode",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "enable debugger mode",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "uninstall",
+        "description": "uninstall the app from an Atlassian site",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose mode",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "installationId",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "variables",
+        "description": "manage app environment variables",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose mode",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "set",
+            "description": "set an environment variable",
+            "options": [
+              {
+                "long": "verbose",
+                "description": "enable verbose mode",
+                "inherit": false
+              },
+              {
+                "long": "encrypt",
+                "description": "encrypt variable",
+                "inherit": false
+              },
+              {
+                "short": "e",
+                "long": "environment",
+                "description": "specify the environment from options: development, staging, production (default: development)",
+                "inherit": false,
+                "value": {
+                  "name": "environment",
+                  "required": false,
+                  "style": "optional",
+                  "provider": "forge.environments"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for command",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "index": 0
+                },
+                {
+                  "name": "value",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "unset",
+            "description": "remove an environment variable",
+            "options": [
+              {
+                "long": "verbose",
+                "description": "enable verbose mode",
+                "inherit": false
+              },
+              {
+                "short": "e",
+                "long": "environment",
+                "description": "specify the environment from options: development, staging, production (default: development)",
+                "inherit": false,
+                "value": {
+                  "name": "environment",
+                  "required": false,
+                  "style": "optional",
+                  "provider": "forge.environments"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for command",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list the environment variables",
+            "options": [
+              {
+                "long": "verbose",
+                "description": "enable verbose mode",
+                "inherit": false
+              },
+              {
+                "short": "e",
+                "long": "environment",
+                "description": "specify the environment from options: development, staging, production (default: development)",
+                "inherit": false,
+                "value": {
+                  "name": "environment",
+                  "required": false,
+                  "style": "optional",
+                  "provider": "forge.environments"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for command",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "help",
+            "description": "display help for command",
+            "arguments": {
+              "states": [
+                {
+                  "name": "command",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "webtrigger",
+        "description": "get a web trigger URL",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose mode",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "functionKey",
+            "description": "web trigger key from the manifest.yml file",
+            "inherit": false,
+            "value": {
+              "name": "function",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "installationId",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "whoami",
+        "description": "display the account information of the logged in user",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose mode",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "display help for command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "forge.autocomplete-actions": {
+        "candidates": [
+          {
+            "value": "install"
+          },
+          {
+            "value": "uninstall"
+          }
+        ]
+      },
+      "forge.environments": {
+        "candidates": [
+          {
+            "value": "development"
+          },
+          {
+            "value": "staging"
+          },
+          {
+            "value": "production"
+          }
+        ]
+      },
+      "forge.products": {
+        "candidates": [
+          {
+            "value": "Jira"
+          },
+          {
+            "value": "Confluence"
+          },
+          {
+            "value": "Compass"
+          }
+        ]
+      },
+      "forge.settings": {
+        "candidates": [
+          {
+            "value": "usage-analytics"
+          }
+        ]
+      },
+      "forge.booleans": {
+        "candidates": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ]
+      }
+    }
+  }
+}
