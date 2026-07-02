@@ -1,0 +1,105 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "Rscript",
+    "description": "run R scripts",
+    "options": [
+      {
+        "short": "e",
+        "description": "r expression to run",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "expression",
+          "description": "R expression"
+        }
+      },
+      {
+        "long": "help",
+        "description": "print usage and exit",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "print version and exit",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "description": "print information on progress",
+        "inherit": false
+      },
+      {
+        "long": "no-echo",
+        "description": "run as quietly as possible",
+        "inherit": false
+      },
+      {
+        "long": "no-restore",
+        "description": "don't restore anything",
+        "inherit": false
+      },
+      {
+        "long": "save",
+        "description": "do save workspace at the end of the session",
+        "inherit": false
+      },
+      {
+        "long": "no-environ",
+        "description": "don't read the site and user environment files",
+        "inherit": false
+      },
+      {
+        "long": "no-site-file",
+        "description": "don't read the site-wide Rprofile",
+        "inherit": false
+      },
+      {
+        "long": "no-init-file",
+        "description": "don't read the user R profile",
+        "inherit": false
+      },
+      {
+        "long": "restore",
+        "description": "do restore previously saved objects at startup",
+        "inherit": false
+      },
+      {
+        "long": "vanilla",
+        "description": "combine --no-save, --no-restore, --no-site-file --no-init-file and --no-environ",
+        "inherit": false
+      },
+      {
+        "long": "default-packages",
+        "description": "comma separated list of default packages",
+        "inherit": false,
+        "value": {
+          "name": "packages",
+          "description": "A comma-separated set of package names, or 'NULL'"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "description": "r script to run",
+          "provider": "builtin.files",
+          "index": 0
+        },
+        {
+          "name": "args",
+          "description": "arguments to pass to the script",
+          "index": 1,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
