@@ -1,0 +1,1233 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "netlify",
+    "description": "manage Netlify sites",
+    "options": [
+      {
+        "long": "telemetry-disable",
+        "description": "opt out of sharing usage data",
+        "inherit": false,
+        "excludes": [
+          "telemetry-enable"
+        ]
+      },
+      {
+        "long": "telemetry-enable",
+        "description": "share usage data",
+        "inherit": false,
+        "excludes": [
+          "telemetry-disable"
+        ]
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "addons:auth",
+        "description": "login to add-on provider",
+        "aliases": [
+          "addon:auth"
+        ],
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "addons:config",
+        "description": "configure add-on settings",
+        "aliases": [
+          "addon:config"
+        ],
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "addons:create",
+        "description": "add an add-on extension to your site",
+        "aliases": [
+          "addon:create"
+        ],
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "addons:delete",
+        "description": "remove an add-on extension from your site",
+        "aliases": [
+          "addon:delete"
+        ],
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "addons:list",
+        "description": "list installed add-ons",
+        "aliases": [
+          "addon:list"
+        ],
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "api",
+        "description": "run a Netlify API method",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "build",
+        "description": "build on your local machine",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "completion",
+        "description": "generate shell completion script"
+      },
+      {
+        "name": "completion:generate",
+        "description": "generate completion script"
+      },
+      {
+        "name": "completion:generate:alias",
+        "description": "generate completion script for alias"
+      },
+      {
+        "name": "deploy",
+        "description": "create a deploy from a folder",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "dev",
+        "description": "start local dev server",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "dev:exec",
+        "description": "execute a dev command",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "dev:trace",
+        "description": "trace a local dev request",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "env",
+        "description": "control environment variables",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "env:get",
+        "description": "get an environment variable",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "env:import",
+        "description": "import variables from an env file",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "env:list",
+        "description": "list environment variables",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "env:set",
+        "description": "set an environment variable",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "env:unset",
+        "description": "unset an environment variable",
+        "aliases": [
+          "env:delete",
+          "env:remove"
+        ],
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "functions:build",
+        "description": "build functions locally",
+        "aliases": [
+          "function:build"
+        ],
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "functions:create",
+        "description": "create a function locally",
+        "aliases": [
+          "function:create"
+        ],
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "functions:invoke",
+        "description": "invoke a function locally",
+        "aliases": [
+          "function:trigger"
+        ],
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "functions:list",
+        "description": "list local functions",
+        "aliases": [
+          "function:list"
+        ],
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "functions:serve",
+        "description": "serve functions locally",
+        "aliases": [
+          "function:server"
+        ],
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "configure continuous deployment",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "link",
+        "description": "link a folder to a Netlify site",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "lm",
+        "description": "handle Netlify Large Media operations",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "lm:info",
+        "description": "show large media requirements",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "lm:install",
+        "description": "configure Large Media on this computer",
+        "aliases": [
+          "lm:init"
+        ],
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "lm:setup",
+        "description": "configure a site to use Large Media",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "login",
+        "description": "log in to Netlify",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "open",
+        "description": "open settings for the linked site",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "open:admin",
+        "description": "open current site admin",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "open:site",
+        "description": "open current site URL",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "sites:create",
+        "description": "create an empty site",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "sites:delete",
+        "description": "delete a site",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "sites:list",
+        "description": "list sites",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "status",
+        "description": "print status information",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "status:hooks",
+        "description": "print linked-site hook information",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "unlink",
+        "description": "unlink a folder from a site",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "watch",
+        "description": "watch for deploy completion",
+        "options": [
+          {
+            "long": "debug",
+            "description": "print debugging information",
+            "inherit": false
+          },
+          {
+            "long": "httpProxy",
+            "description": "proxy server address",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "httpProxyCertificateFilename",
+            "description": "proxy certificate file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "show help for a subcommand",
+        "arguments": {
+          "states": [
+            {
+              "name": "subcommand",
+              "index": 0,
+              "required": false,
+              "provider": {
+                "values": [
+                  "addons:auth",
+                  "addons:config",
+                  "addons:create",
+                  "addons:delete",
+                  "addons:list",
+                  "api",
+                  "build",
+                  "completion",
+                  "completion:generate",
+                  "completion:generate:alias",
+                  "deploy",
+                  "dev",
+                  "dev:exec",
+                  "dev:trace",
+                  "env",
+                  "env:get",
+                  "env:import",
+                  "env:list",
+                  "env:set",
+                  "env:unset",
+                  "functions:build",
+                  "functions:create",
+                  "functions:invoke",
+                  "functions:list",
+                  "functions:serve",
+                  "init",
+                  "link",
+                  "lm",
+                  "lm:info",
+                  "lm:install",
+                  "lm:setup",
+                  "login",
+                  "open",
+                  "open:admin",
+                  "open:site",
+                  "sites:create",
+                  "sites:delete",
+                  "sites:list",
+                  "status",
+                  "status:hooks",
+                  "unlink",
+                  "watch"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
