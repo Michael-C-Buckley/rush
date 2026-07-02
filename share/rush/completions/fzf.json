@@ -1,0 +1,554 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "fzf",
+    "description": "command-line fuzzy finder",
+    "options": [
+      {
+        "short": "x",
+        "long": "extended",
+        "description": "enables extended-search mode",
+        "inherit": false,
+        "excludes": [
+          "--no-extended",
+          "+x"
+        ]
+      },
+      {
+        "long": "no-extended",
+        "spellings": [
+          "+x"
+        ],
+        "description": "disables extended-search mode",
+        "inherit": false,
+        "excludes": [
+          "--extended",
+          "-x"
+        ]
+      },
+      {
+        "short": "e",
+        "long": "exact",
+        "description": "enables Exact-match",
+        "inherit": false
+      },
+      {
+        "long": "algo",
+        "description": "fuzzy matching algorithm",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": "fzf.algorithms"
+        }
+      },
+      {
+        "short": "i",
+        "description": "case-insensitive match (default: smart-case match)",
+        "inherit": false,
+        "exclusiveGroup": "case-mode"
+      },
+      {
+        "spellings": [
+          "+i"
+        ],
+        "description": "case-sensitive match (default: smart-case match)",
+        "inherit": false,
+        "exclusiveGroup": "case-mode"
+      },
+      {
+        "long": "literal",
+        "description": "do not normalize latin script letters before matching",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "long": "nth",
+        "description": "comma-separated list of field index expressions for limiting search scope",
+        "inherit": false,
+        "value": {
+          "name": "index-expressions",
+          "description": "non-zero integer or range expression ([BEGIN]..[END])"
+        }
+      },
+      {
+        "long": "with-nth",
+        "description": "transform the presentation of each line using field index expressions",
+        "inherit": false,
+        "value": {
+          "name": "index-expressions",
+          "description": "non-zero integer or range expression ([BEGIN]..[END])"
+        }
+      },
+      {
+        "short": "d",
+        "long": "delimiter",
+        "description": "field delimiter regex (default: AWK-style)",
+        "inherit": false,
+        "value": {
+          "name": "str"
+        }
+      },
+      {
+        "long": "no-sort",
+        "spellings": [
+          "+s"
+        ],
+        "description": "do not sort the result",
+        "inherit": false
+      },
+      {
+        "long": "tac",
+        "description": "reverse the order of the input",
+        "inherit": false
+      },
+      {
+        "long": "disabled",
+        "description": "do not perform search",
+        "inherit": false
+      },
+      {
+        "long": "tiebreak",
+        "description": "comma-separated list of sort criteria to apply when the scores are tied",
+        "inherit": false,
+        "value": {
+          "name": "criteria",
+          "provider": "fzf.tiebreaks"
+        }
+      },
+      {
+        "short": "m",
+        "long": "multi",
+        "description": "enable multi-select with tab/shift-tab",
+        "inherit": false,
+        "value": {
+          "name": "max",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-mouse",
+        "description": "disable mouse",
+        "inherit": false
+      },
+      {
+        "long": "bind",
+        "description": "custom key bindings. Refer to the man page",
+        "inherit": false,
+        "value": {
+          "name": "keybinds"
+        }
+      },
+      {
+        "long": "cycle",
+        "description": "enable cyclic scroll",
+        "inherit": false
+      },
+      {
+        "long": "keep-right",
+        "description": "keep the right end of the line visible on overflow",
+        "inherit": false
+      },
+      {
+        "long": "no-hscroll",
+        "description": "disable horizontal scroll",
+        "inherit": false
+      },
+      {
+        "long": "hscroll-off",
+        "description": "number of screen columns to keep to the right of the highlighted substring",
+        "inherit": false,
+        "value": {
+          "name": "columns"
+        }
+      },
+      {
+        "long": "filepath-word",
+        "description": "make word-wise movements respect path separators",
+        "inherit": false
+      },
+      {
+        "long": "jump-labels",
+        "description": "label characters for jump and jump-accept",
+        "inherit": false,
+        "value": {
+          "name": "characters"
+        }
+      },
+      {
+        "long": "height",
+        "description": "display fzf window below the cursor with the given height instead of using fullscreen",
+        "inherit": false,
+        "value": {
+          "name": "height",
+          "description": "height[%]"
+        }
+      },
+      {
+        "long": "min-height",
+        "description": "minimum height when --height is given in percent",
+        "inherit": false,
+        "value": {
+          "name": "height"
+        }
+      },
+      {
+        "long": "layout",
+        "description": "choose layout",
+        "inherit": false,
+        "value": {
+          "name": "layout",
+          "provider": "fzf.layouts"
+        }
+      },
+      {
+        "long": "border",
+        "description": "draw border around the finder",
+        "inherit": false,
+        "value": {
+          "name": "style",
+          "required": false,
+          "style": "optional",
+          "provider": "fzf.borders"
+        }
+      },
+      {
+        "long": "margin",
+        "description": "screen margin (TRBL | TB,RL | T,RL,B | T,R,B,L)",
+        "inherit": false,
+        "value": {
+          "name": "margin",
+          "description": "number"
+        }
+      },
+      {
+        "long": "padding",
+        "description": "padding inside border (TRBL | TB,RL | T,RL,B | T,R,B,L)",
+        "inherit": false,
+        "value": {
+          "name": "padding",
+          "description": "number"
+        }
+      },
+      {
+        "long": "info",
+        "description": "finder info style",
+        "inherit": false,
+        "value": {
+          "name": "style",
+          "provider": "fzf.info-styles"
+        }
+      },
+      {
+        "long": "prompt",
+        "description": "input prompt",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "pointer",
+        "description": "pointer to the current line",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "marker",
+        "description": "multi-select marker",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "header",
+        "description": "string to print as header",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "header-lines",
+        "description": "the first N lines of the input are treated as header",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "ansi",
+        "description": "enable processing of ANSI color codes",
+        "inherit": false
+      },
+      {
+        "long": "tabstop",
+        "description": "number of spaces for a tab character",
+        "inherit": false,
+        "value": {
+          "name": "spaces"
+        }
+      },
+      {
+        "long": "color",
+        "description": "base scheme",
+        "inherit": false,
+        "value": {
+          "name": "color-scheme",
+          "description": "(dark|light|16|bw) and/or custom colors",
+          "provider": "fzf.color-schemes"
+        }
+      },
+      {
+        "long": "no-bold",
+        "description": "do not use bold text",
+        "inherit": false
+      },
+      {
+        "long": "history",
+        "description": "history file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "history-size",
+        "description": "maximum number of history entries",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "preview",
+        "description": "command to preview highlighted line ({})",
+        "inherit": false,
+        "value": {
+          "name": "command"
+        }
+      },
+      {
+        "long": "preview-window",
+        "description": "preview window layout",
+        "inherit": false,
+        "value": {
+          "name": "options",
+          "provider": "fzf.preview-window-options"
+        }
+      },
+      {
+        "short": "q",
+        "long": "query",
+        "description": "start the finder with the given query",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "short": "1",
+        "long": "select-1",
+        "description": "automatically select the only match",
+        "inherit": false
+      },
+      {
+        "short": "0",
+        "long": "exit-0",
+        "description": "exit immediately when there's no match",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "long": "filter",
+        "description": "filter mode. Do not start interactive finder",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "print-query",
+        "description": "print query as the first line",
+        "inherit": false
+      },
+      {
+        "long": "expect",
+        "description": "comma-separated list of keys to complete fzf",
+        "inherit": false,
+        "value": {
+          "name": "keys"
+        }
+      },
+      {
+        "long": "read0",
+        "description": "read input delimited by ASCII NUL characters",
+        "inherit": false
+      },
+      {
+        "long": "print0",
+        "description": "print output delimited by ASCII NUL characters",
+        "inherit": false
+      },
+      {
+        "long": "sync",
+        "description": "synchronous search for multi-staged filtering",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "display version information and exit",
+        "inherit": false
+      }
+    ],
+    "providers": {
+      "fzf.algorithms": {
+        "candidates": [
+          {
+            "value": "v1"
+          },
+          {
+            "value": "v2"
+          }
+        ]
+      },
+      "fzf.tiebreaks": {
+        "candidates": [
+          {
+            "value": "length"
+          },
+          {
+            "value": "begin"
+          },
+          {
+            "value": "end"
+          },
+          {
+            "value": "index"
+          }
+        ]
+      },
+      "fzf.layouts": {
+        "candidates": [
+          {
+            "value": "default"
+          },
+          {
+            "value": "reverse"
+          },
+          {
+            "value": "reverse-list"
+          }
+        ]
+      },
+      "fzf.borders": {
+        "candidates": [
+          {
+            "value": "rounded"
+          },
+          {
+            "value": "sharp"
+          },
+          {
+            "value": "horizontal"
+          },
+          {
+            "value": "vertical"
+          },
+          {
+            "value": "top"
+          },
+          {
+            "value": "bottom"
+          },
+          {
+            "value": "left"
+          },
+          {
+            "value": "right"
+          },
+          {
+            "value": "none"
+          }
+        ]
+      },
+      "fzf.info-styles": {
+        "candidates": [
+          {
+            "value": "default"
+          },
+          {
+            "value": "inline"
+          },
+          {
+            "value": "hidden"
+          }
+        ]
+      },
+      "fzf.color-schemes": {
+        "candidates": [
+          {
+            "value": "dark"
+          },
+          {
+            "value": "light"
+          },
+          {
+            "value": "16"
+          },
+          {
+            "value": "bw"
+          }
+        ]
+      },
+      "fzf.preview-window-options": {
+        "candidates": [
+          {
+            "value": "up"
+          },
+          {
+            "value": "down"
+          },
+          {
+            "value": "left"
+          },
+          {
+            "value": "right"
+          },
+          {
+            "value": "nowrap"
+          },
+          {
+            "value": "wrap"
+          },
+          {
+            "value": "nocycle"
+          },
+          {
+            "value": "cycle"
+          },
+          {
+            "value": "nofollow"
+          },
+          {
+            "value": "follow"
+          },
+          {
+            "value": "nohidden"
+          },
+          {
+            "value": "hidden"
+          },
+          {
+            "value": "default"
+          }
+        ]
+      }
+    }
+  }
+}
