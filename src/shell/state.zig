@@ -335,28 +335,38 @@ pub const State = struct {
         try self.local_frames.append(self.allocator, frame);
     }
 
-    pub fn popLocalFrame(self: *State) void {
+    /// Restores the variable bindings saved by the innermost local frame.
+    ///
+    /// Map capacity is reserved before any binding is touched, so the
+    /// restore itself transfers ownership of the saved strings without
+    /// allocating. On OutOfMemory nothing has been mutated and the frame
+    /// remains pushed.
+    pub fn popLocalFrame(self: *State) !void {
         std.debug.assert(self.local_frames.items.len != 0);
+        const saved_count = self.local_frames.items[self.local_frames.items.len - 1].saved.count();
+        try self.variables.ensureUnusedCapacity(self.allocator, saved_count);
+        try self.variable_attributes.ensureUnusedCapacity(self.allocator, saved_count);
+
         var frame = self.local_frames.pop().?;
         defer frame.deinit(self.allocator);
 
-        var entries: std.ArrayList(SavedLocalBinding) = .empty;
-        defer entries.deinit(self.allocator);
+        var iterator = frame.saved.valueIterator();
+        while (iterator.next()) |binding| self.restoreSavedBinding(binding);
+    }
 
-        var iterator = frame.saved.iterator();
-        while (iterator.next()) |entry| entries.append(self.allocator, entry.value_ptr.*) catch unreachable;
-
-        var index = entries.items.len;
-        while (index != 0) {
-            index -= 1;
-            const binding = entries.items[index];
-            self.removeVariable(binding.name);
-            self.removeVariableAttributes(binding.name);
-            if (binding.variable) |variable| {
-                self.putVariable(variable) catch unreachable;
-            } else if (binding.attributes) |attributes| {
-                self.putVariableAttributes(attributes) catch unreachable;
-            }
+    fn restoreSavedBinding(self: *State, binding: *SavedLocalBinding) void {
+        // A name lives in at most one of the two maps: putVariable removes
+        // the attributes entry and putVariableAttributes only inserts when
+        // no variable exists.
+        std.debug.assert(binding.variable == null or binding.attributes == null);
+        self.removeVariable(binding.name);
+        if (binding.variable) |variable| {
+            self.variables.putAssumeCapacity(variable.name, variable);
+            binding.variable = null;
+            self.clearFunctionAutoloadMissesIfSearchVariable(variable.name);
+        } else if (binding.attributes) |attributes| {
+            self.variable_attributes.putAssumeCapacity(attributes.name, attributes);
+            binding.attributes = null;
         }
     }
 

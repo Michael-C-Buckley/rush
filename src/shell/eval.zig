@@ -2918,7 +2918,9 @@ fn evalFunction(
 
     try applyExportedAssignments(shell, assignments);
     try pushFunctionLocalFrame(shell, assignments);
-    defer shell.state.popLocalFrame();
+    var local_frame_popped = false;
+    // ziglint-ignore: Z026 best-effort restore; the enclosing error already aborts the function call
+    defer if (!local_frame_popped) shell.state.popLocalFrame() catch {};
     try shell.state.setPositionals(args);
     const saved_loop_depth = shell.state.loop_depth;
     shell.state.loop_depth = 0;
@@ -2930,6 +2932,8 @@ fn evalFunction(
     shell.state.loop_depth = saved_loop_depth;
     try restorePositionals(shell, saved_positionals);
     restored_positionals = true;
+    local_frame_popped = true;
+    try shell.state.popLocalFrame();
     if (evaluated.flow == .return_) return .{ .status = evaluated.status };
     if (evaluated.flow == .break_ or evaluated.flow == .continue_) return .{ .status = 2 };
     if (evaluated.flow == .fatal and shell.state.options.mode == .bash and !shell.state.options.errexit) {
