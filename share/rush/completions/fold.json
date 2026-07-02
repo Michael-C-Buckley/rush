@@ -1,0 +1,53 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "fold",
+    "description": "fold long input lines",
+    "options": [
+      {
+        "short": "b",
+        "inherit": false,
+        "description": "count width in bytes"
+      },
+      {
+        "short": "s",
+        "inherit": false,
+        "description": "fold at the last blank before width"
+      },
+      {
+        "short": "w",
+        "inherit": false,
+        "value": {
+          "name": "width",
+          "provider": {
+            "values": [
+              "80",
+              "90",
+              "100",
+              "110",
+              "120"
+            ]
+          }
+        },
+        "description": "set output line width"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "description": "files to fold",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
