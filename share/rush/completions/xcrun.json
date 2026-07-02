@@ -1,0 +1,161 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "xcrun",
+    "description": "find and run Xcode developer tools",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "help message"
+      },
+      {
+        "long": "version",
+        "description": "show the xcrun version"
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "show verbose logging output"
+      },
+      {
+        "long": "sdk",
+        "description": "find the tool for the given SDK name",
+        "value": {
+          "name": "sdk-name"
+        }
+      },
+      {
+        "long": "toolchain",
+        "description": "find the tool for the given toolchain",
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "short": "l",
+        "long": "log",
+        "description": "show command path to be executed (and --run)"
+      },
+      {
+        "short": "f",
+        "long": "find",
+        "description": "find and print the tool path"
+      },
+      {
+        "long": "run",
+        "description": "(Default) find and execute the tool"
+      },
+      {
+        "short": "n",
+        "long": "no-cache",
+        "description": "do not use the lookup cache"
+      },
+      {
+        "short": "k",
+        "long": "kill-cache",
+        "description": "invalidate all existing cache entries",
+        "priority": -10
+      },
+      {
+        "long": "show-sdk-path",
+        "description": "show selected SDK install path"
+      },
+      {
+        "long": "show-sdk-version",
+        "description": "show selected SDK version"
+      },
+      {
+        "long": "show-sdk-build-version",
+        "description": "show selected SDK build version"
+      },
+      {
+        "long": "show-sdk-platform-path",
+        "description": "show selected SDK platform path"
+      },
+      {
+        "long": "show-sdk-platform-version",
+        "description": "show selected SDK platform version"
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "scntool",
+        "description": "sceneKit CLI utilities",
+        "options": [
+          {
+            "long": "convert",
+            "description": "file to convert",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "format",
+            "description": "format to convert to",
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "scn",
+                  "dae",
+                  "c3d"
+                ]
+              }
+            }
+          },
+          {
+            "long": "output",
+            "description": "path to the output file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "force-y-up",
+            "description": "convert objects to use y axis up"
+          },
+          {
+            "long": "force-interleaved",
+            "description": "interleave the vertex data for multiple semantics in the same array to achieve better rendering performance"
+          },
+          {
+            "long": "prefer-compressed-textures",
+            "description": "use .ktx, .astc and .pvrtc files for textures if available in the asset catalog"
+          },
+          {
+            "long": "verbose",
+            "description": "get pretty error message"
+          }
+        ]
+      },
+      {
+        "name": "xcodebuild"
+      },
+      {
+        "name": "simctl"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      }
+    },
+    "arguments": {
+      "states": [
+        {
+          "name": "tool",
+          "description": "developer tool to run",
+          "index": 0,
+          "provider": "builtin.executables"
+        }
+      ]
+    }
+  }
+}
