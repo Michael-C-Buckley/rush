@@ -1,0 +1,3288 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "rvm",
+    "description": "manage Ruby versions with RVM",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "use",
+        "description": "setup current shell to use a specific ruby version",
+        "subcommands": [
+          {
+            "name": "rbx",
+            "description": "Rubinius",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "jruby",
+            "description": "JRuby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ruby",
+            "description": "MRI/YARV Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ree",
+            "description": "Ruby Enterprise Edition",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "system",
+            "description": "use the system Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "default",
+            "description": "use the default Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "reset",
+        "description": "remove default and current settings, exit the shell",
+        "subcommands": [
+          {
+            "name": "rbx",
+            "description": "Rubinius",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "jruby",
+            "description": "JRuby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ruby",
+            "description": "MRI/YARV Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ree",
+            "description": "Ruby Enterprise Edition",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "system",
+            "description": "use the system Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "default",
+            "description": "use the default Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "info",
+        "description": "show information about the current ruby environment",
+        "subcommands": [
+          {
+            "name": "rbx",
+            "description": "Rubinius",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "jruby",
+            "description": "JRuby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ruby",
+            "description": "MRI/YARV Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ree",
+            "description": "Ruby Enterprise Edition",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "system",
+            "description": "use the system Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "default",
+            "description": "use the default Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "list",
+        "description": "list currently installed version",
+        "subcommands": [
+          {
+            "name": "rbx",
+            "description": "Rubinius",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "jruby",
+            "description": "JRuby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ruby",
+            "description": "MRI/YARV Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ree",
+            "description": "Ruby Enterprise Edition",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "system",
+            "description": "use the system Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "default",
+            "description": "use the default Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "reload",
+        "description": "reload RVM source itself (useful after changing RVM source)",
+        "subcommands": [
+          {
+            "name": "rbx",
+            "description": "Rubinius",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "jruby",
+            "description": "JRuby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ruby",
+            "description": "MRI/YARV Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ree",
+            "description": "Ruby Enterprise Edition",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "system",
+            "description": "use the system Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "default",
+            "description": "use the default Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "implode",
+        "description": "remove all ruby installations it manages",
+        "subcommands": [
+          {
+            "name": "rbx",
+            "description": "Rubinius",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "jruby",
+            "description": "JRuby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ruby",
+            "description": "MRI/YARV Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ree",
+            "description": "Ruby Enterprise Edition",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "system",
+            "description": "use the system Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "default",
+            "description": "use the default Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "get",
+        "description": "upgrades RVM to the stable or git head branches",
+        "subcommands": [
+          {
+            "name": "rbx",
+            "description": "Rubinius",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "jruby",
+            "description": "JRuby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ruby",
+            "description": "MRI/YARV Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ree",
+            "description": "Ruby Enterprise Edition",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "system",
+            "description": "use the system Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "default",
+            "description": "use the default Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "do",
+        "description": "runs a named ruby file against specified and/or all rubies",
+        "subcommands": [
+          {
+            "name": "rbx",
+            "description": "Rubinius",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "jruby",
+            "description": "JRuby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ruby",
+            "description": "MRI/YARV Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ree",
+            "description": "Ruby Enterprise Edition",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "system",
+            "description": "use the system Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "default",
+            "description": "use the default Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "install one or many ruby versions",
+        "subcommands": [
+          {
+            "name": "rbx",
+            "description": "Rubinius",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "jruby",
+            "description": "JRuby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ruby",
+            "description": "MRI/YARV Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ree",
+            "description": "Ruby Enterprise Edition",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "system",
+            "description": "use the system Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "default",
+            "description": "use the default Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "upgrade",
+        "description": "install new ruby, copy gemsets, make gems pristine, remove old rubies",
+        "subcommands": [
+          {
+            "name": "rbx",
+            "description": "Rubinius",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "jruby",
+            "description": "JRuby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ruby",
+            "description": "MRI/YARV Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ree",
+            "description": "Ruby Enterprise Edition",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "system",
+            "description": "use the system Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "default",
+            "description": "use the default Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "reinstall",
+        "description": "remove ruby, install it, make gems pristine",
+        "subcommands": [
+          {
+            "name": "rbx",
+            "description": "Rubinius",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "jruby",
+            "description": "JRuby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ruby",
+            "description": "MRI/YARV Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ree",
+            "description": "Ruby Enterprise Edition",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "system",
+            "description": "use the system Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "default",
+            "description": "use the default Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "uninstall",
+        "description": "uninstall one or many ruby versions, leaves their sources",
+        "subcommands": [
+          {
+            "name": "rbx",
+            "description": "Rubinius",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "jruby",
+            "description": "JRuby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ruby",
+            "description": "MRI/YARV Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ree",
+            "description": "Ruby Enterprise Edition",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "system",
+            "description": "use the system Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "default",
+            "description": "use the default Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "remove",
+        "description": "remove one or many ruby versions, including their sources",
+        "subcommands": [
+          {
+            "name": "rbx",
+            "description": "Rubinius",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "jruby",
+            "description": "JRuby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ruby",
+            "description": "MRI/YARV Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ree",
+            "description": "Ruby Enterprise Edition",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "system",
+            "description": "use the system Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "default",
+            "description": "use the default Ruby",
+            "options": [
+              {
+                "short": "v",
+                "long": "version",
+                "description": "show version"
+              },
+              {
+                "long": "default",
+                "description": "set as default Ruby for new shells"
+              },
+              {
+                "long": "debug",
+                "description": "enable debug mode"
+              },
+              {
+                "long": "force",
+                "description": "force installation"
+              },
+              {
+                "long": "all",
+                "description": "show most available versions"
+              },
+              {
+                "long": "summary",
+                "description": "print command summary"
+              },
+              {
+                "short": "C",
+                "description": "set configure options",
+                "value": {
+                  "name": "options"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "rbx",
+        "description": "Rubinius",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "show version"
+          },
+          {
+            "long": "default",
+            "description": "set as default Ruby for new shells"
+          },
+          {
+            "long": "debug",
+            "description": "enable debug mode"
+          },
+          {
+            "long": "force",
+            "description": "force installation"
+          },
+          {
+            "long": "all",
+            "description": "show most available versions"
+          },
+          {
+            "long": "summary",
+            "description": "print command summary"
+          },
+          {
+            "short": "C",
+            "description": "set configure options",
+            "value": {
+              "name": "options"
+            }
+          }
+        ]
+      },
+      {
+        "name": "jruby",
+        "description": "JRuby",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "show version"
+          },
+          {
+            "long": "default",
+            "description": "set as default Ruby for new shells"
+          },
+          {
+            "long": "debug",
+            "description": "enable debug mode"
+          },
+          {
+            "long": "force",
+            "description": "force installation"
+          },
+          {
+            "long": "all",
+            "description": "show most available versions"
+          },
+          {
+            "long": "summary",
+            "description": "print command summary"
+          },
+          {
+            "short": "C",
+            "description": "set configure options",
+            "value": {
+              "name": "options"
+            }
+          }
+        ]
+      },
+      {
+        "name": "ruby",
+        "description": "MRI/YARV Ruby",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "show version"
+          },
+          {
+            "long": "default",
+            "description": "set as default Ruby for new shells"
+          },
+          {
+            "long": "debug",
+            "description": "enable debug mode"
+          },
+          {
+            "long": "force",
+            "description": "force installation"
+          },
+          {
+            "long": "all",
+            "description": "show most available versions"
+          },
+          {
+            "long": "summary",
+            "description": "print command summary"
+          },
+          {
+            "short": "C",
+            "description": "set configure options",
+            "value": {
+              "name": "options"
+            }
+          }
+        ]
+      },
+      {
+        "name": "ree",
+        "description": "Ruby Enterprise Edition",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "show version"
+          },
+          {
+            "long": "default",
+            "description": "set as default Ruby for new shells"
+          },
+          {
+            "long": "debug",
+            "description": "enable debug mode"
+          },
+          {
+            "long": "force",
+            "description": "force installation"
+          },
+          {
+            "long": "all",
+            "description": "show most available versions"
+          },
+          {
+            "long": "summary",
+            "description": "print command summary"
+          },
+          {
+            "short": "C",
+            "description": "set configure options",
+            "value": {
+              "name": "options"
+            }
+          }
+        ]
+      },
+      {
+        "name": "system",
+        "description": "use the system Ruby",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "show version"
+          },
+          {
+            "long": "default",
+            "description": "set as default Ruby for new shells"
+          },
+          {
+            "long": "debug",
+            "description": "enable debug mode"
+          },
+          {
+            "long": "force",
+            "description": "force installation"
+          },
+          {
+            "long": "all",
+            "description": "show most available versions"
+          },
+          {
+            "long": "summary",
+            "description": "print command summary"
+          },
+          {
+            "short": "C",
+            "description": "set configure options",
+            "value": {
+              "name": "options"
+            }
+          }
+        ]
+      },
+      {
+        "name": "default",
+        "description": "use the default Ruby",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "show version"
+          },
+          {
+            "long": "default",
+            "description": "set as default Ruby for new shells"
+          },
+          {
+            "long": "debug",
+            "description": "enable debug mode"
+          },
+          {
+            "long": "force",
+            "description": "force installation"
+          },
+          {
+            "long": "all",
+            "description": "show most available versions"
+          },
+          {
+            "long": "summary",
+            "description": "print command summary"
+          },
+          {
+            "short": "C",
+            "description": "set configure options",
+            "value": {
+              "name": "options"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
