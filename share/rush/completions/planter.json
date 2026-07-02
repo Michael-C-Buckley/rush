@@ -1,0 +1,254 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "planter",
+    "options": [
+      {
+        "short": "V",
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "create",
+        "description": "create a project",
+        "options": [
+          {
+            "short": "f",
+            "long": "force",
+            "description": "overwrite without prompting",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "source",
+              "description": "planter name or public repo",
+              "index": 0
+            },
+            {
+              "name": "dir",
+              "description": "new project directory",
+              "index": 1,
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "list planters",
+        "options": [
+          {
+            "short": "a",
+            "long": "alphanumeric",
+            "description": "sort alphanumerically",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "add",
+        "description": "add a planter",
+        "options": [
+          {
+            "short": "L",
+            "long": "local",
+            "description": "treat location as local",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "planter name",
+              "index": 0
+            },
+            {
+              "name": "location",
+              "description": "repo URL or path",
+              "index": 1,
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "edit",
+        "description": "edit a planter",
+        "options": [
+          {
+            "short": "n",
+            "long": "name",
+            "description": "set planter name",
+            "inherit": false,
+            "value": {
+              "name": "new-name"
+            }
+          },
+          {
+            "short": "l",
+            "long": "location",
+            "description": "set planter location",
+            "inherit": false,
+            "value": {
+              "name": "location"
+            }
+          },
+          {
+            "short": "d",
+            "long": "delete",
+            "description": "remove a planter",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "force",
+            "description": "overwrite without prompting",
+            "inherit": false
+          },
+          {
+            "short": "R",
+            "long": "remote",
+            "description": "treat location as remote",
+            "inherit": false
+          },
+          {
+            "short": "L",
+            "long": "local",
+            "description": "treat location as local",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "planter name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "pin",
+        "description": "pin a planter",
+        "options": [
+          {
+            "short": "u",
+            "long": "unpin",
+            "description": "remove pinned position",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "planter name",
+              "index": 0
+            },
+            {
+              "name": "position",
+              "description": "list position",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "info",
+        "description": "show planter info",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "planter name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "show command help",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0,
+              "description": "command name",
+              "provider": "planter.commands"
+            }
+          ]
+        }
+      }
+    ],
+    "description": "create projects from planter templates",
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "planter.commands": {
+        "values": [
+          "create",
+          "list",
+          "add",
+          "edit",
+          "pin",
+          "info",
+          "help"
+        ]
+      }
+    }
+  }
+}
