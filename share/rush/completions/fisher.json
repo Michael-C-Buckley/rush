@@ -1,0 +1,126 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "fisher",
+    "description": "manage Fish shell plugins",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for fisher",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "show fisher version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "install",
+        "description": "install plugin",
+        "arguments": {
+          "states": [
+            {
+              "name": "plugin",
+              "description": "plugin to install",
+              "provider": "fisher.plugins",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "remove",
+        "description": "remove plugins",
+        "arguments": {
+          "states": [
+            {
+              "name": "installed-plugins",
+              "description": "the plugin you want to remove",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "update",
+        "description": "update plugins",
+        "arguments": {
+          "states": [
+            {
+              "name": "installed-plugins",
+              "description": "the plugin you want to update",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "list plugins",
+        "arguments": {
+          "states": [
+            {
+              "name": "regex",
+              "description": "search in list with regular expression",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "fisher.plugins": {
+        "values": [
+          {
+            "value": "IlanCosman/tide@v5",
+            "description": "Tide prompt"
+          },
+          {
+            "value": "pure-fish/pure",
+            "description": "Pure prompt"
+          },
+          {
+            "value": "jorgebucaran/hydro",
+            "description": "Hydro prompt"
+          },
+          {
+            "value": "jethrokuan/z",
+            "description": "directory jumping"
+          },
+          {
+            "value": "PatrickF1/fzf.fish",
+            "description": "fzf key bindings"
+          },
+          {
+            "value": "jorgebucaran/nvm.fish",
+            "description": "Node.js version manager"
+          },
+          {
+            "value": "franciscolourenco/done",
+            "description": "notifications for long processes"
+          },
+          {
+            "value": "jorgebucaran/replay.fish",
+            "description": "replay Bash changes in Fish"
+          },
+          {
+            "value": "jorgebucaran/spark.fish",
+            "description": "visualize numbers"
+          },
+          {
+            "value": "joseluisq/gitnow@2.10.0",
+            "description": "Git workflow helpers"
+          }
+        ]
+      }
+    }
+  }
+}
