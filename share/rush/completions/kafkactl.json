@@ -1,0 +1,1340 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "kafkactl",
+    "description": "apache Kafka command-line interface",
+    "options": [
+      {
+        "long": "config-file",
+        "short": "C",
+        "description": "config file. one of: [$HOME/.config/kafkactl $HOME/.kafkactl $SNAP_REAL_HOME/.config/kafkactl $SNAP_DATA/kafkactl /etc/kafkactl]",
+        "inherit": true,
+        "value": {
+          "name": "config-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "verbose",
+        "short": "V",
+        "description": "verbose output",
+        "inherit": true
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "display help",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "edit",
+        "aliases": [
+          "alter"
+        ],
+        "description": "alter topics, partitions",
+        "subcommands": [
+          {
+            "name": "partition",
+            "description": "alter a partition",
+            "options": [
+              {
+                "long": "replicas",
+                "short": "r",
+                "description": "set replicas for a partition",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "replicas"
+                }
+              },
+              {
+                "long": "validate-only",
+                "short": "v",
+                "description": "validate only",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "topic",
+            "description": "alter a topic",
+            "options": [
+              {
+                "long": "config",
+                "short": "c",
+                "description": "configs in format `key=value`",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "config"
+                }
+              },
+              {
+                "long": "partitions",
+                "short": "p",
+                "description": "number of partitions",
+                "inherit": false,
+                "value": {
+                  "name": "partitions"
+                }
+              },
+              {
+                "long": "replication-factor",
+                "short": "r",
+                "description": "replication factor",
+                "inherit": false,
+                "value": {
+                  "name": "replication-factor"
+                }
+              },
+              {
+                "long": "validate-only",
+                "short": "v",
+                "description": "validate only",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "attach",
+        "description": "run kafkactl pod in kubernetes and attach to it"
+      },
+      {
+        "name": "clone",
+        "description": "clone topics, consumerGroups",
+        "subcommands": [
+          {
+            "name": "cg",
+            "aliases": [
+              "consumer-group"
+            ],
+            "description": "clone existing consumerGroup with all offsets"
+          },
+          {
+            "name": "topic",
+            "description": "clone existing topic (number of partitions, replication factor, config entries) to new one"
+          }
+        ]
+      },
+      {
+        "name": "completion",
+        "description": "generate shell auto-completion file"
+      },
+      {
+        "name": "config",
+        "description": "show and edit configurations",
+        "subcommands": [
+          {
+            "name": "currentContext",
+            "aliases": [
+              "current-context"
+            ],
+            "description": "show current context"
+          },
+          {
+            "name": "getContexts",
+            "aliases": [
+              "get-contexts"
+            ],
+            "description": "list configured contexts",
+            "options": [
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format. One of: compact",
+                "inherit": false,
+                "value": {
+                  "name": "output"
+                }
+              }
+            ]
+          },
+          {
+            "name": "useContext",
+            "aliases": [
+              "use-context"
+            ],
+            "description": "switch active context"
+          },
+          {
+            "name": "view",
+            "description": "show contents of config file"
+          }
+        ]
+      },
+      {
+        "name": "consume",
+        "description": "consume messages from a topic",
+        "options": [
+          {
+            "long": "exit",
+            "short": "e",
+            "description": "stop consuming when latest offset is reached",
+            "inherit": false
+          },
+          {
+            "long": "from-beginning",
+            "short": "b",
+            "description": "set offset for consumer to the oldest offset",
+            "inherit": false
+          },
+          {
+            "long": "group",
+            "short": "g",
+            "description": "consumer group to join",
+            "inherit": false,
+            "value": {
+              "name": "group"
+            }
+          },
+          {
+            "long": "key-encoding",
+            "description": "key encoding (auto-detected by default). One of: none|hex|base64",
+            "inherit": false,
+            "value": {
+              "name": "key-encoding"
+            }
+          },
+          {
+            "long": "key-proto-type",
+            "description": "key protobuf message type",
+            "inherit": false,
+            "value": {
+              "name": "key-proto-type"
+            }
+          },
+          {
+            "long": "max-messages",
+            "description": "stop consuming after n messages have been read",
+            "inherit": false,
+            "value": {
+              "name": "max-messages"
+            }
+          },
+          {
+            "long": "offset",
+            "description": "offsets in format `partition=offset (for partitions not specified, other parameters apply)`",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "offset"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "output format. One of: json|yaml",
+            "inherit": false,
+            "value": {
+              "name": "output"
+            }
+          },
+          {
+            "long": "partitions",
+            "short": "p",
+            "description": "partitions to consume. The default is to consume from all partitions",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "partitions"
+            }
+          },
+          {
+            "long": "print-headers",
+            "description": "print message headers",
+            "inherit": false
+          },
+          {
+            "long": "print-keys",
+            "short": "k",
+            "description": "print message keys",
+            "inherit": false
+          },
+          {
+            "long": "print-schema",
+            "short": "a",
+            "description": "print details about avro schema used for decoding",
+            "inherit": false
+          },
+          {
+            "long": "print-timestamps",
+            "short": "t",
+            "description": "print message timestamps",
+            "inherit": false
+          },
+          {
+            "long": "proto-file",
+            "description": "additional protobuf description file for searching message description",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "proto-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "proto-import-path",
+            "description": "additional path to search files listed in proto 'import' directive",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "proto-import-path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "protoset-file",
+            "description": "additional compiled protobuf description file for searching message description",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "protoset-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "separator",
+            "short": "s",
+            "description": "separator to split key and value",
+            "inherit": false,
+            "value": {
+              "name": "separator"
+            }
+          },
+          {
+            "long": "tail",
+            "description": "show only the last n messages on the topic",
+            "inherit": false,
+            "value": {
+              "name": "tail"
+            }
+          },
+          {
+            "long": "value-encoding",
+            "description": "value encoding (auto-detected by default). One of: none|hex|base64",
+            "inherit": false,
+            "value": {
+              "name": "value-encoding"
+            }
+          },
+          {
+            "long": "value-proto-type",
+            "description": "value protobuf message type",
+            "inherit": false,
+            "value": {
+              "name": "value-proto-type"
+            }
+          }
+        ]
+      },
+      {
+        "name": "create",
+        "description": "create topics, consumerGroups, acls",
+        "subcommands": [
+          {
+            "name": "acl",
+            "aliases": [
+              "access-control-list"
+            ],
+            "description": "create an acl",
+            "options": [
+              {
+                "long": "allow",
+                "short": "a",
+                "description": "acl of permissionType 'allow' (choose this or 'deny')",
+                "inherit": false
+              },
+              {
+                "long": "cluster",
+                "short": "c",
+                "description": "create acl for the cluster",
+                "inherit": false
+              },
+              {
+                "long": "deny",
+                "short": "d",
+                "description": "acl of permissionType 'deny' (choose this or 'allow')",
+                "inherit": false
+              },
+              {
+                "long": "group",
+                "short": "g",
+                "description": "create acl for a consumer group",
+                "inherit": false,
+                "value": {
+                  "name": "group"
+                }
+              },
+              {
+                "long": "host",
+                "description": "hosts to allow",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "long": "operation",
+                "short": "o",
+                "description": "operations of acl",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "operation"
+                }
+              },
+              {
+                "long": "pattern",
+                "description": "pattern type. one of (match, prefixed, literal)",
+                "inherit": false,
+                "value": {
+                  "name": "pattern"
+                }
+              },
+              {
+                "long": "principal",
+                "short": "p",
+                "description": "principal to be authenticated",
+                "inherit": false,
+                "value": {
+                  "name": "principal"
+                }
+              },
+              {
+                "long": "topic",
+                "short": "t",
+                "description": "create acl for a topic",
+                "inherit": false,
+                "value": {
+                  "name": "topic"
+                }
+              },
+              {
+                "long": "validate-only",
+                "short": "v",
+                "description": "validate only",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "cg",
+            "aliases": [
+              "consumer-group"
+            ],
+            "description": "create a consumerGroup",
+            "options": [
+              {
+                "long": "newest",
+                "description": "set the offset to newest offset (for all partitions or the specified partition)",
+                "inherit": false
+              },
+              {
+                "long": "offset",
+                "description": "set offset to this value. offset with value -1 is ignored",
+                "inherit": false,
+                "value": {
+                  "name": "offset"
+                }
+              },
+              {
+                "long": "oldest",
+                "description": "set the offset to oldest offset (for all partitions or the specified partition)",
+                "inherit": false
+              },
+              {
+                "long": "partition",
+                "short": "p",
+                "description": "partition to create group for. -1 stands for all partitions",
+                "inherit": false,
+                "value": {
+                  "name": "partition"
+                }
+              },
+              {
+                "long": "topic",
+                "short": "t",
+                "description": "one or more topics to create group for",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "topic"
+                }
+              }
+            ]
+          },
+          {
+            "name": "topic",
+            "description": "create a topic",
+            "options": [
+              {
+                "long": "config",
+                "short": "c",
+                "description": "configs in format `key=value`",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "config"
+                }
+              },
+              {
+                "long": "partitions",
+                "short": "p",
+                "description": "number of partitions",
+                "inherit": false,
+                "value": {
+                  "name": "partitions"
+                }
+              },
+              {
+                "long": "replication-factor",
+                "short": "r",
+                "description": "replication factor",
+                "inherit": false,
+                "value": {
+                  "name": "replication-factor"
+                }
+              },
+              {
+                "long": "validate-only",
+                "short": "v",
+                "description": "validate only",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "delete",
+        "description": "delete topics, consumerGroups, consumer-group-offset, acls",
+        "subcommands": [
+          {
+            "name": "acl",
+            "aliases": [
+              "access-control-list"
+            ],
+            "description": "delete an acl",
+            "options": [
+              {
+                "long": "allow",
+                "short": "a",
+                "description": "acl of permissionType 'allow'",
+                "inherit": false
+              },
+              {
+                "long": "cluster",
+                "short": "c",
+                "description": "delete acl for the cluster",
+                "inherit": false
+              },
+              {
+                "long": "deny",
+                "short": "d",
+                "description": "acl of permissionType 'deny'",
+                "inherit": false
+              },
+              {
+                "long": "groups",
+                "short": "g",
+                "description": "delete acl for a consumer group",
+                "inherit": false
+              },
+              {
+                "long": "operation",
+                "short": "o",
+                "description": "operation of acl",
+                "inherit": false,
+                "value": {
+                  "name": "operation"
+                }
+              },
+              {
+                "long": "pattern",
+                "description": "pattern type. one of (any, match, prefixed, literal)",
+                "inherit": false,
+                "value": {
+                  "name": "pattern"
+                }
+              },
+              {
+                "long": "topics",
+                "short": "t",
+                "description": "delete acl for a topic",
+                "inherit": false
+              },
+              {
+                "long": "validate-only",
+                "short": "v",
+                "description": "validate only",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "consumer-groups",
+            "aliases": [
+              "consumer-group"
+            ],
+            "description": "delete a consumer-group"
+          },
+          {
+            "name": "cgo",
+            "aliases": [
+              "offset",
+              "consumer-group-offset"
+            ],
+            "description": "delete a consumer-group-offset",
+            "options": [
+              {
+                "long": "partition",
+                "short": "p",
+                "description": "delete offset for this partition. -1 stands for all partitions",
+                "inherit": false,
+                "value": {
+                  "name": "partition"
+                }
+              },
+              {
+                "long": "topic",
+                "short": "t",
+                "description": "delete offset for this topic",
+                "inherit": false,
+                "value": {
+                  "name": "topic"
+                }
+              }
+            ]
+          },
+          {
+            "name": "topic",
+            "description": "delete a topic"
+          }
+        ]
+      },
+      {
+        "name": "describe",
+        "description": "describe topics, consumerGroups, brokers",
+        "subcommands": [
+          {
+            "name": "broker",
+            "description": "describe a broker",
+            "options": [
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format. One of: json|yaml|wide",
+                "inherit": false,
+                "value": {
+                  "name": "output"
+                }
+              }
+            ]
+          },
+          {
+            "name": "cg",
+            "aliases": [
+              "consumer-group"
+            ],
+            "description": "describe a consumerGroup",
+            "options": [
+              {
+                "long": "only-with-lag",
+                "short": "l",
+                "description": "show only partitions that have a lag",
+                "inherit": false
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format. One of: json|yaml|wide",
+                "inherit": false,
+                "value": {
+                  "name": "output"
+                }
+              },
+              {
+                "long": "print-members",
+                "short": "m",
+                "description": "print group members",
+                "inherit": false
+              },
+              {
+                "long": "print-topics",
+                "short": "T",
+                "description": "print topic details",
+                "inherit": false
+              },
+              {
+                "long": "topic",
+                "short": "t",
+                "description": "show group details for given topic only",
+                "inherit": false,
+                "value": {
+                  "name": "topic"
+                }
+              }
+            ]
+          },
+          {
+            "name": "topic",
+            "description": "describe a topic",
+            "options": [
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format. One of: json|yaml|wide",
+                "inherit": false,
+                "value": {
+                  "name": "output"
+                }
+              },
+              {
+                "long": "print-configs",
+                "short": "c",
+                "description": "print configs",
+                "inherit": false
+              },
+              {
+                "long": "skip-empty",
+                "short": "s",
+                "description": "show only partitions that have a messages",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "list",
+        "aliases": [
+          "get"
+        ],
+        "description": "get info about topics, consumerGroups, acls, brokers",
+        "subcommands": [
+          {
+            "name": "acl",
+            "aliases": [
+              "access-control-list"
+            ],
+            "description": "list available acls",
+            "options": [
+              {
+                "long": "allow",
+                "short": "a",
+                "description": "acl of permissionType 'allow'",
+                "inherit": false
+              },
+              {
+                "long": "cluster",
+                "short": "c",
+                "description": "list acl for the cluster",
+                "inherit": false
+              },
+              {
+                "long": "deny",
+                "short": "d",
+                "description": "acl of permissionType 'deny'",
+                "inherit": false
+              },
+              {
+                "long": "groups",
+                "short": "g",
+                "description": "list acl for consumer groups",
+                "inherit": false
+              },
+              {
+                "long": "operation",
+                "description": "operation of acl",
+                "inherit": false,
+                "value": {
+                  "name": "operation"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format. One of: json|yaml",
+                "inherit": false,
+                "value": {
+                  "name": "output"
+                }
+              },
+              {
+                "long": "pattern",
+                "description": "pattern type. one of (any, match, prefixed, literal)",
+                "inherit": false,
+                "value": {
+                  "name": "pattern"
+                }
+              },
+              {
+                "long": "topics",
+                "short": "t",
+                "description": "list acl for topics",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "brokers",
+            "description": "list brokers",
+            "options": [
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format. One of: json|yaml|compact",
+                "inherit": false,
+                "value": {
+                  "name": "output"
+                }
+              }
+            ]
+          },
+          {
+            "name": "cg",
+            "aliases": [
+              "consumer-groups"
+            ],
+            "description": "list available consumerGroups",
+            "options": [
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format. One of: json|yaml|wide|compact",
+                "inherit": false,
+                "value": {
+                  "name": "output"
+                }
+              },
+              {
+                "long": "topic",
+                "short": "t",
+                "description": "show groups for given topic only",
+                "inherit": false,
+                "value": {
+                  "name": "topic"
+                }
+              }
+            ]
+          },
+          {
+            "name": "topics",
+            "description": "list available topics",
+            "options": [
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format. One of: json|yaml|wide|compact",
+                "inherit": false,
+                "value": {
+                  "name": "output"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "produce",
+        "description": "produce messages to a topic",
+        "options": [
+          {
+            "long": "file",
+            "short": "f",
+            "description": "file to read input from",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "header",
+            "short": "H",
+            "description": "headers in format `key:value`",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "header"
+            }
+          },
+          {
+            "long": "key",
+            "short": "k",
+            "description": "key to use for all messages",
+            "inherit": false,
+            "value": {
+              "name": "key"
+            }
+          },
+          {
+            "long": "key-encoding",
+            "description": "key encoding (none by default). One of: none|hex|base64",
+            "inherit": false,
+            "value": {
+              "name": "key-encoding"
+            }
+          },
+          {
+            "long": "key-proto-type",
+            "description": "key protobuf message type",
+            "inherit": false,
+            "value": {
+              "name": "key-proto-type"
+            }
+          },
+          {
+            "long": "key-schema-version",
+            "short": "K",
+            "description": "avro schema version that should be used for key serialization (default is latest)",
+            "inherit": false,
+            "value": {
+              "name": "key-schema-version"
+            }
+          },
+          {
+            "long": "lineSeparator",
+            "short": "L",
+            "description": "separator to split multiple messages from stdin or file",
+            "inherit": false,
+            "value": {
+              "name": "lineSeparator"
+            }
+          },
+          {
+            "long": "max-message-bytes",
+            "description": "the maximum permitted size of a message (defaults to 1000000)",
+            "inherit": false,
+            "value": {
+              "name": "max-message-bytes"
+            }
+          },
+          {
+            "long": "null-value",
+            "description": "produce a null value (can be used instead of providing a value with --value)",
+            "inherit": false
+          },
+          {
+            "long": "partition",
+            "short": "p",
+            "description": "partition to produce to",
+            "inherit": false,
+            "value": {
+              "name": "partition"
+            }
+          },
+          {
+            "long": "partitioner",
+            "short": "P",
+            "description": "the partitioning scheme to use. Can be `murmur2`, `hash`, `hash-ref` `manual`, or `random`. (default is murmur2)",
+            "inherit": false,
+            "value": {
+              "name": "partitioner"
+            }
+          },
+          {
+            "long": "proto-file",
+            "description": "additional protobuf description file for searching message description",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "proto-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "proto-import-path",
+            "description": "additional path to search files listed in proto 'import' directive",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "proto-import-path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "protoset-file",
+            "description": "additional compiled protobuf description file for searching message description",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "protoset-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "rate",
+            "short": "r",
+            "description": "amount of messages per second to produce on the topic",
+            "inherit": false,
+            "value": {
+              "name": "rate"
+            }
+          },
+          {
+            "long": "required-acks",
+            "description": "required acks. One of `NoResponse`, `WaitForLocal`, `WaitForAll`. (default is WaitForLocal)",
+            "inherit": false,
+            "value": {
+              "name": "required-acks"
+            }
+          },
+          {
+            "long": "separator",
+            "short": "S",
+            "description": "separator to split key and value from stdin or file",
+            "inherit": false,
+            "value": {
+              "name": "separator"
+            }
+          },
+          {
+            "long": "silent",
+            "short": "s",
+            "description": "do not write to standard output",
+            "inherit": false
+          },
+          {
+            "long": "value",
+            "short": "v",
+            "description": "value to produce",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "value-encoding",
+            "description": "value encoding (none by default). One of: none|hex|base64",
+            "inherit": false,
+            "value": {
+              "name": "value-encoding"
+            }
+          },
+          {
+            "long": "value-proto-type",
+            "description": "value protobuf message type",
+            "inherit": false,
+            "value": {
+              "name": "value-proto-type"
+            }
+          },
+          {
+            "long": "value-schema-version",
+            "short": "i",
+            "description": "avro schema version that should be used for value serialization (default is latest)",
+            "inherit": false,
+            "value": {
+              "name": "value-schema-version"
+            }
+          }
+        ]
+      },
+      {
+        "name": "reset",
+        "description": "reset consumerGroupsOffset",
+        "subcommands": [
+          {
+            "name": "cgo",
+            "aliases": [
+              "offset",
+              "consumer-group-offset"
+            ],
+            "description": "reset a consumer group offset",
+            "options": [
+              {
+                "long": "all-topics",
+                "description": "do the operation for all topics in the consumer group",
+                "inherit": false
+              },
+              {
+                "long": "execute",
+                "short": "e",
+                "description": "execute the reset (as default only the results are displayed for validation)",
+                "inherit": false
+              },
+              {
+                "long": "newest",
+                "description": "set the offset to newest offset (for all partitions or the specified partition)",
+                "inherit": false
+              },
+              {
+                "long": "offset",
+                "description": "set offset to this value. offset with value -1 is ignored",
+                "inherit": false,
+                "value": {
+                  "name": "offset"
+                }
+              },
+              {
+                "long": "oldest",
+                "description": "set the offset to oldest offset (for all partitions or the specified partition)",
+                "inherit": false
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "output format. One of: json|yaml",
+                "inherit": false,
+                "value": {
+                  "name": "output"
+                }
+              },
+              {
+                "long": "partition",
+                "short": "p",
+                "description": "partition to apply the offset. -1 stands for all partitions",
+                "inherit": false,
+                "value": {
+                  "name": "partition"
+                }
+              },
+              {
+                "long": "topic",
+                "short": "t",
+                "description": "one ore more topics to change offset for",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "topic"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "print the version of kafkactl"
+      },
+      {
+        "name": "help",
+        "description": "help about any command",
+        "subcommands": [
+          {
+            "name": "edit",
+            "aliases": [
+              "alter"
+            ],
+            "description": "alter topics, partitions",
+            "subcommands": [
+              {
+                "name": "partition",
+                "description": "alter a partition"
+              },
+              {
+                "name": "topic",
+                "description": "alter a topic"
+              }
+            ]
+          },
+          {
+            "name": "attach",
+            "description": "run kafkactl pod in kubernetes and attach to it"
+          },
+          {
+            "name": "clone",
+            "description": "clone topics, consumerGroups",
+            "subcommands": [
+              {
+                "name": "cg",
+                "aliases": [
+                  "consumer-group"
+                ],
+                "description": "clone existing consumerGroup with all offsets"
+              },
+              {
+                "name": "topic",
+                "description": "clone existing topic (number of partitions, replication factor, config entries) to new one"
+              }
+            ]
+          },
+          {
+            "name": "completion",
+            "description": "generate shell auto-completion file"
+          },
+          {
+            "name": "config",
+            "description": "show and edit configurations",
+            "subcommands": [
+              {
+                "name": "currentContext",
+                "aliases": [
+                  "current-context"
+                ],
+                "description": "show current context"
+              },
+              {
+                "name": "getContexts",
+                "aliases": [
+                  "get-contexts"
+                ],
+                "description": "list configured contexts"
+              },
+              {
+                "name": "useContext",
+                "aliases": [
+                  "use-context"
+                ],
+                "description": "switch active context"
+              },
+              {
+                "name": "view",
+                "description": "show contents of config file"
+              }
+            ]
+          },
+          {
+            "name": "consume",
+            "description": "consume messages from a topic"
+          },
+          {
+            "name": "create",
+            "description": "create topics, consumerGroups, acls",
+            "subcommands": [
+              {
+                "name": "acl",
+                "aliases": [
+                  "access-control-list"
+                ],
+                "description": "create an acl"
+              },
+              {
+                "name": "cg",
+                "aliases": [
+                  "consumer-group"
+                ],
+                "description": "create a consumerGroup"
+              },
+              {
+                "name": "topic",
+                "description": "create a topic"
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "delete topics, consumerGroups, consumer-group-offset, acls",
+            "subcommands": [
+              {
+                "name": "acl",
+                "aliases": [
+                  "access-control-list"
+                ],
+                "description": "delete an acl"
+              },
+              {
+                "name": "consumer-groups",
+                "aliases": [
+                  "consumer-group"
+                ],
+                "description": "delete a consumer-group"
+              },
+              {
+                "name": "cgo",
+                "aliases": [
+                  "offset",
+                  "consumer-group-offset"
+                ],
+                "description": "delete a consumer-group-offset"
+              },
+              {
+                "name": "topic",
+                "description": "delete a topic"
+              }
+            ]
+          },
+          {
+            "name": "describe",
+            "description": "describe topics, consumerGroups, brokers",
+            "subcommands": [
+              {
+                "name": "broker",
+                "description": "describe a broker"
+              },
+              {
+                "name": "cg",
+                "aliases": [
+                  "consumer-group"
+                ],
+                "description": "describe a consumerGroup"
+              },
+              {
+                "name": "topic",
+                "description": "describe a topic"
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "aliases": [
+              "get"
+            ],
+            "description": "get info about topics, consumerGroups, acls, brokers",
+            "subcommands": [
+              {
+                "name": "acl",
+                "aliases": [
+                  "access-control-list"
+                ],
+                "description": "list available acls"
+              },
+              {
+                "name": "brokers",
+                "description": "list brokers"
+              },
+              {
+                "name": "cg",
+                "aliases": [
+                  "consumer-groups"
+                ],
+                "description": "list available consumerGroups"
+              },
+              {
+                "name": "topics",
+                "description": "list available topics"
+              }
+            ]
+          },
+          {
+            "name": "produce",
+            "description": "produce messages to a topic"
+          },
+          {
+            "name": "reset",
+            "description": "reset consumerGroupsOffset",
+            "subcommands": [
+              {
+                "name": "cgo",
+                "aliases": [
+                  "offset",
+                  "consumer-group-offset"
+                ],
+                "description": "reset a consumer group offset"
+              }
+            ]
+          },
+          {
+            "name": "version",
+            "description": "print the version of kafkactl"
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
