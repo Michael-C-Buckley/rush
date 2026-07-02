@@ -16,6 +16,32 @@
             .status = 0,
         },
         .{
+            .name = "echo supports bash option clusters and escapes",
+            .script =
+            \\echo -ne 'a\nb\t\x21\041\u263a\U0001f600'
+            \\printf '\n'
+            \\echo -enE 'c\nd'
+            \\echo -nex literal
+            \\echo -nnneE done
+            ,
+            .stdout = "a\nb\t!!☺😀\nc\\nd-nex literal\ndone",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "echo escape c suppresses remaining output and newline",
+            .script =
+            \\echo -e 'before\cafter' ignored
+            \\printf '<after>\n'
+            ,
+            .stdout =
+            \\before<after>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "source operands initialize sourced positional parameters",
             .script =
             \\cat >file.sh <<'EOF'

@@ -1656,12 +1656,191 @@ fn evalTimes(shell: anytype, args: []const []const u8) !result.EvalResult {
 }
 
 fn evalEcho(shell: anytype, args: []const []const u8) !result.EvalResult {
-    for (args[1..], 0..) |arg, index| {
-        if (index != 0) shell.host.writeAll(.stdout, " ") catch return echoWriteFailed(shell);
-        shell.host.writeAll(.stdout, arg) catch return echoWriteFailed(shell);
+    var newline = true;
+    var escapes = false;
+    var first_operand: usize = 1;
+
+    while (first_operand < args.len) : (first_operand += 1) {
+        const option = parseEchoOption(args[first_operand]) orelse break;
+        if (option.suppress_newline) newline = false;
+        if (option.escapes) |enabled| escapes = enabled;
     }
-    shell.host.writeAll(.stdout, "\n") catch return echoWriteFailed(shell);
+
+    for (args[first_operand..], 0..) |arg, index| {
+        if (index != 0) shell.host.writeAll(.stdout, " ") catch return echoWriteFailed(shell);
+        if (escapes) {
+            const complete = writeEchoEscaped(shell, arg) catch return echoWriteFailed(shell);
+            if (!complete) return .{};
+        } else {
+            shell.host.writeAll(.stdout, arg) catch return echoWriteFailed(shell);
+        }
+    }
+    if (newline) shell.host.writeAll(.stdout, "\n") catch return echoWriteFailed(shell);
     return .{};
+}
+
+const EchoOption = struct {
+    suppress_newline: bool = false,
+    escapes: ?bool = null,
+};
+
+fn parseEchoOption(arg: []const u8) ?EchoOption {
+    if (arg.len < 2 or arg[0] != '-') return null;
+
+    var option: EchoOption = .{};
+    for (arg[1..]) |byte| {
+        switch (byte) {
+            'n' => option.suppress_newline = true,
+            'e' => option.escapes = true,
+            'E' => option.escapes = false,
+            else => return null,
+        }
+    }
+    return option;
+}
+
+fn writeEchoEscaped(shell: anytype, text: []const u8) !bool {
+    var index: usize = 0;
+    while (index < text.len) {
+        if (text[index] != '\\') {
+            try shell.host.writeAll(.stdout, text[index .. index + 1]);
+            index += 1;
+            continue;
+        }
+
+        index += 1;
+        if (index >= text.len) {
+            try shell.host.writeAll(.stdout, "\\");
+            return true;
+        }
+        if (!try writeEchoEscape(shell, text, &index)) return false;
+    }
+    return true;
+}
+
+fn writeEchoEscape(shell: anytype, text: []const u8, index: *usize) !bool {
+    switch (text[index.*]) {
+        'a' => try shell.host.writeAll(.stdout, "\x07"),
+        'b' => try shell.host.writeAll(.stdout, "\x08"),
+        'c' => {
+            index.* += 1;
+            return false;
+        },
+        'e', 'E' => try shell.host.writeAll(.stdout, "\x1b"),
+        'f' => try shell.host.writeAll(.stdout, "\x0c"),
+        'n' => try shell.host.writeAll(.stdout, "\n"),
+        'r' => try shell.host.writeAll(.stdout, "\r"),
+        't' => try shell.host.writeAll(.stdout, "\t"),
+        'v' => try shell.host.writeAll(.stdout, "\x0b"),
+        '\\' => try shell.host.writeAll(.stdout, "\\"),
+        '0' => try writeEchoOctalEscape(shell, text, index),
+        'x' => try writeEchoHexByteEscape(shell, text, index),
+        'u' => try writeEchoUnicodeEscape(shell, text, index, 4),
+        'U' => try writeEchoUnicodeEscape(shell, text, index, 8),
+        else => {
+            try shell.host.writeAll(.stdout, "\\");
+            try shell.host.writeAll(.stdout, text[index.* .. index.* + 1]);
+            index.* += 1;
+            return true;
+        },
+    }
+    index.* += 1;
+    return true;
+}
+
+fn writeEchoOctalEscape(shell: anytype, text: []const u8, index: *usize) !void {
+    var value: u16 = 0;
+    var count: usize = 0;
+    var cursor = index.* + 1;
+    while (cursor < text.len and count < 3 and text[cursor] >= '0' and text[cursor] <= '7') : (count += 1) {
+        value = value * 8 + (text[cursor] - '0');
+        cursor += 1;
+    }
+    try writeEchoByte(shell, @intCast(value & 0xff));
+    index.* = cursor - 1;
+}
+
+fn writeEchoHexByteEscape(shell: anytype, text: []const u8, index: *usize) !void {
+    const start = index.*;
+    var value: u8 = 0;
+    var count: usize = 0;
+    var cursor = start + 1;
+    while (cursor < text.len and count < 2) : (count += 1) {
+        const digit = std.fmt.charToDigit(text[cursor], 16) catch break;
+        value = value * 16 + digit;
+        cursor += 1;
+    }
+    if (count == 0) {
+        try shell.host.writeAll(.stdout, "\\x");
+        index.* = start + 1;
+    } else {
+        try writeEchoByte(shell, value);
+        index.* = cursor - 1;
+    }
+}
+
+fn writeEchoUnicodeEscape(shell: anytype, text: []const u8, index: *usize, max_digits: usize) !void {
+    std.debug.assert(max_digits == 4 or max_digits == 8);
+
+    const start = index.*;
+    var value: u32 = 0;
+    var count: usize = 0;
+    var cursor = start + 1;
+    while (cursor < text.len and count < max_digits) : (count += 1) {
+        const digit = std.fmt.charToDigit(text[cursor], 16) catch break;
+        value = value * 16 + digit;
+        cursor += 1;
+    }
+    if (count == 0) {
+        try shell.host.writeAll(.stdout, text[start - 1 .. start + 1]);
+        index.* = start + 1;
+    } else {
+        try writeEchoUtf8(shell, value);
+        index.* = cursor - 1;
+    }
+}
+
+fn writeEchoUtf8(shell: anytype, value: u32) !void {
+    if (value <= 0x7f) return writeEchoByte(shell, @intCast(value));
+
+    var buffer: [6]u8 = undefined;
+    const len: usize = if (value <= 0x7ff) len: {
+        buffer[0] = 0xc0 | @as(u8, @intCast(value >> 6));
+        buffer[1] = 0x80 | @as(u8, @intCast(value & 0x3f));
+        break :len 2;
+    } else if (value <= 0xffff) len: {
+        buffer[0] = 0xe0 | @as(u8, @intCast(value >> 12));
+        buffer[1] = 0x80 | @as(u8, @intCast((value >> 6) & 0x3f));
+        buffer[2] = 0x80 | @as(u8, @intCast(value & 0x3f));
+        break :len 3;
+    } else if (value <= 0x1fffff) len: {
+        buffer[0] = 0xf0 | @as(u8, @intCast(value >> 18));
+        buffer[1] = 0x80 | @as(u8, @intCast((value >> 12) & 0x3f));
+        buffer[2] = 0x80 | @as(u8, @intCast((value >> 6) & 0x3f));
+        buffer[3] = 0x80 | @as(u8, @intCast(value & 0x3f));
+        break :len 4;
+    } else if (value <= 0x3ffffff) len: {
+        buffer[0] = 0xf8 | @as(u8, @intCast(value >> 24));
+        buffer[1] = 0x80 | @as(u8, @intCast((value >> 18) & 0x3f));
+        buffer[2] = 0x80 | @as(u8, @intCast((value >> 12) & 0x3f));
+        buffer[3] = 0x80 | @as(u8, @intCast((value >> 6) & 0x3f));
+        buffer[4] = 0x80 | @as(u8, @intCast(value & 0x3f));
+        break :len 5;
+    } else if (value <= 0x7fffffff) len: {
+        buffer[0] = 0xfc | @as(u8, @intCast(value >> 30));
+        buffer[1] = 0x80 | @as(u8, @intCast((value >> 24) & 0x3f));
+        buffer[2] = 0x80 | @as(u8, @intCast((value >> 18) & 0x3f));
+        buffer[3] = 0x80 | @as(u8, @intCast((value >> 12) & 0x3f));
+        buffer[4] = 0x80 | @as(u8, @intCast((value >> 6) & 0x3f));
+        buffer[5] = 0x80 | @as(u8, @intCast(value & 0x3f));
+        break :len 6;
+    } else return;
+    try shell.host.writeAll(.stdout, buffer[0..len]);
+}
+
+fn writeEchoByte(shell: anytype, byte: u8) !void {
+    const buffer = [1]u8{byte};
+    try shell.host.writeAll(.stdout, &buffer);
 }
 
 fn echoWriteFailed(shell: anytype) result.EvalResult {

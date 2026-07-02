@@ -1236,6 +1236,19 @@
             .status = 0,
         },
         .{
+            .name = "echo honors bash-compatible options in POSIX mode",
+            .script =
+            \\echo -n no-newline
+            \\printf '<after>\n'
+            \\echo -e 'line\ntab\tend'
+            \\echo -E 'line\ntab\tend'
+            \\echo -x literal
+            ,
+            .stdout = "no-newline<after>\nline\ntab\tend\nline\\ntab\\tend\n-x literal\n",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "echo reports failure when stdout is closed",
             .script =
             \\echo hidden >&-
