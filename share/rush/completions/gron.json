@@ -1,0 +1,68 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "gron",
+    "description": "make JSON easier to grep",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for gron",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "long": "ungron",
+        "description": "reverse the operation (turn assignments back into JSON)",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "values",
+        "description": "print just the values of provided assignments",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "long": "colorize",
+        "description": "colorize output (default on tty)",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "long": "monochrome",
+        "description": "monochrome (don't colorize output)",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "stream",
+        "description": "treat each line of input as a separate JSON object",
+        "inherit": false
+      },
+      {
+        "short": "k",
+        "long": "insecure",
+        "description": "disable certificate validation",
+        "inherit": false
+      },
+      {
+        "short": "j",
+        "long": "json",
+        "description": "represent gron data as JSON stream",
+        "inherit": false
+      },
+      {
+        "long": "no-sort",
+        "description": "don't sort output (faster)",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "print version information",
+        "inherit": false
+      }
+    ]
+  }
+}
