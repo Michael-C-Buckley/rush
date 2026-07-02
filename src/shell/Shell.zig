@@ -172,6 +172,9 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
             defer if (set_root_source) {
                 self.state.root_source_kind = previous_root_kind;
             };
+            const previous_source_name = self.state.current_source_name;
+            self.state.current_source_name = bashSourceName(src);
+            defer self.state.current_source_name = previous_source_name;
 
             if (reset_chunks) self.resetForTopLevelCommand();
             if (src.text.len == 0) return .{};
@@ -327,6 +330,13 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
         fn aliasesMayRewrite(self: *Self) bool {
             return self.state.aliases.count() != 0 and lexer.aliasesEnabled(self.state);
         }
+    };
+}
+
+fn bashSourceName(src: source.Source) []const u8 {
+    return switch (src.kind) {
+        .command_string => "environment",
+        else => src.name,
     };
 }
 

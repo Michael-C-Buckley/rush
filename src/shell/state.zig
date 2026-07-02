@@ -117,15 +117,22 @@ const LocalFrame = struct {
 
 pub const Function = struct {
     name: []const u8,
+    source_name: []const u8,
     source_text: []const u8,
     definition: ast.FunctionDefinition,
 
     pub fn validate(self: Function) void {
         std.debug.assert(self.name.len != 0);
+        std.debug.assert(self.source_name.len != 0);
         std.debug.assert(self.source_text.len != 0);
         self.definition.validate();
         std.debug.assert(std.mem.eql(u8, self.name, self.definition.name));
     }
+};
+
+pub const FunctionCallFrame = struct {
+    name: []const u8,
+    source_name: []const u8,
 };
 
 const FunctionAutoloadState = enum {
@@ -196,6 +203,7 @@ pub const State = struct {
     arrays: std.StringHashMapUnmanaged(ArrayVariable) = .empty,
     variable_attributes: std.StringHashMapUnmanaged(VariableAttributes) = .empty,
     local_frames: std.ArrayListUnmanaged(LocalFrame) = .empty,
+    function_call_stack: std.ArrayListUnmanaged(FunctionCallFrame) = .empty,
     functions: std.StringHashMapUnmanaged(Function) = .empty,
     function_autoload_states: std.StringHashMapUnmanaged(FunctionAutoloadState) = .empty,
     aliases: std.StringHashMapUnmanaged(Alias) = .empty,
@@ -213,6 +221,7 @@ pub const State = struct {
     loop_depth: usize = 0,
     diagnostic_line_offset: usize = 0,
     root_source_kind: ?source.SourceKind = null,
+    current_source_name: []const u8 = "environment",
     exit_trap: ?[]const u8 = null,
     exit_trap_listing: ?[]const u8 = null,
     running_exit_trap: bool = false,
@@ -250,6 +259,7 @@ pub const State = struct {
         self.variable_attributes.deinit(self.allocator);
         for (self.local_frames.items) |*frame| frame.deinit(self.allocator);
         self.local_frames.deinit(self.allocator);
+        self.function_call_stack.deinit(self.allocator);
         self.functions.deinit(self.allocator);
         var autoload_iterator = self.function_autoload_states.iterator();
         while (autoload_iterator.next()) |entry| self.allocator.free(entry.key_ptr.*);
@@ -644,6 +654,18 @@ pub const State = struct {
             .variable = variable,
             .attributes = attributes,
         });
+    }
+
+    pub fn pushFunctionCall(self: *State, function: Function) !void {
+        try self.function_call_stack.append(self.allocator, .{
+            .name = function.name,
+            .source_name = function.source_name,
+        });
+    }
+
+    pub fn popFunctionCall(self: *State) void {
+        std.debug.assert(self.function_call_stack.items.len != 0);
+        _ = self.function_call_stack.pop();
     }
 
     pub fn setPositionals(self: *State, positionals: []const []const u8) !void {

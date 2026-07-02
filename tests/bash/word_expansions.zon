@@ -140,6 +140,40 @@
             .status = 0,
         },
         .{
+            .name = "FUNCNAME and BASH_SOURCE track function calls",
+            .script =
+            \\cat >lib.sh <<'EOF'
+            \\f() {
+            \\    printf 'func=<%s>:<%s>:<%s>\n' "${FUNCNAME[0]}" "${FUNCNAME[1]}" "${FUNCNAME[*]}"
+            \\    case "${BASH_SOURCE[0]}" in
+            \\        */lib.sh) printf 'source0=<ok>\n' ;;
+            \\        *) printf 'source0=<bad:%s>\n' "${BASH_SOURCE[0]}" ;;
+            \\    esac
+            \\    printf 'source1=<%s>\n' "${BASH_SOURCE[1]}"
+            \\    h() {
+            \\        case "${BASH_SOURCE[0]}" in
+            \\            */lib.sh) printf 'nested_source=<ok>\n' ;;
+            \\            *) printf 'nested_source=<bad:%s>\n' "${BASH_SOURCE[0]}" ;;
+            \\        esac
+            \\    }
+            \\}
+            \\EOF
+            \\. ./lib.sh
+            \\g() { f; }
+            \\g
+            \\h
+            ,
+            .stdout =
+            \\func=<f>:<g>:<f g>
+            \\source0=<ok>
+            \\source1=<environment>
+            \\nested_source=<ok>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "arithmetic expansion error in assignment-only command returns from a function",
             .script =
             \\f() { x=$((1/0)); printf bad; }

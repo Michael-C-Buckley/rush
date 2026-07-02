@@ -1397,7 +1397,8 @@ fn caseArmMatches(shell: anytype, arm: ast.CaseArm, word: []const u8) EvalError!
 
 fn evalFunctionDefinition(shell: anytype, definition: ast.FunctionDefinition) EvalError!result.EvalResult {
     validateAst(definition);
-    try shell.state.putPersistentFunction(try copyFunction(shell.state.definitionAllocator(), definition));
+    const function = try copyFunction(shell.state.definitionAllocator(), definition, shell.state.current_source_name);
+    try shell.state.putPersistentFunction(function);
     return .{};
 }
 
@@ -3866,6 +3867,12 @@ fn evalFunction(
     args: []const []const u8,
 ) EvalError!result.EvalResult {
     validateAst(function);
+    try shell.state.pushFunctionCall(function);
+    defer shell.state.popFunctionCall();
+    const previous_source_name = shell.state.current_source_name;
+    shell.state.current_source_name = function.source_name;
+    defer shell.state.current_source_name = previous_source_name;
+
     const saved = try saveAssignmentVariables(shell, assignments);
     defer restoreVariables(shell, saved);
 
@@ -3945,9 +3952,15 @@ fn applyExportedAssignments(shell: anytype, assignments: []const ast.Assignment)
     }
 }
 
-fn copyFunction(allocator: std.mem.Allocator, definition: ast.FunctionDefinition) CopyError!state_mod.Function {
+fn copyFunction(
+    allocator: std.mem.Allocator,
+    definition: ast.FunctionDefinition,
+    source_name: []const u8,
+) CopyError!state_mod.Function {
     const copied_name = try allocator.dupe(u8, definition.name);
     errdefer allocator.free(copied_name);
+    const copied_source_name = try allocator.dupe(u8, source_name);
+    errdefer allocator.free(copied_source_name);
     const copied_definition: ast.FunctionDefinition = .{
         .name = copied_name,
         .body = try copyCompoundCommand(allocator, definition.body),
@@ -3956,6 +3969,7 @@ fn copyFunction(allocator: std.mem.Allocator, definition: ast.FunctionDefinition
     validateAst(copied_definition);
     return .{
         .name = copied_name,
+        .source_name = copied_source_name,
         .source_text = copied_name,
         .definition = copied_definition,
     };
@@ -3994,7 +4008,9 @@ fn copyCommand(allocator: std.mem.Allocator, command: ast.Command) CopyError!ast
         .simple => |simple| .{ .simple = try copySimpleCommand(allocator, simple) },
         .compound => |compound| .{ .compound = try copyCompoundInvocation(allocator, compound) },
         // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-        .function_definition => |definition| .{ .function_definition = (try copyFunction(allocator, definition)).definition },
+        .function_definition => |definition| .{
+            .function_definition = (try copyFunction(allocator, definition, "rush")).definition,
+        },
     };
 }
 
@@ -7077,6 +7093,12 @@ fn arrayParameterValue(shell: anytype, parameter: ast.ArrayParameter) !?[]const 
     if (shell.state.options.mode == .bash and std.mem.eql(u8, parameter.name, "PIPESTATUS")) {
         return pipelineStatusParameterValue(shell, parameter.subscript);
     }
+    if (shell.state.options.mode == .bash and std.mem.eql(u8, parameter.name, "FUNCNAME")) {
+        return functionStackParameterValue(shell, parameter.subscript, .name);
+    }
+    if (shell.state.options.mode == .bash and std.mem.eql(u8, parameter.name, "BASH_SOURCE")) {
+        return functionStackParameterValue(shell, parameter.subscript, .source_name);
+    }
     const array = shell.state.getArray(parameter.name) orelse return null;
     return switch (parameter.subscript) {
         .index => |word| value: {
@@ -7088,6 +7110,54 @@ fn arrayParameterValue(shell: anytype, parameter: ast.ArrayParameter) !?[]const 
             .star => try joinArrayElements(shell, array.elements, ifsFirstCharacter(shell)),
             else => unreachable,
         },
+    };
+}
+
+const FunctionStackField = enum {
+    name,
+    source_name,
+};
+
+fn functionStackParameterValue(
+    shell: anytype,
+    subscript: ast.ArraySubscript,
+    field: FunctionStackField,
+) !?[]const u8 {
+    const stack = shell.state.function_call_stack.items;
+    if (stack.len == 0) return null;
+    return switch (subscript) {
+        .index => |word| value: {
+            const index = try expandArrayIndex(shell, word);
+            if (index >= stack.len) break :value null;
+            const frame = stack[stack.len - 1 - index];
+            break :value functionStackFieldValue(frame, field);
+        },
+        .all => |special| switch (special) {
+            .at => try joinFunctionStack(shell, field, " "),
+            .star => try joinFunctionStack(shell, field, ifsFirstCharacter(shell)),
+            else => unreachable,
+        },
+    };
+}
+
+fn joinFunctionStack(shell: anytype, field: FunctionStackField, separator: []const u8) ![]const u8 {
+    const stack = shell.state.function_call_stack.items;
+    if (stack.len == 0) return "";
+    var output: std.Io.Writer.Allocating = .init(shell.scratchAllocator());
+    defer output.deinit();
+    var index = stack.len;
+    while (index != 0) {
+        index -= 1;
+        if (index != stack.len - 1) try output.writer.writeAll(separator);
+        try output.writer.writeAll(functionStackFieldValue(stack[index], field));
+    }
+    return output.toOwnedSlice();
+}
+
+fn functionStackFieldValue(frame: state_mod.FunctionCallFrame, field: FunctionStackField) []const u8 {
+    return switch (field) {
+        .name => frame.name,
+        .source_name => frame.source_name,
     };
 }
 
