@@ -1,0 +1,72 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "id",
+    "description": "display user and group IDs",
+    "options": [
+      {
+        "short": "A",
+        "description": "display the process audit user ID and other process audit properties, which requires privilege",
+        "inherit": false,
+        "exclusiveGroup": "id-output-mode"
+      },
+      {
+        "short": "F",
+        "description": "display the full name of the user",
+        "inherit": false,
+        "exclusiveGroup": "id-output-mode"
+      },
+      {
+        "short": "G",
+        "description": "display the different group IDs (effective, real and supplementary) as white-space separated numbers, in no particular order",
+        "inherit": false,
+        "exclusiveGroup": "id-output-mode"
+      },
+      {
+        "short": "M",
+        "description": "display the MAC label of the current process",
+        "inherit": false,
+        "exclusiveGroup": "id-output-mode"
+      },
+      {
+        "short": "P",
+        "description": "display the id as a password file entry",
+        "inherit": false,
+        "exclusiveGroup": "id-output-mode"
+      },
+      {
+        "short": "g",
+        "description": "display the effective group ID as a number",
+        "inherit": false,
+        "exclusiveGroup": "id-output-mode"
+      },
+      {
+        "short": "n",
+        "description": "display the name of the user or group ID for the -G, -g and -u options instead of the number. If any of the ID numbers cannot be mapped into names the number wi",
+        "inherit": false,
+        "exclusiveGroup": "id-output-mode"
+      },
+      {
+        "short": "p",
+        "description": "make the output human-readable",
+        "inherit": false,
+        "exclusiveGroup": "id-output-mode"
+      },
+      {
+        "short": "u",
+        "description": "display the effective user ID as a number",
+        "inherit": false,
+        "exclusiveGroup": "id-output-mode"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "user",
+          "index": 0
+        }
+      ]
+    }
+  }
+}
