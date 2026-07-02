@@ -1,0 +1,13 @@
+__rush_complete_pre_commit_hooks() {
+  config=.pre-commit-config.yaml
+  if [ ! -r "$config" ]; then
+    return
+  fi
+  sed -n 's/^[[:space:]]*- id:[[:space:]]*//p' "$config" 2>/dev/null | while IFS= read -r hook; do
+    hook=${hook%%#*}
+    hook=${hook%"${hook##*[![:space:]]}"}
+    if [ -n "$hook" ]; then
+      rush_complete candidate "$hook" --kind value --description "configured hook"
+    fi
+  done
+}

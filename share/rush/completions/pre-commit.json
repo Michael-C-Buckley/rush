@@ -1,0 +1,642 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pre-commit",
+    "description": "manage pre-commit hooks",
+    "options": [
+      {
+        "description": "show help",
+        "inherit": false,
+        "long": "help",
+        "short": "h"
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "autoupdate",
+        "description": "auto-update pre-commit config to the latest repos' versions",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set color output",
+            "inherit": false,
+            "long": "color",
+            "value": {
+              "name": "color",
+              "provider": "pre-commit.colors"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "short": "c",
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "bleeding-edge",
+            "description": "Update to the bleeding edge of `master` instead of the latest tagged version (the default behavior)",
+            "inherit": false
+          },
+          {
+            "long": "freeze",
+            "description": "Store 'frozen' hashes in `rev` instead of tag names",
+            "inherit": false
+          },
+          {
+            "long": "repo",
+            "description": "Only update this repository -- may be specified multiple times",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "REPO"
+            }
+          }
+        ]
+      },
+      {
+        "name": "clean",
+        "description": "clean out pre-commit files",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set color output",
+            "inherit": false,
+            "long": "color",
+            "value": {
+              "name": "color",
+              "provider": "pre-commit.colors"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "short": "c",
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "gc",
+        "description": "clean unused cached repos",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set color output",
+            "inherit": false,
+            "long": "color",
+            "value": {
+              "name": "color",
+              "provider": "pre-commit.colors"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "short": "c",
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "init-templatedir",
+        "description": "install hook script in a directory intended for use with `git config ini...",
+        "options": [
+          {
+            "description": "set hook type",
+            "inherit": false,
+            "long": "hook-type",
+            "short": "t",
+            "value": {
+              "name": "hook-type",
+              "provider": "pre-commit.hook-stages"
+            }
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set color output",
+            "inherit": false,
+            "long": "color",
+            "value": {
+              "name": "color",
+              "provider": "pre-commit.colors"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "short": "c",
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "no-allow-missing-config",
+            "description": "Assume cloned repos should have a `pre-commit` config",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "install the pre-commit script",
+        "options": [
+          {
+            "description": "set hook type",
+            "inherit": false,
+            "long": "hook-type",
+            "short": "t",
+            "value": {
+              "name": "hook-type",
+              "provider": "pre-commit.hook-stages"
+            }
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set color output",
+            "inherit": false,
+            "long": "color",
+            "value": {
+              "name": "color",
+              "provider": "pre-commit.colors"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "short": "c",
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "f",
+            "long": "overwrite",
+            "description": "Overwrite existing hooks / remove migration mode",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "install-hooks"
+            ],
+            "description": "install hook environments",
+            "inherit": false
+          },
+          {
+            "long": "allow-missing-config",
+            "description": "Whether to allow a missing `pre-commit` configuration file or exit with a failure code",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "migrate-config",
+        "description": "migrate list configuration to new map configuration",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set color output",
+            "inherit": false,
+            "long": "color",
+            "value": {
+              "name": "color",
+              "provider": "pre-commit.colors"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "short": "c",
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "run hooks",
+        "arguments": {
+          "states": [
+            {
+              "name": "hook",
+              "description": "a single hook-id to run",
+              "index": 0,
+              "provider": "pre-commit.hooks"
+            }
+          ]
+        },
+        "options": [
+          {
+            "description": "show verbose output",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "run all files",
+            "inherit": false,
+            "long": "all-files",
+            "short": "a"
+          },
+          {
+            "description": "run specific files",
+            "inherit": false,
+            "long": "files",
+            "value": {
+              "name": "files",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "show diff after failures",
+            "inherit": false,
+            "long": "show-diff-on-failure"
+          },
+          {
+            "description": "set hook stage",
+            "inherit": false,
+            "long": "hook-stage",
+            "value": {
+              "name": "stage",
+              "provider": "pre-commit.hook-stages"
+            }
+          },
+          {
+            "description": "set remote branch",
+            "inherit": false,
+            "long": "remote-branch",
+            "value": {
+              "name": "branch"
+            }
+          },
+          {
+            "description": "set local branch",
+            "inherit": false,
+            "long": "local-branch",
+            "value": {
+              "name": "branch"
+            }
+          },
+          {
+            "description": "set source ref",
+            "inherit": false,
+            "long": "from-ref",
+            "short": "s",
+            "value": {
+              "name": "ref"
+            }
+          },
+          {
+            "description": "set destination ref",
+            "inherit": false,
+            "long": "to-ref",
+            "short": "o",
+            "value": {
+              "name": "ref"
+            }
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set color output",
+            "inherit": false,
+            "long": "color",
+            "value": {
+              "name": "color",
+              "provider": "pre-commit.colors"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "short": "c",
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "sample-config",
+        "description": "produce a sample .pre-commit-config.yaml file",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set color output",
+            "inherit": false,
+            "long": "color",
+            "value": {
+              "name": "color",
+              "provider": "pre-commit.colors"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "short": "c",
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "try-repo",
+        "description": "try the hooks in a repository, useful for developing new hooks",
+        "options": [
+          {
+            "description": "show verbose output",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "run all files",
+            "inherit": false,
+            "long": "all-files",
+            "short": "a"
+          },
+          {
+            "description": "run specific files",
+            "inherit": false,
+            "long": "files",
+            "value": {
+              "name": "files",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "show diff after failures",
+            "inherit": false,
+            "long": "show-diff-on-failure"
+          },
+          {
+            "description": "set hook stage",
+            "inherit": false,
+            "long": "hook-stage",
+            "value": {
+              "name": "stage",
+              "provider": "pre-commit.hook-stages"
+            }
+          },
+          {
+            "description": "set remote branch",
+            "inherit": false,
+            "long": "remote-branch",
+            "value": {
+              "name": "branch"
+            }
+          },
+          {
+            "description": "set local branch",
+            "inherit": false,
+            "long": "local-branch",
+            "value": {
+              "name": "branch"
+            }
+          },
+          {
+            "description": "set source ref",
+            "inherit": false,
+            "long": "from-ref",
+            "short": "s",
+            "value": {
+              "name": "ref"
+            }
+          },
+          {
+            "description": "set destination ref",
+            "inherit": false,
+            "long": "to-ref",
+            "short": "o",
+            "value": {
+              "name": "ref"
+            }
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set color output",
+            "inherit": false,
+            "long": "color",
+            "value": {
+              "name": "color",
+              "provider": "pre-commit.colors"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "short": "c",
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "ref",
+            "aliases": [
+              "rev"
+            ],
+            "description": "Manually select a rev to run against, otherwise the `HEAD` revision will be used",
+            "inherit": false,
+            "value": {
+              "name": "REV"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "repo",
+              "description": "repository to source hooks from",
+              "index": 0
+            },
+            {
+              "name": "hook",
+              "description": "a single hook-id to run",
+              "index": 1,
+              "provider": "pre-commit.hooks"
+            }
+          ]
+        }
+      },
+      {
+        "name": "uninstall",
+        "description": "uninstall the pre-commit script",
+        "options": [
+          {
+            "description": "set hook type",
+            "inherit": false,
+            "long": "hook-type",
+            "short": "t",
+            "value": {
+              "name": "hook-type",
+              "provider": "pre-commit.hook-stages"
+            }
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set color output",
+            "inherit": false,
+            "long": "color",
+            "value": {
+              "name": "color",
+              "provider": "pre-commit.colors"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "short": "c",
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "show help for a specific command",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set color output",
+            "inherit": false,
+            "long": "color",
+            "value": {
+              "name": "color",
+              "provider": "pre-commit.colors"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "short": "c",
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "pre-commit.colors": {
+        "values": [
+          "auto",
+          "always",
+          "never"
+        ]
+      },
+      "pre-commit.hook-stages": {
+        "values": [
+          "pre-commit",
+          "pre-merge-commit",
+          "pre-push",
+          "prepare-commit-msg",
+          "commit-msg",
+          "post-commit",
+          "post-checkout",
+          "post-merge",
+          "post-rewrite"
+        ]
+      },
+      "pre-commit.hooks": {
+        "function": "__rush_complete_pre_commit_hooks"
+      }
+    }
+  }
+}
