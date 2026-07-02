@@ -1,0 +1,25 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "z",
+    "description": "jump to frequently used directories",
+    "options": [
+      { "short": "c", "description": "restrict matches to subdirectories of the current directory" },
+      { "short": "e", "description": "echo the best match without changing directory" },
+      { "short": "h", "description": "show help" },
+      { "short": "l", "description": "list matches only" },
+      { "short": "r", "description": "match by rank only" },
+      { "short": "t", "description": "match by recent access only" },
+      { "short": "x", "description": "remove the current directory from the data file" }
+    ],
+    "arguments": {
+      "states": [
+        { "name": "directory", "index": 0, "repeatable": true, "provider": "z.directories" }
+      ]
+    },
+    "providers": {
+      "z.directories": { "function": "__rush_complete_z_directories" }
+    }
+  }
+}
