@@ -1,0 +1,268 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "k9s",
+    "description": "Kubernetes terminal UI",
+    "options": [
+      {
+        "short": "A",
+        "long": "all-namespaces",
+        "description": "launch K9s in all namespaces",
+        "inherit": false
+      },
+      {
+        "long": "as",
+        "description": "username to impersonate for the operation",
+        "inherit": false,
+        "value": {
+          "name": "as",
+          "description": "The username you want to impersonate"
+        }
+      },
+      {
+        "long": "as-group",
+        "description": "group to impersonate for the operation",
+        "inherit": false,
+        "value": {
+          "name": "stringArray",
+          "description": "The group you want to impersonate"
+        }
+      },
+      {
+        "long": "certificate-authority",
+        "description": "path to a cert file for the certificate authority",
+        "inherit": false,
+        "value": {
+          "name": "certificate-authority",
+          "description": "The path to a cert file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "client-key",
+        "description": "path to a client key file for TLS",
+        "inherit": false,
+        "value": {
+          "name": "client-key",
+          "description": "The path to a client key file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "c",
+        "long": "command",
+        "description": "overrides the default resource to load when the application launches",
+        "inherit": false,
+        "value": {
+          "name": "command",
+          "description": "The command you want to execute"
+        }
+      },
+      {
+        "long": "context",
+        "description": "the name of the kubeconfig context to use",
+        "inherit": false,
+        "value": {
+          "name": "context",
+          "description": "The name of the kubeconfig context"
+        }
+      },
+      {
+        "long": "crumbsless",
+        "description": "turn K9s crumbs off",
+        "inherit": false
+      },
+      {
+        "long": "headless",
+        "description": "turn K9s header off",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help for k9s",
+        "inherit": false
+      },
+      {
+        "long": "insecure-skip-tls-verify",
+        "description": "if true, the server's caCertFile will not be checked for validity",
+        "inherit": false
+      },
+      {
+        "long": "kubeconfig",
+        "description": "path to the kubeconfig file to use for CLI requests",
+        "inherit": false,
+        "value": {
+          "name": "kubeconfig",
+          "description": "The path to the kubeconfig file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "logFile",
+        "description": "specify the log file",
+        "inherit": false,
+        "value": {
+          "name": "logFile",
+          "description": "The path of the log file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "l",
+        "long": "logLevel",
+        "description": "specify a log level (info, warn, debug, trace, error) (default 'info')",
+        "inherit": false,
+        "value": {
+          "name": "level",
+          "description": "The log level",
+          "provider": "k9s-log-levels"
+        }
+      },
+      {
+        "long": "logoless",
+        "description": "turn K9s logo off",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "long": "namespace",
+        "description": "if present, the namespace scope for this CLI request",
+        "inherit": false,
+        "value": {
+          "name": "namespace",
+          "description": "The namespace"
+        }
+      },
+      {
+        "long": "readonly",
+        "description": "sets readOnly mode by overriding readOnly configuration setting",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "long": "refresh",
+        "description": "specify the default refresh rate as an integer (sec) (default 2)",
+        "inherit": false,
+        "value": {
+          "name": "int",
+          "description": "The refresh rate (sec)"
+        }
+      },
+      {
+        "long": "request-timeout",
+        "description": "the length of time to wait before giving up on a single server request",
+        "inherit": false,
+        "value": {
+          "name": "request-timeout",
+          "description": "The length of time to wait"
+        }
+      },
+      {
+        "long": "screen-dump-dir",
+        "description": "sets a path to a dir for a screen dumps",
+        "inherit": false,
+        "value": {
+          "name": "screen-dump-dir",
+          "description": "The path to a dir for a screen dumps",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "token",
+        "description": "bearer token for authentication to the API server",
+        "inherit": false,
+        "value": {
+          "name": "token",
+          "description": "The Bearer token"
+        }
+      },
+      {
+        "long": "user",
+        "description": "the name of the kubeconfig user to use",
+        "inherit": false,
+        "value": {
+          "name": "user",
+          "description": "The name of the kubeconfig user"
+        }
+      },
+      {
+        "long": "write",
+        "description": "sets write mode by overriding the readOnly configuration setting",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "help",
+        "description": "help about any command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "info",
+        "description": "print configuration info",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "Help for info",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "print version/build info",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "Help for version",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "short",
+            "description": "Prints K9s version info in short format",
+            "inherit": false
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "k9s-log-levels": {
+        "values": [
+          {
+            "value": "info"
+          },
+          {
+            "value": "warn"
+          },
+          {
+            "value": "debug"
+          },
+          {
+            "value": "trace"
+          },
+          {
+            "value": "error"
+          }
+        ]
+      }
+    }
+  }
+}
