@@ -1,0 +1,374 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "volta",
+    "description": "JavaScript toolchain manager",
+    "options": [
+      {
+        "long": "verbose",
+        "description": "enable verbose diagnostics"
+      },
+      {
+        "long": "quiet",
+        "description": "suppress unnecessary output"
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help"
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show Volta version"
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "fetch",
+        "description": "fetches a tool to the local machine",
+        "arguments": {
+          "states": [
+            {
+              "name": "tool@version",
+              "repeatable": true
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose diagnostics"
+          },
+          {
+            "long": "quiet",
+            "description": "suppress unnecessary output"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "installs a tool in your toolchain",
+        "arguments": {
+          "states": [
+            {
+              "name": "tool@version",
+              "repeatable": true
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose diagnostics"
+          },
+          {
+            "long": "quiet",
+            "description": "suppress unnecessary output"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          }
+        ]
+      },
+      {
+        "name": "uninstall",
+        "description": "uninstalls a tool from your toolchain",
+        "arguments": {
+          "states": [
+            {
+              "name": "tool"
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose diagnostics"
+          },
+          {
+            "long": "quiet",
+            "description": "suppress unnecessary output"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          }
+        ]
+      },
+      {
+        "name": "pin",
+        "description": "pins your project's runtime or package manager",
+        "arguments": {
+          "states": [
+            {
+              "name": "tool@version",
+              "repeatable": true
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose diagnostics"
+          },
+          {
+            "long": "quiet",
+            "description": "suppress unnecessary output"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          }
+        ]
+      },
+      {
+        "name": "list",
+        "description": "displays the current toolchain",
+        "options": [
+          {
+            "short": "c",
+            "long": "current",
+            "description": "show the currently-active tool(s)"
+          },
+          {
+            "short": "d",
+            "long": "default",
+            "description": "show your default tool(s)"
+          },
+          {
+            "long": "verbose",
+            "description": "enable verbose diagnostics"
+          },
+          {
+            "long": "quiet",
+            "description": "suppress unnecessary output"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "format",
+            "description": "specify output format",
+            "value": {
+              "name": "output-format",
+              "provider": "formats"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "tool"
+            }
+          ]
+        }
+      },
+      {
+        "name": "completions",
+        "description": "generates Volta completions",
+        "options": [
+          {
+            "short": "f",
+            "long": "force",
+            "description": "write over an existing file, if any"
+          },
+          {
+            "short": "o",
+            "long": "output",
+            "description": "file to write generated completions to",
+            "value": {
+              "name": "file",
+              "provider": "files"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "enable verbose diagnostics"
+          },
+          {
+            "long": "quiet",
+            "description": "suppress unnecessary output"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "shell",
+              "provider": "shells"
+            }
+          ]
+        }
+      },
+      {
+        "name": "which",
+        "description": "locates the actual binary that will be called by Volta",
+        "arguments": {
+          "states": [
+            {
+              "name": "binary",
+              "provider": "files",
+              "repeatable": true
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose diagnostics"
+          },
+          {
+            "long": "quiet",
+            "description": "suppress unnecessary output"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          }
+        ]
+      },
+      {
+        "name": "setup",
+        "description": "enables Volta for the current user",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "enable verbose diagnostics"
+          },
+          {
+            "long": "quiet",
+            "description": "suppress unnecessary output"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "run a command with custom Node, npm, and/or Yarn versions",
+        "options": [
+          {
+            "long": "bundle",
+            "description": "forces npm to be the version bundled with Node"
+          },
+          {
+            "long": "no-yarn",
+            "description": "disables Yarn"
+          },
+          {
+            "long": "verbose",
+            "description": "enables verbose diagnostics"
+          },
+          {
+            "long": "quiet",
+            "description": "prevents unnecessary output"
+          },
+          {
+            "long": "node",
+            "description": "set the custom Node version",
+            "value": {
+              "name": "version"
+            }
+          },
+          {
+            "long": "npm",
+            "description": "set the custom npm version",
+            "value": {
+              "name": "version"
+            }
+          },
+          {
+            "long": "yarn",
+            "description": "set the custom Yarn version",
+            "value": {
+              "name": "version"
+            }
+          },
+          {
+            "long": "env",
+            "description": "set an environment variable (can be used multiple times)",
+            "repeatable": true,
+            "value": {
+              "name": "NAME=value"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "command"
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "prints this message or the help of the given subcommand(s)",
+        "arguments": {
+          "states": [
+            {
+              "name": "subcommand",
+              "provider": "commands",
+              "repeatable": true
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "files": {
+        "builtin": "files"
+      },
+      "commands": {
+        "values": [
+          "fetch",
+          "install",
+          "uninstall",
+          "pin",
+          "list",
+          "completions",
+          "which",
+          "setup",
+          "run",
+          "help"
+        ]
+      },
+      "formats": {
+        "values": [
+          "human",
+          "plain"
+        ]
+      },
+      "shells": {
+        "values": [
+          "zsh",
+          "bash",
+          "fish",
+          "powershell",
+          "elvish"
+        ]
+      }
+    }
+  }
+}
