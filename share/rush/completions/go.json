@@ -1,0 +1,898 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "go",
+    "description": "manage Go source code",
+    "subcommands": [
+      {
+        "name": "bug",
+        "description": "start a bug report"
+      },
+      {
+        "name": "build",
+        "description": "compile packages and dependencies",
+        "options": [
+          {
+            "short": "o",
+            "description": "write the resulting executable or object to the named output file or directory",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          },
+          {
+            "short": "i",
+            "description": "install the packages that are dependencies of the target",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "packages",
+              "index": 0,
+              "repeatable": true,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "clean",
+        "description": "remove object files and cached files",
+        "options": [
+          {
+            "short": "i",
+            "description": "remove the corresponding installed archive or binary",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "description": "apply recursively to all the dependencies of the packages named by the import paths",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-cache"
+            ],
+            "description": "remove the entire go build cache",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-testcache"
+            ],
+            "description": "expire all test results in the go build cache",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-modcache"
+            ],
+            "description": "remove the entire module download cache, including unpacked source code of versioned dependencies",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "doc",
+        "description": "show documentation for package or symbol",
+        "options": [
+          {
+            "spellings": [
+              "-all"
+            ],
+            "description": "show all the documentation for the package",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "description": "respect case when matching symbols",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-cmd"
+            ],
+            "description": "treat a command (package main) like a regular package. Otherwise package main's exported symbols are hidden when showing the package's top-level documentation",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-short"
+            ],
+            "description": "one-line representation for each symbol",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-src"
+            ],
+            "description": "show the full source code for the symbol",
+            "inherit": false
+          },
+          {
+            "short": "u",
+            "description": "show documentation for unexported as well as exported symbols, methods, and fields",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "env",
+        "description": "print Go environment information",
+        "options": [
+          {
+            "spellings": [
+              "-json"
+            ],
+            "description": "prints the environment in JSON format instead of as a shell script",
+            "inherit": false
+          },
+          {
+            "short": "u",
+            "description": "unset the default setting for the named environment variables",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "w",
+            "description": "change the default settings of the named environment variables to the given values",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          }
+        ]
+      },
+      {
+        "name": "fix",
+        "description": "update packages to use new APIs",
+        "arguments": {
+          "states": [
+            {
+              "name": "packages",
+              "index": 0,
+              "repeatable": true,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "fmt",
+        "description": "gofmt (reformat) package sources",
+        "options": [
+          {
+            "short": "n",
+            "description": "print the commands that would be executed",
+            "inherit": false
+          },
+          {
+            "short": "x",
+            "description": "print the commands as they are executed",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-mod"
+            ],
+            "description": "which module download mode to use",
+            "inherit": false,
+            "value": {
+              "name": "mode",
+              "provider": "go.mod-modes"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "packages",
+              "index": 0,
+              "repeatable": true,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "generate",
+        "description": "generate Go files by processing source",
+        "options": [
+          {
+            "spellings": [
+              "-run"
+            ],
+            "description": "specifies a regular expression to select directives whose full original source text matches the expression",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "get",
+        "description": "add dependencies to current module and install them",
+        "options": [
+          {
+            "short": "t",
+            "description": "modules needed to build tests of packages specified on the command line",
+            "inherit": false
+          },
+          {
+            "short": "u",
+            "description": "update to newer minor or patch releases when available",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "required": false,
+              "style": "optional",
+              "provider": "go.update-modes"
+            }
+          },
+          {
+            "spellings": [
+              "-insecure"
+            ],
+            "description": "permit fetching from insecure origins",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "description": "only update go.mod and download source code needed to build packages",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "url",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "install",
+        "description": "compile and install packages and dependencies",
+        "arguments": {
+          "states": [
+            {
+              "name": "packages",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "list packages or modules",
+        "options": [
+          {
+            "spellings": [
+              "-compiled"
+            ],
+            "description": "set CompiledGoFiles to the Go source files",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-deps"
+            ],
+            "description": "terate over not just the named packages but also all their dependencies",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "description": "specify an alternate format for the list",
+            "inherit": false,
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "short": "e",
+            "description": "processes the erroneous packages with the usual printing",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-export"
+            ],
+            "description": "set the Export field to the name of a file containing up-to-date export information for the given package",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-find"
+            ],
+            "description": "identify the named packages but not resolve their dependencies",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-test"
+            ],
+            "description": "report test binaries",
+            "inherit": false
+          },
+          {
+            "short": "m",
+            "description": "list modules instead of packages",
+            "inherit": false
+          },
+          {
+            "short": "u",
+            "description": "add information about available upgrades",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-versions"
+            ],
+            "description": "set the Module's Versions field to a list of all known versions of that module",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-retracted"
+            ],
+            "description": "eport information about retracted module versions",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "mod",
+        "description": "module maintenance",
+        "subcommands": [
+          {
+            "name": "download",
+            "description": "download the named modules into the module cache",
+            "options": [
+              {
+                "spellings": [
+                  "-json"
+                ],
+                "description": "print a sequence of JSON objects to standard output, describing each downloaded module (or failure)",
+                "inherit": false
+              },
+              {
+                "short": "x",
+                "description": "print the commands download executes to standard error",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "modules",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "edit",
+            "description": "edit and format go.mod files",
+            "options": [
+              {
+                "spellings": [
+                  "-module"
+                ],
+                "description": "change the module's path",
+                "inherit": false
+              },
+              {
+                "spellings": [
+                  "-go"
+                ],
+                "description": "set the expected Go language version",
+                "inherit": false,
+                "value": {
+                  "name": "version"
+                }
+              },
+              {
+                "spellings": [
+                  "-require"
+                ],
+                "description": "add a requirement on the given module",
+                "inherit": false,
+                "value": {
+                  "name": "path",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "spellings": [
+                  "-droprequire"
+                ],
+                "description": "drop a requirement on the given module",
+                "inherit": false,
+                "value": {
+                  "name": "path",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "spellings": [
+                  "-exclude"
+                ],
+                "description": "add an exclusion on the given module",
+                "inherit": false,
+                "value": {
+                  "name": "path",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "spellings": [
+                  "-dropexclude"
+                ],
+                "description": "drop an exclusion on the given module",
+                "inherit": false,
+                "value": {
+                  "name": "path",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "spellings": [
+                  "-replace"
+                ],
+                "description": "add a replacement of the given module path and version pair",
+                "inherit": false,
+                "value": {
+                  "name": "path",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "spellings": [
+                  "-dropreplace"
+                ],
+                "description": "drops a replacement of the given module path and version pair",
+                "inherit": false,
+                "value": {
+                  "name": "path",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "spellings": [
+                  "-retract"
+                ],
+                "description": "add a retraction for the given version",
+                "inherit": false,
+                "value": {
+                  "name": "version"
+                }
+              },
+              {
+                "spellings": [
+                  "-dropretract"
+                ],
+                "description": "drop a retraction for the given version",
+                "inherit": false,
+                "value": {
+                  "name": "version"
+                }
+              },
+              {
+                "spellings": [
+                  "-fmt"
+                ],
+                "description": "format the go.mod file without making other changes",
+                "inherit": false
+              },
+              {
+                "spellings": [
+                  "-print"
+                ],
+                "description": "print the final go.mod in its text format instead of writing it back to disk",
+                "inherit": false
+              },
+              {
+                "spellings": [
+                  "-json"
+                ],
+                "description": "print the final go.mod in JSON format instead of writing it back to disk in text forma",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "graph",
+            "description": "print the module requirement graph"
+          },
+          {
+            "name": "init",
+            "description": "initialize and write a new go.mod file in the current directory",
+            "arguments": {
+              "states": [
+                {
+                  "name": "module-path",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "tidy",
+            "description": "ensure that the go.mod file matches the source code in the module",
+            "options": [
+              {
+                "short": "e",
+                "description": "attempt to proceed despite errors encountered while loading packages",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "description": "print information about removed modules",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "vendor",
+            "description": "construct a directory named vendor in the main module's root directory",
+            "options": [
+              {
+                "short": "e",
+                "description": "attempt to proceed despite errors encountered while loading packages",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "description": "print information about removed modules",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "verify",
+            "description": "check that dependencies of the main module stored in the module cache have not been modified since they were downloaded"
+          },
+          {
+            "name": "why",
+            "description": "show a shortest path in the import graph from the main module to each of the listed packages",
+            "options": [
+              {
+                "short": "m",
+                "description": "treat its arguments as a list of modules",
+                "inherit": false
+              },
+              {
+                "spellings": [
+                  "-vendor"
+                ],
+                "description": "ignore imports in tests of packages outside the main module",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "packages",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "work",
+        "description": "workspace maintenance",
+        "subcommands": [
+          {
+            "name": "edit",
+            "description": "edit go.work from tools or scripts",
+            "options": [
+              {
+                "spellings": [
+                  "-fmt"
+                ],
+                "description": "the -fmt flag reformats the go.work file without making other changes. This reformatting is also implied by any other modifications that use or rewrite the go.m",
+                "inherit": false
+              },
+              {
+                "spellings": [
+                  "-use"
+                ],
+                "description": "the -use=path and -dropuse=path flags add and drop a use directive from the go.work file's set of module directories",
+                "inherit": false,
+                "value": {
+                  "name": "path",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "spellings": [
+                  "-dropuse"
+                ],
+                "description": "the -use=path and -dropuse=path flags add and drop a use directive from the go.work file's set of module directories",
+                "inherit": false,
+                "value": {
+                  "name": "path",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "spellings": [
+                  "-replace"
+                ],
+                "description": "the -replace=old[@v]=new[@v] flag adds a replacement of the given module path and version pair. If the @v in old@v is omitted, a replacement without a version o",
+                "inherit": false,
+                "value": {
+                  "name": "old[@v]=new[@v]"
+                }
+              },
+              {
+                "spellings": [
+                  "-dropreplace"
+                ],
+                "description": "the -dropreplace=old[@v] flag drops a replacement of the given module path and version pair. If the @v is omitted, a replacement without a version on the left s",
+                "inherit": false,
+                "value": {
+                  "name": "old[@v]"
+                }
+              },
+              {
+                "spellings": [
+                  "-go"
+                ],
+                "description": "set the expected Go language version",
+                "inherit": false,
+                "value": {
+                  "name": "version"
+                }
+              },
+              {
+                "spellings": [
+                  "-print"
+                ],
+                "description": "the -print flag prints the final go.work in its text format instead of writing it back to go.mod",
+                "inherit": false
+              },
+              {
+                "spellings": [
+                  "-json"
+                ],
+                "description": "the -json flag prints the final go.work file in JSON format instead of writing it back to go.mod",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "init",
+            "description": "initialize workspace file",
+            "arguments": {
+              "states": [
+                {
+                  "name": "moddirs",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "sync",
+            "description": "sync workspace build list to modules"
+          },
+          {
+            "name": "use",
+            "description": "add modules to workspace file",
+            "options": [
+              {
+                "short": "r",
+                "description": "the -r flag searches recursively for modules in the argument directories, and the use command operates as if each of the directories were specified as arguments",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "moddirs",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "compile and run Go program",
+        "options": [
+          {
+            "spellings": [
+              "-exec"
+            ],
+            "description": "invoke the binary using xprog",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "test",
+        "description": "test packages",
+        "options": [
+          {
+            "spellings": [
+              "-args"
+            ],
+            "description": "pass the remainder of the command line to the test binary",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "c",
+            "description": "compile the test binary to pkg.test but do not run it",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-exec"
+            ],
+            "description": "invoke the binary using xprog",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "i",
+            "description": "install packages that are dependencies of the test",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-json"
+            ],
+            "description": "convert test output to JSON suitable",
+            "inherit": false
+          },
+          {
+            "short": "o",
+            "description": "compile the test binary to the named file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "tool",
+        "description": "run specified go tool",
+        "options": [
+          {
+            "short": "n",
+            "description": "print the command that would be executed but not execute it",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "tool",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "version",
+        "description": "print Go version",
+        "options": [
+          {
+            "short": "m",
+            "description": "print each executable's embedded module version information",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "description": "report unrecognized files",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "vet",
+        "description": "report likely mistakes in packages",
+        "options": [
+          {
+            "spellings": [
+              "-vettool"
+            ],
+            "description": "select a different analysis tool with alternative or additional checks",
+            "inherit": false,
+            "value": {
+              "name": "tool"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "go.mod-modes": {
+        "candidates": [
+          {
+            "value": "readonly"
+          },
+          {
+            "value": "vendor"
+          }
+        ]
+      },
+      "go.update-modes": {
+        "candidates": [
+          {
+            "value": "patch",
+            "description": "update patch releases"
+          }
+        ]
+      }
+    }
+  }
+}
