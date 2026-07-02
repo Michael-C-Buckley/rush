@@ -1,0 +1,712 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "typeorm",
+    "description": "TypeORM CLI",
+    "subcommands": [
+      {
+        "name": "schema:sync",
+        "description": "synchronizes your entities with database schema",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "show version",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "config",
+            "description": "connection configuration file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "c",
+            "long": "connection",
+            "description": "connection name",
+            "inherit": false,
+            "value": {
+              "name": "connection"
+            }
+          },
+          {
+            "long": "help",
+            "description": "show help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "schema:log",
+        "description": "shows sql to be executed by schema:sync command",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "show version",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "config",
+            "description": "connection configuration file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "c",
+            "long": "connection",
+            "description": "connection name",
+            "inherit": false,
+            "value": {
+              "name": "connection"
+            }
+          },
+          {
+            "long": "help",
+            "description": "show help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "schema:drop",
+        "description": "drops all tables in the database on your default connection",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "show version",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "config",
+            "description": "connection configuration file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "c",
+            "long": "connection",
+            "description": "connection name",
+            "inherit": false,
+            "value": {
+              "name": "connection"
+            }
+          },
+          {
+            "long": "help",
+            "description": "show help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "query",
+        "description": "executes given SQL query on a default connection",
+        "arguments": {
+          "states": [
+            {
+              "name": "query",
+              "description": "The SQL Query to run",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "show version",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "config",
+            "description": "connection configuration file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "c",
+            "long": "connection",
+            "description": "connection name",
+            "inherit": false,
+            "value": {
+              "name": "connection"
+            }
+          },
+          {
+            "long": "help",
+            "description": "show help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "entity:create",
+        "description": "generates a new entity",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "show version",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "config",
+            "description": "connection configuration file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "c",
+            "long": "connection",
+            "description": "connection name",
+            "inherit": false,
+            "value": {
+              "name": "connection"
+            }
+          },
+          {
+            "long": "help",
+            "description": "show help for command",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "name",
+            "description": "name of the entity class",
+            "inherit": false,
+            "value": {
+              "name": "entity"
+            }
+          },
+          {
+            "short": "d",
+            "long": "dir",
+            "description": "directory where entity should be created",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          }
+        ]
+      },
+      {
+        "name": "subscriber:create",
+        "description": "generates a new subscriber",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "show version",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "config",
+            "description": "connection configuration file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "c",
+            "long": "connection",
+            "description": "connection name",
+            "inherit": false,
+            "value": {
+              "name": "connection"
+            }
+          },
+          {
+            "long": "help",
+            "description": "show help for command",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "name",
+            "description": "name of the subscriber class",
+            "inherit": false,
+            "value": {
+              "name": "subscriber"
+            }
+          },
+          {
+            "short": "d",
+            "long": "dir",
+            "description": "directory where subscriber should be created",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          }
+        ]
+      },
+      {
+        "name": "migration:create",
+        "description": "creates a new migration file",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "show version",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "config",
+            "description": "connection configuration file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "c",
+            "long": "connection",
+            "description": "connection name",
+            "inherit": false,
+            "value": {
+              "name": "connection"
+            }
+          },
+          {
+            "long": "help",
+            "description": "show help for command",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "name",
+            "description": "name of the migration class",
+            "inherit": false,
+            "value": {
+              "name": "migration"
+            }
+          },
+          {
+            "short": "d",
+            "long": "dir",
+            "description": "directory where migration should be created",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "o",
+            "long": "outputJs",
+            "description": "generate a migration file on Javascript instead of Typescript",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "migration:generate",
+        "description": "generates a new migration file with sql needs to be executed to update schema",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "show version",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "config",
+            "description": "connection configuration file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "c",
+            "long": "connection",
+            "description": "connection name",
+            "inherit": false,
+            "value": {
+              "name": "connection"
+            }
+          },
+          {
+            "long": "help",
+            "description": "show help for command",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "name",
+            "description": "name of the migration class",
+            "inherit": false,
+            "value": {
+              "name": "migration"
+            }
+          },
+          {
+            "short": "d",
+            "long": "dir",
+            "description": "directory where migration should be created",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "p",
+            "long": "pretty",
+            "description": "pretty-print generated SQL",
+            "inherit": false
+          },
+          {
+            "short": "o",
+            "long": "outputJs",
+            "description": "generate a migration file on Javascript instead of Typescript",
+            "inherit": false
+          },
+          {
+            "long": "dr",
+            "aliases": [
+              "dryrun"
+            ],
+            "description": "prints out the contents of the migration instead of writing it to a file",
+            "inherit": false
+          },
+          {
+            "long": "ch",
+            "aliases": [
+              "check"
+            ],
+            "description": "verifies that the current database is up to date and that no migrations are needed",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "migration:run",
+        "description": "runs all pending migrations",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "show version",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "config",
+            "description": "connection configuration file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "c",
+            "long": "connection",
+            "description": "connection name",
+            "inherit": false,
+            "value": {
+              "name": "connection"
+            }
+          },
+          {
+            "long": "help",
+            "description": "show help for command",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "transaction",
+            "description": "indicates if transaction should be used or not for migration run",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "migration:show",
+        "description": "show all migrations and whether they have been run or not",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "show version",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "config",
+            "description": "connection configuration file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "c",
+            "long": "connection",
+            "description": "connection name",
+            "inherit": false,
+            "value": {
+              "name": "connection"
+            }
+          },
+          {
+            "long": "help",
+            "description": "show help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "migration:revert",
+        "description": "reverts last executed migration",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "show version",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "config",
+            "description": "connection configuration file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "c",
+            "long": "connection",
+            "description": "connection name",
+            "inherit": false,
+            "value": {
+              "name": "connection"
+            }
+          },
+          {
+            "long": "help",
+            "description": "show help for command",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "transaction",
+            "description": "indicates if transaction should be used or not for migration revert",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "prints TypeORM version this project uses",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "show version",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "description": "show help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "cache:clear",
+        "description": "clears all data stored in query runner cache",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "show version",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "config",
+            "description": "connection configuration file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "c",
+            "long": "connection",
+            "description": "connection name",
+            "inherit": false,
+            "value": {
+              "name": "connection"
+            }
+          },
+          {
+            "long": "help",
+            "description": "show help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "generates initial TypeORM project structure",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "show version",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "config",
+            "description": "connection configuration file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "c",
+            "long": "connection",
+            "description": "connection name",
+            "inherit": false,
+            "value": {
+              "name": "connection"
+            }
+          },
+          {
+            "long": "help",
+            "description": "show help for command",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "name",
+            "description": "name of the project directory",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "db",
+            "aliases": [
+              "database"
+            ],
+            "description": "database type you'll use in your project",
+            "inherit": false,
+            "value": {
+              "name": "database",
+              "provider": "typeorm.databases"
+            }
+          },
+          {
+            "long": "express",
+            "description": "indicates if express should be included in the project",
+            "inherit": false
+          },
+          {
+            "long": "docker",
+            "description": "set to true if docker-compose must be generated as well",
+            "inherit": false
+          },
+          {
+            "long": "pm",
+            "aliases": [
+              "manager"
+            ],
+            "description": "install packages",
+            "inherit": false,
+            "value": {
+              "name": "manager",
+              "provider": "typeorm.package-managers"
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "typeorm.databases": {
+        "values": [
+          "mysql",
+          "mariadb",
+          "postgres",
+          "cockroachdb",
+          "sqlite",
+          "mssql",
+          "oracle",
+          "cordova",
+          "nativescript",
+          "react-native",
+          "expo",
+          "mongodb"
+        ]
+      },
+      "typeorm.package-managers": {
+        "values": [
+          "npm",
+          "yarn"
+        ]
+      }
+    },
+    "options": [
+      {
+        "long": "help",
+        "description": "show help for command",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      }
+    ]
+  }
+}
