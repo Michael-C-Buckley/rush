@@ -1,0 +1,30 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "sl",
+    "description": "run the steam locomotive animation",
+    "options": [
+      {
+        "short": "a",
+        "description": "an accident is occurring; people cry for help",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "description": "little version",
+        "inherit": false
+      },
+      {
+        "short": "F",
+        "description": "it flies like the galaxy express 999",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "description": "c51 appears instead of D51",
+        "inherit": false
+      }
+    ]
+  }
+}
