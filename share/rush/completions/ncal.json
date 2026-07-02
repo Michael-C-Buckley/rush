@@ -1,0 +1,291 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ncal",
+    "description": "display calendars and Easter dates",
+    "options": [
+      {
+        "short": "h",
+        "description": "turn off today highlighting",
+        "inherit": false
+      },
+      {
+        "short": "J",
+        "description": "Display Julian Calendar, if combined with the -e option, display date of Easter according to the Julian Calendar",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "description": "Display date of Easter (for western churches)",
+        "inherit": false
+      },
+      {
+        "short": "j",
+        "description": "Display Julian days (days one-based, numbered from January 1)",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "description": "display the specified month",
+        "inherit": false,
+        "value": {
+          "name": "month",
+          "description": "Display the specified month. If month is specified as a decimal number, it may be followed by the letter \u2018f\u2019 or \u2018p\u2019 to indicate the following or preceding month",
+          "provider": {
+            "values": [
+              "january",
+              "february",
+              "march",
+              "april",
+              "may",
+              "june",
+              "july",
+              "august",
+              "september",
+              "october",
+              "november",
+              "december"
+            ]
+          }
+        },
+        "excludes": [
+          "y",
+          "p"
+        ]
+      },
+      {
+        "short": "y",
+        "description": "Display a calendar for the specified year",
+        "inherit": false,
+        "value": {
+          "name": "year"
+        }
+      },
+      {
+        "short": "o",
+        "description": "Display date of Orthodox Easter (Greek and Russian Orthodox Churches)",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "description": "Print the country codes and switching days from Julian to Gregorian Calendar as they are assumed by ncal. The country code as determined from the local environm",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "set Gregorian switch country code",
+        "inherit": false,
+        "value": {
+          "name": "country_code",
+          "provider": {
+            "values": [
+              {
+                "value": "AL",
+                "description": "Albania"
+              },
+              {
+                "value": "AT",
+                "description": "Austria"
+              },
+              {
+                "value": "AU",
+                "description": "Australia"
+              },
+              {
+                "value": "BE",
+                "description": "Belgium"
+              },
+              {
+                "value": "BG",
+                "description": "Bulgaria"
+              },
+              {
+                "value": "CA",
+                "description": "Canada"
+              },
+              {
+                "value": "CH",
+                "description": "Switzerland"
+              },
+              {
+                "value": "CN",
+                "description": "China"
+              },
+              {
+                "value": "CZ",
+                "description": "Czech Republic"
+              },
+              {
+                "value": "DE",
+                "description": "Germany"
+              },
+              {
+                "value": "DK",
+                "description": "Denmark"
+              },
+              {
+                "value": "ES",
+                "description": "Spain"
+              },
+              {
+                "value": "FI",
+                "description": "Finland"
+              },
+              {
+                "value": "FR",
+                "description": "France"
+              },
+              {
+                "value": "GB",
+                "description": "United Kingdom"
+              },
+              {
+                "value": "GR",
+                "description": "Greece"
+              },
+              {
+                "value": "HU",
+                "description": "Hungary"
+              },
+              {
+                "value": "IS",
+                "description": "Iceland"
+              },
+              {
+                "value": "IT",
+                "description": "Italy"
+              },
+              {
+                "value": "JP",
+                "description": "Japan"
+              },
+              {
+                "value": "LI",
+                "description": "Lithuania"
+              },
+              {
+                "value": "LN",
+                "description": "Latin"
+              },
+              {
+                "value": "LU",
+                "description": "Luxembourg"
+              },
+              {
+                "value": "LV",
+                "description": "Latvia"
+              },
+              {
+                "value": "NL",
+                "description": "Netherlands"
+              },
+              {
+                "value": "NO",
+                "description": "Norway"
+              },
+              {
+                "value": "PL",
+                "description": "Poland"
+              },
+              {
+                "value": "PT",
+                "description": "Portugal"
+              },
+              {
+                "value": "RO",
+                "description": "Romania"
+              },
+              {
+                "value": "RU",
+                "description": "Russia"
+              },
+              {
+                "value": "SI",
+                "description": "Slovenia"
+              },
+              {
+                "value": "SW",
+                "description": "Sweden"
+              },
+              {
+                "value": "TR",
+                "description": "Turkey"
+              },
+              {
+                "value": "US",
+                "description": "United States"
+              },
+              {
+                "value": "YU",
+                "description": "Yugoslavia"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "w",
+        "description": "Print the number of the week below each week column",
+        "inherit": false
+      },
+      {
+        "short": "3",
+        "description": "Display the previous, current and next month surrounding today",
+        "inherit": false,
+        "excludes": [
+          "y",
+          "A",
+          "B",
+          "p"
+        ]
+      },
+      {
+        "short": "A",
+        "description": "Display the number of months after the current month",
+        "inherit": false,
+        "value": {
+          "name": "number",
+          "description": "Number of months to display"
+        }
+      },
+      {
+        "short": "B",
+        "description": "Display the number of months before the current month",
+        "inherit": false,
+        "value": {
+          "name": "number",
+          "description": "Number of months to display"
+        }
+      },
+      {
+        "short": "C",
+        "description": "Switch to cal mode",
+        "inherit": false
+      },
+      {
+        "short": "N",
+        "description": "Switch to ncal mode",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "description": "Use yyyy-mm as the current date (for debugging of date selection)",
+        "inherit": false,
+        "value": {
+          "name": "yyyy-mm",
+          "description": "Date to use as the current date"
+        }
+      },
+      {
+        "short": "H",
+        "description": "Use yyyy-mm-dd as the current date (for debugging of highlighting)",
+        "inherit": false,
+        "value": {
+          "name": "yyyy-mm-dd",
+          "description": "Date to use as the current date"
+        }
+      }
+    ]
+  }
+}
