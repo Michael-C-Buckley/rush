@@ -1,0 +1,943 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "zapier-platform-cli",
+    "description": "create and maintain Zapier integrations",
+    "subcommands": [
+      {
+        "name": "analytics",
+        "description": "show the status of the analytics that are collected. Also used to change what is collected",
+        "options": [
+          {
+            "short": "m",
+            "long": "mode",
+            "description": "choose how much information to share. Anonymous mode drops the OS type and Zapier user id, but keeps command info. Identifying information is used only for debu",
+            "value": {
+              "name": "mode",
+              "provider": {
+                "values": [
+                  "enabled",
+                  "anonymous",
+                  "disabled"
+                ]
+              }
+            }
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "build",
+        "description": "build a pushable zip from the current directory",
+        "options": [
+          {
+            "long": "disable-dependency-detection",
+            "description": "disable \"smart\" file inclusion. By default, Zapier only includes files that are required by `index.js`. If you (or your dependencies) require files dynamically"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "convert",
+        "description": "convert a Legacy Web Builder app or Visual Builder integration to a CLI integration",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "convert a specific version. Required when converting a Visual Builder integration",
+            "value": {
+              "name": "version"
+            }
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "integrationId",
+              "description": "to get the integration/app ID, go to \"https://zapier.com/app/developer\", click on an integration, and copy the number directly after \"/app/\" in the URL",
+              "index": 0
+            },
+            {
+              "name": "path",
+              "description": "relative to your current path - IE: `.` for current directory",
+              "provider": "builtin.directories",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete:integration",
+        "aliases": [],
+        "description": "delete your integration (including all versions)",
+        "options": [
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "delete:version",
+        "description": "delete a specific version of your integration",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "specify the version to delete. It must have no users or Zaps",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "deprecate",
+        "description": "mark a non-production version of your integration as deprecated, with removal by a certain date",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "the version to deprecate",
+              "index": 0
+            },
+            {
+              "name": "date",
+              "description": "the date (YYYY-MM-DD) when Zapier will make the specified version unavailable",
+              "index": 1
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "describe",
+        "description": "describe the current integration",
+        "options": [
+          {
+            "short": "f",
+            "long": "format",
+            "description": "change structured output format",
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "plain",
+                  "json",
+                  "raw",
+                  "row",
+                  "table"
+                ]
+              }
+            }
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "env:get",
+        "description": "get environment variables for a version",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "the version to get the environment for",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "f",
+            "long": "format",
+            "description": "change structured output format",
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "plain",
+                  "json",
+                  "raw",
+                  "row",
+                  "table"
+                ]
+              }
+            }
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "env:set",
+        "description": "set environment variables for a version",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "the version to set the environment for. Values are copied forward when a new version is created, but this command will only ever affect the specified version",
+              "index": 0
+            },
+            {
+              "name": "key-value-pairs...",
+              "description": "the key-value pairs to set. Keys are case-insensitive. Each pair should be space separated and pairs should be separated by an `=`. For example: `A=123 B=456`",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "env:unset",
+        "description": "unset environment variables for a version",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "the version to set the environment for",
+              "index": 0
+            },
+            {
+              "name": "keys...",
+              "description": "the keys to unset. Keys are case-insensitive",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "history",
+        "description": "get the history of your integration",
+        "options": [
+          {
+            "short": "f",
+            "long": "format",
+            "description": "change structured output format",
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "plain",
+                  "json",
+                  "raw",
+                  "row",
+                  "table"
+                ]
+              }
+            }
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "initialize a new Zapier integration with a project template",
+        "options": [
+          {
+            "short": "t",
+            "long": "template",
+            "description": "the template to start your integration with",
+            "value": {
+              "name": "template",
+              "provider": {
+                "values": [
+                  "basic-auth",
+                  "callback",
+                  "custom-auth",
+                  "digest-auth",
+                  "dynamic-dropdown",
+                  "files",
+                  "minimal",
+                  "oauth1-trello",
+                  "oauth2",
+                  "search-or-create",
+                  "session-auth",
+                  "typescript"
+                ]
+              }
+            }
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "where to create the new integration. If the directory doesn't exist, it will be created. If the directory isn't empty, we'll ask for confirmation",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "integrations",
+        "aliases": [
+          "apps"
+        ],
+        "description": "list integrations you have admin access to",
+        "options": [
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "link",
+        "description": "link the current directory with an existing integration",
+        "options": [
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "login",
+        "description": "configure your `~/.zapierrc` with a deploy key",
+        "options": [
+          {
+            "short": "s",
+            "long": "sso",
+            "description": "use this flag if you log into Zapier a Single Sign-On (SSO) button and don't have a Zapier password"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "logout",
+        "description": "deactivate your active deploy key and reset `~/.zapierrc`",
+        "options": [
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "logs",
+        "description": "print recent logs",
+        "options": [
+          {
+            "short": "f",
+            "long": "format",
+            "description": "change structured output format",
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "plain",
+                  "json",
+                  "raw",
+                  "row",
+                  "table"
+                ]
+              }
+            }
+          },
+          {
+            "short": "v",
+            "long": "version",
+            "description": "filter logs to the specified version",
+            "value": {
+              "name": "version"
+            }
+          },
+          {
+            "short": "s",
+            "long": "status",
+            "description": "filter logs to only see errors or successes",
+            "value": {
+              "name": "status",
+              "provider": {
+                "values": [
+                  "any",
+                  "success",
+                  "error"
+                ]
+              }
+            }
+          },
+          {
+            "short": "t",
+            "long": "type",
+            "description": "see logs of the specified type",
+            "value": {
+              "name": "type",
+              "provider": {
+                "values": [
+                  "console",
+                  "bundle",
+                  "http"
+                ]
+              }
+            }
+          },
+          {
+            "long": "detailed",
+            "description": "see extra info, like request/response body and headers"
+          },
+          {
+            "short": "u",
+            "long": "user",
+            "description": "only show logs for this user. Defaults to your account",
+            "value": {
+              "name": "user"
+            }
+          },
+          {
+            "long": "limit",
+            "description": "cap the number of logs returned. Max is 50 (also the default)",
+            "value": {
+              "name": "limit"
+            }
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "migrate",
+        "description": "migrate users from one version of your integration to another",
+        "options": [
+          {
+            "long": "user",
+            "description": "migrate only this user",
+            "value": {
+              "name": "user"
+            }
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "fromVersion",
+              "description": "the version FROM which to migrate users",
+              "index": 0
+            },
+            {
+              "name": "toVersion",
+              "description": "the version TO which to migrate users",
+              "index": 1
+            },
+            {
+              "name": "percent",
+              "description": "percentage (between 1 and 100) of users to migrate",
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "promote",
+        "description": "promote a specific version to public access",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "the version you want promote",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "push",
+        "description": "build and upload the current integration",
+        "options": [
+          {
+            "long": "disable-dependency-detection",
+            "description": "disable \"smart\" file inclusion. By default, Zapier only includes files that are required by `index.js`. If you (or your dependencies) require files dynamically"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "register",
+        "description": "register a new integration in your account",
+        "arguments": {
+          "states": [
+            {
+              "name": "title",
+              "description": "your integrations's public title. Asked interactively if not present",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "scaffold",
+        "description": "add a starting trigger, create, search, or resource to your integration",
+        "options": [
+          {
+            "short": "d",
+            "long": "dest",
+            "description": "specify the new file's directory. Use this flag when you want to create a different folder structure such as `src/triggers` instead of the default `triggers`. D",
+            "value": {
+              "name": "dest",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "test-dest",
+            "description": "specify the new test file's directory. Use this flag when you want to create a different folder structure such as `src/triggers` instead of the default `trigger",
+            "value": {
+              "name": "test-dest",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "e",
+            "long": "entry",
+            "description": "supply the path to your integration's root (`index.js`). Only needed if your `index.js` is in a subfolder, like `src`",
+            "value": {
+              "name": "entry",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "f",
+            "long": "force",
+            "description": "should we overwrite an existing trigger/search/create file?"
+          },
+          {
+            "long": "no-help",
+            "description": "when scaffolding, should we skip adding helpful intro comments? Useful if this isn't your first rodeo"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "actionType",
+              "provider": {
+                "values": [
+                  "trigger",
+                  "search",
+                  "create",
+                  "resource"
+                ]
+              },
+              "index": 0
+            },
+            {
+              "name": "noun",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "team:add",
+        "aliases": [],
+        "description": "add a team member to your integration",
+        "arguments": {
+          "states": [
+            {
+              "name": "email",
+              "description": "the user to be invited. If they don't have a Zapier account, they'll be prompted to create one",
+              "index": 0
+            },
+            {
+              "name": "role",
+              "description": "the level the invited team member should be at. Admins can edit everything and get email updates. Subscribers only get email updates",
+              "provider": {
+                "values": [
+                  "admin",
+                  "subscriber"
+                ]
+              },
+              "index": 1
+            },
+            {
+              "name": "message",
+              "description": "a message sent in the email to your team member, if you need to provide context. Wrap the message in quotes to ensure spaces get saved",
+              "index": 2
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "team:get",
+        "aliases": [],
+        "description": "get team members involved with your integration",
+        "options": [
+          {
+            "short": "f",
+            "long": "format",
+            "description": "change structured output format",
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "plain",
+                  "json",
+                  "raw",
+                  "row",
+                  "table"
+                ]
+              }
+            }
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "team:remove",
+        "aliases": [],
+        "description": "remove a team member from all versions of your integration",
+        "options": [
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "test",
+        "description": "test your integration via the \"test\" script in your \"package.json\"",
+        "options": [
+          {
+            "long": "skip-validate",
+            "description": "forgo running `zapier validate` before tests are run. This will speed up tests if you're modifying functionality of an existing integration rather than adding n"
+          },
+          {
+            "long": "yarn",
+            "description": "use `yarn` instead of `npm`. This happens automatically if there's a `yarn.lock` file, but you can manually force `yarn` if you run tests from a sub-directory"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "upload",
+        "description": "upload the latest build of your integration to Zapier",
+        "options": [
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "users:add",
+        "aliases": [],
+        "description": "add a user to some or all versions of your integration",
+        "options": [
+          {
+            "short": "f",
+            "long": "force",
+            "description": "skip confirmation. Useful for running programmatically",
+            "priority": -10
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "email",
+              "description": "the user to be invited. If they don't have a Zapier account, they'll be prompted to create one",
+              "index": 0
+            },
+            {
+              "name": "version",
+              "description": "a version string (like 1.2.3). Optional, used only if you want to invite a user to a specific version instead of all versions",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "users:get",
+        "aliases": [],
+        "description": "get a list of users who have been invited to your integration",
+        "options": [
+          {
+            "short": "f",
+            "long": "format",
+            "description": "change structured output format",
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "plain",
+                  "json",
+                  "raw",
+                  "row",
+                  "table"
+                ]
+              }
+            }
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "users:links",
+        "description": "get a list of links that are used to invite users to your integration",
+        "options": [
+          {
+            "short": "f",
+            "long": "format",
+            "description": "change structured output format",
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "plain",
+                  "json",
+                  "raw",
+                  "row",
+                  "table"
+                ]
+              }
+            }
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "users:remove",
+        "aliases": [],
+        "description": "remove a user from all versions of your integration",
+        "options": [
+          {
+            "short": "f",
+            "long": "force",
+            "description": "skips confirmation. Useful for running programmatically",
+            "priority": -10
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "email",
+              "description": "the user to be removed",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "validate",
+        "description": "validate your integration",
+        "options": [
+          {
+            "short": "f",
+            "long": "format",
+            "description": "change structured output format",
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "plain",
+                  "json",
+                  "raw",
+                  "row",
+                  "table"
+                ]
+              }
+            }
+          },
+          {
+            "long": "without-style",
+            "description": "forgo pinging the Zapier server to run further checks"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "versions",
+        "description": "list the versions of your integration available for use in the Zapier editor",
+        "options": [
+          {
+            "short": "f",
+            "long": "format",
+            "description": "change structured output format",
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "plain",
+                  "json",
+                  "raw",
+                  "row",
+                  "table"
+                ]
+              }
+            }
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "display help for <%= config.bin %>",
+        "options": [
+          {
+            "long": "all",
+            "description": "see all commands in CLI"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "show extra debugging output"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "description": "command to show help for",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
