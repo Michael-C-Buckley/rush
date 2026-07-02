@@ -1,0 +1,3649 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "gradle",
+    "description": "build automation tool",
+    "arguments": {
+      "states": [
+        {
+          "name": "task-name",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "build",
+        "description": "compute all outputs",
+        "options": [
+          {
+            "description": "show help information",
+            "long": "help",
+            "short": "h",
+            "spellings": [
+              "-?"
+            ]
+          },
+          {
+            "description": "print version information",
+            "long": "version",
+            "short": "v"
+          },
+          {
+            "description": "print the full stacktrace",
+            "long": "full-stacktrace",
+            "short": "S"
+          },
+          {
+            "description": "print stacktraces for user exceptions",
+            "long": "stacktrace",
+            "short": "s"
+          },
+          {
+            "description": "create a build scan",
+            "long": "scan"
+          },
+          {
+            "description": "enable the Gradle build cache",
+            "long": "build-cache"
+          },
+          {
+            "description": "disable the Gradle build cache",
+            "long": "no-build-cache"
+          },
+          {
+            "description": "enable configure-on-demand",
+            "long": "configure-on-demand"
+          },
+          {
+            "description": "disable configure-on-demand",
+            "long": "no-configure-on-demand"
+          },
+          {
+            "description": "set maximum worker count",
+            "long": "max-workers",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "build projects in parallel",
+            "long": "parallel"
+          },
+          {
+            "description": "disable parallel execution",
+            "long": "no-parallel"
+          },
+          {
+            "description": "set Gradle daemon priority",
+            "long": "priority",
+            "value": {
+              "name": "priority",
+              "provider": "gradle.priorities"
+            }
+          },
+          {
+            "description": "generate a performance profile",
+            "long": "profile"
+          },
+          {
+            "description": "enable file-system watching",
+            "long": "watch-fs"
+          },
+          {
+            "description": "disable file-system watching",
+            "long": "no-watch-fs"
+          },
+          {
+            "description": "use the Gradle daemon",
+            "long": "daemon"
+          },
+          {
+            "description": "disable the Gradle daemon",
+            "long": "no-daemon"
+          },
+          {
+            "description": "start the Gradle daemon in the foreground",
+            "long": "foreground"
+          },
+          {
+            "description": "log errors only",
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "description": "set log level to warn",
+            "long": "warn",
+            "short": "w"
+          },
+          {
+            "description": "set log level to info",
+            "long": "info",
+            "short": "i"
+          },
+          {
+            "description": "log in debug mode",
+            "long": "debug",
+            "short": "d"
+          },
+          {
+            "description": "set console output mode",
+            "long": "console",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.console-modes"
+            }
+          },
+          {
+            "description": "set warning mode",
+            "long": "warning-mode",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.warning-modes"
+            }
+          },
+          {
+            "description": "include the specified build",
+            "long": "include-build",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "build without network access",
+            "long": "offline"
+          },
+          {
+            "description": "refresh dependency state",
+            "long": "refresh-dependencies"
+          },
+          {
+            "description": "show tasks without executing them",
+            "long": "dry-run"
+          },
+          {
+            "description": "persist dependency lock state",
+            "long": "write-locks"
+          },
+          {
+            "description": "update versions for modules",
+            "long": "update-locks",
+            "value": {
+              "name": "group:name"
+            }
+          },
+          {
+            "description": "use the specified build file",
+            "long": "build-file",
+            "short": "b",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "use the specified settings file",
+            "long": "settings-file",
+            "short": "c",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set Gradle user home",
+            "long": "gradle-user-home",
+            "short": "g",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project directory",
+            "long": "project-dir",
+            "short": "p",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project cache directory",
+            "long": "project-cache-dir",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set a JVM system property",
+            "long": "system-prop",
+            "short": "D",
+            "value": {
+              "name": "property"
+            }
+          },
+          {
+            "description": "use an initialization script",
+            "long": "init-script",
+            "short": "I",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set a project property",
+            "long": "project-prop",
+            "short": "P",
+            "value": {
+              "name": "property"
+            }
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "run applications",
+        "options": [
+          {
+            "description": "show help information",
+            "long": "help",
+            "short": "h",
+            "spellings": [
+              "-?"
+            ]
+          },
+          {
+            "description": "print version information",
+            "long": "version",
+            "short": "v"
+          },
+          {
+            "description": "print the full stacktrace",
+            "long": "full-stacktrace",
+            "short": "S"
+          },
+          {
+            "description": "print stacktraces for user exceptions",
+            "long": "stacktrace",
+            "short": "s"
+          },
+          {
+            "description": "create a build scan",
+            "long": "scan"
+          },
+          {
+            "description": "enable the Gradle build cache",
+            "long": "build-cache"
+          },
+          {
+            "description": "disable the Gradle build cache",
+            "long": "no-build-cache"
+          },
+          {
+            "description": "enable configure-on-demand",
+            "long": "configure-on-demand"
+          },
+          {
+            "description": "disable configure-on-demand",
+            "long": "no-configure-on-demand"
+          },
+          {
+            "description": "set maximum worker count",
+            "long": "max-workers",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "build projects in parallel",
+            "long": "parallel"
+          },
+          {
+            "description": "disable parallel execution",
+            "long": "no-parallel"
+          },
+          {
+            "description": "set Gradle daemon priority",
+            "long": "priority",
+            "value": {
+              "name": "priority",
+              "provider": "gradle.priorities"
+            }
+          },
+          {
+            "description": "generate a performance profile",
+            "long": "profile"
+          },
+          {
+            "description": "enable file-system watching",
+            "long": "watch-fs"
+          },
+          {
+            "description": "disable file-system watching",
+            "long": "no-watch-fs"
+          },
+          {
+            "description": "use the Gradle daemon",
+            "long": "daemon"
+          },
+          {
+            "description": "disable the Gradle daemon",
+            "long": "no-daemon"
+          },
+          {
+            "description": "start the Gradle daemon in the foreground",
+            "long": "foreground"
+          },
+          {
+            "description": "log errors only",
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "description": "set log level to warn",
+            "long": "warn",
+            "short": "w"
+          },
+          {
+            "description": "set log level to info",
+            "long": "info",
+            "short": "i"
+          },
+          {
+            "description": "log in debug mode",
+            "long": "debug",
+            "short": "d"
+          },
+          {
+            "description": "set console output mode",
+            "long": "console",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.console-modes"
+            }
+          },
+          {
+            "description": "set warning mode",
+            "long": "warning-mode",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.warning-modes"
+            }
+          },
+          {
+            "description": "include the specified build",
+            "long": "include-build",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "build without network access",
+            "long": "offline"
+          },
+          {
+            "description": "refresh dependency state",
+            "long": "refresh-dependencies"
+          },
+          {
+            "description": "show tasks without executing them",
+            "long": "dry-run"
+          },
+          {
+            "description": "persist dependency lock state",
+            "long": "write-locks"
+          },
+          {
+            "description": "update versions for modules",
+            "long": "update-locks",
+            "value": {
+              "name": "group:name"
+            }
+          },
+          {
+            "description": "use the specified build file",
+            "long": "build-file",
+            "short": "b",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "use the specified settings file",
+            "long": "settings-file",
+            "short": "c",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set Gradle user home",
+            "long": "gradle-user-home",
+            "short": "g",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project directory",
+            "long": "project-dir",
+            "short": "p",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project cache directory",
+            "long": "project-cache-dir",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set a JVM system property",
+            "long": "system-prop",
+            "short": "D",
+            "value": {
+              "name": "property"
+            }
+          },
+          {
+            "description": "use an initialization script",
+            "long": "init-script",
+            "short": "I",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set a project property",
+            "long": "project-prop",
+            "short": "P",
+            "value": {
+              "name": "property"
+            }
+          }
+        ]
+      },
+      {
+        "name": "check",
+        "description": "run all checks",
+        "options": [
+          {
+            "description": "show help information",
+            "long": "help",
+            "short": "h",
+            "spellings": [
+              "-?"
+            ]
+          },
+          {
+            "description": "print version information",
+            "long": "version",
+            "short": "v"
+          },
+          {
+            "description": "print the full stacktrace",
+            "long": "full-stacktrace",
+            "short": "S"
+          },
+          {
+            "description": "print stacktraces for user exceptions",
+            "long": "stacktrace",
+            "short": "s"
+          },
+          {
+            "description": "create a build scan",
+            "long": "scan"
+          },
+          {
+            "description": "enable the Gradle build cache",
+            "long": "build-cache"
+          },
+          {
+            "description": "disable the Gradle build cache",
+            "long": "no-build-cache"
+          },
+          {
+            "description": "enable configure-on-demand",
+            "long": "configure-on-demand"
+          },
+          {
+            "description": "disable configure-on-demand",
+            "long": "no-configure-on-demand"
+          },
+          {
+            "description": "set maximum worker count",
+            "long": "max-workers",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "build projects in parallel",
+            "long": "parallel"
+          },
+          {
+            "description": "disable parallel execution",
+            "long": "no-parallel"
+          },
+          {
+            "description": "set Gradle daemon priority",
+            "long": "priority",
+            "value": {
+              "name": "priority",
+              "provider": "gradle.priorities"
+            }
+          },
+          {
+            "description": "generate a performance profile",
+            "long": "profile"
+          },
+          {
+            "description": "enable file-system watching",
+            "long": "watch-fs"
+          },
+          {
+            "description": "disable file-system watching",
+            "long": "no-watch-fs"
+          },
+          {
+            "description": "use the Gradle daemon",
+            "long": "daemon"
+          },
+          {
+            "description": "disable the Gradle daemon",
+            "long": "no-daemon"
+          },
+          {
+            "description": "start the Gradle daemon in the foreground",
+            "long": "foreground"
+          },
+          {
+            "description": "log errors only",
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "description": "set log level to warn",
+            "long": "warn",
+            "short": "w"
+          },
+          {
+            "description": "set log level to info",
+            "long": "info",
+            "short": "i"
+          },
+          {
+            "description": "log in debug mode",
+            "long": "debug",
+            "short": "d"
+          },
+          {
+            "description": "set console output mode",
+            "long": "console",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.console-modes"
+            }
+          },
+          {
+            "description": "set warning mode",
+            "long": "warning-mode",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.warning-modes"
+            }
+          },
+          {
+            "description": "include the specified build",
+            "long": "include-build",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "build without network access",
+            "long": "offline"
+          },
+          {
+            "description": "refresh dependency state",
+            "long": "refresh-dependencies"
+          },
+          {
+            "description": "show tasks without executing them",
+            "long": "dry-run"
+          },
+          {
+            "description": "persist dependency lock state",
+            "long": "write-locks"
+          },
+          {
+            "description": "update versions for modules",
+            "long": "update-locks",
+            "value": {
+              "name": "group:name"
+            }
+          },
+          {
+            "description": "use the specified build file",
+            "long": "build-file",
+            "short": "b",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "use the specified settings file",
+            "long": "settings-file",
+            "short": "c",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set Gradle user home",
+            "long": "gradle-user-home",
+            "short": "g",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project directory",
+            "long": "project-dir",
+            "short": "p",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project cache directory",
+            "long": "project-cache-dir",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set a JVM system property",
+            "long": "system-prop",
+            "short": "D",
+            "value": {
+              "name": "property"
+            }
+          },
+          {
+            "description": "use an initialization script",
+            "long": "init-script",
+            "short": "I",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set a project property",
+            "long": "project-prop",
+            "short": "P",
+            "value": {
+              "name": "property"
+            }
+          }
+        ]
+      },
+      {
+        "name": "clean",
+        "description": "clear the contents of the build directory",
+        "options": [
+          {
+            "description": "show help information",
+            "long": "help",
+            "short": "h",
+            "spellings": [
+              "-?"
+            ]
+          },
+          {
+            "description": "print version information",
+            "long": "version",
+            "short": "v"
+          },
+          {
+            "description": "print the full stacktrace",
+            "long": "full-stacktrace",
+            "short": "S"
+          },
+          {
+            "description": "print stacktraces for user exceptions",
+            "long": "stacktrace",
+            "short": "s"
+          },
+          {
+            "description": "create a build scan",
+            "long": "scan"
+          },
+          {
+            "description": "enable the Gradle build cache",
+            "long": "build-cache"
+          },
+          {
+            "description": "disable the Gradle build cache",
+            "long": "no-build-cache"
+          },
+          {
+            "description": "enable configure-on-demand",
+            "long": "configure-on-demand"
+          },
+          {
+            "description": "disable configure-on-demand",
+            "long": "no-configure-on-demand"
+          },
+          {
+            "description": "set maximum worker count",
+            "long": "max-workers",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "build projects in parallel",
+            "long": "parallel"
+          },
+          {
+            "description": "disable parallel execution",
+            "long": "no-parallel"
+          },
+          {
+            "description": "set Gradle daemon priority",
+            "long": "priority",
+            "value": {
+              "name": "priority",
+              "provider": "gradle.priorities"
+            }
+          },
+          {
+            "description": "generate a performance profile",
+            "long": "profile"
+          },
+          {
+            "description": "enable file-system watching",
+            "long": "watch-fs"
+          },
+          {
+            "description": "disable file-system watching",
+            "long": "no-watch-fs"
+          },
+          {
+            "description": "use the Gradle daemon",
+            "long": "daemon"
+          },
+          {
+            "description": "disable the Gradle daemon",
+            "long": "no-daemon"
+          },
+          {
+            "description": "start the Gradle daemon in the foreground",
+            "long": "foreground"
+          },
+          {
+            "description": "log errors only",
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "description": "set log level to warn",
+            "long": "warn",
+            "short": "w"
+          },
+          {
+            "description": "set log level to info",
+            "long": "info",
+            "short": "i"
+          },
+          {
+            "description": "log in debug mode",
+            "long": "debug",
+            "short": "d"
+          },
+          {
+            "description": "set console output mode",
+            "long": "console",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.console-modes"
+            }
+          },
+          {
+            "description": "set warning mode",
+            "long": "warning-mode",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.warning-modes"
+            }
+          },
+          {
+            "description": "include the specified build",
+            "long": "include-build",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "build without network access",
+            "long": "offline"
+          },
+          {
+            "description": "refresh dependency state",
+            "long": "refresh-dependencies"
+          },
+          {
+            "description": "show tasks without executing them",
+            "long": "dry-run"
+          },
+          {
+            "description": "persist dependency lock state",
+            "long": "write-locks"
+          },
+          {
+            "description": "update versions for modules",
+            "long": "update-locks",
+            "value": {
+              "name": "group:name"
+            }
+          },
+          {
+            "description": "use the specified build file",
+            "long": "build-file",
+            "short": "b",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "use the specified settings file",
+            "long": "settings-file",
+            "short": "c",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set Gradle user home",
+            "long": "gradle-user-home",
+            "short": "g",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project directory",
+            "long": "project-dir",
+            "short": "p",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project cache directory",
+            "long": "project-cache-dir",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set a JVM system property",
+            "long": "system-prop",
+            "short": "D",
+            "value": {
+              "name": "property"
+            }
+          },
+          {
+            "description": "use an initialization script",
+            "long": "init-script",
+            "short": "I",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set a project property",
+            "long": "project-prop",
+            "short": "P",
+            "value": {
+              "name": "property"
+            }
+          }
+        ]
+      },
+      {
+        "name": "projects",
+        "description": "list of all sub-projects",
+        "options": [
+          {
+            "description": "show help information",
+            "long": "help",
+            "short": "h",
+            "spellings": [
+              "-?"
+            ]
+          },
+          {
+            "description": "print version information",
+            "long": "version",
+            "short": "v"
+          },
+          {
+            "description": "print the full stacktrace",
+            "long": "full-stacktrace",
+            "short": "S"
+          },
+          {
+            "description": "print stacktraces for user exceptions",
+            "long": "stacktrace",
+            "short": "s"
+          },
+          {
+            "description": "create a build scan",
+            "long": "scan"
+          },
+          {
+            "description": "enable the Gradle build cache",
+            "long": "build-cache"
+          },
+          {
+            "description": "disable the Gradle build cache",
+            "long": "no-build-cache"
+          },
+          {
+            "description": "enable configure-on-demand",
+            "long": "configure-on-demand"
+          },
+          {
+            "description": "disable configure-on-demand",
+            "long": "no-configure-on-demand"
+          },
+          {
+            "description": "set maximum worker count",
+            "long": "max-workers",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "build projects in parallel",
+            "long": "parallel"
+          },
+          {
+            "description": "disable parallel execution",
+            "long": "no-parallel"
+          },
+          {
+            "description": "set Gradle daemon priority",
+            "long": "priority",
+            "value": {
+              "name": "priority",
+              "provider": "gradle.priorities"
+            }
+          },
+          {
+            "description": "generate a performance profile",
+            "long": "profile"
+          },
+          {
+            "description": "enable file-system watching",
+            "long": "watch-fs"
+          },
+          {
+            "description": "disable file-system watching",
+            "long": "no-watch-fs"
+          },
+          {
+            "description": "use the Gradle daemon",
+            "long": "daemon"
+          },
+          {
+            "description": "disable the Gradle daemon",
+            "long": "no-daemon"
+          },
+          {
+            "description": "start the Gradle daemon in the foreground",
+            "long": "foreground"
+          },
+          {
+            "description": "log errors only",
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "description": "set log level to warn",
+            "long": "warn",
+            "short": "w"
+          },
+          {
+            "description": "set log level to info",
+            "long": "info",
+            "short": "i"
+          },
+          {
+            "description": "log in debug mode",
+            "long": "debug",
+            "short": "d"
+          },
+          {
+            "description": "set console output mode",
+            "long": "console",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.console-modes"
+            }
+          },
+          {
+            "description": "set warning mode",
+            "long": "warning-mode",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.warning-modes"
+            }
+          },
+          {
+            "description": "include the specified build",
+            "long": "include-build",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "build without network access",
+            "long": "offline"
+          },
+          {
+            "description": "refresh dependency state",
+            "long": "refresh-dependencies"
+          },
+          {
+            "description": "show tasks without executing them",
+            "long": "dry-run"
+          },
+          {
+            "description": "persist dependency lock state",
+            "long": "write-locks"
+          },
+          {
+            "description": "update versions for modules",
+            "long": "update-locks",
+            "value": {
+              "name": "group:name"
+            }
+          },
+          {
+            "description": "use the specified build file",
+            "long": "build-file",
+            "short": "b",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "use the specified settings file",
+            "long": "settings-file",
+            "short": "c",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set Gradle user home",
+            "long": "gradle-user-home",
+            "short": "g",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project directory",
+            "long": "project-dir",
+            "short": "p",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project cache directory",
+            "long": "project-cache-dir",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set a JVM system property",
+            "long": "system-prop",
+            "short": "D",
+            "value": {
+              "name": "property"
+            }
+          },
+          {
+            "description": "use an initialization script",
+            "long": "init-script",
+            "short": "I",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set a project property",
+            "long": "project-prop",
+            "short": "P",
+            "value": {
+              "name": "property"
+            }
+          }
+        ]
+      },
+      {
+        "name": "tasks",
+        "description": "list of main tasks of the selected project",
+        "options": [
+          {
+            "long": "all",
+            "description": "by default, this report shows only those tasks which have been assigned to a task group. You can obtain more information in the task list...",
+            "inherit": false
+          },
+          {
+            "long": "group",
+            "description": "if you need to be more precise, you can display only the tasks from a specific group",
+            "inherit": false,
+            "value": {
+              "name": "group"
+            }
+          },
+          {
+            "description": "show help information",
+            "long": "help",
+            "short": "h",
+            "spellings": [
+              "-?"
+            ]
+          },
+          {
+            "description": "print version information",
+            "long": "version",
+            "short": "v"
+          },
+          {
+            "description": "print the full stacktrace",
+            "long": "full-stacktrace",
+            "short": "S"
+          },
+          {
+            "description": "print stacktraces for user exceptions",
+            "long": "stacktrace",
+            "short": "s"
+          },
+          {
+            "description": "create a build scan",
+            "long": "scan"
+          },
+          {
+            "description": "enable the Gradle build cache",
+            "long": "build-cache"
+          },
+          {
+            "description": "disable the Gradle build cache",
+            "long": "no-build-cache"
+          },
+          {
+            "description": "enable configure-on-demand",
+            "long": "configure-on-demand"
+          },
+          {
+            "description": "disable configure-on-demand",
+            "long": "no-configure-on-demand"
+          },
+          {
+            "description": "set maximum worker count",
+            "long": "max-workers",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "build projects in parallel",
+            "long": "parallel"
+          },
+          {
+            "description": "disable parallel execution",
+            "long": "no-parallel"
+          },
+          {
+            "description": "set Gradle daemon priority",
+            "long": "priority",
+            "value": {
+              "name": "priority",
+              "provider": "gradle.priorities"
+            }
+          },
+          {
+            "description": "generate a performance profile",
+            "long": "profile"
+          },
+          {
+            "description": "enable file-system watching",
+            "long": "watch-fs"
+          },
+          {
+            "description": "disable file-system watching",
+            "long": "no-watch-fs"
+          },
+          {
+            "description": "use the Gradle daemon",
+            "long": "daemon"
+          },
+          {
+            "description": "disable the Gradle daemon",
+            "long": "no-daemon"
+          },
+          {
+            "description": "start the Gradle daemon in the foreground",
+            "long": "foreground"
+          },
+          {
+            "description": "log errors only",
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "description": "set log level to warn",
+            "long": "warn",
+            "short": "w"
+          },
+          {
+            "description": "set log level to info",
+            "long": "info",
+            "short": "i"
+          },
+          {
+            "description": "log in debug mode",
+            "long": "debug",
+            "short": "d"
+          },
+          {
+            "description": "set console output mode",
+            "long": "console",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.console-modes"
+            }
+          },
+          {
+            "description": "set warning mode",
+            "long": "warning-mode",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.warning-modes"
+            }
+          },
+          {
+            "description": "include the specified build",
+            "long": "include-build",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "build without network access",
+            "long": "offline"
+          },
+          {
+            "description": "refresh dependency state",
+            "long": "refresh-dependencies"
+          },
+          {
+            "description": "show tasks without executing them",
+            "long": "dry-run"
+          },
+          {
+            "description": "persist dependency lock state",
+            "long": "write-locks"
+          },
+          {
+            "description": "update versions for modules",
+            "long": "update-locks",
+            "value": {
+              "name": "group:name"
+            }
+          },
+          {
+            "description": "use the specified build file",
+            "long": "build-file",
+            "short": "b",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "use the specified settings file",
+            "long": "settings-file",
+            "short": "c",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set Gradle user home",
+            "long": "gradle-user-home",
+            "short": "g",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project directory",
+            "long": "project-dir",
+            "short": "p",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project cache directory",
+            "long": "project-cache-dir",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set a JVM system property",
+            "long": "system-prop",
+            "short": "D",
+            "value": {
+              "name": "property"
+            }
+          },
+          {
+            "description": "use an initialization script",
+            "long": "init-script",
+            "short": "I",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set a project property",
+            "long": "project-prop",
+            "short": "P",
+            "value": {
+              "name": "property"
+            }
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "display task usage information",
+        "options": [
+          {
+            "long": "task",
+            "inherit": false,
+            "value": {
+              "name": "task"
+            }
+          },
+          {
+            "description": "show help information",
+            "long": "help",
+            "short": "h",
+            "spellings": [
+              "-?"
+            ]
+          },
+          {
+            "description": "print version information",
+            "long": "version",
+            "short": "v"
+          },
+          {
+            "description": "print the full stacktrace",
+            "long": "full-stacktrace",
+            "short": "S"
+          },
+          {
+            "description": "print stacktraces for user exceptions",
+            "long": "stacktrace",
+            "short": "s"
+          },
+          {
+            "description": "create a build scan",
+            "long": "scan"
+          },
+          {
+            "description": "enable the Gradle build cache",
+            "long": "build-cache"
+          },
+          {
+            "description": "disable the Gradle build cache",
+            "long": "no-build-cache"
+          },
+          {
+            "description": "enable configure-on-demand",
+            "long": "configure-on-demand"
+          },
+          {
+            "description": "disable configure-on-demand",
+            "long": "no-configure-on-demand"
+          },
+          {
+            "description": "set maximum worker count",
+            "long": "max-workers",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "build projects in parallel",
+            "long": "parallel"
+          },
+          {
+            "description": "disable parallel execution",
+            "long": "no-parallel"
+          },
+          {
+            "description": "set Gradle daemon priority",
+            "long": "priority",
+            "value": {
+              "name": "priority",
+              "provider": "gradle.priorities"
+            }
+          },
+          {
+            "description": "generate a performance profile",
+            "long": "profile"
+          },
+          {
+            "description": "enable file-system watching",
+            "long": "watch-fs"
+          },
+          {
+            "description": "disable file-system watching",
+            "long": "no-watch-fs"
+          },
+          {
+            "description": "use the Gradle daemon",
+            "long": "daemon"
+          },
+          {
+            "description": "disable the Gradle daemon",
+            "long": "no-daemon"
+          },
+          {
+            "description": "start the Gradle daemon in the foreground",
+            "long": "foreground"
+          },
+          {
+            "description": "log errors only",
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "description": "set log level to warn",
+            "long": "warn",
+            "short": "w"
+          },
+          {
+            "description": "set log level to info",
+            "long": "info",
+            "short": "i"
+          },
+          {
+            "description": "log in debug mode",
+            "long": "debug",
+            "short": "d"
+          },
+          {
+            "description": "set console output mode",
+            "long": "console",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.console-modes"
+            }
+          },
+          {
+            "description": "set warning mode",
+            "long": "warning-mode",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.warning-modes"
+            }
+          },
+          {
+            "description": "include the specified build",
+            "long": "include-build",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "build without network access",
+            "long": "offline"
+          },
+          {
+            "description": "refresh dependency state",
+            "long": "refresh-dependencies"
+          },
+          {
+            "description": "show tasks without executing them",
+            "long": "dry-run"
+          },
+          {
+            "description": "persist dependency lock state",
+            "long": "write-locks"
+          },
+          {
+            "description": "update versions for modules",
+            "long": "update-locks",
+            "value": {
+              "name": "group:name"
+            }
+          },
+          {
+            "description": "use the specified build file",
+            "long": "build-file",
+            "short": "b",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "use the specified settings file",
+            "long": "settings-file",
+            "short": "c",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set Gradle user home",
+            "long": "gradle-user-home",
+            "short": "g",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project directory",
+            "long": "project-dir",
+            "short": "p",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project cache directory",
+            "long": "project-cache-dir",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set a JVM system property",
+            "long": "system-prop",
+            "short": "D",
+            "value": {
+              "name": "property"
+            }
+          },
+          {
+            "description": "use an initialization script",
+            "long": "init-script",
+            "short": "I",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set a project property",
+            "long": "project-prop",
+            "short": "P",
+            "value": {
+              "name": "property"
+            }
+          }
+        ]
+      },
+      {
+        "name": "dependencies",
+        "description": "gives you a list of the dependencies of the selected project, broken down by configuration",
+        "options": [
+          {
+            "description": "show help information",
+            "long": "help",
+            "short": "h",
+            "spellings": [
+              "-?"
+            ]
+          },
+          {
+            "description": "print version information",
+            "long": "version",
+            "short": "v"
+          },
+          {
+            "description": "print the full stacktrace",
+            "long": "full-stacktrace",
+            "short": "S"
+          },
+          {
+            "description": "print stacktraces for user exceptions",
+            "long": "stacktrace",
+            "short": "s"
+          },
+          {
+            "description": "create a build scan",
+            "long": "scan"
+          },
+          {
+            "description": "enable the Gradle build cache",
+            "long": "build-cache"
+          },
+          {
+            "description": "disable the Gradle build cache",
+            "long": "no-build-cache"
+          },
+          {
+            "description": "enable configure-on-demand",
+            "long": "configure-on-demand"
+          },
+          {
+            "description": "disable configure-on-demand",
+            "long": "no-configure-on-demand"
+          },
+          {
+            "description": "set maximum worker count",
+            "long": "max-workers",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "build projects in parallel",
+            "long": "parallel"
+          },
+          {
+            "description": "disable parallel execution",
+            "long": "no-parallel"
+          },
+          {
+            "description": "set Gradle daemon priority",
+            "long": "priority",
+            "value": {
+              "name": "priority",
+              "provider": "gradle.priorities"
+            }
+          },
+          {
+            "description": "generate a performance profile",
+            "long": "profile"
+          },
+          {
+            "description": "enable file-system watching",
+            "long": "watch-fs"
+          },
+          {
+            "description": "disable file-system watching",
+            "long": "no-watch-fs"
+          },
+          {
+            "description": "use the Gradle daemon",
+            "long": "daemon"
+          },
+          {
+            "description": "disable the Gradle daemon",
+            "long": "no-daemon"
+          },
+          {
+            "description": "start the Gradle daemon in the foreground",
+            "long": "foreground"
+          },
+          {
+            "description": "log errors only",
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "description": "set log level to warn",
+            "long": "warn",
+            "short": "w"
+          },
+          {
+            "description": "set log level to info",
+            "long": "info",
+            "short": "i"
+          },
+          {
+            "description": "log in debug mode",
+            "long": "debug",
+            "short": "d"
+          },
+          {
+            "description": "set console output mode",
+            "long": "console",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.console-modes"
+            }
+          },
+          {
+            "description": "set warning mode",
+            "long": "warning-mode",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.warning-modes"
+            }
+          },
+          {
+            "description": "include the specified build",
+            "long": "include-build",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "build without network access",
+            "long": "offline"
+          },
+          {
+            "description": "refresh dependency state",
+            "long": "refresh-dependencies"
+          },
+          {
+            "description": "show tasks without executing them",
+            "long": "dry-run"
+          },
+          {
+            "description": "persist dependency lock state",
+            "long": "write-locks"
+          },
+          {
+            "description": "update versions for modules",
+            "long": "update-locks",
+            "value": {
+              "name": "group:name"
+            }
+          },
+          {
+            "description": "use the specified build file",
+            "long": "build-file",
+            "short": "b",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "use the specified settings file",
+            "long": "settings-file",
+            "short": "c",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set Gradle user home",
+            "long": "gradle-user-home",
+            "short": "g",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project directory",
+            "long": "project-dir",
+            "short": "p",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project cache directory",
+            "long": "project-cache-dir",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set a JVM system property",
+            "long": "system-prop",
+            "short": "D",
+            "value": {
+              "name": "property"
+            }
+          },
+          {
+            "description": "use an initialization script",
+            "long": "init-script",
+            "short": "I",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set a project property",
+            "long": "project-prop",
+            "short": "P",
+            "value": {
+              "name": "property"
+            }
+          }
+        ]
+      },
+      {
+        "name": "buildEnvironment",
+        "description": "visualises the buildscript dependencies of the selected project",
+        "options": [
+          {
+            "description": "show help information",
+            "long": "help",
+            "short": "h",
+            "spellings": [
+              "-?"
+            ]
+          },
+          {
+            "description": "print version information",
+            "long": "version",
+            "short": "v"
+          },
+          {
+            "description": "print the full stacktrace",
+            "long": "full-stacktrace",
+            "short": "S"
+          },
+          {
+            "description": "print stacktraces for user exceptions",
+            "long": "stacktrace",
+            "short": "s"
+          },
+          {
+            "description": "create a build scan",
+            "long": "scan"
+          },
+          {
+            "description": "enable the Gradle build cache",
+            "long": "build-cache"
+          },
+          {
+            "description": "disable the Gradle build cache",
+            "long": "no-build-cache"
+          },
+          {
+            "description": "enable configure-on-demand",
+            "long": "configure-on-demand"
+          },
+          {
+            "description": "disable configure-on-demand",
+            "long": "no-configure-on-demand"
+          },
+          {
+            "description": "set maximum worker count",
+            "long": "max-workers",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "build projects in parallel",
+            "long": "parallel"
+          },
+          {
+            "description": "disable parallel execution",
+            "long": "no-parallel"
+          },
+          {
+            "description": "set Gradle daemon priority",
+            "long": "priority",
+            "value": {
+              "name": "priority",
+              "provider": "gradle.priorities"
+            }
+          },
+          {
+            "description": "generate a performance profile",
+            "long": "profile"
+          },
+          {
+            "description": "enable file-system watching",
+            "long": "watch-fs"
+          },
+          {
+            "description": "disable file-system watching",
+            "long": "no-watch-fs"
+          },
+          {
+            "description": "use the Gradle daemon",
+            "long": "daemon"
+          },
+          {
+            "description": "disable the Gradle daemon",
+            "long": "no-daemon"
+          },
+          {
+            "description": "start the Gradle daemon in the foreground",
+            "long": "foreground"
+          },
+          {
+            "description": "log errors only",
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "description": "set log level to warn",
+            "long": "warn",
+            "short": "w"
+          },
+          {
+            "description": "set log level to info",
+            "long": "info",
+            "short": "i"
+          },
+          {
+            "description": "log in debug mode",
+            "long": "debug",
+            "short": "d"
+          },
+          {
+            "description": "set console output mode",
+            "long": "console",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.console-modes"
+            }
+          },
+          {
+            "description": "set warning mode",
+            "long": "warning-mode",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.warning-modes"
+            }
+          },
+          {
+            "description": "include the specified build",
+            "long": "include-build",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "build without network access",
+            "long": "offline"
+          },
+          {
+            "description": "refresh dependency state",
+            "long": "refresh-dependencies"
+          },
+          {
+            "description": "show tasks without executing them",
+            "long": "dry-run"
+          },
+          {
+            "description": "persist dependency lock state",
+            "long": "write-locks"
+          },
+          {
+            "description": "update versions for modules",
+            "long": "update-locks",
+            "value": {
+              "name": "group:name"
+            }
+          },
+          {
+            "description": "use the specified build file",
+            "long": "build-file",
+            "short": "b",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "use the specified settings file",
+            "long": "settings-file",
+            "short": "c",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set Gradle user home",
+            "long": "gradle-user-home",
+            "short": "g",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project directory",
+            "long": "project-dir",
+            "short": "p",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project cache directory",
+            "long": "project-cache-dir",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set a JVM system property",
+            "long": "system-prop",
+            "short": "D",
+            "value": {
+              "name": "property"
+            }
+          },
+          {
+            "description": "use an initialization script",
+            "long": "init-script",
+            "short": "I",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set a project property",
+            "long": "project-prop",
+            "short": "P",
+            "value": {
+              "name": "property"
+            }
+          }
+        ]
+      },
+      {
+        "name": "dependencyInsight",
+        "description": "gives you an insight into a particular dependency (or dependencies) that match specified input",
+        "options": [
+          {
+            "description": "show help information",
+            "long": "help",
+            "short": "h",
+            "spellings": [
+              "-?"
+            ]
+          },
+          {
+            "description": "print version information",
+            "long": "version",
+            "short": "v"
+          },
+          {
+            "description": "print the full stacktrace",
+            "long": "full-stacktrace",
+            "short": "S"
+          },
+          {
+            "description": "print stacktraces for user exceptions",
+            "long": "stacktrace",
+            "short": "s"
+          },
+          {
+            "description": "create a build scan",
+            "long": "scan"
+          },
+          {
+            "description": "enable the Gradle build cache",
+            "long": "build-cache"
+          },
+          {
+            "description": "disable the Gradle build cache",
+            "long": "no-build-cache"
+          },
+          {
+            "description": "enable configure-on-demand",
+            "long": "configure-on-demand"
+          },
+          {
+            "description": "disable configure-on-demand",
+            "long": "no-configure-on-demand"
+          },
+          {
+            "description": "set maximum worker count",
+            "long": "max-workers",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "build projects in parallel",
+            "long": "parallel"
+          },
+          {
+            "description": "disable parallel execution",
+            "long": "no-parallel"
+          },
+          {
+            "description": "set Gradle daemon priority",
+            "long": "priority",
+            "value": {
+              "name": "priority",
+              "provider": "gradle.priorities"
+            }
+          },
+          {
+            "description": "generate a performance profile",
+            "long": "profile"
+          },
+          {
+            "description": "enable file-system watching",
+            "long": "watch-fs"
+          },
+          {
+            "description": "disable file-system watching",
+            "long": "no-watch-fs"
+          },
+          {
+            "description": "use the Gradle daemon",
+            "long": "daemon"
+          },
+          {
+            "description": "disable the Gradle daemon",
+            "long": "no-daemon"
+          },
+          {
+            "description": "start the Gradle daemon in the foreground",
+            "long": "foreground"
+          },
+          {
+            "description": "log errors only",
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "description": "set log level to warn",
+            "long": "warn",
+            "short": "w"
+          },
+          {
+            "description": "set log level to info",
+            "long": "info",
+            "short": "i"
+          },
+          {
+            "description": "log in debug mode",
+            "long": "debug",
+            "short": "d"
+          },
+          {
+            "description": "set console output mode",
+            "long": "console",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.console-modes"
+            }
+          },
+          {
+            "description": "set warning mode",
+            "long": "warning-mode",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.warning-modes"
+            }
+          },
+          {
+            "description": "include the specified build",
+            "long": "include-build",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "build without network access",
+            "long": "offline"
+          },
+          {
+            "description": "refresh dependency state",
+            "long": "refresh-dependencies"
+          },
+          {
+            "description": "show tasks without executing them",
+            "long": "dry-run"
+          },
+          {
+            "description": "persist dependency lock state",
+            "long": "write-locks"
+          },
+          {
+            "description": "update versions for modules",
+            "long": "update-locks",
+            "value": {
+              "name": "group:name"
+            }
+          },
+          {
+            "description": "use the specified build file",
+            "long": "build-file",
+            "short": "b",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "use the specified settings file",
+            "long": "settings-file",
+            "short": "c",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set Gradle user home",
+            "long": "gradle-user-home",
+            "short": "g",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project directory",
+            "long": "project-dir",
+            "short": "p",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project cache directory",
+            "long": "project-cache-dir",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set a JVM system property",
+            "long": "system-prop",
+            "short": "D",
+            "value": {
+              "name": "property"
+            }
+          },
+          {
+            "description": "use an initialization script",
+            "long": "init-script",
+            "short": "I",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set a project property",
+            "long": "project-prop",
+            "short": "P",
+            "value": {
+              "name": "property"
+            }
+          }
+        ]
+      },
+      {
+        "name": "properties",
+        "description": "gives you a list of the properties of the selected project",
+        "options": [
+          {
+            "description": "show help information",
+            "long": "help",
+            "short": "h",
+            "spellings": [
+              "-?"
+            ]
+          },
+          {
+            "description": "print version information",
+            "long": "version",
+            "short": "v"
+          },
+          {
+            "description": "print the full stacktrace",
+            "long": "full-stacktrace",
+            "short": "S"
+          },
+          {
+            "description": "print stacktraces for user exceptions",
+            "long": "stacktrace",
+            "short": "s"
+          },
+          {
+            "description": "create a build scan",
+            "long": "scan"
+          },
+          {
+            "description": "enable the Gradle build cache",
+            "long": "build-cache"
+          },
+          {
+            "description": "disable the Gradle build cache",
+            "long": "no-build-cache"
+          },
+          {
+            "description": "enable configure-on-demand",
+            "long": "configure-on-demand"
+          },
+          {
+            "description": "disable configure-on-demand",
+            "long": "no-configure-on-demand"
+          },
+          {
+            "description": "set maximum worker count",
+            "long": "max-workers",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "build projects in parallel",
+            "long": "parallel"
+          },
+          {
+            "description": "disable parallel execution",
+            "long": "no-parallel"
+          },
+          {
+            "description": "set Gradle daemon priority",
+            "long": "priority",
+            "value": {
+              "name": "priority",
+              "provider": "gradle.priorities"
+            }
+          },
+          {
+            "description": "generate a performance profile",
+            "long": "profile"
+          },
+          {
+            "description": "enable file-system watching",
+            "long": "watch-fs"
+          },
+          {
+            "description": "disable file-system watching",
+            "long": "no-watch-fs"
+          },
+          {
+            "description": "use the Gradle daemon",
+            "long": "daemon"
+          },
+          {
+            "description": "disable the Gradle daemon",
+            "long": "no-daemon"
+          },
+          {
+            "description": "start the Gradle daemon in the foreground",
+            "long": "foreground"
+          },
+          {
+            "description": "log errors only",
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "description": "set log level to warn",
+            "long": "warn",
+            "short": "w"
+          },
+          {
+            "description": "set log level to info",
+            "long": "info",
+            "short": "i"
+          },
+          {
+            "description": "log in debug mode",
+            "long": "debug",
+            "short": "d"
+          },
+          {
+            "description": "set console output mode",
+            "long": "console",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.console-modes"
+            }
+          },
+          {
+            "description": "set warning mode",
+            "long": "warning-mode",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.warning-modes"
+            }
+          },
+          {
+            "description": "include the specified build",
+            "long": "include-build",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "build without network access",
+            "long": "offline"
+          },
+          {
+            "description": "refresh dependency state",
+            "long": "refresh-dependencies"
+          },
+          {
+            "description": "show tasks without executing them",
+            "long": "dry-run"
+          },
+          {
+            "description": "persist dependency lock state",
+            "long": "write-locks"
+          },
+          {
+            "description": "update versions for modules",
+            "long": "update-locks",
+            "value": {
+              "name": "group:name"
+            }
+          },
+          {
+            "description": "use the specified build file",
+            "long": "build-file",
+            "short": "b",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "use the specified settings file",
+            "long": "settings-file",
+            "short": "c",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set Gradle user home",
+            "long": "gradle-user-home",
+            "short": "g",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project directory",
+            "long": "project-dir",
+            "short": "p",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project cache directory",
+            "long": "project-cache-dir",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set a JVM system property",
+            "long": "system-prop",
+            "short": "D",
+            "value": {
+              "name": "property"
+            }
+          },
+          {
+            "description": "use an initialization script",
+            "long": "init-script",
+            "short": "I",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set a project property",
+            "long": "project-prop",
+            "short": "P",
+            "value": {
+              "name": "property"
+            }
+          }
+        ]
+      },
+      {
+        "name": "--status",
+        "description": "(Standalone command) List running and recently stopped Gradle daemons. Only displays daemons of the same Gradle version",
+        "options": []
+      },
+      {
+        "name": "--stop",
+        "description": "(Standalone command) Stop all Gradle Daemons of the same version",
+        "options": []
+      },
+      {
+        "name": "init",
+        "description": "create new Gradle builds, with new or existing projects",
+        "options": [
+          {
+            "long": "type",
+            "description": "specify project type",
+            "inherit": false,
+            "value": {
+              "name": "type",
+              "provider": "gradle.project-types"
+            }
+          },
+          {
+            "description": "show help information",
+            "long": "help",
+            "short": "h",
+            "spellings": [
+              "-?"
+            ]
+          },
+          {
+            "description": "print version information",
+            "long": "version",
+            "short": "v"
+          },
+          {
+            "description": "print the full stacktrace",
+            "long": "full-stacktrace",
+            "short": "S"
+          },
+          {
+            "description": "print stacktraces for user exceptions",
+            "long": "stacktrace",
+            "short": "s"
+          },
+          {
+            "description": "create a build scan",
+            "long": "scan"
+          },
+          {
+            "description": "enable the Gradle build cache",
+            "long": "build-cache"
+          },
+          {
+            "description": "disable the Gradle build cache",
+            "long": "no-build-cache"
+          },
+          {
+            "description": "enable configure-on-demand",
+            "long": "configure-on-demand"
+          },
+          {
+            "description": "disable configure-on-demand",
+            "long": "no-configure-on-demand"
+          },
+          {
+            "description": "set maximum worker count",
+            "long": "max-workers",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "build projects in parallel",
+            "long": "parallel"
+          },
+          {
+            "description": "disable parallel execution",
+            "long": "no-parallel"
+          },
+          {
+            "description": "set Gradle daemon priority",
+            "long": "priority",
+            "value": {
+              "name": "priority",
+              "provider": "gradle.priorities"
+            }
+          },
+          {
+            "description": "generate a performance profile",
+            "long": "profile"
+          },
+          {
+            "description": "enable file-system watching",
+            "long": "watch-fs"
+          },
+          {
+            "description": "disable file-system watching",
+            "long": "no-watch-fs"
+          },
+          {
+            "description": "use the Gradle daemon",
+            "long": "daemon"
+          },
+          {
+            "description": "disable the Gradle daemon",
+            "long": "no-daemon"
+          },
+          {
+            "description": "start the Gradle daemon in the foreground",
+            "long": "foreground"
+          },
+          {
+            "description": "log errors only",
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "description": "set log level to warn",
+            "long": "warn",
+            "short": "w"
+          },
+          {
+            "description": "set log level to info",
+            "long": "info",
+            "short": "i"
+          },
+          {
+            "description": "log in debug mode",
+            "long": "debug",
+            "short": "d"
+          },
+          {
+            "description": "set console output mode",
+            "long": "console",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.console-modes"
+            }
+          },
+          {
+            "description": "set warning mode",
+            "long": "warning-mode",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.warning-modes"
+            }
+          },
+          {
+            "description": "include the specified build",
+            "long": "include-build",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "build without network access",
+            "long": "offline"
+          },
+          {
+            "description": "refresh dependency state",
+            "long": "refresh-dependencies"
+          },
+          {
+            "description": "show tasks without executing them",
+            "long": "dry-run"
+          },
+          {
+            "description": "persist dependency lock state",
+            "long": "write-locks"
+          },
+          {
+            "description": "update versions for modules",
+            "long": "update-locks",
+            "value": {
+              "name": "group:name"
+            }
+          },
+          {
+            "description": "use the specified build file",
+            "long": "build-file",
+            "short": "b",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "use the specified settings file",
+            "long": "settings-file",
+            "short": "c",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set Gradle user home",
+            "long": "gradle-user-home",
+            "short": "g",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project directory",
+            "long": "project-dir",
+            "short": "p",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project cache directory",
+            "long": "project-cache-dir",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set a JVM system property",
+            "long": "system-prop",
+            "short": "D",
+            "value": {
+              "name": "property"
+            }
+          },
+          {
+            "description": "use an initialization script",
+            "long": "init-script",
+            "short": "I",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set a project property",
+            "long": "project-prop",
+            "short": "P",
+            "value": {
+              "name": "property"
+            }
+          }
+        ]
+      },
+      {
+        "name": "wrapper",
+        "description": "generates a script, gradlew, that invokes a declared version of Gradle, downloading it beforehand if necessary",
+        "options": [
+          {
+            "long": "gradle-version",
+            "description": "the Gradle version used for downloading and executing the Wrapper",
+            "inherit": false,
+            "value": {
+              "name": "version"
+            }
+          },
+          {
+            "long": "distribution-type",
+            "description": "the Gradle distribution type used for the Wrapper",
+            "inherit": false,
+            "value": {
+              "name": "type",
+              "provider": "gradle.distribution-types"
+            }
+          },
+          {
+            "long": "gradle-distribution-url",
+            "description": "the full URL pointing to Gradle distribution ZIP file",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "gradle-distribution-sha256-sum",
+            "description": "the SHA256 hash sum used for verifying the downloaded Gradle distribution",
+            "inherit": false,
+            "value": {
+              "name": "sha256"
+            }
+          },
+          {
+            "description": "show help information",
+            "long": "help",
+            "short": "h",
+            "spellings": [
+              "-?"
+            ]
+          },
+          {
+            "description": "print version information",
+            "long": "version",
+            "short": "v"
+          },
+          {
+            "description": "print the full stacktrace",
+            "long": "full-stacktrace",
+            "short": "S"
+          },
+          {
+            "description": "print stacktraces for user exceptions",
+            "long": "stacktrace",
+            "short": "s"
+          },
+          {
+            "description": "create a build scan",
+            "long": "scan"
+          },
+          {
+            "description": "enable the Gradle build cache",
+            "long": "build-cache"
+          },
+          {
+            "description": "disable the Gradle build cache",
+            "long": "no-build-cache"
+          },
+          {
+            "description": "enable configure-on-demand",
+            "long": "configure-on-demand"
+          },
+          {
+            "description": "disable configure-on-demand",
+            "long": "no-configure-on-demand"
+          },
+          {
+            "description": "set maximum worker count",
+            "long": "max-workers",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "build projects in parallel",
+            "long": "parallel"
+          },
+          {
+            "description": "disable parallel execution",
+            "long": "no-parallel"
+          },
+          {
+            "description": "set Gradle daemon priority",
+            "long": "priority",
+            "value": {
+              "name": "priority",
+              "provider": "gradle.priorities"
+            }
+          },
+          {
+            "description": "generate a performance profile",
+            "long": "profile"
+          },
+          {
+            "description": "enable file-system watching",
+            "long": "watch-fs"
+          },
+          {
+            "description": "disable file-system watching",
+            "long": "no-watch-fs"
+          },
+          {
+            "description": "use the Gradle daemon",
+            "long": "daemon"
+          },
+          {
+            "description": "disable the Gradle daemon",
+            "long": "no-daemon"
+          },
+          {
+            "description": "start the Gradle daemon in the foreground",
+            "long": "foreground"
+          },
+          {
+            "description": "log errors only",
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "description": "set log level to warn",
+            "long": "warn",
+            "short": "w"
+          },
+          {
+            "description": "set log level to info",
+            "long": "info",
+            "short": "i"
+          },
+          {
+            "description": "log in debug mode",
+            "long": "debug",
+            "short": "d"
+          },
+          {
+            "description": "set console output mode",
+            "long": "console",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.console-modes"
+            }
+          },
+          {
+            "description": "set warning mode",
+            "long": "warning-mode",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.warning-modes"
+            }
+          },
+          {
+            "description": "include the specified build",
+            "long": "include-build",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "build without network access",
+            "long": "offline"
+          },
+          {
+            "description": "refresh dependency state",
+            "long": "refresh-dependencies"
+          },
+          {
+            "description": "show tasks without executing them",
+            "long": "dry-run"
+          },
+          {
+            "description": "persist dependency lock state",
+            "long": "write-locks"
+          },
+          {
+            "description": "update versions for modules",
+            "long": "update-locks",
+            "value": {
+              "name": "group:name"
+            }
+          },
+          {
+            "description": "use the specified build file",
+            "long": "build-file",
+            "short": "b",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "use the specified settings file",
+            "long": "settings-file",
+            "short": "c",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set Gradle user home",
+            "long": "gradle-user-home",
+            "short": "g",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project directory",
+            "long": "project-dir",
+            "short": "p",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project cache directory",
+            "long": "project-cache-dir",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set a JVM system property",
+            "long": "system-prop",
+            "short": "D",
+            "value": {
+              "name": "property"
+            }
+          },
+          {
+            "description": "use an initialization script",
+            "long": "init-script",
+            "short": "I",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set a project property",
+            "long": "project-prop",
+            "short": "P",
+            "value": {
+              "name": "property"
+            }
+          }
+        ]
+      },
+      {
+        "name": "test",
+        "description": "run a test task",
+        "options": [
+          {
+            "long": "continuous",
+            "description": "allows you to automatically re-execute the requested tasks when task inputs change",
+            "inherit": false
+          },
+          {
+            "long": "rerun-tasks",
+            "description": "this will force test and all task dependencies of test to execute",
+            "inherit": false
+          },
+          {
+            "long": "continue",
+            "description": "gradle will execute every task to be executed where all of the dependencies for that task completed without failure",
+            "inherit": false
+          },
+          {
+            "description": "show help information",
+            "long": "help",
+            "short": "h",
+            "spellings": [
+              "-?"
+            ]
+          },
+          {
+            "description": "print version information",
+            "long": "version",
+            "short": "v"
+          },
+          {
+            "description": "print the full stacktrace",
+            "long": "full-stacktrace",
+            "short": "S"
+          },
+          {
+            "description": "print stacktraces for user exceptions",
+            "long": "stacktrace",
+            "short": "s"
+          },
+          {
+            "description": "create a build scan",
+            "long": "scan"
+          },
+          {
+            "description": "enable the Gradle build cache",
+            "long": "build-cache"
+          },
+          {
+            "description": "disable the Gradle build cache",
+            "long": "no-build-cache"
+          },
+          {
+            "description": "enable configure-on-demand",
+            "long": "configure-on-demand"
+          },
+          {
+            "description": "disable configure-on-demand",
+            "long": "no-configure-on-demand"
+          },
+          {
+            "description": "set maximum worker count",
+            "long": "max-workers",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "build projects in parallel",
+            "long": "parallel"
+          },
+          {
+            "description": "disable parallel execution",
+            "long": "no-parallel"
+          },
+          {
+            "description": "set Gradle daemon priority",
+            "long": "priority",
+            "value": {
+              "name": "priority",
+              "provider": "gradle.priorities"
+            }
+          },
+          {
+            "description": "generate a performance profile",
+            "long": "profile"
+          },
+          {
+            "description": "enable file-system watching",
+            "long": "watch-fs"
+          },
+          {
+            "description": "disable file-system watching",
+            "long": "no-watch-fs"
+          },
+          {
+            "description": "use the Gradle daemon",
+            "long": "daemon"
+          },
+          {
+            "description": "disable the Gradle daemon",
+            "long": "no-daemon"
+          },
+          {
+            "description": "start the Gradle daemon in the foreground",
+            "long": "foreground"
+          },
+          {
+            "description": "log errors only",
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "description": "set log level to warn",
+            "long": "warn",
+            "short": "w"
+          },
+          {
+            "description": "set log level to info",
+            "long": "info",
+            "short": "i"
+          },
+          {
+            "description": "log in debug mode",
+            "long": "debug",
+            "short": "d"
+          },
+          {
+            "description": "set console output mode",
+            "long": "console",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.console-modes"
+            }
+          },
+          {
+            "description": "set warning mode",
+            "long": "warning-mode",
+            "value": {
+              "name": "mode",
+              "provider": "gradle.warning-modes"
+            }
+          },
+          {
+            "description": "include the specified build",
+            "long": "include-build",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "build without network access",
+            "long": "offline"
+          },
+          {
+            "description": "refresh dependency state",
+            "long": "refresh-dependencies"
+          },
+          {
+            "description": "show tasks without executing them",
+            "long": "dry-run"
+          },
+          {
+            "description": "persist dependency lock state",
+            "long": "write-locks"
+          },
+          {
+            "description": "update versions for modules",
+            "long": "update-locks",
+            "value": {
+              "name": "group:name"
+            }
+          },
+          {
+            "description": "use the specified build file",
+            "long": "build-file",
+            "short": "b",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "use the specified settings file",
+            "long": "settings-file",
+            "short": "c",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set Gradle user home",
+            "long": "gradle-user-home",
+            "short": "g",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project directory",
+            "long": "project-dir",
+            "short": "p",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set project cache directory",
+            "long": "project-cache-dir",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set a JVM system property",
+            "long": "system-prop",
+            "short": "D",
+            "value": {
+              "name": "property"
+            }
+          },
+          {
+            "description": "use an initialization script",
+            "long": "init-script",
+            "short": "I",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set a project property",
+            "long": "project-prop",
+            "short": "P",
+            "value": {
+              "name": "property"
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "gradle.console-modes": {
+        "candidates": [
+          {
+            "value": "auto"
+          },
+          {
+            "value": "plain"
+          },
+          {
+            "value": "rich"
+          },
+          {
+            "value": "verbose"
+          }
+        ]
+      },
+      "gradle.warning-modes": {
+        "candidates": [
+          {
+            "value": "all"
+          },
+          {
+            "value": "fail"
+          },
+          {
+            "value": "summary"
+          },
+          {
+            "value": "none"
+          }
+        ]
+      },
+      "gradle.priorities": {
+        "candidates": [
+          {
+            "value": "normal"
+          },
+          {
+            "value": "low"
+          }
+        ]
+      },
+      "gradle.project-types": {
+        "candidates": [
+          {
+            "value": "basic"
+          },
+          {
+            "value": "java-library"
+          },
+          {
+            "value": "java-application"
+          }
+        ]
+      },
+      "gradle.distribution-types": {
+        "candidates": [
+          {
+            "value": "bin"
+          },
+          {
+            "value": "all"
+          }
+        ]
+      }
+    },
+    "options": [
+      {
+        "description": "show help information",
+        "long": "help",
+        "short": "h",
+        "spellings": [
+          "-?"
+        ]
+      },
+      {
+        "description": "print version information",
+        "long": "version",
+        "short": "v"
+      },
+      {
+        "description": "print the full stacktrace",
+        "long": "full-stacktrace",
+        "short": "S"
+      },
+      {
+        "description": "print stacktraces for user exceptions",
+        "long": "stacktrace",
+        "short": "s"
+      },
+      {
+        "description": "create a build scan",
+        "long": "scan"
+      },
+      {
+        "description": "enable the Gradle build cache",
+        "long": "build-cache"
+      },
+      {
+        "description": "disable the Gradle build cache",
+        "long": "no-build-cache"
+      },
+      {
+        "description": "enable configure-on-demand",
+        "long": "configure-on-demand"
+      },
+      {
+        "description": "disable configure-on-demand",
+        "long": "no-configure-on-demand"
+      },
+      {
+        "description": "set maximum worker count",
+        "long": "max-workers",
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "description": "build projects in parallel",
+        "long": "parallel"
+      },
+      {
+        "description": "disable parallel execution",
+        "long": "no-parallel"
+      },
+      {
+        "description": "set Gradle daemon priority",
+        "long": "priority",
+        "value": {
+          "name": "priority",
+          "provider": "gradle.priorities"
+        }
+      },
+      {
+        "description": "generate a performance profile",
+        "long": "profile"
+      },
+      {
+        "description": "enable file-system watching",
+        "long": "watch-fs"
+      },
+      {
+        "description": "disable file-system watching",
+        "long": "no-watch-fs"
+      },
+      {
+        "description": "use the Gradle daemon",
+        "long": "daemon"
+      },
+      {
+        "description": "disable the Gradle daemon",
+        "long": "no-daemon"
+      },
+      {
+        "description": "start the Gradle daemon in the foreground",
+        "long": "foreground"
+      },
+      {
+        "description": "log errors only",
+        "long": "quiet",
+        "short": "q"
+      },
+      {
+        "description": "set log level to warn",
+        "long": "warn",
+        "short": "w"
+      },
+      {
+        "description": "set log level to info",
+        "long": "info",
+        "short": "i"
+      },
+      {
+        "description": "log in debug mode",
+        "long": "debug",
+        "short": "d"
+      },
+      {
+        "description": "set console output mode",
+        "long": "console",
+        "value": {
+          "name": "mode",
+          "provider": "gradle.console-modes"
+        }
+      },
+      {
+        "description": "set warning mode",
+        "long": "warning-mode",
+        "value": {
+          "name": "mode",
+          "provider": "gradle.warning-modes"
+        }
+      },
+      {
+        "description": "include the specified build",
+        "long": "include-build",
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "description": "build without network access",
+        "long": "offline"
+      },
+      {
+        "description": "refresh dependency state",
+        "long": "refresh-dependencies"
+      },
+      {
+        "description": "show tasks without executing them",
+        "long": "dry-run"
+      },
+      {
+        "description": "persist dependency lock state",
+        "long": "write-locks"
+      },
+      {
+        "description": "update versions for modules",
+        "long": "update-locks",
+        "value": {
+          "name": "group:name"
+        }
+      },
+      {
+        "description": "use the specified build file",
+        "long": "build-file",
+        "short": "b",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "description": "use the specified settings file",
+        "long": "settings-file",
+        "short": "c",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "description": "set Gradle user home",
+        "long": "gradle-user-home",
+        "short": "g",
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "description": "set project directory",
+        "long": "project-dir",
+        "short": "p",
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "description": "set project cache directory",
+        "long": "project-cache-dir",
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "description": "set a JVM system property",
+        "long": "system-prop",
+        "short": "D",
+        "value": {
+          "name": "property"
+        }
+      },
+      {
+        "description": "use an initialization script",
+        "long": "init-script",
+        "short": "I",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "description": "set a project property",
+        "long": "project-prop",
+        "short": "P",
+        "value": {
+          "name": "property"
+        }
+      }
+    ]
+  }
+}
