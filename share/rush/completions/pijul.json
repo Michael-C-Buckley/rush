@@ -1,0 +1,1050 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pijul",
+    "description": "manage Pijul repositories",
+    "subcommands": [
+      {
+        "name": "add",
+        "description": "add a path to the tree",
+        "options": [
+          {
+            "short": "f",
+            "long": "force",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "long": "recursive",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "paths",
+              "description": "paths to add to the internal tree",
+              "index": 0,
+              "provider": "builtin.files",
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "apply",
+        "description": "apply changes to a channel",
+        "options": [
+          {
+            "long": "channel",
+            "description": "apply change to this channel",
+            "inherit": false,
+            "value": {
+              "name": "channel"
+            }
+          },
+          {
+            "long": "deps-only",
+            "description": "only apply the dependencies of the change, not the change itself. O...",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "repository",
+            "description": "set repository path",
+            "inherit": false,
+            "value": {
+              "name": "repo-path",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "change",
+              "description": "the change that need to be applied. If this value is missing, read...",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "archive",
+        "description": "create an archive of the repository",
+        "options": [
+          {
+            "long": "change",
+            "description": "apply these changes after switching to the channel",
+            "inherit": false,
+            "value": {
+              "name": "change"
+            }
+          },
+          {
+            "long": "channel",
+            "description": "use this channel, instead of the current channel",
+            "inherit": false,
+            "value": {
+              "name": "channel"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "short": "k",
+            "description": "skip HTTPS certificate checks",
+            "inherit": false
+          },
+          {
+            "short": "o",
+            "description": "name of the output file",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "prefix",
+            "description": "append this path in front of each path inside the archive",
+            "inherit": false,
+            "value": {
+              "name": "prefix",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "remote",
+            "description": "ask the remote to send an archive",
+            "inherit": false,
+            "value": {
+              "name": "remote"
+            }
+          },
+          {
+            "long": "repository",
+            "description": "set repository path",
+            "inherit": false,
+            "value": {
+              "name": "repo-path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "state",
+            "description": "archive in this state",
+            "inherit": false,
+            "value": {
+              "name": "state"
+            }
+          },
+          {
+            "long": "umask",
+            "description": "append this path in front of each path inside the archive",
+            "inherit": false,
+            "value": {
+              "name": "umask"
+            }
+          }
+        ]
+      },
+      {
+        "name": "change",
+        "description": "show information about a particular change",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "repository",
+            "description": "set repository path",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "hash",
+              "description": "the hash of the change to show, or an unambiguous prefix thereof",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "channel",
+        "description": "manage different channels",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "repository",
+            "description": "set repository path",
+            "inherit": false,
+            "value": {
+              "name": "repo-path",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "delete",
+            "description": "delete a channel. The channel must not be the current channel",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "delete",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "help",
+            "description": "print this message or the help of the given subcommand(s)"
+          },
+          {
+            "name": "new",
+            "description": "create a new, empty channel"
+          },
+          {
+            "name": "rename",
+            "description": "rename a channel",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "from",
+                  "index": 0
+                },
+                {
+                  "name": "to",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "switch",
+            "description": "switch to a channel. There must not be unrecorded changes in the wo..."
+          }
+        ]
+      },
+      {
+        "name": "clone",
+        "description": "clone an existing pijul repository",
+        "options": [
+          {
+            "long": "change",
+            "description": "clone this change and its dependencies",
+            "inherit": false,
+            "value": {
+              "name": "change"
+            }
+          },
+          {
+            "long": "channel",
+            "description": "set the remote channel [default: main]",
+            "inherit": false,
+            "value": {
+              "name": "channel"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "short": "k",
+            "description": "skip HTTPS certificate checks",
+            "inherit": false
+          },
+          {
+            "long": "path",
+            "description": "clone this path only",
+            "inherit": false,
+            "value": {
+              "name": "partial-paths",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "state",
+            "description": "clone this state",
+            "inherit": false,
+            "value": {
+              "name": "state"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "remote",
+              "description": "clone this remote",
+              "index": 0
+            },
+            {
+              "name": "path",
+              "description": "path where to clone the repository. If missing, the inferred name o...",
+              "index": 1,
+              "provider": "builtin.files"
+            },
+            {
+              "name": "salt",
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "credit",
+        "description": "show which change last affected each line of the given file(s)",
+        "options": [
+          {
+            "long": "channel",
+            "description": "use this channel instead of the current channel",
+            "inherit": false,
+            "value": {
+              "name": "channel"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "repository",
+            "description": "set repository path",
+            "inherit": false,
+            "value": {
+              "name": "repo-path",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "description": "the file to annotate",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "diff",
+        "description": "show difference between two channels/changes",
+        "options": [
+          {
+            "long": "channel",
+            "description": "compare with this channel",
+            "inherit": false,
+            "value": {
+              "name": "channel"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "output the diff in JSON format instead of the default change text f...",
+            "inherit": false
+          },
+          {
+            "long": "repository",
+            "description": "set repository path",
+            "inherit": false,
+            "value": {
+              "name": "repo-path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "s",
+            "long": "short",
+            "description": "show a short version of the diff",
+            "inherit": false
+          },
+          {
+            "long": "tag",
+            "description": "add all the changes of this channel as dependencies (except changes...",
+            "inherit": false
+          },
+          {
+            "short": "u",
+            "long": "untracked",
+            "description": "include the untracked files",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "prefixes",
+              "description": "only diff those paths (files or directories). If missing, diff the...",
+              "index": 0,
+              "provider": "builtin.files",
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "fork",
+        "description": "create a new channel",
+        "options": [
+          {
+            "long": "change",
+            "description": "apply this change after creating the channel",
+            "inherit": false,
+            "value": {
+              "name": "change"
+            }
+          },
+          {
+            "long": "channel",
+            "description": "make the new channel from this channel instead of the current channel",
+            "inherit": false,
+            "value": {
+              "name": "channel"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "repository",
+            "description": "set repository path",
+            "inherit": false,
+            "value": {
+              "name": "repo-path",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "to",
+              "description": "the name of the new channel",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "init",
+        "description": "initialize an empty pijul repository",
+        "options": [
+          {
+            "long": "channel",
+            "description": "set the name of the current channel (defaults to \u201cmain\u201d)",
+            "inherit": false,
+            "value": {
+              "name": "channel"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "short": "k",
+            "long": "kind",
+            "description": "project kind; if Pijul knows about your project kind, the .ignore f...",
+            "inherit": false,
+            "value": {
+              "name": "kind"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "path where the repository should be initialized",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "log",
+        "description": "show the entire log of changes",
+        "options": [
+          {
+            "long": "channel",
+            "description": "show logs for this channel instead of the current channel",
+            "inherit": false,
+            "value": {
+              "name": "channel"
+            }
+          },
+          {
+            "long": "description",
+            "description": "include full change description in the output",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "hash-only",
+            "description": "only show the change hashes",
+            "inherit": false
+          },
+          {
+            "long": "limit",
+            "description": "output at most this many changes",
+            "inherit": false,
+            "value": {
+              "name": "limit"
+            }
+          },
+          {
+            "long": "offset",
+            "description": "start after this many changes",
+            "inherit": false,
+            "value": {
+              "name": "offset"
+            }
+          },
+          {
+            "long": "output-format",
+            "inherit": false,
+            "value": {
+              "name": "output-format"
+            },
+            "description": "set output format"
+          },
+          {
+            "long": "repository",
+            "description": "set repository path",
+            "inherit": false,
+            "value": {
+              "name": "repo-path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "state",
+            "description": "include state identifiers in the output",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "filters",
+              "description": "filter log output, showing only log entries that touched the specif...",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "ls"
+      },
+      {
+        "name": "mv"
+      },
+      {
+        "name": "pull",
+        "description": "pull changes from a remote upstream",
+        "options": [
+          {
+            "short": "a",
+            "long": "all",
+            "description": "pull all changes",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "force-cache",
+            "description": "force an update of the local remote cache. May effect some reportin...",
+            "inherit": false
+          },
+          {
+            "long": "from-channel",
+            "description": "pull from this remote channel",
+            "inherit": false,
+            "value": {
+              "name": "from-channel"
+            }
+          },
+          {
+            "long": "full",
+            "description": "download full changes, even when not necessary",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "short": "k",
+            "description": "skip HTTPS certificate checks",
+            "inherit": false
+          },
+          {
+            "long": "path",
+            "description": "only pull to these paths",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "repository",
+            "description": "set repository path",
+            "inherit": false,
+            "value": {
+              "name": "repo-path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "to-channel",
+            "description": "pull into this channel instead of the current channel",
+            "inherit": false,
+            "value": {
+              "name": "to-channel"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "from",
+              "description": "pull from this remote",
+              "index": 0
+            },
+            {
+              "name": "changes",
+              "description": "pull changes from the local repository, not necessarily from a channel",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "push",
+        "description": "push changes to a remote upstream",
+        "options": [
+          {
+            "short": "a",
+            "long": "all",
+            "description": "push all changes",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "force-cache",
+            "description": "force an update of the local remote cache. May effect some reportin...",
+            "inherit": false
+          },
+          {
+            "long": "from-channel",
+            "description": "push from this channel instead of the default channel",
+            "inherit": false,
+            "value": {
+              "name": "from-channel"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "short": "k",
+            "description": "skip HTTPS certificate checks",
+            "inherit": false
+          },
+          {
+            "long": "path",
+            "description": "push changes only relating to these paths",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "repository",
+            "description": "set repository path",
+            "inherit": false,
+            "value": {
+              "name": "repo-path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "to-channel",
+            "description": "push to this remote channel instead of the remote\u2019s default channel",
+            "inherit": false,
+            "value": {
+              "name": "to-channel"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "to",
+              "description": "push to this remote",
+              "index": 0
+            },
+            {
+              "name": "changes",
+              "description": "push only these changes",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "record",
+        "description": "create a new change",
+        "options": [
+          {
+            "short": "a",
+            "long": "all",
+            "description": "record all paths that have changed",
+            "inherit": false
+          },
+          {
+            "long": "amend",
+            "description": "amend this change instead of creating a new change",
+            "inherit": false,
+            "value": {
+              "name": "amend"
+            }
+          },
+          {
+            "long": "author",
+            "description": "set the author field",
+            "inherit": false,
+            "value": {
+              "name": "author"
+            }
+          },
+          {
+            "long": "channel",
+            "description": "record the change in this channel instead of the current channel",
+            "inherit": false,
+            "value": {
+              "name": "channel"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "ignore-missing",
+            "description": "ignore missing (deleted) files",
+            "inherit": false
+          },
+          {
+            "short": "m",
+            "long": "message",
+            "description": "set the change message",
+            "inherit": false,
+            "value": {
+              "name": "message"
+            }
+          },
+          {
+            "long": "repository",
+            "description": "set repository path",
+            "inherit": false,
+            "value": {
+              "name": "repo-path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timestamp",
+            "description": "set the timestamp field",
+            "inherit": false,
+            "value": {
+              "name": "timestamp"
+            }
+          },
+          {
+            "long": "working-copy",
+            "inherit": false,
+            "value": {
+              "name": "working-copy"
+            },
+            "description": "set working copy path"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "prefixes",
+              "description": "paths in which to record the changes",
+              "index": 0,
+              "provider": "builtin.files",
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "remote",
+        "description": "manage remote repositories",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "repository",
+            "description": "set repository path",
+            "inherit": false,
+            "value": {
+              "name": "repo-path",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "delete",
+            "description": "deletes the remote",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "remote",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "help",
+            "description": "print this message or the help of the given subcommand(s)"
+          }
+        ]
+      },
+      {
+        "name": "remove",
+        "description": "remove a file from the tree of tracked files (pijul record will the...",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "paths",
+              "description": "the paths need to be removed",
+              "index": 0,
+              "provider": "builtin.files",
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "reset",
+        "description": "reset the working copy to the last recorded change. In other words,...",
+        "options": [
+          {
+            "long": "channel",
+            "description": "reset the working copy to this channel, and change the current chan...",
+            "inherit": false,
+            "value": {
+              "name": "channel"
+            }
+          },
+          {
+            "long": "dry-run",
+            "description": "print this file to the standard output, without modifying the repos...",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "force",
+            "description": "reset even if there are unrecorded changes",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "repository",
+            "description": "set repository path",
+            "inherit": false,
+            "value": {
+              "name": "repo-path",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "files",
+              "description": "only reset these files",
+              "index": 0,
+              "provider": "builtin.files",
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "unrecord",
+        "description": "unrecord a list of changes",
+        "options": [
+          {
+            "long": "channel",
+            "description": "unrecord changes from this channel instead of the current channel",
+            "inherit": false,
+            "value": {
+              "name": "channel"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "repository",
+            "description": "set repository path",
+            "inherit": false,
+            "value": {
+              "name": "repo-path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "reset",
+            "description": "also undo the changes in the working copy (preserving unrecorded ch...",
+            "inherit": false
+          },
+          {
+            "long": "show-changes",
+            "description": "show N changes in a text editor if no s were given. Defaults to the...",
+            "inherit": false,
+            "value": {
+              "name": "n"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "change-id",
+              "description": "the hash of a change (unambiguous prefixes are accepted)",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
