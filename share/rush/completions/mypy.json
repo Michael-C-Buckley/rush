@@ -1,0 +1,572 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "mypy",
+    "description": "type check Python code",
+    "options": [
+      {
+        "long": "module",
+        "description": "Asks mypy to type check the provided module",
+        "inherit": false,
+        "value": {
+          "name": "module"
+        }
+      },
+      {
+        "long": "package",
+        "description": "Asks mypy to type check the provided package",
+        "inherit": false,
+        "value": {
+          "name": "package"
+        }
+      },
+      {
+        "long": "command",
+        "description": "Asks mypy to type check the provided string as a program",
+        "inherit": false,
+        "value": {
+          "name": "program"
+        }
+      },
+      {
+        "long": "exclude",
+        "description": "A regular expression that matches file names, directory names and paths which mypy should ignore while recursively discovering files to check",
+        "inherit": false,
+        "value": {
+          "name": "regex"
+        }
+      },
+      {
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "description": "show verbose messages",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "show version information",
+        "inherit": false
+      },
+      {
+        "long": "config-file",
+        "description": "This flag makes mypy read configuration settings from the given file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "warn-unused-configs",
+        "description": "This flag makes mypy warn about unused [mypy-<pattern>] config file sections",
+        "inherit": false
+      },
+      {
+        "long": "explicit-package-bases",
+        "description": "This flag tells mypy that top-level packages will be based in either the current directory, or a member of the MYPYPATH environment variable",
+        "inherit": false
+      },
+      {
+        "long": "ignore-missing-imports",
+        "description": "This flag makes mypy ignore all missing imports",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "silent"
+        ],
+        "description": "This flag adjusts how mypy follows imported modules that were not explicitly passed in via the command line",
+        "inherit": false
+      },
+      {
+        "long": "python-executable",
+        "description": "This flag will have mypy collect type information from PEP561 compliant packages installed for the Python executable EXECUTABLE",
+        "inherit": false,
+        "value": {
+          "name": "executable",
+          "provider": "builtin.executables"
+        }
+      },
+      {
+        "long": "no-site-packages",
+        "description": "This flag will disable searching for PEP561 compliant packages",
+        "inherit": false
+      },
+      {
+        "long": "no-silence-site-packages",
+        "description": "By default, mypy will suppress any error messages generated within PEP561 compliant packages",
+        "inherit": false
+      },
+      {
+        "long": "fast-module-lookup",
+        "description": "The default logic used to scan through search paths to resolve imports has a quadratic worse-case behavior in some cases, which is for instance triggered by a l",
+        "inherit": false
+      },
+      {
+        "long": "no-namespace-packages",
+        "description": "This flag disables import discovery of namespace packages (see PEP420)",
+        "inherit": false
+      },
+      {
+        "long": "python-version",
+        "description": "This flag will make mypy type check your code as if it were run under Python version X",
+        "inherit": false,
+        "value": {
+          "name": "version",
+          "provider": {
+            "values": [
+              "3.8",
+              "3.9",
+              "3.10",
+              "3.11",
+              "3.12",
+              "3.13"
+            ]
+          }
+        }
+      },
+      {
+        "long": "platform",
+        "description": "This flag will make mypy type check your code as if it were run under the given operating system",
+        "inherit": false,
+        "value": {
+          "name": "platform",
+          "provider": {
+            "values": [
+              "linux",
+              "darwin",
+              "win32"
+            ]
+          }
+        }
+      },
+      {
+        "long": "always-true",
+        "description": "This flag will treat all variables named NAME as compile-time constants that are always true",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "always-false",
+        "description": "This flag will treat all variables named NAME as compile-time constants that are always false",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "disallow-any-unimported",
+        "description": "This flag disallows usage of types that come from unfollowed imports (such types become aliases for Any)",
+        "inherit": false
+      },
+      {
+        "long": "disallow-any-expr",
+        "description": "This flag disallows all expressions in the module that have type Any",
+        "inherit": false
+      },
+      {
+        "long": "disallow-any-decorated",
+        "description": "This flag disallows functions that have Any in their signature after decorator transformation",
+        "inherit": false
+      },
+      {
+        "long": "disallow-any-explicit",
+        "description": "This flag disallows explicit Any in type positions such as type annotations and generic type parameters",
+        "inherit": false
+      },
+      {
+        "long": "disallow-any-generics",
+        "description": "This flag disallows usage of generic types that do not specify explicit type parameters",
+        "inherit": false
+      },
+      {
+        "long": "disallow-subclassing-any",
+        "description": "This flag reports an error whenever a class subclasses a value of type Any",
+        "inherit": false
+      },
+      {
+        "long": "disallow-untyped-calls",
+        "description": "This flag reports an error whenever a function with type annotations calls a function defined without annotations",
+        "inherit": false
+      },
+      {
+        "long": "untyped-calls-exclude",
+        "description": "This flag allows to selectively disable option--disallow-untyped-calls for functions and methods defined in specific packages, modules, or classes",
+        "inherit": false,
+        "value": {
+          "name": "module"
+        }
+      },
+      {
+        "long": "disallow-untyped-defs",
+        "description": "This flag reports an error whenever it encounters a function definition without type annotations or with incomplete type annotations",
+        "inherit": false
+      },
+      {
+        "long": "disallow-incomplete-defs",
+        "description": "This flag reports an error whenever it encounters a partly annotated function definition, while still allowing entirely unannotated definitions",
+        "inherit": false
+      },
+      {
+        "long": "check-untyped-defs",
+        "description": "This flag is less severe than the previous two options -- it type checks the body of every function, regardless of whether it has type annotations",
+        "inherit": false
+      },
+      {
+        "long": "disallow-untyped-decorators",
+        "description": "This flag reports an error whenever a function with type annotations is decorated with a decorator without annotations",
+        "inherit": false
+      },
+      {
+        "long": "implicit-optional",
+        "description": "This flag causes mypy to treat arguments with a None default value as having an implicit pydata~typing",
+        "inherit": false
+      },
+      {
+        "long": "no-strict-optional",
+        "description": "This flag disables strict checking of pydata~typing",
+        "inherit": false
+      },
+      {
+        "long": "warn-redundant-casts",
+        "description": "This flag will make mypy report an error whenever your code uses an unnecessary cast that can safely be removed",
+        "inherit": false
+      },
+      {
+        "long": "warn-unused-ignores",
+        "description": "This flag will make mypy report an error whenever your code uses a # type ignore comment on a line that is not actually generating an error message",
+        "inherit": false
+      },
+      {
+        "long": "no-warn-no-return",
+        "description": "By default, mypy will generate errors when a function is missing return statements in some execution paths",
+        "inherit": false
+      },
+      {
+        "long": "warn-return-any",
+        "description": "This flag causes mypy to generate a warning when returning a value with type Any from a function declared with a non-Any return type",
+        "inherit": false
+      },
+      {
+        "long": "warn-unreachable",
+        "description": "This flag will make mypy report an error whenever it encounters code determined to be unreachable or redundant after performing type analysis",
+        "inherit": false
+      },
+      {
+        "long": "allow-untyped-globals",
+        "description": "This flag causes mypy to suppress errors caused by not being able to fully infer the types of global and class variables",
+        "inherit": false
+      },
+      {
+        "long": "allow-redefinition",
+        "description": "By default, mypy won't allow a variable to be redefined with an unrelated type",
+        "inherit": false
+      },
+      {
+        "long": "local-partial-types",
+        "description": "In mypy, the most common cases for partial types are variables initialized using None, but without explicit Optional annotations",
+        "inherit": false
+      },
+      {
+        "long": "no-implicit-reexport",
+        "description": "By default, imported values to a module are treated as exported and mypy allows other modules to import them",
+        "inherit": false
+      },
+      {
+        "long": "strict-equality",
+        "description": "By default, mypy allows always-false comparisons like 42 == 'no'",
+        "inherit": false
+      },
+      {
+        "long": "extra-checks",
+        "description": "This flag enables additional checks that are technically correct but may be impractical in real code",
+        "inherit": false
+      },
+      {
+        "long": "strict",
+        "description": "enable all optional strict checks",
+        "inherit": false
+      },
+      {
+        "long": "disable-error-code",
+        "description": "This flag allows disabling one or multiple error codes globally",
+        "inherit": false,
+        "value": {
+          "name": "code"
+        }
+      },
+      {
+        "long": "enable-error-code",
+        "description": "This flag allows enabling one or multiple error codes globally",
+        "inherit": false,
+        "value": {
+          "name": "code"
+        }
+      },
+      {
+        "long": "show-error-context",
+        "description": "This flag will precede all errors with 'note' messages explaining the context of the error",
+        "inherit": false
+      },
+      {
+        "long": "show-column-numbers",
+        "description": "This flag will add column offsets to error messages",
+        "inherit": false
+      },
+      {
+        "long": "show-error-end",
+        "description": "This flag will make mypy show not just that start position where an error was detected, but also the end position of the relevant expression",
+        "inherit": false
+      },
+      {
+        "long": "hide-error-codes",
+        "description": "This flag will hide the error code [<code>] from error messages",
+        "inherit": false
+      },
+      {
+        "long": "pretty",
+        "description": "Use visually nicer output in error messages use soft word wrap, show source code snippets, and show error location markers",
+        "inherit": false
+      },
+      {
+        "long": "no-color-output",
+        "description": "This flag will disable color output in error messages, enabled by default",
+        "inherit": false
+      },
+      {
+        "long": "no-error-summary",
+        "description": "This flag will disable error summary",
+        "inherit": false
+      },
+      {
+        "long": "show-absolute-path",
+        "description": "Show absolute paths to files",
+        "inherit": false
+      },
+      {
+        "long": "soft-error-limit",
+        "description": "This flag will adjust the limit after which mypy will (sometimes) disable reporting most additional errors",
+        "inherit": false,
+        "value": {
+          "name": "limit"
+        }
+      },
+      {
+        "long": "no-incremental",
+        "description": "This flag disables incremental mode mypy will no longer reference the cache when re-run",
+        "inherit": false
+      },
+      {
+        "long": "cache-dir",
+        "description": "By default, mypy stores all cache data inside of a folder named",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "sqlite-cache",
+        "description": "Use an SQLite_ database to store the cache",
+        "inherit": false
+      },
+      {
+        "long": "cache-fine-grained",
+        "description": "Include fine-grained dependency information in the cache for the mypy daemon",
+        "inherit": false
+      },
+      {
+        "long": "skip-version-check",
+        "description": "By default, mypy will ignore cache data generated by a different version of mypy",
+        "inherit": false
+      },
+      {
+        "long": "skip-cache-mtime-checks",
+        "description": "Skip cache internal consistency checks based on mtime",
+        "inherit": false
+      },
+      {
+        "long": "pdb",
+        "description": "This flag will invoke the Python debugger when mypy encounters a fatal error",
+        "inherit": false
+      },
+      {
+        "long": "tb",
+        "description": "If set, this flag will display a full traceback when mypy encounters a fatal error",
+        "inherit": false
+      },
+      {
+        "long": "raise-exceptions",
+        "description": "Raise exception on fatal error",
+        "inherit": false
+      },
+      {
+        "long": "custom-typing-module",
+        "description": "This flag lets you use a custom module as a substitute for the pymodtyping module",
+        "inherit": false,
+        "value": {
+          "name": "module"
+        }
+      },
+      {
+        "long": "custom-typeshed-dir",
+        "description": "This flag specifies the directory where mypy looks for standard library typeshed stubs, instead of the typeshed that ships with mypy",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "warn-incomplete-stub",
+        "description": "This flag modifies both the option--disallow-untyped-defs and option--disallow-incomplete-defs flags so they also report errors if stubs in typeshed are missing",
+        "inherit": false
+      },
+      {
+        "long": "shadow-file",
+        "description": "When mypy is asked to type check SOURCE_FILE, this flag makes mypy read from and type check the contents of SHADOW_FILE instead",
+        "inherit": false,
+        "value": {
+          "name": "source shadow"
+        }
+      },
+      {
+        "long": "any-exprs-report",
+        "description": "Causes mypy to generate a text file report documenting how many expressions of type Any are present within your codebase",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "cobertura-xml-report",
+        "description": "Causes mypy to generate a Cobertura XML type checking coverage report",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "html-report",
+        "description": "Causes mypy to generate an HTML type checking coverage report",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "linecount-report",
+        "description": "Causes mypy to generate a text file report documenting the functions and lines that are typed and untyped within your codebase",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "linecoverage-report",
+        "description": "Causes mypy to generate a JSON file that maps each source file's absolute filename to a list of line numbers that belong to typed functions in that file",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "lineprecision-report",
+        "description": "Causes mypy to generate a flat text file report with per-module statistics of how many lines are typechecked etc",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "txt-report",
+        "description": "Causes mypy to generate a text file type checking coverage report",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "xml-report",
+        "description": "Causes mypy to generate an XML type checking coverage report",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "install-types",
+        "description": "This flag causes mypy to install known missing stub packages for third-party libraries using pip",
+        "inherit": false
+      },
+      {
+        "long": "non-interactive",
+        "description": "When used together with option--install-types <mypy --install-types>, this causes mypy to install all suggested stub packages using pip without asking for confi",
+        "inherit": false
+      },
+      {
+        "long": "junit-xml",
+        "description": "Causes mypy to generate a JUnit XML test result document with type checking results",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "find-occurrences",
+        "description": "This flag will make mypy print out all usages of a class member based on static type information",
+        "inherit": false,
+        "value": {
+          "name": "class.member"
+        }
+      },
+      {
+        "long": "scripts-are-modules",
+        "description": "This flag will give command line arguments that appear to be scripts",
+        "inherit": false
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    },
+    "arguments": {
+      "states": [
+        {
+          "name": "path",
+          "description": "python file or package directory",
+          "index": 0,
+          "repeatable": true,
+          "required": false,
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      ]
+    }
+  }
+}
