@@ -1,0 +1,18 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "noglob",
+    "description": "run a command without zsh glob expansion",
+    "hidden": true,
+    "arguments": {
+      "states": [
+        {
+          "name": "command",
+          "index": 0,
+          "rest": "command-line"
+        }
+      ]
+    }
+  }
+}
