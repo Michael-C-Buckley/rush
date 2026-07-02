@@ -1,0 +1,799 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "tsc",
+    "description": "TypeScript compiler",
+    "options": [
+      {
+        "long": "all",
+        "description": "show all compiler options",
+        "inherit": false
+      },
+      {
+        "long": "generateTrace",
+        "description": "generates an event trace and a list of types",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "description": "gives local information for help on the CLI",
+        "inherit": false
+      },
+      {
+        "long": "init",
+        "description": "initializes a TypeScript project and creates a tsconfig.json file",
+        "inherit": false
+      },
+      {
+        "long": "listFilesOnly",
+        "description": "print names of files that are part of the compilation and then stop processing",
+        "inherit": false
+      },
+      {
+        "long": "locale",
+        "description": "set the language of the messaging from TypeScript. This does not affect emit",
+        "inherit": false
+      },
+      {
+        "long": "project",
+        "description": "compile the project given the path to its configuration file, or to a folder with a tsconfig.json",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "showConfig",
+        "description": "print the final configuration instead of building",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "print the compiler's version",
+        "inherit": false
+      },
+      {
+        "long": "build",
+        "description": "build one or more projects and their dependencies, if out of date",
+        "inherit": false
+      },
+      {
+        "long": "clean",
+        "description": "delete the outputs of all projects",
+        "inherit": false
+      },
+      {
+        "long": "dry",
+        "description": "show what would be built (or deleted, if specified with '--clean')",
+        "inherit": false
+      },
+      {
+        "long": "force",
+        "description": "build all projects, including those that appear to be up to date",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "description": "enable verbose logging",
+        "inherit": false
+      },
+      {
+        "long": "excludeDirectories",
+        "description": "remove a list of directories from the watch process",
+        "inherit": false,
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "excludeFiles",
+        "description": "remove a list of files from the watch mode's processing",
+        "inherit": false,
+        "value": {
+          "name": "files",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "fallbackPolling",
+        "description": "specify what approach the watcher should use if the system runs out of native file watchers",
+        "inherit": false,
+        "value": {
+          "name": "approach",
+          "provider": {
+            "values": [
+              "fixedPollingInterval",
+              "priorityPollingInterval",
+              "dynamicPriorityPolling"
+            ]
+          }
+        }
+      },
+      {
+        "long": "synchronousWatchDirectory",
+        "description": "synchronously call callbacks and update the state of directory watchers on platforms that don`t support recursive watching natively",
+        "inherit": false
+      },
+      {
+        "long": "watch",
+        "description": "watch input files",
+        "inherit": false
+      },
+      {
+        "long": "watchDirectory",
+        "description": "specify how directories are watched on systems that lack recursive file-watching functionality",
+        "inherit": false,
+        "value": {
+          "name": "approach",
+          "provider": {
+            "values": [
+              "fixedPollingInterval",
+              "dynamicPriorityPolling",
+              "useFsEvents"
+            ]
+          }
+        }
+      },
+      {
+        "long": "watchFile",
+        "description": "specify how the TypeScript watch mode works",
+        "inherit": false,
+        "value": {
+          "name": "approach",
+          "provider": {
+            "values": [
+              "fixedPollingInterval",
+              "priorityPollingInterval",
+              "dynamicPriorityPolling",
+              "useFsEvents",
+              "useFsEventsOnParentDirectory"
+            ]
+          }
+        }
+      },
+      {
+        "long": "allowJs",
+        "description": "allow JavaScript files to be a part of your program. Use the checkJS option to get errors from these files",
+        "inherit": false
+      },
+      {
+        "long": "allowSyntheticDefaultImports",
+        "description": "allow 'import x from y' when a module doesn't have a default export",
+        "inherit": false
+      },
+      {
+        "long": "allowUmdGlobalAccess",
+        "description": "allow accessing UMD globals from modules",
+        "inherit": false
+      },
+      {
+        "long": "allowUnreachableCode",
+        "description": "disable error reporting for unreachable code",
+        "inherit": false
+      },
+      {
+        "long": "allowUnusedLabels",
+        "description": "disable error reporting for unused label",
+        "inherit": false
+      },
+      {
+        "long": "alwaysStrict",
+        "description": "ensure 'use strict' is always emitted",
+        "inherit": false
+      },
+      {
+        "long": "assumeChangesOnlyAffectDirectDependencies",
+        "description": "have recompiles in projects that use incremental and watch mode assume that changes within a file will only affect files directly depending on it",
+        "inherit": false
+      },
+      {
+        "long": "baseUrl",
+        "description": "specify the base directory to resolve non-relative module names",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "checkJs",
+        "description": "enable error reporting in type-checked JavaScript files",
+        "inherit": false
+      },
+      {
+        "long": "composite",
+        "description": "enable constraints that allow a TypeScript project to be used with project references",
+        "inherit": false
+      },
+      {
+        "long": "declaration",
+        "description": "generate .d.ts files from TypeScript and JavaScript files in your project",
+        "inherit": false
+      },
+      {
+        "long": "declarationDir",
+        "description": "specify the output directory for generated declaration files",
+        "inherit": false,
+        "value": {
+          "name": "string",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "declarationMap",
+        "description": "create sourcemaps for d.ts files",
+        "inherit": false
+      },
+      {
+        "long": "diagnostics",
+        "description": "output compiler performance information after building",
+        "inherit": false
+      },
+      {
+        "long": "disableReferencedProjectLoad",
+        "description": "reduce the number of projects loaded automatically by TypeScript",
+        "inherit": false
+      },
+      {
+        "long": "disableSizeLimit",
+        "description": "remove the 20mb cap on total source code size for JavaScript files in the TypeScript language server",
+        "inherit": false
+      },
+      {
+        "long": "disableSolutionSearching",
+        "description": "opt a project out of multi-project reference checking when editing",
+        "inherit": false
+      },
+      {
+        "long": "disableSourceOfProjectReferenceRedirect",
+        "description": "disable preferring source files instead of declaration files when referencing composite projects",
+        "inherit": false
+      },
+      {
+        "long": "downlevelIteration",
+        "description": "emit more compliant, but verbose and less performant JavaScript for iteration",
+        "inherit": false
+      },
+      {
+        "long": "emitBOM",
+        "description": "emit a UTF-8 Byte Order Mark (BOM) in the beginning of output files",
+        "inherit": false
+      },
+      {
+        "long": "emitDeclarationOnly",
+        "description": "only output d.ts files and not JavaScript files",
+        "inherit": false
+      },
+      {
+        "long": "emitDecoratorMetadata",
+        "description": "emit design-type metadata for decorated declarations in source files",
+        "inherit": false
+      },
+      {
+        "long": "esModuleInterop",
+        "description": "emit additional JavaScript to ease support for importing CommonJS modules. This enables allowSyntheticDefaultImports for type compatibility",
+        "inherit": false
+      },
+      {
+        "long": "exactOptionalPropertyTypes",
+        "description": "differentiate between undefined and not present when type checking",
+        "inherit": false
+      },
+      {
+        "long": "experimentalDecorators",
+        "description": "enable experimental support for TC39 stage 2 draft decorators",
+        "inherit": false
+      },
+      {
+        "long": "explainFiles",
+        "description": "print files read during the compilation including why it was included",
+        "inherit": false
+      },
+      {
+        "long": "extendedDiagnostics",
+        "description": "output more detailed compiler performance information after building",
+        "inherit": false
+      },
+      {
+        "long": "forceConsistentCasingInFileNames",
+        "description": "ensure that casing is correct in imports",
+        "inherit": false
+      },
+      {
+        "long": "generateCpuProfile",
+        "description": "emit a v8 CPU profile of the compiler run for debugging",
+        "inherit": false
+      },
+      {
+        "long": "importHelpers",
+        "description": "allow importing helper functions from tslib once per project, instead of including them per-file",
+        "inherit": false
+      },
+      {
+        "long": "importsNotUsedAsValues",
+        "description": "specify emit/checking behavior for imports that are only used for types",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              "remove",
+              "preserve",
+              "error"
+            ]
+          }
+        }
+      },
+      {
+        "long": "incremental",
+        "description": "save .tsbuildinfo files to allow for incremental compilation of projects",
+        "inherit": false
+      },
+      {
+        "long": "inlineSourceMap",
+        "description": "include sourcemap files inside the emitted JavaScript",
+        "inherit": false
+      },
+      {
+        "long": "inlineSources",
+        "description": "include source code in the sourcemaps inside the emitted JavaScript",
+        "inherit": false
+      },
+      {
+        "long": "isolatedModules",
+        "description": "ensure that each file can be safely transpiled without relying on other imports",
+        "inherit": false
+      },
+      {
+        "long": "jsx",
+        "description": "specify what JSX code is generated",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              "react",
+              "react-jsx",
+              "react-jsxdev",
+              "react-native",
+              "preserve"
+            ]
+          }
+        }
+      },
+      {
+        "long": "jsxFactory",
+        "description": "specify the JSX factory function used when targeting React JSX emit, e.g. 'React.createElement' or 'h'",
+        "inherit": false,
+        "value": {
+          "name": "JSX-factory-function"
+        }
+      },
+      {
+        "long": "jsxFragmentFactory",
+        "description": "specify the JSX Fragment reference used for fragments when targeting React JSX emit e.g. 'React.Fragment' or 'Fragment'",
+        "inherit": false,
+        "value": {
+          "name": "JSX-fragment"
+        }
+      },
+      {
+        "long": "jsxImportSource",
+        "description": "specify module specifier used to import the JSX factory functions when using jsx: react-jsx*",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "keyofStringsOnly",
+        "description": "make keyof only return strings instead of string, numbers or symbols. Legacy option",
+        "inherit": false
+      },
+      {
+        "long": "lib",
+        "description": "specify a set of bundled library declaration files that describe the target runtime environment",
+        "inherit": false,
+        "value": {
+          "name": "list",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "listEmittedFiles",
+        "description": "print the names of emitted files after a compilation",
+        "inherit": false
+      },
+      {
+        "long": "listFiles",
+        "description": "print all of the files read during the compilation",
+        "inherit": false
+      },
+      {
+        "long": "mapRoot",
+        "description": "specify the location where debugger should locate map files instead of generated locations",
+        "inherit": false,
+        "value": {
+          "name": "string",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "maxNodeModuleJsDepth",
+        "description": "specify the maximum folder depth used for checking JavaScript files from node_modules. Only applicable with allowJs",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "module",
+        "description": "specify what module code is generated",
+        "inherit": false,
+        "value": {
+          "name": "module",
+          "provider": {
+            "values": [
+              "ES6",
+              "ES2015",
+              "ES2020",
+              "None",
+              "UMD",
+              "AMD",
+              "System",
+              "ESNext",
+              "CommonJS"
+            ]
+          }
+        }
+      },
+      {
+        "long": "moduleResolution",
+        "description": "specify how TypeScript looks up a file from a given module specifier",
+        "inherit": false,
+        "value": {
+          "name": "module"
+        }
+      },
+      {
+        "long": "newLine",
+        "description": "set the newline character for emitting files",
+        "inherit": false,
+        "value": {
+          "name": "character"
+        }
+      },
+      {
+        "long": "noEmit",
+        "description": "disable emitting file from a compilation",
+        "inherit": false
+      },
+      {
+        "long": "noEmitHelpers",
+        "description": "disable generating custom helper functions like __extends in compiled output",
+        "inherit": false
+      },
+      {
+        "long": "noEmitOnError",
+        "description": "disable emitting files if any type checking errors are reported",
+        "inherit": false
+      },
+      {
+        "long": "noErrorTruncation",
+        "description": "disable truncating types in error messages",
+        "inherit": false
+      },
+      {
+        "long": "noFallthroughCasesInSwitch",
+        "description": "enable error reporting for fallthrough cases in switch statements",
+        "inherit": false
+      },
+      {
+        "long": "noImplicitAny",
+        "description": "enable error reporting for expressions and declarations with an implied any type",
+        "inherit": false
+      },
+      {
+        "long": "noImplicitOverride",
+        "description": "ensure overriding members in derived classes are marked with an override modifier",
+        "inherit": false
+      },
+      {
+        "long": "noImplicitReturns",
+        "description": "enable error reporting for codepaths that do not explicitly return in a function",
+        "inherit": false
+      },
+      {
+        "long": "noImplicitThis",
+        "description": "enable error reporting when this is given the type any",
+        "inherit": false
+      },
+      {
+        "long": "noImplicitUseStrict",
+        "description": "disable adding 'use strict' directives in emitted JavaScript files",
+        "inherit": false
+      },
+      {
+        "long": "noLib",
+        "description": "disable including any library files, including the default lib.d.ts",
+        "inherit": false
+      },
+      {
+        "long": "noPropertyAccessFromIndexSignature",
+        "description": "enforces using indexed accessors for keys declared using an indexed type",
+        "inherit": false
+      },
+      {
+        "long": "noResolve",
+        "description": "disallow imports, requires or <reference>s from expanding the number of files TypeScript should add to a project",
+        "inherit": false
+      },
+      {
+        "long": "noStrictGenericChecks",
+        "description": "disable strict checking of generic signatures in function types",
+        "inherit": false
+      },
+      {
+        "long": "noUncheckedIndexedAccess",
+        "description": "add undefined to a type when accessed using an index",
+        "inherit": false
+      },
+      {
+        "long": "noUnusedLocals",
+        "description": "enable error reporting when a local variables aren't read",
+        "inherit": false
+      },
+      {
+        "long": "noUnusedParameters",
+        "description": "raise an error when a function parameter isn't read",
+        "inherit": false
+      },
+      {
+        "long": "outDir",
+        "description": "specify an output folder for all emitted files",
+        "inherit": false,
+        "value": {
+          "name": "string",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "outFile",
+        "description": "specify a file that bundles all outputs into one JavaScript file. If declaration is true, also designates a file that bundles all .d.ts output",
+        "inherit": false,
+        "value": {
+          "name": "string",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "paths",
+        "description": "specify a set of entries that re-map imports to additional lookup locations",
+        "inherit": false,
+        "value": {
+          "name": "object"
+        }
+      },
+      {
+        "long": "plugins",
+        "description": "specify a list of language service plugins to include",
+        "inherit": false,
+        "value": {
+          "name": "plugins"
+        }
+      },
+      {
+        "long": "preserveConstEnums",
+        "description": "disable erasing const enum declarations in generated code",
+        "inherit": false
+      },
+      {
+        "long": "preserveSymlinks",
+        "description": "disable resolving symlinks to their realpath. This correlates to the same flag in node",
+        "inherit": false
+      },
+      {
+        "long": "preserveWatchOutput",
+        "description": "disable wiping the console in watch mode",
+        "inherit": false
+      },
+      {
+        "long": "pretty",
+        "description": "enable color and formatting in output to make compiler errors easier to read",
+        "inherit": false
+      },
+      {
+        "long": "reactNamespace",
+        "description": "specify the object invoked for createElement. This only applies when targeting react JSX emit",
+        "inherit": false,
+        "value": {
+          "name": "object"
+        }
+      },
+      {
+        "long": "removeComments",
+        "description": "disable emitting comments",
+        "inherit": false
+      },
+      {
+        "long": "resolveJsonModule",
+        "description": "enable importing .json files",
+        "inherit": false
+      },
+      {
+        "long": "rootDir",
+        "description": "specify the root folder within your source files",
+        "inherit": false,
+        "value": {
+          "name": "string",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "rootDirs",
+        "description": "allow multiple folders to be treated as one when resolving modules",
+        "inherit": false,
+        "value": {
+          "name": "string",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "skipDefaultLibCheck",
+        "description": "skip type checking .d.ts files that are included with TypeScript",
+        "inherit": false
+      },
+      {
+        "long": "skipLibCheck",
+        "description": "skip type checking all .d.ts files",
+        "inherit": false
+      },
+      {
+        "long": "sourceMap",
+        "description": "create source map files for emitted JavaScript files",
+        "inherit": false
+      },
+      {
+        "long": "sourceRoot",
+        "description": "specify the root path for debuggers to find the reference source code",
+        "inherit": false,
+        "value": {
+          "name": "string",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "strict",
+        "description": "enable all strict type checking options",
+        "inherit": false
+      },
+      {
+        "long": "strictBindCallApply",
+        "description": "check that the arguments for bind, call, and apply methods match the original function",
+        "inherit": false
+      },
+      {
+        "long": "strictFunctionTypes",
+        "description": "when assigning functions, check to ensure parameters and the return values are subtype-compatible",
+        "inherit": false
+      },
+      {
+        "long": "strictNullChecks",
+        "description": "when type checking, take into account null and undefined",
+        "inherit": false
+      },
+      {
+        "long": "strictPropertyInitialization",
+        "description": "check for class properties that are declared but not set in the constructor",
+        "inherit": false
+      },
+      {
+        "long": "stripInternal",
+        "description": "disable emitting declarations that have @internal in their JSDoc comments",
+        "inherit": false
+      },
+      {
+        "long": "suppressExcessPropertyErrors",
+        "description": "disable reporting of excess property errors during the creation of object literals",
+        "inherit": false
+      },
+      {
+        "long": "suppressImplicitAnyIndexErrors",
+        "description": "suppress noImplicitAny errors when indexing objects that lack index signatures",
+        "inherit": false
+      },
+      {
+        "long": "target",
+        "description": "set the JavaScript language version for emitted JavaScript and include compatible library declarations",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": {
+            "values": [
+              "ES3",
+              "ES5",
+              "ES6",
+              "ES2015",
+              "ES7",
+              "ES2016",
+              "ES2017",
+              "ES2018",
+              "ES2019",
+              "ES2020",
+              "ESNext"
+            ]
+          }
+        }
+      },
+      {
+        "long": "traceResolution",
+        "description": "log paths used during the moduleResolution process",
+        "inherit": false
+      },
+      {
+        "long": "tsBuildInfoFile",
+        "description": "specify the folder for .tsbuildinfo incremental compilation files",
+        "inherit": false,
+        "value": {
+          "name": "string",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "typeRoots",
+        "description": "specify multiple folders that act like ./node_modules/@types",
+        "inherit": false,
+        "value": {
+          "name": "folders",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "types",
+        "description": "specify type package names to be included without being referenced in a source file",
+        "inherit": false,
+        "value": {
+          "name": "package-names"
+        }
+      },
+      {
+        "long": "useDefineForClassFields",
+        "description": "emit ECMAScript-standard-compliant class fields",
+        "inherit": false
+      },
+      {
+        "long": "useUnknownInCatchVariables",
+        "description": "default catch clause variables as unknown instead of any",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "provider": "builtin.files",
+          "index": 0,
+          "description": "TypeScript file",
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
