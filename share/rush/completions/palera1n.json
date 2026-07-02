@@ -1,0 +1,193 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "palera1n",
+    "description": "ios jailbreak tool",
+    "options": [
+      {
+        "long": "version",
+        "description": "Print version",
+        "inherit": false
+      },
+      {
+        "long": "force-revert",
+        "description": "Remove jailbreak",
+        "inherit": false
+      },
+      {
+        "long": "setup-partial-fakefs",
+        "short": "B",
+        "description": "Setup partial fakefs",
+        "inherit": false
+      },
+      {
+        "long": "setup-fakefs",
+        "short": "c",
+        "description": "Setup fakefs",
+        "inherit": false
+      },
+      {
+        "long": "demote",
+        "short": "d",
+        "description": "Demote",
+        "inherit": false
+      },
+      {
+        "long": "dfuhelper",
+        "short": "D",
+        "description": "Exit after entering DFU",
+        "inherit": false
+      },
+      {
+        "long": "boot-args",
+        "short": "e",
+        "description": "XNU boot arguments",
+        "inherit": false,
+        "value": {
+          "name": "BOOT_ARGUMENTS"
+        }
+      },
+      {
+        "long": "enter-recovery",
+        "short": "E",
+        "description": "Enter recovery mode",
+        "inherit": false
+      },
+      {
+        "long": "fakefs",
+        "short": "f",
+        "description": "Boot fakefs",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "Show help for palera1n",
+        "inherit": false
+      },
+      {
+        "long": "override-checkra1n",
+        "short": "i",
+        "description": "Override checkra1n",
+        "inherit": false,
+        "value": {
+          "name": "FILE",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "override-pongo",
+        "short": "k",
+        "description": "Override Pongo image",
+        "inherit": false,
+        "value": {
+          "name": "FILE",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "override-kpf",
+        "short": "K",
+        "description": "Override kernel patchfinder",
+        "inherit": false,
+        "value": {
+          "name": "FILE",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "rootless",
+        "short": "l",
+        "description": "Boot rootless. This is the default",
+        "inherit": false
+      },
+      {
+        "long": "jbinit-log-to-file",
+        "short": "L",
+        "description": "Make jbinit log to /cores/jbinit.log (can be read from sandbox while jailbroken)",
+        "inherit": false
+      },
+      {
+        "long": "exit-recovery",
+        "short": "n",
+        "description": "Exit recovery mode",
+        "inherit": false
+      },
+      {
+        "long": "device-info",
+        "short": "I",
+        "description": "Print info about the connected device",
+        "inherit": false
+      },
+      {
+        "long": "override-overlay",
+        "short": "o",
+        "description": "Override overlay",
+        "inherit": false,
+        "value": {
+          "name": "FILE",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "pongo-shell",
+        "short": "p",
+        "description": "Boots to PongoOS shell",
+        "inherit": false
+      },
+      {
+        "long": "pongo-full",
+        "short": "P",
+        "description": "Boots to a PongoOS shell with default images already uploaded",
+        "inherit": false
+      },
+      {
+        "long": "override-ramdisk",
+        "short": "r",
+        "description": "Override ramdisk",
+        "inherit": false,
+        "value": {
+          "name": "FILE",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "reboot-device",
+        "short": "R",
+        "description": "Reboot connected device in normal mode",
+        "inherit": false
+      },
+      {
+        "long": "safe-mode",
+        "short": "s",
+        "description": "Enter safe mode",
+        "inherit": false
+      },
+      {
+        "long": "no-colors",
+        "short": "S",
+        "description": "Disable colors on the command line",
+        "inherit": false
+      },
+      {
+        "long": "debug-logging",
+        "short": "v",
+        "description": "Enable debug logging. This option can be repeated for extra verbosity",
+        "inherit": false,
+        "repeatable": true
+      },
+      {
+        "long": "verbose-boot",
+        "short": "V",
+        "description": "Verbose boot",
+        "inherit": false
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
