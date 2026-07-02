@@ -311,9 +311,9 @@ pub fn frameFromInput(allocator: std.mem.Allocator, input: Input, options: Rende
         options.theme,
     );
     if (options.suggestion.len != 0 and renderableInlineText(options.suggestion)) {
-        try appendUiStyleStart(allocator, &input_line, options.theme.autosuggestion);
+        try appendUiStyleStart(allocator, &input_line, options.theme.muted);
         try input_line.appendSlice(allocator, options.suggestion);
-        try appendUiStyleEnd(allocator, &input_line, options.theme.autosuggestion);
+        try appendUiStyleEnd(allocator, &input_line, options.theme.muted);
     }
     const input_line_bytes = try input_line.toOwnedSlice(allocator);
     defer allocator.free(input_line_bytes);
@@ -376,8 +376,8 @@ fn appendStyledInput(
         const grapheme_end = i + grapheme.len;
         const should_flash = completionFlashAt(flash, i, grapheme_end);
         if (flash_active != should_flash) {
-            if (flash_active) try appendUiStyleEnd(allocator, out, theme.completion_flash);
-            if (should_flash) try appendUiStyleStart(allocator, out, theme.completion_flash);
+            if (flash_active) try appendUiStyleEnd(allocator, out, theme.flash);
+            if (should_flash) try appendUiStyleStart(allocator, out, theme.flash);
             flash_active = should_flash;
         }
         const severity = diagnosticSeverityAt(spans, i, grapheme_end);
@@ -390,7 +390,7 @@ fn appendStyledInput(
         i = grapheme_end;
     }
     if (active != null) try out.appendSlice(allocator, "\x1b[24;59m");
-    if (flash_active) try appendUiStyleEnd(allocator, out, theme.completion_flash);
+    if (flash_active) try appendUiStyleEnd(allocator, out, theme.flash);
     if (i < text.len) try out.appendSlice(allocator, text[i..]);
 }
 
@@ -417,11 +417,10 @@ pub fn completionFlashForCursor(text: []const u8, cursor: usize) CompletionFlash
 
 fn diagnosticStyle(theme: UiTheme, severity: DiagnosticSeverity) UiStyle {
     return switch (severity) {
-        .warning, .err => theme.diagnostic_error,
-        .command_invalid => theme.command_invalid,
-        .comment => theme.input_comment,
-        .quote => theme.input_quote,
-        .pending => theme.input_pending,
+        .warning, .err, .command_invalid => theme.err,
+        .comment => theme.comment,
+        .quote => theme.quote,
+        .pending => theme.pending,
     };
 }
 

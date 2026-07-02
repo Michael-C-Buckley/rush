@@ -21,7 +21,7 @@
 
   <h2 id="adaptive-ui-theme"><a href="#adaptive-ui-theme">Adaptive UI theme</a></h2>
 
-  <p>Set <code>rush_style_*</code> variables to theme completions, autosuggestions, history matches, and diagnostics. Rush reads them before each prompt and caches them for rendering.</p>
+  <p>Set semantic <code>rush_style_*</code> variables to theme directories, options, autosuggestions, matches, and diagnostics wherever Rush renders them. Rush reads them before each prompt and caches them for rendering.</p>
 
   <pre><span class="cmd">rush_style</span>() {
   <span class="kw">if</span> <span class="cmd">test</span> <span class="str">"$rush_color_scheme"</span> = light; <span class="kw">then</span>
@@ -30,10 +30,10 @@
     muted=bright-black
   <span class="kw">fi</span>
 
-  rush_style_completion_selected=<span class="str">"fg=${rush_color_cyan-#00ffff},bold"</span>
-  rush_style_completion_directory=<span class="str">"fg=$(color dim "${rush_color_blue-#0000ff}" 15)"</span>
-  rush_style_completion_description=<span class="str">"fg=$muted,dim"</span>
-  rush_style_history_match=<span class="str">'fg=yellow,bold'</span>
+  rush_style_selection=<span class="str">"fg=${rush_color_cyan-#00ffff},bold"</span>
+  rush_style_directory=<span class="str">"fg=$(color dim "${rush_color_blue-#0000ff}" 15)"</span>
+  rush_style_muted=<span class="str">"fg=$muted,dim"</span>
+  rush_style_match=<span class="str">'fg=yellow,bold'</span>
 }</pre>
 
   <p>Define <code>rush_style</code> to recompute styles at startup and when the terminal reports a color-scheme or palette change. Rush sets <code>rush_color_scheme</code> to <code>dark</code>, <code>light</code>, or <code>unknown</code> first.</p>

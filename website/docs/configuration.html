@@ -86,7 +86,7 @@ each <span class="var">$XDG_DATA_DIRS</span> entry + /rush/functions
 
   <h2 id="ui-styles"><a href="#ui-styles">UI styles</a></h2>
 
-  <p>Configure editor colors with lowercase shell variables. Values are comma-separated style options.</p>
+  <p>Configure interactive colors with semantic lowercase shell variables. Values are comma-separated style options.</p>
 
   <pre>rush_style() {
   if test "$rush_color_scheme" = light; then
@@ -100,16 +100,15 @@ each <span class="var">$XDG_DATA_DIRS</span> entry + /rush/functions
   fi
 
   directory_color=$(color dim "${rush_color_blue-#0000ff}" 20)
-  rush_style_completion_directory="fg=$directory_color"
-  rush_style_completion_selected="fg=$accent,bold"
-  rush_style_completion_description="fg=$muted,dim"
-  rush_style_completion_flash="$flash"
-  rush_style_history_match='fg=yellow,bold'
-  rush_style_autosuggestion='dim'
-  rush_style_diagnostic_error='ul=curly,ul_color=red'
+  rush_style_directory="fg=$directory_color"
+  rush_style_selection="fg=$accent,bold"
+  rush_style_muted="fg=$muted,dim"
+  rush_style_flash="$flash"
+  rush_style_match='fg=yellow,bold'
+  rush_style_error='ul=curly,ul_color=red'
 }</pre>
 
-  <p>If <code>rush_style</code> exists, Rush calls it at interactive startup and after terminal color changes. Rush reads <code>rush_style_*</code> before each prompt, so later assignments apply on the next prompt.</p>
+  <p>If <code>rush_style</code> exists, Rush calls it at interactive startup and after terminal color changes. Rush reads semantic <code>rush_style_*</code> variables before each prompt, so later assignments apply on the next prompt.</p>
 
   <p>Before each color-scheme call, Rush sets these Rush-owned variables for the hook:</p>
 
@@ -147,22 +146,21 @@ each <span class="var">$XDG_DATA_DIRS</span> entry + /rush/functions
       <tr><th>Variable</th><th>Styled role</th></tr>
     </thead>
     <tbody>
-      <tr><td><code>rush_style_completion_selected</code></td><td>Selected completion candidate</td></tr>
-      <tr><td><code>rush_style_completion_command</code></td><td>Command-name completion candidate</td></tr>
-      <tr><td><code>rush_style_completion_builtin</code></td><td>Builtin completion candidate</td></tr>
-      <tr><td><code>rush_style_completion_subcommand</code></td><td>Subcommand completion candidate</td></tr>
-      <tr><td><code>rush_style_completion_plain</code></td><td>Plain completion candidate</td></tr>
-      <tr><td><code>rush_style_completion_directory</code></td><td>Directory completion candidate</td></tr>
-      <tr><td><code>rush_style_completion_option</code></td><td>Option completion candidate</td></tr>
-      <tr><td><code>rush_style_completion_variable</code></td><td>Variable completion candidate</td></tr>
-      <tr><td><code>rush_style_completion_function</code></td><td>Function completion candidate</td></tr>
-      <tr><td><code>rush_style_completion_file</code></td><td>File completion candidate</td></tr>
-      <tr><td><code>rush_style_completion_description</code></td><td>Completion description text</td></tr>
-      <tr><td><code>rush_style_completion_summary</code></td><td>Completion menu summary text</td></tr>
-      <tr><td><code>rush_style_completion_flash</code></td><td>Transient completion flash feedback</td></tr>
-      <tr><td><code>rush_style_history_match</code></td><td>History search match highlight</td></tr>
-      <tr><td><code>rush_style_autosuggestion</code></td><td>Inline autosuggestion text</td></tr>
-      <tr><td><code>rush_style_diagnostic_error</code></td><td>Editor diagnostic error underline</td></tr>
+      <tr><td><code>rush_style_selection</code></td><td>Selected UI item</td></tr>
+      <tr><td><code>rush_style_command</code></td><td>Command-like text</td></tr>
+      <tr><td><code>rush_style_plain</code></td><td>Plain completion text</td></tr>
+      <tr><td><code>rush_style_directory</code></td><td>Directory paths and directory completion candidates</td></tr>
+      <tr><td><code>rush_style_option</code></td><td>Command options</td></tr>
+      <tr><td><code>rush_style_variable</code></td><td>Shell variables</td></tr>
+      <tr><td><code>rush_style_function</code></td><td>Shell functions</td></tr>
+      <tr><td><code>rush_style_file</code></td><td>File paths and file completion candidates</td></tr>
+      <tr><td><code>rush_style_muted</code></td><td>Secondary text, summaries, descriptions, and autosuggestions</td></tr>
+      <tr><td><code>rush_style_flash</code></td><td>Transient completion flash feedback</td></tr>
+      <tr><td><code>rush_style_match</code></td><td>Search or fuzzy-match highlight</td></tr>
+      <tr><td><code>rush_style_error</code></td><td>Errors and invalid input underline</td></tr>
+      <tr><td><code>rush_style_comment</code></td><td>Input comments</td></tr>
+      <tr><td><code>rush_style_quote</code></td><td>Quoted input</td></tr>
+      <tr><td><code>rush_style_pending</code></td><td>Pending or incomplete input</td></tr>
     </tbody>
   </table>
 

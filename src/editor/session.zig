@@ -2608,9 +2608,9 @@ fn styledHistorySearchLabel(
     var position_index: usize = 0;
     for (display_text, 0..) |byte, index| {
         if (position_index < positions.len and positions[position_index] == index) {
-            try appendUiStyleStart(allocator, &label, theme.history_match);
+            try appendUiStyleStart(allocator, &label, theme.match);
             try label.append(allocator, byte);
-            try appendUiStyleEnd(allocator, &label, theme.history_match);
+            try appendUiStyleEnd(allocator, &label, theme.match);
             position_index += 1;
         } else {
             try label.append(allocator, byte);

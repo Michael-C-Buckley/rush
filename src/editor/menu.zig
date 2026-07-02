@@ -23,26 +23,21 @@ pub const UiStyle = struct {
 };
 
 pub const UiTheme = struct {
-    completion_selected: UiStyle = .{ .fg = .{ .index = 6 }, .bold = true },
-    completion_command: UiStyle = .{},
-    completion_builtin: UiStyle = .{},
-    completion_subcommand: UiStyle = .{},
-    completion_plain: UiStyle = .{},
-    completion_directory: UiStyle = .{ .fg = .{ .index = 4 } },
-    completion_option: UiStyle = .{ .fg = .{ .index = 6 } },
-    completion_variable: UiStyle = .{ .fg = .{ .index = 5 } },
-    completion_function: UiStyle = .{ .fg = .{ .index = 5 } },
-    completion_file: UiStyle = .{ .fg = .{ .index = 7 } },
-    completion_description: UiStyle = .{ .fg = .{ .index = 8 } },
-    completion_summary: UiStyle = .{ .fg = .{ .index = 8 } },
-    completion_flash: UiStyle = .{ .fg = .{ .index = 0 }, .bg = .{ .index = 7 } },
-    history_match: UiStyle = .{ .fg = .{ .index = 3 } },
-    autosuggestion: UiStyle = .{ .fg = .{ .index = 8 } },
-    diagnostic_error: UiStyle = .{ .ul = .curly, .ul_color = .{ .index = 1 } },
-    command_invalid: UiStyle = .{ .ul = .curly, .ul_color = .{ .index = 1 } },
-    input_comment: UiStyle = .{ .fg = .{ .index = 8 } },
-    input_quote: UiStyle = .{ .fg = .{ .index = 2 } },
-    input_pending: UiStyle = .{ .fg = .{ .index = 6 } },
+    selection: UiStyle = .{ .fg = .{ .index = 6 }, .bold = true },
+    command: UiStyle = .{},
+    plain: UiStyle = .{},
+    directory: UiStyle = .{ .fg = .{ .index = 4 } },
+    option: UiStyle = .{ .fg = .{ .index = 6 } },
+    variable: UiStyle = .{ .fg = .{ .index = 5 } },
+    function: UiStyle = .{ .fg = .{ .index = 5 } },
+    file: UiStyle = .{ .fg = .{ .index = 7 } },
+    muted: UiStyle = .{ .fg = .{ .index = 8 } },
+    flash: UiStyle = .{ .fg = .{ .index = 0 }, .bg = .{ .index = 7 } },
+    match: UiStyle = .{ .fg = .{ .index = 3 } },
+    err: UiStyle = .{ .ul = .curly, .ul_color = .{ .index = 1 } },
+    comment: UiStyle = .{ .fg = .{ .index = 8 } },
+    quote: UiStyle = .{ .fg = .{ .index = 2 } },
+    pending: UiStyle = .{ .fg = .{ .index = 6 } },
 };
 
 pub const Presentation = struct {
@@ -176,24 +171,24 @@ pub fn appendLines(
         const label = try candidateLabel(allocator, candidate, options.presentation);
         defer if (label.owned) |owned| allocator.free(owned);
         if (index == options.selected) {
-            try appendUiStyleStart(allocator, &line, options.theme.completion_selected);
+            try appendUiStyleStart(allocator, &line, options.theme.selection);
             try line.appendSlice(allocator, options.presentation.row_prefix);
             const kind_style = kindStyle(options.theme, candidate.kind);
             try appendUiStyleStart(allocator, &line, kind_style);
             try appendPaddedCell(allocator, &line, label.text, label_width, options.presentation);
             try appendUiStyleEnd(allocator, &line, kind_style);
-            try appendUiStyleStart(allocator, &line, options.theme.completion_selected);
+            try appendUiStyleStart(allocator, &line, options.theme.selection);
             if (candidate.description) |description| {
                 if (description.len != 0 and description_width != 0) {
                     try line.appendSlice(allocator, options.presentation.description_separator);
-                    try appendUiStyleStart(allocator, &line, options.theme.completion_description);
+                    try appendUiStyleStart(allocator, &line, options.theme.muted);
                     try appendTruncated(allocator, &line, description, description_width, options.presentation);
-                    try appendUiStyleEnd(allocator, &line, options.theme.completion_description);
-                    try appendUiStyleStart(allocator, &line, options.theme.completion_selected);
+                    try appendUiStyleEnd(allocator, &line, options.theme.muted);
+                    try appendUiStyleStart(allocator, &line, options.theme.selection);
                 }
             }
             try line.appendSlice(allocator, options.presentation.selected_row_suffix);
-            try appendUiStyleEnd(allocator, &line, options.theme.completion_selected);
+            try appendUiStyleEnd(allocator, &line, options.theme.selection);
         } else {
             try line.appendSlice(allocator, options.presentation.row_prefix);
             const kind_style = kindStyle(options.theme, candidate.kind);
@@ -203,9 +198,9 @@ pub fn appendLines(
             if (candidate.description) |description| {
                 if (description.len != 0 and description_width != 0) {
                     try line.appendSlice(allocator, options.presentation.description_separator);
-                    try appendUiStyleStart(allocator, &line, options.theme.completion_description);
+                    try appendUiStyleStart(allocator, &line, options.theme.muted);
                     try appendTruncated(allocator, &line, description, description_width, options.presentation);
-                    try appendUiStyleEnd(allocator, &line, options.theme.completion_description);
+                    try appendUiStyleEnd(allocator, &line, options.theme.muted);
                 }
             }
         }
@@ -215,11 +210,11 @@ pub fn appendLines(
         var line: std.ArrayList(u8) = .empty;
         errdefer line.deinit(allocator);
         try line.appendSlice(allocator, options.presentation.row_prefix);
-        try appendUiStyleStart(allocator, &line, options.theme.completion_summary);
+        try appendUiStyleStart(allocator, &line, options.theme.muted);
         const text = try scrollSummaryText(allocator, window, candidates.len, options.presentation.scroll_summary);
         defer allocator.free(text);
         try line.appendSlice(allocator, text);
-        try appendUiStyleEnd(allocator, &line, options.theme.completion_summary);
+        try appendUiStyleEnd(allocator, &line, options.theme.muted);
         try lines.append(allocator, try line.toOwnedSlice(allocator));
     }
 }
@@ -292,15 +287,13 @@ fn candidateLabel(
 
 fn kindStyle(theme: UiTheme, kind: completion.Kind) UiStyle {
     return switch (kind) {
-        .command => theme.completion_command,
-        .builtin => theme.completion_builtin,
-        .subcommand => theme.completion_subcommand,
-        .plain => theme.completion_plain,
-        .function => theme.completion_function,
-        .file => theme.completion_file,
-        .directory => theme.completion_directory,
-        .variable => theme.completion_variable,
-        .option => theme.completion_option,
+        .command, .builtin, .subcommand => theme.command,
+        .plain => theme.plain,
+        .function => theme.function,
+        .file => theme.file,
+        .directory => theme.directory,
+        .variable => theme.variable,
+        .option => theme.option,
     };
 }
 
@@ -663,7 +656,7 @@ test "menu label column uses all candidates and caps outliers" {
         .width = 80,
         .height = 3,
         .label_width_override = null,
-        .theme = .{ .completion_description = .{} },
+        .theme = .{ .muted = .{} },
         .presentation = .{ .max_label_width = 8, .scroll_summary = .{ .visible = false } },
     });
 

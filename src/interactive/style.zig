@@ -87,26 +87,21 @@ fn colorSchemeName(scheme: editor.driver.ColorScheme) []const u8 {
 
 pub fn theme(state: shell.state.State) editor_render.UiTheme {
     var ui_theme: editor_render.UiTheme = .{};
-    applyUiStyleVariable(state, &ui_theme.completion_selected, "rush_style_completion_selected");
-    applyUiStyleVariable(state, &ui_theme.completion_command, "rush_style_completion_command");
-    applyUiStyleVariable(state, &ui_theme.completion_builtin, "rush_style_completion_builtin");
-    applyUiStyleVariable(state, &ui_theme.completion_subcommand, "rush_style_completion_subcommand");
-    applyUiStyleVariable(state, &ui_theme.completion_plain, "rush_style_completion_plain");
-    applyUiStyleVariable(state, &ui_theme.completion_directory, "rush_style_completion_directory");
-    applyUiStyleVariable(state, &ui_theme.completion_option, "rush_style_completion_option");
-    applyUiStyleVariable(state, &ui_theme.completion_variable, "rush_style_completion_variable");
-    applyUiStyleVariable(state, &ui_theme.completion_function, "rush_style_completion_function");
-    applyUiStyleVariable(state, &ui_theme.completion_file, "rush_style_completion_file");
-    applyUiStyleVariable(state, &ui_theme.completion_description, "rush_style_completion_description");
-    applyUiStyleVariable(state, &ui_theme.completion_summary, "rush_style_completion_summary");
-    applyUiStyleVariable(state, &ui_theme.completion_flash, "rush_style_completion_flash");
-    applyUiStyleVariable(state, &ui_theme.history_match, "rush_style_history_match");
-    applyUiStyleVariable(state, &ui_theme.autosuggestion, "rush_style_autosuggestion");
-    applyUiStyleVariable(state, &ui_theme.diagnostic_error, "rush_style_diagnostic_error");
-    applyUiStyleVariable(state, &ui_theme.command_invalid, "rush_style_command_invalid");
-    applyUiStyleVariable(state, &ui_theme.input_comment, "rush_style_input_comment");
-    applyUiStyleVariable(state, &ui_theme.input_quote, "rush_style_input_quote");
-    applyUiStyleVariable(state, &ui_theme.input_pending, "rush_style_input_pending");
+    applyUiStyleVariable(state, &ui_theme.selection, "rush_style_selection");
+    applyUiStyleVariable(state, &ui_theme.command, "rush_style_command");
+    applyUiStyleVariable(state, &ui_theme.plain, "rush_style_plain");
+    applyUiStyleVariable(state, &ui_theme.directory, "rush_style_directory");
+    applyUiStyleVariable(state, &ui_theme.option, "rush_style_option");
+    applyUiStyleVariable(state, &ui_theme.variable, "rush_style_variable");
+    applyUiStyleVariable(state, &ui_theme.function, "rush_style_function");
+    applyUiStyleVariable(state, &ui_theme.file, "rush_style_file");
+    applyUiStyleVariable(state, &ui_theme.muted, "rush_style_muted");
+    applyUiStyleVariable(state, &ui_theme.flash, "rush_style_flash");
+    applyUiStyleVariable(state, &ui_theme.match, "rush_style_match");
+    applyUiStyleVariable(state, &ui_theme.err, "rush_style_error");
+    applyUiStyleVariable(state, &ui_theme.comment, "rush_style_comment");
+    applyUiStyleVariable(state, &ui_theme.quote, "rush_style_quote");
+    applyUiStyleVariable(state, &ui_theme.pending, "rush_style_pending");
     return ui_theme;
 }
 
@@ -127,9 +122,9 @@ test "interactive style refresh runs rush_style with color scheme" {
         .text =
         \\rush_style() {
         \\  if test "$rush_color_scheme" = light; then
-        \\    rush_style_history_match='fg=red,bold'
+        \\    rush_style_match='fg=red,bold'
         \\  else
-        \\    rush_style_history_match='fg=blue'
+        \\    rush_style_match='fg=blue'
         \\  fi
         \\}
         ,
@@ -139,8 +134,8 @@ test "interactive style refresh runs rush_style with color scheme" {
     const ui_theme = try refreshStyle(&sh, std.testing.allocator, std.testing.io, .light);
 
     try std.testing.expectEqualStrings("light", sh.state.getVariable("rush_color_scheme").?.value);
-    try std.testing.expectEqual(editor_render.parseUiColor("red").?, ui_theme.history_match.fg.?);
-    try std.testing.expect(ui_theme.history_match.bold);
+    try std.testing.expectEqual(editor_render.parseUiColor("red").?, ui_theme.match.fg.?);
+    try std.testing.expect(ui_theme.match.bold);
 }
 
 test "interactive color reports update rush color variables" {
@@ -152,7 +147,7 @@ test "interactive color reports update rush color variables" {
         .id = 1,
         .kind = .command_string,
         .name = "test",
-        .text = "rush_style() { rush_style_completion_directory=\"fg=$rush_color_blue\"; }",
+        .text = "rush_style() { rush_style_directory=\"fg=$rush_color_blue\"; }",
     };
     _ = try sh.evalSource(src);
 
@@ -164,7 +159,7 @@ test "interactive color reports update rush color variables" {
     );
 
     try std.testing.expectEqualStrings("#012345", sh.state.getVariable("rush_color_blue").?.value);
-    try std.testing.expectEqual(editor_render.parseUiColor("#012345").?, ui_theme.completion_directory.fg.?);
+    try std.testing.expectEqual(editor_render.parseUiColor("#012345").?, ui_theme.directory.fg.?);
 }
 
 test {
