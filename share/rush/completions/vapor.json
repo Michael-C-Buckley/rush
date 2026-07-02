@@ -1,0 +1,146 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "vapor",
+    "description": "Vapor toolbox for server-side Swift",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "value": {
+          "name": "command",
+          "description": "Display usage information about the specified command",
+          "provider": "commands"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "build",
+        "description": "builds an app in the console"
+      },
+      {
+        "name": "new",
+        "description": "generates a new app",
+        "options": [
+          {
+            "long": "template",
+            "short": "T",
+            "description": "the URL of a Git repository to use as a template",
+            "value": {
+              "name": "template"
+            }
+          },
+          {
+            "long": "branch",
+            "description": "template repository branch to use",
+            "value": {
+              "name": "branch"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "the directory to place the new project in",
+            "value": {
+              "name": "directory",
+              "provider": "directories"
+            }
+          },
+          {
+            "long": "no-commit",
+            "description": "skips adding a first commit to the newly created repo"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "Name of project and folder",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "clean",
+        "description": "cleans temporary files",
+        "options": [
+          {
+            "long": "update",
+            "short": "u",
+            "description": "delete Package.resolved file if it exists"
+          },
+          {
+            "long": "global",
+            "short": "g",
+            "description": "clean Xcode's global DerivedData cache"
+          },
+          {
+            "long": "swiftpm",
+            "short": "s",
+            "description": "delete .swiftpm folder"
+          }
+        ]
+      },
+      {
+        "name": "heroku",
+        "description": "commands for working with Heroku",
+        "subcommands": [
+          {
+            "name": "init",
+            "description": "configures app for deployment to Heroku"
+          },
+          {
+            "name": "push",
+            "description": "deploys app to Heroku"
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "runs an app from the console. Equivalent to `swift run --enable-test-discovery Run`"
+      },
+      {
+        "name": "supervisor",
+        "description": "commands for working with Supervisord",
+        "subcommands": [
+          {
+            "name": "init",
+            "description": "creates a Supervisor entry for the current project"
+          },
+          {
+            "name": "restart",
+            "description": "restarts current project in Supervisor"
+          },
+          {
+            "name": "update",
+            "description": "updates Supervisor entry for current project"
+          }
+        ]
+      },
+      {
+        "name": "xcode",
+        "description": "opens an app in Xcode"
+      }
+    ],
+    "providers": {
+      "commands": {
+        "values": [
+          "clean",
+          "heroku",
+          "new",
+          "run",
+          "supervisor",
+          "xcode",
+          "build"
+        ]
+      },
+      "directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
