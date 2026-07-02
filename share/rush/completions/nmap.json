@@ -1,0 +1,209 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "nmap",
+    "description": "scan networks and ports",
+    "options": [
+      {
+        "spellings": [
+          "-iL"
+        ],
+        "description": "Input from list of hosts/networks",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-iR"
+        ],
+        "description": "Choose random targets",
+        "inherit": false,
+        "value": {
+          "name": "count"
+        }
+      },
+      {
+        "long": "exclude",
+        "description": "exclude hosts or networks",
+        "inherit": false,
+        "value": {
+          "name": "host"
+        }
+      },
+      {
+        "long": "excludefile",
+        "description": "Exclude list from file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-sS"
+        ],
+        "description": "TCP SYN scan",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-sT"
+        ],
+        "description": "TCP scan",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-sA"
+        ],
+        "description": "TCP ACK scan",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-sW"
+        ],
+        "description": "TCP Window scan",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-sM"
+        ],
+        "description": "TCP Maimon scan",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-sU"
+        ],
+        "description": "UDP scan",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-sP"
+        ],
+        "description": "Ping scan",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-sN"
+        ],
+        "description": "TCP Null scan",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-sF"
+        ],
+        "description": "FIN scan",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-sX"
+        ],
+        "description": "Xmas scan",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-sO"
+        ],
+        "description": "IP protocol scan",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "description": "Scan specified ports",
+        "inherit": false,
+        "value": {
+          "name": "ports"
+        }
+      },
+      {
+        "short": "v",
+        "spellings": [
+          "-vv"
+        ],
+        "description": "Increase verbosity level",
+        "inherit": false
+      },
+      {
+        "short": "O",
+        "description": "Enable OS detection",
+        "inherit": false
+      },
+      {
+        "long": "osscan-limit",
+        "description": "Limit OS detection to promising targets",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "---osscan-guess"
+        ],
+        "description": "Guess OS more aggressively",
+        "inherit": false
+      },
+      {
+        "short": "A",
+        "description": "Enable a full detection",
+        "inherit": false
+      },
+      {
+        "short": "6",
+        "description": "Enable IPV6 scanning",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "description": "show version information",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-privileged"
+        ],
+        "description": "Assume that user is fully privileges",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-unprivileged"
+        ],
+        "description": "Assume that user lacks raw socket privileges",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "target",
+          "description": "host or network target",
+          "index": 0,
+          "repeatable": true,
+          "required": false
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
