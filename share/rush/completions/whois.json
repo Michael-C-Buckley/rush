@@ -1,0 +1,105 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "whois",
+    "description": "query WHOIS registration databases",
+    "options": [
+      {
+        "short": "a",
+        "description": "use the American Registry for Internet Numbers (ARIN) database"
+      },
+      {
+        "short": "A",
+        "description": "use the Asia/Pacific Network Information Center (APNIC) database"
+      },
+      {
+        "short": "b",
+        "description": "use the Network Abuse Clearinghouse database"
+      },
+      {
+        "short": "c",
+        "description": "equivalent to '-h TLD.whois-servers.net', where 'TLD' is this option's argument",
+        "value": {
+          "name": "TLD"
+        },
+        "excludes": [
+          "-h"
+        ]
+      },
+      {
+        "short": "f",
+        "description": "use the African Network Information Centre (AfriNIC) database"
+      },
+      {
+        "short": "g",
+        "description": "use the US non-military federal government database"
+      },
+      {
+        "short": "h",
+        "description": "use the specified host instead of the default (host name or IP)",
+        "value": {
+          "name": "hostname"
+        },
+        "excludes": [
+          "-c"
+        ]
+      },
+      {
+        "short": "i",
+        "description": "use the traditional Network Information Center (InterNIC) database"
+      },
+      {
+        "short": "I",
+        "description": "use the Internet Assigned Numbers Authority (IANA) database"
+      },
+      {
+        "short": "k",
+        "description": "use the National Internet Development Agency of Korea (KRNIC) database"
+      },
+      {
+        "short": "l",
+        "description": "use the Latin American and Caribbean IP address Regional Registry (LACNIC) database"
+      },
+      {
+        "short": "m",
+        "description": "use the Route Arbiter Database (RADB) database"
+      },
+      {
+        "short": "p",
+        "description": "connect to the whois server on the given port",
+        "value": {
+          "name": "port"
+        }
+      },
+      {
+        "short": "P",
+        "description": "use the PeeringDB database of AS numbers"
+      },
+      {
+        "short": "Q",
+        "description": "do a quick lookup (don't follow referrals)"
+      },
+      {
+        "short": "r",
+        "description": "use the R\u00e9seaux IP Europ\u00e9ens (RIPE) database"
+      },
+      {
+        "short": "R",
+        "description": "do a recursive lookup"
+      },
+      {
+        "short": "S",
+        "description": "print the output verbatim"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "name",
+          "repeatable": true
+        }
+      ]
+    }
+  }
+}
