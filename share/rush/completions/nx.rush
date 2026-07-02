@@ -1,0 +1,95 @@
+__rush_complete_nx_workspace_file() {
+  dir=$PWD
+  while test "$dir" != /; do
+    for file in nx.json workspace.json angular.json package.json; do
+      if test -f "$dir/$file"; then
+        printf '%s\n' "$dir/$file"
+        return
+      fi
+    done
+    dir=${dir%/*}
+    test -n "$dir" || dir=/
+  done
+}
+
+__rush_complete_nx_project_data() {
+  file=$(__rush_complete_nx_workspace_file)
+  test -n "$file" || return
+  command -v node >/dev/null 2>&1 || return
+  node -e '
+const fs = require("fs");
+const path = require("path");
+const root = path.dirname(process.argv[1]);
+function read(file) { try { return JSON.parse(fs.readFileSync(file, "utf8")); } catch { return null; } }
+function collectProjectJson(dir, out) {
+  for (const entry of fs.readdirSync(dir, { withFileTypes: true })) {
+    if (entry.name === "node_modules" || entry.name === ".git" || entry.name === "dist") continue;
+    const full = path.join(dir, entry.name);
+    if (entry.isDirectory()) {
+      const pj = path.join(full, "project.json");
+      if (fs.existsSync(pj)) {
+        const data = read(pj) || {};
+        out[data.name || path.relative(root, full)] = data;
+      }
+      collectProjectJson(full, out);
+    }
+  }
+}
+const data = read(process.argv[1]) || {};
+const projects = {};
+if (data.projects && !Array.isArray(data.projects)) {
+  for (const [name, value] of Object.entries(data.projects)) {
+    projects[name] = typeof value === "string" ? (read(path.join(root, value, "project.json")) || {}) : value;
+  }
+}
+collectProjectJson(root, projects);
+for (const [name, project] of Object.entries(projects)) {
+  const targets = Object.keys(project.targets || project.architect || {}).join(",");
+  console.log(`${name}\t${targets}`);
+}
+' "$file" 2>/dev/null
+}
+
+__rush_complete_nx_projects() {
+  __rush_complete_nx_project_data | while IFS= read -r line; do
+    name=${line%%$(printf '\t')*}
+    test -n "$name" && rush_complete candidate "$name" --kind plain --description 'nx project' --priority 40
+  done
+}
+
+__rush_complete_nx_targets() {
+  __rush_complete_nx_project_data | while IFS= read -r line; do
+    targets=${line#*$(printf '\t')}
+    old_ifs=$IFS; IFS=,
+    for target in $targets; do
+      test -n "$target" && rush_complete candidate "$target" --kind plain --description 'nx target' --priority 35
+    done
+    IFS=$old_ifs
+  done
+}
+
+__rush_complete_nx_run_targets() {
+  __rush_complete_nx_project_data | while IFS= read -r line; do
+    project=${line%%$(printf '\t')*}
+    targets=${line#*$(printf '\t')}
+    old_ifs=$IFS; IFS=,
+    for target in $targets; do
+      test -n "$project" && test -n "$target" && rush_complete candidate "$project:$target" --kind plain --description 'nx target' --priority 45
+    done
+    IFS=$old_ifs
+  done
+}
+
+__rush_complete_nx_generators() {
+  for generator in @nx/js:library @nx/js:application @nx/node:application @nx/react:application @nx/react:library @nx/angular:application @nx/angular:library @nx/workspace:library; do
+    rush_complete candidate "$generator" --kind plain --description 'nx generator' --priority 20
+  done
+}
+
+__rush_complete_nx_workspace_generators() {
+  for dir in tools/generators/*; do
+    test -d "$dir" || continue
+    name=${dir##*/}
+    rush_complete candidate "$name" --kind plain --description 'workspace generator' --priority 45
+  done
+}
