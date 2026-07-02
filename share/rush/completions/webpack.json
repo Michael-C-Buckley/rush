@@ -1,0 +1,5035 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "webpack",
+    "description": "javaScript module bundler",
+    "options": [
+      {
+        "long": "config",
+        "short": "c",
+        "description": "provide path to a webpack configuration file e.g. ./webpack.config.js",
+        "value": {
+          "name": "value",
+          "provider": "files"
+        }
+      },
+      {
+        "long": "config-name",
+        "description": "name of the configuration to use",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "merge",
+        "short": "m",
+        "description": "merge two or more configurations using 'webpack-merge'"
+      },
+      {
+        "long": "env",
+        "description": "environment passed to the configuration when it is a function",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "node-env",
+        "description": "sets process.env.NODE_ENV to the specified value",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "hot",
+        "short": "h",
+        "description": "enables Hot Module Replacement",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-hot",
+        "description": "disables Hot Module Replacement"
+      },
+      {
+        "long": "analyze",
+        "description": "it invokes webpack-bundle-analyzer plugin to get bundle information"
+      },
+      {
+        "long": "progress",
+        "description": "print compilation progress during build",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "prefetch",
+        "description": "prefetch this request",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "json",
+        "short": "j",
+        "description": "prints result as JSON or store it in a file",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-amd",
+        "description": "negative 'amd' option"
+      },
+      {
+        "long": "bail",
+        "description": "report the first error as a hard error instead of tolerating it"
+      },
+      {
+        "long": "no-bail",
+        "description": "negative 'bail' option"
+      },
+      {
+        "long": "cache",
+        "description": "enable in memory caching. Disable caching"
+      },
+      {
+        "long": "no-cache",
+        "description": "negative 'cache' option"
+      },
+      {
+        "long": "cache-cache-unaffected",
+        "description": "additionally cache computation of modules that are unchanged and reference only unchanged modules"
+      },
+      {
+        "long": "no-cache-cache-unaffected",
+        "description": "negative 'cache-cache-unaffected' option"
+      },
+      {
+        "long": "cache-max-generations",
+        "description": "number of generations unused cache entries stay in memory cache at minimum (1 = may be removed after unused for a single compilation, ..., Infinity: kept foreve",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "cache-type",
+        "description": "in memory caching. Filesystem caching",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "cache-allow-collecting-memory",
+        "description": "allows to collect unused memory allocated during deserialization. This requires copying data into smaller buffers and has a performance cost"
+      },
+      {
+        "long": "no-cache-allow-collecting-memory",
+        "description": "negative 'cache-allow-collecting-memory' option"
+      },
+      {
+        "long": "cache-cache-directory",
+        "description": "base directory for the cache (defaults to node_modules/.cache/webpack)",
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "cache-cache-location",
+        "description": "locations for the cache (defaults to cacheDirectory / name)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "cache-compression",
+        "description": "compression type used for the cache files",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-cache-compression",
+        "description": "negative 'cache-compression' option"
+      },
+      {
+        "long": "cache-hash-algorithm",
+        "description": "algorithm used for generation the hash (see node.js crypto package)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "cache-idle-timeout",
+        "description": "time in ms after which idle period the cache storing should happen",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "cache-idle-timeout-after-large-changes",
+        "description": "time in ms after which idle period the cache storing should happen when larger changes has been detected (cumulative build time > 2 x avg cache store time)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "cache-idle-timeout-for-initial-store",
+        "description": "time in ms after which idle period the initial cache storing should happen",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "cache-immutable-paths",
+        "description": "a RegExp matching an immutable directory (usually a package manager cache directory, including the tailing slash) A path to an immutable directory (usually a pa",
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "cache-immutable-paths-reset",
+        "description": "clear all items provided in 'cache.immutablePaths' configuration. List of paths that are managed by a package manager and contain a version or hash in its path "
+      },
+      {
+        "long": "cache-managed-paths",
+        "description": "a RegExp matching a managed directory (usually a node_modules directory, including the tailing slash) A path to a managed directory (usually a node_modules dire",
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "cache-managed-paths-reset",
+        "description": "clear all items provided in 'cache.managedPaths' configuration. List of paths that are managed by a package manager and can be trusted to not be modified otherw"
+      },
+      {
+        "long": "cache-max-age",
+        "description": "time for which unused cache entries stay in the filesystem cache at minimum (in milliseconds)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "cache-max-memory-generations",
+        "description": "number of generations unused cache entries stay in memory cache at minimum (0 = no memory cache used, 1 = may be removed after unused for a single compilation, ",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "cache-memory-cache-unaffected",
+        "description": "additionally cache computation of modules that are unchanged and reference only unchanged modules in memory"
+      },
+      {
+        "long": "no-cache-memory-cache-unaffected",
+        "description": "negative 'cache-memory-cache-unaffected' option"
+      },
+      {
+        "long": "cache-name",
+        "description": "name for the cache. Different names will lead to different coexisting caches",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "cache-profile",
+        "description": "track and log detailed timing information for individual cache items"
+      },
+      {
+        "long": "no-cache-profile",
+        "description": "negative 'cache-profile' option"
+      },
+      {
+        "long": "cache-store",
+        "description": "when to store data to the filesystem. (pack: Store data when compiler is idle in a single file)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "cache-version",
+        "description": "version of the cache data. Different versions won't allow to reuse the cache and override existing content. Update the version when config changed in a way whic",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "context",
+        "description": "the base directory (absolute path!) for resolving the `entry` option. If `output.pathinfo` is set, the included pathinfo is shortened to this directory",
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "dependencies",
+        "description": "references to another configuration to depend on",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "dependencies-reset",
+        "description": "clear all items provided in 'dependencies' configuration. References to other configurations to depend on"
+      },
+      {
+        "long": "devtool",
+        "short": "d",
+        "description": "determine source maps to use",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-devtool",
+        "description": "do not generate source maps"
+      },
+      {
+        "long": "entry",
+        "description": "the entry point(s) of your application e.g. ./src/main.js",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "entry-reset",
+        "description": "clear all items provided in 'entry' configuration. All modules are loaded upon startup. The last one is exported"
+      },
+      {
+        "long": "experiments-async-web-assembly",
+        "description": "support WebAssembly as asynchronous EcmaScript Module"
+      },
+      {
+        "long": "no-experiments-async-web-assembly",
+        "description": "negative 'experiments-async-web-assembly' option"
+      },
+      {
+        "long": "experiments-back-compat",
+        "description": "enable backward-compat layer with deprecation warnings for many webpack 4 APIs"
+      },
+      {
+        "long": "no-experiments-back-compat",
+        "description": "negative 'experiments-back-compat' option"
+      },
+      {
+        "long": "experiments-build-http-allowed-uris",
+        "description": "allowed URI pattern. Allowed URI (resp. the beginning of it)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "experiments-build-http-allowed-uris-reset",
+        "description": "clear all items provided in 'experiments.buildHttp.allowedUris' configuration. List of allowed URIs (resp. the beginning of them)"
+      },
+      {
+        "long": "experiments-build-http-cache-location",
+        "description": "location where resource content is stored for lockfile entries. It's also possible to disable storing by passing false",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-experiments-build-http-cache-location",
+        "description": "negative 'experiments-build-http-cache-location' option"
+      },
+      {
+        "long": "experiments-build-http-frozen",
+        "description": "when set, anything that would lead to a modification of the lockfile or any resource content, will result in an error"
+      },
+      {
+        "long": "no-experiments-build-http-frozen",
+        "description": "negative 'experiments-build-http-frozen' option"
+      },
+      {
+        "long": "experiments-build-http-lockfile-location",
+        "description": "location of the lockfile",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "experiments-build-http-proxy",
+        "description": "proxy configuration, which can be used to specify a proxy server to use for HTTP requests",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "experiments-build-http-upgrade",
+        "description": "when set, resources of existing lockfile entries will be fetched and entries will be upgraded when resource content has changed"
+      },
+      {
+        "long": "no-experiments-build-http-upgrade",
+        "description": "negative 'experiments-build-http-upgrade' option"
+      },
+      {
+        "long": "experiments-cache-unaffected",
+        "description": "enable additional in memory caching of modules that are unchanged and reference only unchanged modules"
+      },
+      {
+        "long": "no-experiments-cache-unaffected",
+        "description": "negative 'experiments-cache-unaffected' option"
+      },
+      {
+        "long": "experiments-css",
+        "description": "enable css support"
+      },
+      {
+        "long": "no-experiments-css",
+        "description": "negative 'experiments-css' option"
+      },
+      {
+        "long": "experiments-css-exports-only",
+        "description": "avoid generating and loading a stylesheet and only embed exports from css into output javascript files"
+      },
+      {
+        "long": "no-experiments-css-exports-only",
+        "description": "negative 'experiments-css-exports-only' option"
+      },
+      {
+        "long": "experiments-future-defaults",
+        "description": "apply defaults of next major version"
+      },
+      {
+        "long": "no-experiments-future-defaults",
+        "description": "negative 'experiments-future-defaults' option"
+      },
+      {
+        "long": "experiments-layers",
+        "description": "enable module layers"
+      },
+      {
+        "long": "no-experiments-layers",
+        "description": "negative 'experiments-layers' option"
+      },
+      {
+        "long": "experiments-lazy-compilation",
+        "description": "compile entrypoints and import()s only when they are accessed"
+      },
+      {
+        "long": "no-experiments-lazy-compilation",
+        "description": "negative 'experiments-lazy-compilation' option"
+      },
+      {
+        "long": "experiments-lazy-compilation-backend-client",
+        "description": "a custom client",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "experiments-lazy-compilation-backend-listen",
+        "description": "a port",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "experiments-lazy-compilation-backend-listen-host",
+        "description": "a host",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "experiments-lazy-compilation-backend-listen-port",
+        "description": "a port",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "experiments-lazy-compilation-backend-protocol",
+        "description": "specifies the protocol the client should use to connect to the server",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "experiments-lazy-compilation-entries",
+        "description": "enable/disable lazy compilation for entries"
+      },
+      {
+        "long": "no-experiments-lazy-compilation-entries",
+        "description": "negative 'experiments-lazy-compilation-entries' option"
+      },
+      {
+        "long": "experiments-lazy-compilation-imports",
+        "description": "enable/disable lazy compilation for import() modules"
+      },
+      {
+        "long": "no-experiments-lazy-compilation-imports",
+        "description": "negative 'experiments-lazy-compilation-imports' option"
+      },
+      {
+        "long": "experiments-lazy-compilation-test",
+        "description": "specify which entrypoints or import()ed modules should be lazily compiled. This is matched with the imported module and not the entrypoint name",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "experiments-output-module",
+        "description": "allow output javascript files as module source type"
+      },
+      {
+        "long": "no-experiments-output-module",
+        "description": "negative 'experiments-output-module' option"
+      },
+      {
+        "long": "experiments-sync-web-assembly",
+        "description": "support WebAssembly as synchronous EcmaScript Module (outdated)"
+      },
+      {
+        "long": "no-experiments-sync-web-assembly",
+        "description": "negative 'experiments-sync-web-assembly' option"
+      },
+      {
+        "long": "experiments-top-level-await",
+        "description": "allow using top-level-await in EcmaScript Modules"
+      },
+      {
+        "long": "no-experiments-top-level-await",
+        "description": "negative 'experiments-top-level-await' option"
+      },
+      {
+        "long": "externals",
+        "description": "every matched dependency becomes external. An exact matched dependency becomes external. The same string is used as external dependency",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "externals-reset",
+        "description": "clear all items provided in 'externals' configuration. Specify dependencies that shouldn't be resolved by webpack, but should become dependencies of the resulti"
+      },
+      {
+        "long": "externals-presets-electron",
+        "description": "treat common electron built-in modules in main and preload context like 'electron', 'ipc' or 'shell' as external and load them via require() when used"
+      },
+      {
+        "long": "no-externals-presets-electron",
+        "description": "negative 'externals-presets-electron' option"
+      },
+      {
+        "long": "externals-presets-electron-main",
+        "description": "treat electron built-in modules in the main context like 'app', 'ipc-main' or 'shell' as external and load them via require() when used"
+      },
+      {
+        "long": "no-externals-presets-electron-main",
+        "description": "negative 'externals-presets-electron-main' option"
+      },
+      {
+        "long": "externals-presets-electron-preload",
+        "description": "treat electron built-in modules in the preload context like 'web-frame', 'ipc-renderer' or 'shell' as external and load them via require() when used"
+      },
+      {
+        "long": "no-externals-presets-electron-preload",
+        "description": "negative 'externals-presets-electron-preload' option"
+      },
+      {
+        "long": "externals-presets-electron-renderer",
+        "description": "treat electron built-in modules in the renderer context like 'web-frame', 'ipc-renderer' or 'shell' as external and load them via require() when used"
+      },
+      {
+        "long": "no-externals-presets-electron-renderer",
+        "description": "negative 'externals-presets-electron-renderer' option"
+      },
+      {
+        "long": "externals-presets-node",
+        "description": "treat node.js built-in modules like fs, path or vm as external and load them via require() when used"
+      },
+      {
+        "long": "no-externals-presets-node",
+        "description": "negative 'externals-presets-node' option"
+      },
+      {
+        "long": "externals-presets-nwjs",
+        "description": "treat NW.js legacy nw.gui module as external and load it via require() when used"
+      },
+      {
+        "long": "no-externals-presets-nwjs",
+        "description": "negative 'externals-presets-nwjs' option"
+      },
+      {
+        "long": "externals-presets-web",
+        "description": "treat references to 'http(s)://...' and 'std:...' as external and load them via import when used (Note that this changes execution order as externals are execut"
+      },
+      {
+        "long": "no-externals-presets-web",
+        "description": "negative 'externals-presets-web' option"
+      },
+      {
+        "long": "externals-presets-web-async",
+        "description": "treat references to 'http(s)://...' and 'std:...' as external and load them via async import() when used (Note that this external type is an async module, which"
+      },
+      {
+        "long": "no-externals-presets-web-async",
+        "description": "negative 'externals-presets-web-async' option"
+      },
+      {
+        "long": "externals-type",
+        "description": "specifies the default type of externals ('amd*', 'umd*', 'system' and 'jsonp' depend on output.libraryTarget set to the same value)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "ignore-warnings",
+        "description": "a RegExp to select the warning message",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "ignore-warnings-file",
+        "description": "a RegExp to select the origin file for the warning",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "ignore-warnings-message",
+        "description": "a RegExp to select the warning message",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "ignore-warnings-module",
+        "description": "a RegExp to select the origin module for the warning",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "ignore-warnings-reset",
+        "description": "clear all items provided in 'ignoreWarnings' configuration. Ignore specific warnings"
+      },
+      {
+        "long": "infrastructure-logging-append-only",
+        "description": "only appends lines to the output. Avoids updating existing output e. g. for status messages. This option is only used when no custom console is provided"
+      },
+      {
+        "long": "no-infrastructure-logging-append-only",
+        "description": "negative 'infrastructure-logging-append-only' option"
+      },
+      {
+        "long": "infrastructure-logging-colors",
+        "description": "enables/Disables colorful output. This option is only used when no custom console is provided"
+      },
+      {
+        "long": "no-infrastructure-logging-colors",
+        "description": "negative 'infrastructure-logging-colors' option"
+      },
+      {
+        "long": "infrastructure-logging-debug",
+        "description": "enable/Disable debug logging for all loggers. Enable debug logging for specific loggers",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-infrastructure-logging-debug",
+        "description": "negative 'infrastructure-logging-debug' option"
+      },
+      {
+        "long": "infrastructure-logging-debug-reset",
+        "description": "clear all items provided in 'infrastructureLogging.debug' configuration. Enable debug logging for specific loggers"
+      },
+      {
+        "long": "infrastructure-logging-level",
+        "description": "log level",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "mode",
+        "description": "defines the mode to pass to webpack",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-expr-context-critical",
+        "description": "enable warnings for full dynamic dependencies"
+      },
+      {
+        "long": "no-module-expr-context-critical",
+        "description": "negative 'module-expr-context-critical' option"
+      },
+      {
+        "long": "module-expr-context-recursive",
+        "description": "enable recursive directory lookup for full dynamic dependencies. Deprecated: This option has moved to 'module.parser.javascript.exprContextRecursive'",
+        "deprecated": true
+      },
+      {
+        "long": "no-module-expr-context-recursive",
+        "description": "negative 'module-expr-context-recursive' option"
+      },
+      {
+        "long": "module-expr-context-reg-exp",
+        "description": "sets the default regular expression for full dynamic dependencies. Deprecated: This option has moved to 'module.parser.javascript.exprContextRegExp'",
+        "deprecated": true,
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-expr-context-reg-exp",
+        "description": "negative 'module-expr-context-reg-exp' option"
+      },
+      {
+        "long": "module-expr-context-request",
+        "description": "set the default request for full dynamic dependencies. Deprecated: This option has moved to 'module.parser.javascript.exprContextRequest'",
+        "deprecated": true,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-generator-asset-data-url-encoding",
+        "description": "asset encoding (defaults to base64)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-module-generator-asset-data-url-encoding",
+        "description": "negative 'module-generator-asset-data-url-encoding' option"
+      },
+      {
+        "long": "module-generator-asset-data-url-mimetype",
+        "description": "asset mimetype (getting from file extension by default)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-generator-asset-emit",
+        "description": "emit an output asset from this asset module. This can be set to 'false' to omit emitting e. g. for SSR"
+      },
+      {
+        "long": "no-module-generator-asset-emit",
+        "description": "negative 'module-generator-asset-emit' option"
+      },
+      {
+        "long": "module-generator-asset-filename",
+        "description": "specifies the filename template of output files on disk. You must **not** specify an absolute path here, but the path may contain folders separated by '/'! The ",
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "module-generator-asset-output-path",
+        "description": "emit the asset in the specified folder relative to 'output.path'. This should only be needed when custom 'publicPath' is specified to match the folder structure",
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "module-generator-asset-public-path",
+        "description": "the 'publicPath' specifies the public URL address of the output files when referenced in a browser",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-generator-asset-inline-data-url-encoding",
+        "description": "asset encoding (defaults to base64)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-module-generator-asset-inline-data-url-encoding",
+        "description": "negative 'module-generator-asset-inline-data-url-encoding' option"
+      },
+      {
+        "long": "module-generator-asset-inline-data-url-mimetype",
+        "description": "asset mimetype (getting from file extension by default)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-generator-asset-resource-emit",
+        "description": "emit an output asset from this asset module. This can be set to 'false' to omit emitting e. g. for SSR"
+      },
+      {
+        "long": "no-module-generator-asset-resource-emit",
+        "description": "negative 'module-generator-asset-resource-emit' option"
+      },
+      {
+        "long": "module-generator-asset-resource-filename",
+        "description": "specifies the filename template of output files on disk. You must **not** specify an absolute path here, but the path may contain folders separated by '/'! The ",
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "module-generator-asset-resource-output-path",
+        "description": "emit the asset in the specified folder relative to 'output.path'. This should only be needed when custom 'publicPath' is specified to match the folder structure",
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "module-generator-asset-resource-public-path",
+        "description": "the 'publicPath' specifies the public URL address of the output files when referenced in a browser",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-no-parse",
+        "description": "a regular expression, when matched the module is not parsed. An absolute path, when the module starts with this path it is not parsed",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-no-parse-reset",
+        "description": "clear all items provided in 'module.noParse' configuration. Don't parse files matching. It's matched against the full resolved request"
+      },
+      {
+        "long": "module-parser-asset-data-url-condition-max-size",
+        "description": "maximum size of asset that should be inline as modules. Default: 8kb",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-amd",
+        "description": "negative 'module-parser-javascript-amd' option"
+      },
+      {
+        "long": "module-parser-javascript-browserify",
+        "description": "enable/disable special handling for browserify bundles"
+      },
+      {
+        "long": "no-module-parser-javascript-browserify",
+        "description": "negative 'module-parser-javascript-browserify' option"
+      },
+      {
+        "long": "module-parser-javascript-commonjs",
+        "description": "enable/disable parsing of CommonJs syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-commonjs",
+        "description": "negative 'module-parser-javascript-commonjs' option"
+      },
+      {
+        "long": "module-parser-javascript-commonjs-magic-comments",
+        "description": "enable/disable parsing of magic comments in CommonJs syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-commonjs-magic-comments",
+        "description": "negative 'module-parser-javascript-commonjs-magic-comments' option"
+      },
+      {
+        "long": "module-parser-javascript-exports-presence",
+        "description": "specifies the behavior of invalid export names in \"import ... from ...\" and \"export ... from ...\"",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-exports-presence",
+        "description": "negative 'module-parser-javascript-exports-presence' option"
+      },
+      {
+        "long": "module-parser-javascript-expr-context-critical",
+        "description": "enable warnings for full dynamic dependencies"
+      },
+      {
+        "long": "no-module-parser-javascript-expr-context-critical",
+        "description": "negative 'module-parser-javascript-expr-context-critical' option"
+      },
+      {
+        "long": "module-parser-javascript-expr-context-recursive",
+        "description": "enable recursive directory lookup for full dynamic dependencies"
+      },
+      {
+        "long": "no-module-parser-javascript-expr-context-recursive",
+        "description": "negative 'module-parser-javascript-expr-context-recursive' option"
+      },
+      {
+        "long": "module-parser-javascript-expr-context-reg-exp",
+        "description": "sets the default regular expression for full dynamic dependencies",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-expr-context-reg-exp",
+        "description": "negative 'module-parser-javascript-expr-context-reg-exp' option"
+      },
+      {
+        "long": "module-parser-javascript-expr-context-request",
+        "description": "set the default request for full dynamic dependencies",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-parser-javascript-harmony",
+        "description": "enable/disable parsing of EcmaScript Modules syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-harmony",
+        "description": "negative 'module-parser-javascript-harmony' option"
+      },
+      {
+        "long": "module-parser-javascript-import",
+        "description": "enable/disable parsing of import() syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-import",
+        "description": "negative 'module-parser-javascript-import' option"
+      },
+      {
+        "long": "module-parser-javascript-import-exports-presence",
+        "description": "specifies the behavior of invalid export names in \"import ... from ...\"",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-import-exports-presence",
+        "description": "negative 'module-parser-javascript-import-exports-presence' option"
+      },
+      {
+        "long": "module-parser-javascript-import-meta",
+        "description": "enable/disable evaluating import.meta"
+      },
+      {
+        "long": "no-module-parser-javascript-import-meta",
+        "description": "negative 'module-parser-javascript-import-meta' option"
+      },
+      {
+        "long": "module-parser-javascript-import-meta-context",
+        "description": "enable/disable evaluating import.meta.webpackContext"
+      },
+      {
+        "long": "no-module-parser-javascript-import-meta-context",
+        "description": "negative 'module-parser-javascript-import-meta-context' option"
+      },
+      {
+        "long": "no-module-parser-javascript-node",
+        "description": "negative 'module-parser-javascript-node' option"
+      },
+      {
+        "long": "module-parser-javascript-node-dirname",
+        "description": "include a polyfill for the '__dirname' variable",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-node-dirname",
+        "description": "negative 'module-parser-javascript-node-dirname' option"
+      },
+      {
+        "long": "module-parser-javascript-node-filename",
+        "description": "include a polyfill for the '__filename' variable",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-node-filename",
+        "description": "negative 'module-parser-javascript-node-filename' option"
+      },
+      {
+        "long": "module-parser-javascript-node-global",
+        "description": "include a polyfill for the 'global' variable",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-node-global",
+        "description": "negative 'module-parser-javascript-node-global' option"
+      },
+      {
+        "long": "module-parser-javascript-reexport-exports-presence",
+        "description": "specifies the behavior of invalid export names in \"export ... from ...\". This might be useful to disable during the migration from \"export ... from ...\" to \"exp",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-reexport-exports-presence",
+        "description": "negative 'module-parser-javascript-reexport-exports-presence' option"
+      },
+      {
+        "long": "module-parser-javascript-require-context",
+        "description": "enable/disable parsing of require.context syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-require-context",
+        "description": "negative 'module-parser-javascript-require-context' option"
+      },
+      {
+        "long": "module-parser-javascript-require-ensure",
+        "description": "enable/disable parsing of require.ensure syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-require-ensure",
+        "description": "negative 'module-parser-javascript-require-ensure' option"
+      },
+      {
+        "long": "module-parser-javascript-require-include",
+        "description": "enable/disable parsing of require.include syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-require-include",
+        "description": "negative 'module-parser-javascript-require-include' option"
+      },
+      {
+        "long": "module-parser-javascript-require-js",
+        "description": "enable/disable parsing of require.js special syntax like require.config, requirejs.config, require.version and requirejs.onError"
+      },
+      {
+        "long": "no-module-parser-javascript-require-js",
+        "description": "negative 'module-parser-javascript-require-js' option"
+      },
+      {
+        "long": "module-parser-javascript-strict-export-presence",
+        "description": "deprecated in favor of \"exportsPresence\". Emit errors instead of warnings when imported names don't exist in imported module",
+        "deprecated": true
+      },
+      {
+        "long": "no-module-parser-javascript-strict-export-presence",
+        "description": "negative 'module-parser-javascript-strict-export-presence' option"
+      },
+      {
+        "long": "module-parser-javascript-strict-this-context-on-imports",
+        "description": "handle the this context correctly according to the spec for namespace objects"
+      },
+      {
+        "long": "no-module-parser-javascript-strict-this-context-on-imports",
+        "description": "negative 'module-parser-javascript-strict-this-context-on-imports' option"
+      },
+      {
+        "long": "module-parser-javascript-system",
+        "description": "enable/disable parsing of System.js special syntax like System.import, System.get, System.set and System.register"
+      },
+      {
+        "long": "no-module-parser-javascript-system",
+        "description": "negative 'module-parser-javascript-system' option"
+      },
+      {
+        "long": "module-parser-javascript-unknown-context-critical",
+        "description": "enable warnings when using the require function in a not statically analyse-able way"
+      },
+      {
+        "long": "no-module-parser-javascript-unknown-context-critical",
+        "description": "negative 'module-parser-javascript-unknown-context-critical' option"
+      },
+      {
+        "long": "module-parser-javascript-unknown-context-recursive",
+        "description": "enable recursive directory lookup when using the require function in a not statically analyse-able way"
+      },
+      {
+        "long": "no-module-parser-javascript-unknown-context-recursive",
+        "description": "negative 'module-parser-javascript-unknown-context-recursive' option"
+      },
+      {
+        "long": "module-parser-javascript-unknown-context-reg-exp",
+        "description": "sets the regular expression when using the require function in a not statically analyse-able way",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-unknown-context-reg-exp",
+        "description": "negative 'module-parser-javascript-unknown-context-reg-exp' option"
+      },
+      {
+        "long": "module-parser-javascript-unknown-context-request",
+        "description": "sets the request when using the require function in a not statically analyse-able way",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-parser-javascript-url",
+        "description": "enable/disable parsing of new URL() syntax",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-url",
+        "description": "negative 'module-parser-javascript-url' option"
+      },
+      {
+        "long": "module-parser-javascript-worker",
+        "description": "specify a syntax that should be parsed as WebWorker reference. 'Abc' handles 'new Abc()', 'Abc from xyz' handles 'import { Abc } from \"xyz\"; new Abc()', 'abc()'",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-worker",
+        "description": "negative 'module-parser-javascript-worker' option"
+      },
+      {
+        "long": "module-parser-javascript-worker-reset",
+        "description": "clear all items provided in 'module.parser.javascript.worker' configuration. Disable or configure parsing of WebWorker syntax like new Worker() or navigator.ser"
+      },
+      {
+        "long": "module-parser-javascript-wrapped-context-critical",
+        "description": "enable warnings for partial dynamic dependencies"
+      },
+      {
+        "long": "no-module-parser-javascript-wrapped-context-critical",
+        "description": "negative 'module-parser-javascript-wrapped-context-critical' option"
+      },
+      {
+        "long": "module-parser-javascript-wrapped-context-recursive",
+        "description": "enable recursive directory lookup for partial dynamic dependencies"
+      },
+      {
+        "long": "no-module-parser-javascript-wrapped-context-recursive",
+        "description": "negative 'module-parser-javascript-wrapped-context-recursive' option"
+      },
+      {
+        "long": "module-parser-javascript-wrapped-context-reg-exp",
+        "description": "set the inner regular expression for partial dynamic dependencies",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-auto-amd",
+        "description": "negative 'module-parser-javascript-auto-amd' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-browserify",
+        "description": "enable/disable special handling for browserify bundles"
+      },
+      {
+        "long": "no-module-parser-javascript-auto-browserify",
+        "description": "negative 'module-parser-javascript-auto-browserify' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-commonjs",
+        "description": "enable/disable parsing of CommonJs syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-auto-commonjs",
+        "description": "negative 'module-parser-javascript-auto-commonjs' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-commonjs-magic-comments",
+        "description": "enable/disable parsing of magic comments in CommonJs syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-auto-commonjs-magic-comments",
+        "description": "negative 'module-parser-javascript-auto-commonjs-magic-comments' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-exports-presence",
+        "description": "specifies the behavior of invalid export names in \"import ... from ...\" and \"export ... from ...\"",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-auto-exports-presence",
+        "description": "negative 'module-parser-javascript-auto-exports-presence' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-expr-context-critical",
+        "description": "enable warnings for full dynamic dependencies"
+      },
+      {
+        "long": "no-module-parser-javascript-auto-expr-context-critical",
+        "description": "negative 'module-parser-javascript-auto-expr-context-critical' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-expr-context-recursive",
+        "description": "enable recursive directory lookup for full dynamic dependencies"
+      },
+      {
+        "long": "no-module-parser-javascript-auto-expr-context-recursive",
+        "description": "negative 'module-parser-javascript-auto-expr-context-recursive' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-expr-context-reg-exp",
+        "description": "sets the default regular expression for full dynamic dependencies",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-auto-expr-context-reg-exp",
+        "description": "negative 'module-parser-javascript-auto-expr-context-reg-exp' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-expr-context-request",
+        "description": "set the default request for full dynamic dependencies",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-parser-javascript-auto-harmony",
+        "description": "enable/disable parsing of EcmaScript Modules syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-auto-harmony",
+        "description": "negative 'module-parser-javascript-auto-harmony' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-import",
+        "description": "enable/disable parsing of import() syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-auto-import",
+        "description": "negative 'module-parser-javascript-auto-import' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-import-exports-presence",
+        "description": "specifies the behavior of invalid export names in \"import ... from ...\"",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-auto-import-exports-presence",
+        "description": "negative 'module-parser-javascript-auto-import-exports-presence' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-import-meta",
+        "description": "enable/disable evaluating import.meta"
+      },
+      {
+        "long": "no-module-parser-javascript-auto-import-meta",
+        "description": "negative 'module-parser-javascript-auto-import-meta' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-import-meta-context",
+        "description": "enable/disable evaluating import.meta.webpackContext"
+      },
+      {
+        "long": "no-module-parser-javascript-auto-import-meta-context",
+        "description": "negative 'module-parser-javascript-auto-import-meta-context' option"
+      },
+      {
+        "long": "no-module-parser-javascript-auto-node",
+        "description": "negative 'module-parser-javascript-auto-node' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-node-dirname",
+        "description": "include a polyfill for the '__dirname' variable",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-auto-node-dirname",
+        "description": "negative 'module-parser-javascript-auto-node-dirname' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-node-filename",
+        "description": "include a polyfill for the '__filename' variable",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-auto-node-filename",
+        "description": "negative 'module-parser-javascript-auto-node-filename' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-node-global",
+        "description": "include a polyfill for the 'global' variable",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-auto-node-global",
+        "description": "negative 'module-parser-javascript-auto-node-global' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-reexport-exports-presence",
+        "description": "specifies the behavior of invalid export names in \"export ... from ...\". This might be useful to disable during the migration from \"export ... from ...\" to \"exp",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-auto-reexport-exports-presence",
+        "description": "negative 'module-parser-javascript-auto-reexport-exports-presence' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-require-context",
+        "description": "enable/disable parsing of require.context syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-auto-require-context",
+        "description": "negative 'module-parser-javascript-auto-require-context' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-require-ensure",
+        "description": "enable/disable parsing of require.ensure syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-auto-require-ensure",
+        "description": "negative 'module-parser-javascript-auto-require-ensure' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-require-include",
+        "description": "enable/disable parsing of require.include syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-auto-require-include",
+        "description": "negative 'module-parser-javascript-auto-require-include' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-require-js",
+        "description": "enable/disable parsing of require.js special syntax like require.config, requirejs.config, require.version and requirejs.onError"
+      },
+      {
+        "long": "no-module-parser-javascript-auto-require-js",
+        "description": "negative 'module-parser-javascript-auto-require-js' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-strict-export-presence",
+        "description": "deprecated in favor of \"exportsPresence\". Emit errors instead of warnings when imported names don't exist in imported module",
+        "deprecated": true
+      },
+      {
+        "long": "no-module-parser-javascript-auto-strict-export-presence",
+        "description": "negative 'module-parser-javascript-auto-strict-export-presence' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-strict-this-context-on-imports",
+        "description": "handle the this context correctly according to the spec for namespace objects"
+      },
+      {
+        "long": "no-module-parser-javascript-auto-strict-this-context-on-imports",
+        "description": "negative 'module-parser-javascript-auto-strict-this-context-on-imports' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-system",
+        "description": "enable/disable parsing of System.js special syntax like System.import, System.get, System.set and System.register"
+      },
+      {
+        "long": "no-module-parser-javascript-auto-system",
+        "description": "negative 'module-parser-javascript-auto-system' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-unknown-context-critical",
+        "description": "enable warnings when using the require function in a not statically analyse-able way"
+      },
+      {
+        "long": "no-module-parser-javascript-auto-unknown-context-critical",
+        "description": "negative 'module-parser-javascript-auto-unknown-context-critical' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-unknown-context-recursive",
+        "description": "enable recursive directory lookup when using the require function in a not statically analyse-able way"
+      },
+      {
+        "long": "no-module-parser-javascript-auto-unknown-context-recursive",
+        "description": "negative 'module-parser-javascript-auto-unknown-context-recursive' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-unknown-context-reg-exp",
+        "description": "sets the regular expression when using the require function in a not statically analyse-able way",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-auto-unknown-context-reg-exp",
+        "description": "negative 'module-parser-javascript-auto-unknown-context-reg-exp' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-unknown-context-request",
+        "description": "sets the request when using the require function in a not statically analyse-able way",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-parser-javascript-auto-url",
+        "description": "enable/disable parsing of new URL() syntax",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-auto-url",
+        "description": "negative 'module-parser-javascript-auto-url' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-worker",
+        "description": "specify a syntax that should be parsed as WebWorker reference. 'Abc' handles 'new Abc()', 'Abc from xyz' handles 'import { Abc } from \"xyz\"; new Abc()', 'abc()'",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-auto-worker",
+        "description": "negative 'module-parser-javascript-auto-worker' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-worker-reset",
+        "description": "clear all items provided in 'module.parser.javascript/auto.worker' configuration. Disable or configure parsing of WebWorker syntax like new Worker() or navigato"
+      },
+      {
+        "long": "module-parser-javascript-auto-wrapped-context-critical",
+        "description": "enable warnings for partial dynamic dependencies"
+      },
+      {
+        "long": "no-module-parser-javascript-auto-wrapped-context-critical",
+        "description": "negative 'module-parser-javascript-auto-wrapped-context-critical' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-wrapped-context-recursive",
+        "description": "enable recursive directory lookup for partial dynamic dependencies"
+      },
+      {
+        "long": "no-module-parser-javascript-auto-wrapped-context-recursive",
+        "description": "negative 'module-parser-javascript-auto-wrapped-context-recursive' option"
+      },
+      {
+        "long": "module-parser-javascript-auto-wrapped-context-reg-exp",
+        "description": "set the inner regular expression for partial dynamic dependencies",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-amd",
+        "description": "negative 'module-parser-javascript-dynamic-amd' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-browserify",
+        "description": "enable/disable special handling for browserify bundles"
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-browserify",
+        "description": "negative 'module-parser-javascript-dynamic-browserify' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-commonjs",
+        "description": "enable/disable parsing of CommonJs syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-commonjs",
+        "description": "negative 'module-parser-javascript-dynamic-commonjs' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-commonjs-magic-comments",
+        "description": "enable/disable parsing of magic comments in CommonJs syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-commonjs-magic-comments",
+        "description": "negative 'module-parser-javascript-dynamic-commonjs-magic-comments' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-exports-presence",
+        "description": "specifies the behavior of invalid export names in \"import ... from ...\" and \"export ... from ...\"",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-exports-presence",
+        "description": "negative 'module-parser-javascript-dynamic-exports-presence' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-expr-context-critical",
+        "description": "enable warnings for full dynamic dependencies"
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-expr-context-critical",
+        "description": "negative 'module-parser-javascript-dynamic-expr-context-critical' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-expr-context-recursive",
+        "description": "enable recursive directory lookup for full dynamic dependencies"
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-expr-context-recursive",
+        "description": "negative 'module-parser-javascript-dynamic-expr-context-recursive' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-expr-context-reg-exp",
+        "description": "sets the default regular expression for full dynamic dependencies",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-expr-context-reg-exp",
+        "description": "negative 'module-parser-javascript-dynamic-expr-context-reg-exp' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-expr-context-request",
+        "description": "set the default request for full dynamic dependencies",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-parser-javascript-dynamic-harmony",
+        "description": "enable/disable parsing of EcmaScript Modules syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-harmony",
+        "description": "negative 'module-parser-javascript-dynamic-harmony' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-import",
+        "description": "enable/disable parsing of import() syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-import",
+        "description": "negative 'module-parser-javascript-dynamic-import' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-import-exports-presence",
+        "description": "specifies the behavior of invalid export names in \"import ... from ...\"",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-import-exports-presence",
+        "description": "negative 'module-parser-javascript-dynamic-import-exports-presence' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-import-meta",
+        "description": "enable/disable evaluating import.meta"
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-import-meta",
+        "description": "negative 'module-parser-javascript-dynamic-import-meta' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-import-meta-context",
+        "description": "enable/disable evaluating import.meta.webpackContext"
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-import-meta-context",
+        "description": "negative 'module-parser-javascript-dynamic-import-meta-context' option"
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-node",
+        "description": "negative 'module-parser-javascript-dynamic-node' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-node-dirname",
+        "description": "include a polyfill for the '__dirname' variable",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-node-dirname",
+        "description": "negative 'module-parser-javascript-dynamic-node-dirname' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-node-filename",
+        "description": "include a polyfill for the '__filename' variable",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-node-filename",
+        "description": "negative 'module-parser-javascript-dynamic-node-filename' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-node-global",
+        "description": "include a polyfill for the 'global' variable",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-node-global",
+        "description": "negative 'module-parser-javascript-dynamic-node-global' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-reexport-exports-presence",
+        "description": "specifies the behavior of invalid export names in \"export ... from ...\". This might be useful to disable during the migration from \"export ... from ...\" to \"exp",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-reexport-exports-presence",
+        "description": "negative 'module-parser-javascript-dynamic-reexport-exports-presence' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-require-context",
+        "description": "enable/disable parsing of require.context syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-require-context",
+        "description": "negative 'module-parser-javascript-dynamic-require-context' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-require-ensure",
+        "description": "enable/disable parsing of require.ensure syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-require-ensure",
+        "description": "negative 'module-parser-javascript-dynamic-require-ensure' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-require-include",
+        "description": "enable/disable parsing of require.include syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-require-include",
+        "description": "negative 'module-parser-javascript-dynamic-require-include' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-require-js",
+        "description": "enable/disable parsing of require.js special syntax like require.config, requirejs.config, require.version and requirejs.onError"
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-require-js",
+        "description": "negative 'module-parser-javascript-dynamic-require-js' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-strict-export-presence",
+        "description": "deprecated in favor of \"exportsPresence\". Emit errors instead of warnings when imported names don't exist in imported module",
+        "deprecated": true
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-strict-export-presence",
+        "description": "negative 'module-parser-javascript-dynamic-strict-export-presence' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-strict-this-context-on-imports",
+        "description": "handle the this context correctly according to the spec for namespace objects"
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-strict-this-context-on-imports",
+        "description": "negative 'module-parser-javascript-dynamic-strict-this-context-on-imports' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-system",
+        "description": "enable/disable parsing of System.js special syntax like System.import, System.get, System.set and System.register"
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-system",
+        "description": "negative 'module-parser-javascript-dynamic-system' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-unknown-context-critical",
+        "description": "enable warnings when using the require function in a not statically analyse-able way"
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-unknown-context-critical",
+        "description": "negative 'module-parser-javascript-dynamic-unknown-context-critical' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-unknown-context-recursive",
+        "description": "enable recursive directory lookup when using the require function in a not statically analyse-able way"
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-unknown-context-recursive",
+        "description": "negative 'module-parser-javascript-dynamic-unknown-context-recursive' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-unknown-context-reg-exp",
+        "description": "sets the regular expression when using the require function in a not statically analyse-able way",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-unknown-context-reg-exp",
+        "description": "negative 'module-parser-javascript-dynamic-unknown-context-reg-exp' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-unknown-context-request",
+        "description": "sets the request when using the require function in a not statically analyse-able way",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-parser-javascript-dynamic-url",
+        "description": "enable/disable parsing of new URL() syntax",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-url",
+        "description": "negative 'module-parser-javascript-dynamic-url' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-worker",
+        "description": "specify a syntax that should be parsed as WebWorker reference. 'Abc' handles 'new Abc()', 'Abc from xyz' handles 'import { Abc } from \"xyz\"; new Abc()', 'abc()'",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-worker",
+        "description": "negative 'module-parser-javascript-dynamic-worker' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-worker-reset",
+        "description": "clear all items provided in 'module.parser.javascript/dynamic.worker' configuration. Disable or configure parsing of WebWorker syntax like new Worker() or navig"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-wrapped-context-critical",
+        "description": "enable warnings for partial dynamic dependencies"
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-wrapped-context-critical",
+        "description": "negative 'module-parser-javascript-dynamic-wrapped-context-critical' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-wrapped-context-recursive",
+        "description": "enable recursive directory lookup for partial dynamic dependencies"
+      },
+      {
+        "long": "no-module-parser-javascript-dynamic-wrapped-context-recursive",
+        "description": "negative 'module-parser-javascript-dynamic-wrapped-context-recursive' option"
+      },
+      {
+        "long": "module-parser-javascript-dynamic-wrapped-context-reg-exp",
+        "description": "set the inner regular expression for partial dynamic dependencies",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-esm-amd",
+        "description": "negative 'module-parser-javascript-esm-amd' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-browserify",
+        "description": "enable/disable special handling for browserify bundles"
+      },
+      {
+        "long": "no-module-parser-javascript-esm-browserify",
+        "description": "negative 'module-parser-javascript-esm-browserify' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-commonjs",
+        "description": "enable/disable parsing of CommonJs syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-esm-commonjs",
+        "description": "negative 'module-parser-javascript-esm-commonjs' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-commonjs-magic-comments",
+        "description": "enable/disable parsing of magic comments in CommonJs syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-esm-commonjs-magic-comments",
+        "description": "negative 'module-parser-javascript-esm-commonjs-magic-comments' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-exports-presence",
+        "description": "specifies the behavior of invalid export names in \"import ... from ...\" and \"export ... from ...\"",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-esm-exports-presence",
+        "description": "negative 'module-parser-javascript-esm-exports-presence' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-expr-context-critical",
+        "description": "enable warnings for full dynamic dependencies"
+      },
+      {
+        "long": "no-module-parser-javascript-esm-expr-context-critical",
+        "description": "negative 'module-parser-javascript-esm-expr-context-critical' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-expr-context-recursive",
+        "description": "enable recursive directory lookup for full dynamic dependencies"
+      },
+      {
+        "long": "no-module-parser-javascript-esm-expr-context-recursive",
+        "description": "negative 'module-parser-javascript-esm-expr-context-recursive' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-expr-context-reg-exp",
+        "description": "sets the default regular expression for full dynamic dependencies",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-esm-expr-context-reg-exp",
+        "description": "negative 'module-parser-javascript-esm-expr-context-reg-exp' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-expr-context-request",
+        "description": "set the default request for full dynamic dependencies",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-parser-javascript-esm-harmony",
+        "description": "enable/disable parsing of EcmaScript Modules syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-esm-harmony",
+        "description": "negative 'module-parser-javascript-esm-harmony' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-import",
+        "description": "enable/disable parsing of import() syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-esm-import",
+        "description": "negative 'module-parser-javascript-esm-import' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-import-exports-presence",
+        "description": "specifies the behavior of invalid export names in \"import ... from ...\"",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-esm-import-exports-presence",
+        "description": "negative 'module-parser-javascript-esm-import-exports-presence' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-import-meta",
+        "description": "enable/disable evaluating import.meta"
+      },
+      {
+        "long": "no-module-parser-javascript-esm-import-meta",
+        "description": "negative 'module-parser-javascript-esm-import-meta' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-import-meta-context",
+        "description": "enable/disable evaluating import.meta.webpackContext"
+      },
+      {
+        "long": "no-module-parser-javascript-esm-import-meta-context",
+        "description": "negative 'module-parser-javascript-esm-import-meta-context' option"
+      },
+      {
+        "long": "no-module-parser-javascript-esm-node",
+        "description": "negative 'module-parser-javascript-esm-node' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-node-dirname",
+        "description": "include a polyfill for the '__dirname' variable",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-esm-node-dirname",
+        "description": "negative 'module-parser-javascript-esm-node-dirname' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-node-filename",
+        "description": "include a polyfill for the '__filename' variable",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-esm-node-filename",
+        "description": "negative 'module-parser-javascript-esm-node-filename' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-node-global",
+        "description": "include a polyfill for the 'global' variable",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-esm-node-global",
+        "description": "negative 'module-parser-javascript-esm-node-global' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-reexport-exports-presence",
+        "description": "specifies the behavior of invalid export names in \"export ... from ...\". This might be useful to disable during the migration from \"export ... from ...\" to \"exp",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-esm-reexport-exports-presence",
+        "description": "negative 'module-parser-javascript-esm-reexport-exports-presence' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-require-context",
+        "description": "enable/disable parsing of require.context syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-esm-require-context",
+        "description": "negative 'module-parser-javascript-esm-require-context' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-require-ensure",
+        "description": "enable/disable parsing of require.ensure syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-esm-require-ensure",
+        "description": "negative 'module-parser-javascript-esm-require-ensure' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-require-include",
+        "description": "enable/disable parsing of require.include syntax"
+      },
+      {
+        "long": "no-module-parser-javascript-esm-require-include",
+        "description": "negative 'module-parser-javascript-esm-require-include' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-require-js",
+        "description": "enable/disable parsing of require.js special syntax like require.config, requirejs.config, require.version and requirejs.onError"
+      },
+      {
+        "long": "no-module-parser-javascript-esm-require-js",
+        "description": "negative 'module-parser-javascript-esm-require-js' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-strict-export-presence",
+        "description": "deprecated in favor of \"exportsPresence\". Emit errors instead of warnings when imported names don't exist in imported module",
+        "deprecated": true
+      },
+      {
+        "long": "no-module-parser-javascript-esm-strict-export-presence",
+        "description": "negative 'module-parser-javascript-esm-strict-export-presence' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-strict-this-context-on-imports",
+        "description": "handle the this context correctly according to the spec for namespace objects"
+      },
+      {
+        "long": "no-module-parser-javascript-esm-strict-this-context-on-imports",
+        "description": "negative 'module-parser-javascript-esm-strict-this-context-on-imports' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-system",
+        "description": "enable/disable parsing of System.js special syntax like System.import, System.get, System.set and System.register"
+      },
+      {
+        "long": "no-module-parser-javascript-esm-system",
+        "description": "negative 'module-parser-javascript-esm-system' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-unknown-context-critical",
+        "description": "enable warnings when using the require function in a not statically analyse-able way"
+      },
+      {
+        "long": "no-module-parser-javascript-esm-unknown-context-critical",
+        "description": "negative 'module-parser-javascript-esm-unknown-context-critical' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-unknown-context-recursive",
+        "description": "enable recursive directory lookup when using the require function in a not statically analyse-able way"
+      },
+      {
+        "long": "no-module-parser-javascript-esm-unknown-context-recursive",
+        "description": "negative 'module-parser-javascript-esm-unknown-context-recursive' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-unknown-context-reg-exp",
+        "description": "sets the regular expression when using the require function in a not statically analyse-able way",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-esm-unknown-context-reg-exp",
+        "description": "negative 'module-parser-javascript-esm-unknown-context-reg-exp' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-unknown-context-request",
+        "description": "sets the request when using the require function in a not statically analyse-able way",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-parser-javascript-esm-url",
+        "description": "enable/disable parsing of new URL() syntax",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-esm-url",
+        "description": "negative 'module-parser-javascript-esm-url' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-worker",
+        "description": "specify a syntax that should be parsed as WebWorker reference. 'Abc' handles 'new Abc()', 'Abc from xyz' handles 'import { Abc } from \"xyz\"; new Abc()', 'abc()'",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-parser-javascript-esm-worker",
+        "description": "negative 'module-parser-javascript-esm-worker' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-worker-reset",
+        "description": "clear all items provided in 'module.parser.javascript/esm.worker' configuration. Disable or configure parsing of WebWorker syntax like new Worker() or navigator"
+      },
+      {
+        "long": "module-parser-javascript-esm-wrapped-context-critical",
+        "description": "enable warnings for partial dynamic dependencies"
+      },
+      {
+        "long": "no-module-parser-javascript-esm-wrapped-context-critical",
+        "description": "negative 'module-parser-javascript-esm-wrapped-context-critical' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-wrapped-context-recursive",
+        "description": "enable recursive directory lookup for partial dynamic dependencies"
+      },
+      {
+        "long": "no-module-parser-javascript-esm-wrapped-context-recursive",
+        "description": "negative 'module-parser-javascript-esm-wrapped-context-recursive' option"
+      },
+      {
+        "long": "module-parser-javascript-esm-wrapped-context-reg-exp",
+        "description": "set the inner regular expression for partial dynamic dependencies",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-compiler",
+        "description": "match the child compiler name",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-compiler-not",
+        "description": "logical NOT",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-dependency",
+        "description": "match dependency type",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-dependency-not",
+        "description": "logical NOT",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-enforce",
+        "description": "enforce this rule as pre or post step",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-exclude",
+        "description": "shortcut for resource.exclude",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-exclude-not",
+        "description": "logical NOT",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-include",
+        "description": "shortcut for resource.include",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-include-not",
+        "description": "logical NOT",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-issuer",
+        "description": "match the issuer of the module (The module pointing to this module)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-issuer-not",
+        "description": "logical NOT",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-issuer-layer",
+        "description": "match layer of the issuer of this module (The module pointing to this module)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-issuer-layer-not",
+        "description": "logical NOT",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-layer",
+        "description": "specifies the layer in which the module should be placed in",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-loader",
+        "description": "a loader request",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-mimetype",
+        "description": "match module mimetype when load from Data URI",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-mimetype-not",
+        "description": "logical NOT",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-real-resource",
+        "description": "match the real resource path of the module",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-real-resource-not",
+        "description": "logical NOT",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-resource",
+        "description": "match the resource path of the module",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-resource-not",
+        "description": "logical NOT",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-resource-fragment",
+        "description": "match the resource fragment of the module",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-resource-fragment-not",
+        "description": "logical NOT",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-resource-query",
+        "description": "match the resource query of the module",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-resource-query-not",
+        "description": "logical NOT",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-scheme",
+        "description": "match module scheme",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-scheme-not",
+        "description": "logical NOT",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-side-effects",
+        "description": "flags a module as with or without side effects"
+      },
+      {
+        "long": "no-module-rules-side-effects",
+        "description": "negative 'module-rules-side-effects' option"
+      },
+      {
+        "long": "module-rules-test",
+        "description": "shortcut for resource.test",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-test-not",
+        "description": "logical NOT",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-type",
+        "description": "module type to use for the module",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-use-ident",
+        "description": "unique loader options identifier",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-use-loader",
+        "description": "a loader request",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-use-options",
+        "description": "options passed to a loader",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-use",
+        "description": "a loader request",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-rules-reset",
+        "description": "clear all items provided in 'module.rules' configuration. A list of rules"
+      },
+      {
+        "long": "module-strict-export-presence",
+        "description": "emit errors instead of warnings when imported names don't exist in imported module. Deprecated: This option has moved to 'module.parser.javascript.strictExportP",
+        "deprecated": true
+      },
+      {
+        "long": "no-module-strict-export-presence",
+        "description": "negative 'module-strict-export-presence' option"
+      },
+      {
+        "long": "module-strict-this-context-on-imports",
+        "description": "handle the this context correctly according to the spec for namespace objects. Deprecated: This option has moved to 'module.parser.javascript.strictThisContextO",
+        "deprecated": true
+      },
+      {
+        "long": "no-module-strict-this-context-on-imports",
+        "description": "negative 'module-strict-this-context-on-imports' option"
+      },
+      {
+        "long": "module-unknown-context-critical",
+        "description": "enable warnings when using the require function in a not statically analyse-able way. Deprecated: This option has moved to 'module.parser.javascript.unknownCont",
+        "deprecated": true
+      },
+      {
+        "long": "no-module-unknown-context-critical",
+        "description": "negative 'module-unknown-context-critical' option"
+      },
+      {
+        "long": "module-unknown-context-recursive",
+        "description": "enable recursive directory lookup when using the require function in a not statically analyse-able way. Deprecated: This option has moved to 'module.parser.java",
+        "deprecated": true
+      },
+      {
+        "long": "no-module-unknown-context-recursive",
+        "description": "negative 'module-unknown-context-recursive' option"
+      },
+      {
+        "long": "module-unknown-context-reg-exp",
+        "description": "sets the regular expression when using the require function in a not statically analyse-able way. Deprecated: This option has moved to 'module.parser.javascript",
+        "deprecated": true,
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-module-unknown-context-reg-exp",
+        "description": "negative 'module-unknown-context-reg-exp' option"
+      },
+      {
+        "long": "module-unknown-context-request",
+        "description": "sets the request when using the require function in a not statically analyse-able way. Deprecated: This option has moved to 'module.parser.javascript.unknownCon",
+        "deprecated": true,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "module-unsafe-cache",
+        "description": "cache the resolving of module requests"
+      },
+      {
+        "long": "no-module-unsafe-cache",
+        "description": "negative 'module-unsafe-cache' option"
+      },
+      {
+        "long": "module-wrapped-context-critical",
+        "description": "enable warnings for partial dynamic dependencies. Deprecated: This option has moved to 'module.parser.javascript.wrappedContextCritical'",
+        "deprecated": true
+      },
+      {
+        "long": "no-module-wrapped-context-critical",
+        "description": "negative 'module-wrapped-context-critical' option"
+      },
+      {
+        "long": "module-wrapped-context-recursive",
+        "description": "enable recursive directory lookup for partial dynamic dependencies. Deprecated: This option has moved to 'module.parser.javascript.wrappedContextRecursive'",
+        "deprecated": true
+      },
+      {
+        "long": "no-module-wrapped-context-recursive",
+        "description": "negative 'module-wrapped-context-recursive' option"
+      },
+      {
+        "long": "module-wrapped-context-reg-exp",
+        "description": "set the inner regular expression for partial dynamic dependencies. Deprecated: This option has moved to 'module.parser.javascript.wrappedContextRegExp'",
+        "deprecated": true,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "name",
+        "description": "name of the configuration. Used when loading multiple configurations",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-node",
+        "description": "negative 'node' option"
+      },
+      {
+        "long": "node-dirname",
+        "description": "include a polyfill for the '__dirname' variable",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-node-dirname",
+        "description": "negative 'node-dirname' option"
+      },
+      {
+        "long": "node-filename",
+        "description": "include a polyfill for the '__filename' variable",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "no-node-filename",
+        "description": "negative 'node-filename' option"
+      },
+      {
+        "long": "node-global",
+        "description": "include a polyfill for the 'global' variable",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-node-global",
+        "description": "negative 'node-global' option"
+      },
+      {
+        "long": "optimization-check-wasm-types",
+        "description": "check for incompatible wasm types when importing/exporting from/to ESM"
+      },
+      {
+        "long": "no-optimization-check-wasm-types",
+        "description": "negative 'optimization-check-wasm-types' option"
+      },
+      {
+        "long": "optimization-chunk-ids",
+        "description": "define the algorithm to choose chunk ids (named: readable ids for better debugging, deterministic: numeric hash ids for better long term caching, size: numeric ",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-optimization-chunk-ids",
+        "description": "negative 'optimization-chunk-ids' option"
+      },
+      {
+        "long": "optimization-concatenate-modules",
+        "description": "concatenate modules when possible to generate less modules, more efficient code and enable more optimizations by the minimizer"
+      },
+      {
+        "long": "no-optimization-concatenate-modules",
+        "description": "negative 'optimization-concatenate-modules' option"
+      },
+      {
+        "long": "optimization-emit-on-errors",
+        "description": "emit assets even when errors occur. Critical errors are emitted into the generated code and will cause errors at runtime"
+      },
+      {
+        "long": "no-optimization-emit-on-errors",
+        "description": "negative 'optimization-emit-on-errors' option"
+      },
+      {
+        "long": "optimization-flag-included-chunks",
+        "description": "also flag chunks as loaded which contain a subset of the modules"
+      },
+      {
+        "long": "no-optimization-flag-included-chunks",
+        "description": "negative 'optimization-flag-included-chunks' option"
+      },
+      {
+        "long": "optimization-inner-graph",
+        "description": "creates a module-internal dependency graph for top level symbols, exports and imports, to improve unused exports detection"
+      },
+      {
+        "long": "no-optimization-inner-graph",
+        "description": "negative 'optimization-inner-graph' option"
+      },
+      {
+        "long": "optimization-mangle-exports",
+        "description": "rename exports when possible to generate shorter code (depends on optimization.usedExports and optimization.providedExports, true/\"deterministic\": generate shor",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-optimization-mangle-exports",
+        "description": "negative 'optimization-mangle-exports' option"
+      },
+      {
+        "long": "optimization-mangle-wasm-imports",
+        "description": "reduce size of WASM by changing imports to shorter strings"
+      },
+      {
+        "long": "no-optimization-mangle-wasm-imports",
+        "description": "negative 'optimization-mangle-wasm-imports' option"
+      },
+      {
+        "long": "optimization-merge-duplicate-chunks",
+        "description": "merge chunks which contain the same modules"
+      },
+      {
+        "long": "no-optimization-merge-duplicate-chunks",
+        "description": "negative 'optimization-merge-duplicate-chunks' option"
+      },
+      {
+        "long": "optimization-minimize",
+        "description": "enable minimizing the output. Uses optimization.minimizer"
+      },
+      {
+        "long": "no-optimization-minimize",
+        "description": "negative 'optimization-minimize' option"
+      },
+      {
+        "long": "optimization-module-ids",
+        "description": "define the algorithm to choose module ids (natural: numeric ids in order of usage, named: readable ids for better debugging, hashed: (deprecated) short hashes a",
+        "deprecated": true,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-optimization-module-ids",
+        "description": "negative 'optimization-module-ids' option"
+      },
+      {
+        "long": "optimization-node-env",
+        "description": "set process.env.NODE_ENV to a specific value",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-optimization-node-env",
+        "description": "negative 'optimization-node-env' option"
+      },
+      {
+        "long": "optimization-portable-records",
+        "description": "generate records with relative paths to be able to move the context folder"
+      },
+      {
+        "long": "no-optimization-portable-records",
+        "description": "negative 'optimization-portable-records' option"
+      },
+      {
+        "long": "optimization-provided-exports",
+        "description": "figure out which exports are provided by modules to generate more efficient code"
+      },
+      {
+        "long": "no-optimization-provided-exports",
+        "description": "negative 'optimization-provided-exports' option"
+      },
+      {
+        "long": "optimization-real-content-hash",
+        "description": "use real [contenthash] based on final content of the assets"
+      },
+      {
+        "long": "no-optimization-real-content-hash",
+        "description": "negative 'optimization-real-content-hash' option"
+      },
+      {
+        "long": "optimization-remove-available-modules",
+        "description": "removes modules from chunks when these modules are already included in all parents"
+      },
+      {
+        "long": "no-optimization-remove-available-modules",
+        "description": "negative 'optimization-remove-available-modules' option"
+      },
+      {
+        "long": "optimization-remove-empty-chunks",
+        "description": "remove chunks which are empty"
+      },
+      {
+        "long": "no-optimization-remove-empty-chunks",
+        "description": "negative 'optimization-remove-empty-chunks' option"
+      },
+      {
+        "long": "optimization-runtime-chunk",
+        "description": "create an additional chunk which contains only the webpack runtime and chunk hash maps",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-optimization-runtime-chunk",
+        "description": "negative 'optimization-runtime-chunk' option"
+      },
+      {
+        "long": "optimization-runtime-chunk-name",
+        "description": "the name or name factory for the runtime chunks",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "optimization-side-effects",
+        "description": "skip over modules which contain no side effects when exports are not used (false: disabled, 'flag': only use manually placed side effects flag, true: also analy",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-optimization-side-effects",
+        "description": "negative 'optimization-side-effects' option"
+      },
+      {
+        "long": "no-optimization-split-chunks",
+        "description": "negative 'optimization-split-chunks' option"
+      },
+      {
+        "long": "optimization-split-chunks-automatic-name-delimiter",
+        "description": "sets the name delimiter for created chunks",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "optimization-split-chunks-chunks",
+        "description": "select chunks for determining shared modules (defaults to \"async\", \"initial\" and \"all\" requires adding these chunks to the HTML)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "optimization-split-chunks-default-size-types",
+        "description": "size type, like 'javascript', 'webassembly'",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "optimization-split-chunks-default-size-types-reset",
+        "description": "clear all items provided in 'optimization.splitChunks.defaultSizeTypes' configuration. Sets the size types which are used when a number is used for sizes"
+      },
+      {
+        "long": "optimization-split-chunks-enforce-size-threshold",
+        "description": "size of the javascript part of the chunk",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "optimization-split-chunks-fallback-cache-group-chunks",
+        "description": "select chunks for determining shared modules (defaults to \"async\", \"initial\" and \"all\" requires adding these chunks to the HTML)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "optimization-split-chunks-fallback-cache-group-max-async-size",
+        "description": "size of the javascript part of the chunk",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "optimization-split-chunks-fallback-cache-group-max-initial-size",
+        "description": "size of the javascript part of the chunk",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "optimization-split-chunks-fallback-cache-group-max-size",
+        "description": "size of the javascript part of the chunk",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "optimization-split-chunks-fallback-cache-group-min-size",
+        "description": "size of the javascript part of the chunk",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "optimization-split-chunks-fallback-cache-group-min-size-reduction",
+        "description": "size of the javascript part of the chunk",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "optimization-split-chunks-filename",
+        "description": "sets the template for the filename for created chunks",
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "optimization-split-chunks-hide-path-info",
+        "description": "prevents exposing path info when creating names for parts splitted by maxSize"
+      },
+      {
+        "long": "no-optimization-split-chunks-hide-path-info",
+        "description": "negative 'optimization-split-chunks-hide-path-info' option"
+      },
+      {
+        "long": "optimization-split-chunks-max-async-requests",
+        "description": "maximum number of requests which are accepted for on-demand loading",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "optimization-split-chunks-max-async-size",
+        "description": "size of the javascript part of the chunk",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "optimization-split-chunks-max-initial-requests",
+        "description": "maximum number of initial chunks which are accepted for an entry point",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "optimization-split-chunks-max-initial-size",
+        "description": "size of the javascript part of the chunk",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "optimization-split-chunks-max-size",
+        "description": "size of the javascript part of the chunk",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "optimization-split-chunks-min-chunks",
+        "description": "minimum number of times a module has to be duplicated until it's considered for splitting",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "optimization-split-chunks-min-remaining-size",
+        "description": "size of the javascript part of the chunk",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "optimization-split-chunks-min-size",
+        "description": "size of the javascript part of the chunk",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "optimization-split-chunks-min-size-reduction",
+        "description": "size of the javascript part of the chunk",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "optimization-split-chunks-name",
+        "description": "give chunks created a name (chunks with equal name are merged)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-optimization-split-chunks-name",
+        "description": "negative 'optimization-split-chunks-name' option"
+      },
+      {
+        "long": "optimization-split-chunks-used-exports",
+        "description": "compare used exports when checking common modules. Modules will only be put in the same chunk when exports are equal"
+      },
+      {
+        "long": "no-optimization-split-chunks-used-exports",
+        "description": "negative 'optimization-split-chunks-used-exports' option"
+      },
+      {
+        "long": "optimization-used-exports",
+        "description": "figure out which exports are used by modules to mangle export names, omit unused exports and generate more efficient code (true: analyse used exports for each r",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-optimization-used-exports",
+        "description": "negative 'optimization-used-exports' option"
+      },
+      {
+        "long": "output-asset-module-filename",
+        "description": "the filename of asset modules as relative path inside the 'output.path' directory",
+        "value": {
+          "name": "value",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "output-async-chunks",
+        "description": "enable/disable creating async chunks that are loaded on demand"
+      },
+      {
+        "long": "no-output-async-chunks",
+        "description": "negative 'output-async-chunks' option"
+      },
+      {
+        "long": "output-charset",
+        "description": "add charset attribute for script tag"
+      },
+      {
+        "long": "no-output-charset",
+        "description": "negative 'output-charset' option"
+      },
+      {
+        "long": "output-chunk-filename",
+        "description": "specifies the filename template of output files on disk. You must **not** specify an absolute path here, but the path may contain folders separated by '/'! The ",
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "output-chunk-format",
+        "description": "the format of chunks (formats included by default are 'array-push' (web/WebWorker), 'commonjs' (node.js), 'module' (ESM), but others might be added by plugins)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-output-chunk-format",
+        "description": "negative 'output-chunk-format' option"
+      },
+      {
+        "long": "output-chunk-load-timeout",
+        "description": "number of milliseconds before chunk request expires",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-chunk-loading",
+        "description": "the method of loading chunks (methods included by default are 'jsonp' (web), 'import' (ESM), 'importScripts' (WebWorker), 'require' (sync node.js), 'async-node'",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-output-chunk-loading",
+        "description": "negative 'output-chunk-loading' option"
+      },
+      {
+        "long": "output-chunk-loading-global",
+        "description": "the global variable used by webpack for loading of chunks",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-clean",
+        "description": "clean the output directory before emit"
+      },
+      {
+        "long": "no-output-clean",
+        "description": "negative 'output-clean' option"
+      },
+      {
+        "long": "output-clean-dry",
+        "description": "log the assets that should be removed instead of deleting them"
+      },
+      {
+        "long": "no-output-clean-dry",
+        "description": "negative 'output-clean-dry' option"
+      },
+      {
+        "long": "output-clean-keep",
+        "description": "keep these assets",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-compare-before-emit",
+        "description": "check if to be emitted file already exists and have the same content before writing to output filesystem"
+      },
+      {
+        "long": "no-output-compare-before-emit",
+        "description": "negative 'output-compare-before-emit' option"
+      },
+      {
+        "long": "output-cross-origin-loading",
+        "description": "this option enables cross-origin loading of chunks",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-output-cross-origin-loading",
+        "description": "negative 'output-cross-origin-loading' option"
+      },
+      {
+        "long": "output-css-chunk-filename",
+        "description": "specifies the filename template of output files on disk. You must **not** specify an absolute path here, but the path may contain folders separated by '/'! The ",
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "output-css-filename",
+        "description": "specifies the filename template of output files on disk. You must **not** specify an absolute path here, but the path may contain folders separated by '/'! The ",
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "output-devtool-fallback-module-filename-template",
+        "description": "similar to `output.devtoolModuleFilenameTemplate`, but used in the case of duplicate module identifiers",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-devtool-module-filename-template",
+        "description": "filename template string of function for the sources array in a generated SourceMap",
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "output-devtool-namespace",
+        "description": "module namespace to use when interpolating filename template string for the sources array in a generated SourceMap. Defaults to `output.library` if not set. It'",
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "output-enabled-chunk-loading-types",
+        "description": "the method of loading chunks (methods included by default are 'jsonp' (web), 'import' (ESM), 'importScripts' (WebWorker), 'require' (sync node.js), 'async-node'",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-enabled-chunk-loading-types-reset",
+        "description": "clear all items provided in 'output.enabledChunkLoadingTypes' configuration. List of chunk loading types enabled for use by entry points"
+      },
+      {
+        "long": "output-enabled-library-types",
+        "description": "type of library (types included by default are 'var', 'module', 'assign', 'assign-properties', 'this', 'window', 'self', 'global', 'commonjs', 'commonjs2', 'com",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-enabled-library-types-reset",
+        "description": "clear all items provided in 'output.enabledLibraryTypes' configuration. List of library types enabled for use by entry points"
+      },
+      {
+        "long": "output-enabled-wasm-loading-types",
+        "description": "the method of loading WebAssembly Modules (methods included by default are 'fetch' (web/WebWorker), 'async-node' (node.js), but others might be added by plugins",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-enabled-wasm-loading-types-reset",
+        "description": "clear all items provided in 'output.enabledWasmLoadingTypes' configuration. List of wasm loading types enabled for use by entry points"
+      },
+      {
+        "long": "output-environment-arrow-function",
+        "description": "the environment supports arrow functions ('() => { ... }')"
+      },
+      {
+        "long": "no-output-environment-arrow-function",
+        "description": "negative 'output-environment-arrow-function' option"
+      },
+      {
+        "long": "output-environment-big-int-literal",
+        "description": "the environment supports BigInt as literal (123n)"
+      },
+      {
+        "long": "no-output-environment-big-int-literal",
+        "description": "negative 'output-environment-big-int-literal' option"
+      },
+      {
+        "long": "output-environment-const",
+        "description": "the environment supports const and let for variable declarations"
+      },
+      {
+        "long": "no-output-environment-const",
+        "description": "negative 'output-environment-const' option"
+      },
+      {
+        "long": "output-environment-destructuring",
+        "description": "the environment supports destructuring ('{ a, b } = obj')"
+      },
+      {
+        "long": "no-output-environment-destructuring",
+        "description": "negative 'output-environment-destructuring' option"
+      },
+      {
+        "long": "output-environment-dynamic-import",
+        "description": "the environment supports an async import() function to import EcmaScript modules"
+      },
+      {
+        "long": "no-output-environment-dynamic-import",
+        "description": "negative 'output-environment-dynamic-import' option"
+      },
+      {
+        "long": "output-environment-for-of",
+        "description": "the environment supports 'for of' iteration ('for (const x of array) { ... }')"
+      },
+      {
+        "long": "no-output-environment-for-of",
+        "description": "negative 'output-environment-for-of' option"
+      },
+      {
+        "long": "output-environment-module",
+        "description": "the environment supports EcmaScript Module syntax to import EcmaScript modules (import ... from '...')"
+      },
+      {
+        "long": "no-output-environment-module",
+        "description": "negative 'output-environment-module' option"
+      },
+      {
+        "long": "output-environment-optional-chaining",
+        "description": "the environment supports optional chaining ('obj?.a' or 'obj?.()')"
+      },
+      {
+        "long": "no-output-environment-optional-chaining",
+        "description": "negative 'output-environment-optional-chaining' option"
+      },
+      {
+        "long": "output-environment-template-literal",
+        "description": "the environment supports template literals"
+      },
+      {
+        "long": "no-output-environment-template-literal",
+        "description": "negative 'output-environment-template-literal' option"
+      },
+      {
+        "long": "output-filename",
+        "description": "specifies the filename template of output files on disk. You must **not** specify an absolute path here, but the path may contain folders separated by '/'! The ",
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "output-global-object",
+        "description": "an expression which is used to address the global object/scope in runtime code",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-hash-digest",
+        "description": "digest type used for the hash",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-hash-digest-length",
+        "description": "number of chars which are used for the hash",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-hash-function",
+        "description": "algorithm used for generation the hash (see node.js crypto package)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-hash-salt",
+        "description": "any string which is added to the hash to salt it",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-hot-update-chunk-filename",
+        "description": "the filename of the Hot Update Chunks. They are inside the output.path directory",
+        "value": {
+          "name": "value",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "output-hot-update-global",
+        "description": "the global variable used by webpack for loading of hot update chunks",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-hot-update-main-filename",
+        "description": "the filename of the Hot Update Main File. It is inside the 'output.path' directory",
+        "value": {
+          "name": "value",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "output-iife",
+        "description": "wrap javascript code into IIFE's to avoid leaking into global scope"
+      },
+      {
+        "long": "no-output-iife",
+        "description": "negative 'output-iife' option"
+      },
+      {
+        "long": "output-import-function-name",
+        "description": "the name of the native import() function (can be exchanged for a polyfill)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-import-meta-name",
+        "description": "the name of the native import.meta object (can be exchanged for a polyfill)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-library",
+        "description": "a part of the library name",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-library-reset",
+        "description": "clear all items provided in 'output.library' configuration. The name of the library (some types allow unnamed libraries too)"
+      },
+      {
+        "long": "output-library-amd",
+        "description": "name of the exposed AMD library in the UMD",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-library-commonjs",
+        "description": "name of the exposed commonjs export in the UMD",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-library-root",
+        "description": "part of the name of the property exposed globally by a UMD library",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-library-root-reset",
+        "description": "clear all items provided in 'output.library.root' configuration. Name of the property exposed globally by a UMD library"
+      },
+      {
+        "long": "output-library-auxiliary-comment",
+        "description": "append the same comment above each import style",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-library-auxiliary-comment-amd",
+        "description": "set comment for `amd` section in UMD",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-library-auxiliary-comment-commonjs",
+        "description": "set comment for `commonjs` (exports) section in UMD",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-library-auxiliary-comment-commonjs2",
+        "description": "set comment for `commonjs2` (module.exports) section in UMD",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-library-auxiliary-comment-root",
+        "description": "set comment for `root` (global variable) section in UMD",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-library-export",
+        "description": "part of the export that should be exposed as library",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-library-export-reset",
+        "description": "clear all items provided in 'output.library.export' configuration. Specify which export should be exposed as library"
+      },
+      {
+        "long": "output-library-name",
+        "description": "a part of the library name",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-library-name-reset",
+        "description": "clear all items provided in 'output.library.name' configuration. The name of the library (some types allow unnamed libraries too)"
+      },
+      {
+        "long": "output-library-name-amd",
+        "description": "name of the exposed AMD library in the UMD",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-library-name-commonjs",
+        "description": "name of the exposed commonjs export in the UMD",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-library-name-root",
+        "description": "part of the name of the property exposed globally by a UMD library",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-library-name-root-reset",
+        "description": "clear all items provided in 'output.library.name.root' configuration. Name of the property exposed globally by a UMD library"
+      },
+      {
+        "long": "output-library-type",
+        "description": "type of library (types included by default are 'var', 'module', 'assign', 'assign-properties', 'this', 'window', 'self', 'global', 'commonjs', 'commonjs2', 'com",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-library-umd-named-define",
+        "description": "if `output.libraryTarget` is set to umd and `output.library` is set, setting this to true will name the AMD module"
+      },
+      {
+        "long": "no-output-library-umd-named-define",
+        "description": "negative 'output-library-umd-named-define' option"
+      },
+      {
+        "long": "output-module",
+        "description": "output javascript files as module source type"
+      },
+      {
+        "long": "no-output-module",
+        "description": "negative 'output-module' option"
+      },
+      {
+        "long": "output-path",
+        "short": "o",
+        "description": "output location of the file generated by webpack e.g. ./dist/",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-pathinfo",
+        "description": "include comments with information about the modules",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-output-pathinfo",
+        "description": "negative 'output-pathinfo' option"
+      },
+      {
+        "long": "output-public-path",
+        "description": "the 'publicPath' specifies the public URL address of the output files when referenced in a browser",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-script-type",
+        "description": "this option enables loading async chunks via a custom script type, such as script type=\"module\"",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-output-script-type",
+        "description": "negative 'output-script-type' option"
+      },
+      {
+        "long": "output-source-map-filename",
+        "description": "the filename of the SourceMaps for the JavaScript files. They are inside the 'output.path' directory",
+        "value": {
+          "name": "value",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "output-source-prefix",
+        "description": "prefixes every line of the source in the bundle with this string",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-strict-module-error-handling",
+        "description": "handles error in module loading correctly at a performance cost. This will handle module error compatible with the EcmaScript Modules spec"
+      },
+      {
+        "long": "no-output-strict-module-error-handling",
+        "description": "negative 'output-strict-module-error-handling' option"
+      },
+      {
+        "long": "output-strict-module-exception-handling",
+        "description": "handles exceptions in module loading correctly at a performance cost (Deprecated). This will handle module error compatible with the Node.js CommonJS way",
+        "deprecated": true
+      },
+      {
+        "long": "no-output-strict-module-exception-handling",
+        "description": "negative 'output-strict-module-exception-handling' option"
+      },
+      {
+        "long": "output-trusted-types",
+        "description": "use a Trusted Types policy to create urls for chunks. 'output.uniqueName' is used a default policy name. Passing a string sets a custom policy name. The name of",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "output-trusted-types-policy-name",
+        "description": "the name of the Trusted Types policy created by webpack to serve bundle chunks",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-unique-name",
+        "description": "a unique name of the webpack build to avoid multiple webpack runtimes to conflict when using globals",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "output-wasm-loading",
+        "description": "the method of loading WebAssembly Modules (methods included by default are 'fetch' (web/WebWorker), 'async-node' (node.js), but others might be added by plugins",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-output-wasm-loading",
+        "description": "negative 'output-wasm-loading' option"
+      },
+      {
+        "long": "output-webassembly-module-filename",
+        "description": "the filename of WebAssembly modules as relative path inside the 'output.path' directory",
+        "value": {
+          "name": "value",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "output-worker-chunk-loading",
+        "description": "the method of loading chunks (methods included by default are 'jsonp' (web), 'import' (ESM), 'importScripts' (WebWorker), 'require' (sync node.js), 'async-node'",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-output-worker-chunk-loading",
+        "description": "negative 'output-worker-chunk-loading' option"
+      },
+      {
+        "long": "output-worker-wasm-loading",
+        "description": "the method of loading WebAssembly Modules (methods included by default are 'fetch' (web/WebWorker), 'async-node' (node.js), but others might be added by plugins",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-output-worker-wasm-loading",
+        "description": "negative 'output-worker-wasm-loading' option"
+      },
+      {
+        "long": "parallelism",
+        "description": "the number of parallel processed modules in the compilation",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-performance",
+        "description": "negative 'performance' option"
+      },
+      {
+        "long": "performance-hints",
+        "description": "sets the format of the hints: warnings, errors or nothing at all",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-performance-hints",
+        "description": "negative 'performance-hints' option"
+      },
+      {
+        "long": "performance-max-asset-size",
+        "description": "file size limit (in bytes) when exceeded, that webpack will provide performance hints",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "performance-max-entrypoint-size",
+        "description": "total size of an entry point (in bytes)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "profile",
+        "description": "capture timing information for each module"
+      },
+      {
+        "long": "no-profile",
+        "description": "negative 'profile' option"
+      },
+      {
+        "long": "records-input-path",
+        "description": "store compiler state to a json file",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-records-input-path",
+        "description": "negative 'records-input-path' option"
+      },
+      {
+        "long": "records-output-path",
+        "description": "load compiler state from a json file",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-records-output-path",
+        "description": "negative 'records-output-path' option"
+      },
+      {
+        "long": "records-path",
+        "description": "store/Load compiler state from/to a json file. This will result in persistent ids of modules and chunks. An absolute path is expected. `recordsPath` is used for",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-records-path",
+        "description": "negative 'records-path' option"
+      },
+      {
+        "long": "resolve-alias-alias",
+        "description": "ignore request (replace with empty module). New request",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-resolve-alias-alias",
+        "description": "negative 'resolve-alias-alias' option"
+      },
+      {
+        "long": "resolve-alias-name",
+        "description": "request to be redirected",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "resolve-alias-only-module",
+        "description": "redirect only exact matching request"
+      },
+      {
+        "long": "no-resolve-alias-only-module",
+        "description": "negative 'resolve-alias-only-module' option"
+      },
+      {
+        "long": "resolve-alias-reset",
+        "description": "clear all items provided in 'resolve.alias' configuration. Redirect module requests"
+      },
+      {
+        "long": "resolve-alias-fields",
+        "description": "field in the description file (usually package.json) which are used to redirect requests inside the module",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "resolve-alias-fields-reset",
+        "description": "clear all items provided in 'resolve.aliasFields' configuration. Fields in the description file (usually package.json) which are used to redirect requests insid"
+      },
+      {
+        "long": "resolve-cache",
+        "description": "enable caching of successfully resolved requests (cache entries are revalidated)"
+      },
+      {
+        "long": "no-resolve-cache",
+        "description": "negative 'resolve-cache' option"
+      },
+      {
+        "long": "resolve-cache-with-context",
+        "description": "include the context information in the cache identifier when caching"
+      },
+      {
+        "long": "no-resolve-cache-with-context",
+        "description": "negative 'resolve-cache-with-context' option"
+      },
+      {
+        "long": "resolve-condition-names",
+        "description": "condition names for exports field entry point",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "resolve-condition-names-reset",
+        "description": "clear all items provided in 'resolve.conditionNames' configuration. Condition names for exports field entry point"
+      },
+      {
+        "long": "resolve-description-files",
+        "description": "filename used to find a description file (like a package.json)",
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "resolve-description-files-reset",
+        "description": "clear all items provided in 'resolve.descriptionFiles' configuration. Filenames used to find a description file (like a package.json)"
+      },
+      {
+        "long": "resolve-enforce-extension",
+        "description": "enforce the resolver to use one of the extensions from the extensions option (User must specify requests without extension)"
+      },
+      {
+        "long": "no-resolve-enforce-extension",
+        "description": "negative 'resolve-enforce-extension' option"
+      },
+      {
+        "long": "resolve-exports-fields",
+        "description": "field name from the description file (usually package.json) which is used to provide entry points of a package",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "resolve-exports-fields-reset",
+        "description": "clear all items provided in 'resolve.exportsFields' configuration. Field names from the description file (usually package.json) which are used to provide entry "
+      },
+      {
+        "long": "resolve-extensions",
+        "description": "extension added to the request when trying to find the file",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "resolve-extensions-reset",
+        "description": "clear all items provided in 'resolve.extensions' configuration. Extensions added to the request when trying to find the file"
+      },
+      {
+        "long": "resolve-fallback-alias",
+        "description": "ignore request (replace with empty module). New request",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-resolve-fallback-alias",
+        "description": "negative 'resolve-fallback-alias' option"
+      },
+      {
+        "long": "resolve-fallback-name",
+        "description": "request to be redirected",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "resolve-fallback-only-module",
+        "description": "redirect only exact matching request"
+      },
+      {
+        "long": "no-resolve-fallback-only-module",
+        "description": "negative 'resolve-fallback-only-module' option"
+      },
+      {
+        "long": "resolve-fallback-reset",
+        "description": "clear all items provided in 'resolve.fallback' configuration. Redirect module requests"
+      },
+      {
+        "long": "resolve-fully-specified",
+        "description": "treats the request specified by the user as fully specified, meaning no extensions are added and the mainFiles in directories are not resolved (This doesn't aff"
+      },
+      {
+        "long": "no-resolve-fully-specified",
+        "description": "negative 'resolve-fully-specified' option"
+      },
+      {
+        "long": "resolve-imports-fields",
+        "description": "field name from the description file (usually package.json) which is used to provide internal request of a package (requests starting with # are considered as i",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "resolve-imports-fields-reset",
+        "description": "clear all items provided in 'resolve.importsFields' configuration. Field names from the description file (usually package.json) which are used to provide intern"
+      },
+      {
+        "long": "resolve-main-fields",
+        "description": "field name from the description file (package.json) which are used to find the default entry point",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "resolve-main-fields-reset",
+        "description": "clear all items provided in 'resolve.mainFields' configuration. Field names from the description file (package.json) which are used to find the default entry po"
+      },
+      {
+        "long": "resolve-main-files",
+        "description": "filename used to find the default entry point if there is no description file or main field",
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "resolve-main-files-reset",
+        "description": "clear all items provided in 'resolve.mainFiles' configuration. Filenames used to find the default entry point if there is no description file or main field"
+      },
+      {
+        "long": "resolve-modules",
+        "description": "folder name or directory path where to find modules",
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "resolve-modules-reset",
+        "description": "clear all items provided in 'resolve.modules' configuration. Folder names or directory paths where to find modules"
+      },
+      {
+        "long": "resolve-prefer-absolute",
+        "description": "prefer to resolve server-relative URLs (starting with '/') as absolute paths before falling back to resolve in 'resolve.roots'"
+      },
+      {
+        "long": "no-resolve-prefer-absolute",
+        "description": "negative 'resolve-prefer-absolute' option"
+      },
+      {
+        "long": "resolve-prefer-relative",
+        "description": "prefer to resolve module requests as relative request and fallback to resolving as module"
+      },
+      {
+        "long": "no-resolve-prefer-relative",
+        "description": "negative 'resolve-prefer-relative' option"
+      },
+      {
+        "long": "resolve-restrictions",
+        "description": "resolve restriction. Resolve result must fulfill this restriction",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "resolve-restrictions-reset",
+        "description": "clear all items provided in 'resolve.restrictions' configuration. A list of resolve restrictions. Resolve results must fulfill all of these restrictions to reso"
+      },
+      {
+        "long": "resolve-roots",
+        "description": "directory in which requests that are server-relative URLs (starting with '/') are resolved",
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "resolve-roots-reset",
+        "description": "clear all items provided in 'resolve.roots' configuration. A list of directories in which requests that are server-relative URLs (starting with '/') are resolve"
+      },
+      {
+        "long": "resolve-symlinks",
+        "description": "enable resolving symlinks to the original location"
+      },
+      {
+        "long": "no-resolve-symlinks",
+        "description": "negative 'resolve-symlinks' option"
+      },
+      {
+        "long": "resolve-unsafe-cache",
+        "description": "enable caching of successfully resolved requests (cache entries are not revalidated)"
+      },
+      {
+        "long": "no-resolve-unsafe-cache",
+        "description": "negative 'resolve-unsafe-cache' option"
+      },
+      {
+        "long": "resolve-use-sync-file-system-calls",
+        "description": "use synchronous filesystem calls for the resolver"
+      },
+      {
+        "long": "no-resolve-use-sync-file-system-calls",
+        "description": "negative 'resolve-use-sync-file-system-calls' option"
+      },
+      {
+        "long": "resolve-loader-alias-alias",
+        "description": "ignore request (replace with empty module). New request",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-resolve-loader-alias-alias",
+        "description": "negative 'resolve-loader-alias-alias' option"
+      },
+      {
+        "long": "resolve-loader-alias-name",
+        "description": "request to be redirected",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "resolve-loader-alias-only-module",
+        "description": "redirect only exact matching request"
+      },
+      {
+        "long": "no-resolve-loader-alias-only-module",
+        "description": "negative 'resolve-loader-alias-only-module' option"
+      },
+      {
+        "long": "resolve-loader-alias-reset",
+        "description": "clear all items provided in 'resolveLoader.alias' configuration. Redirect module requests"
+      },
+      {
+        "long": "resolve-loader-alias-fields",
+        "description": "field in the description file (usually package.json) which are used to redirect requests inside the module",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "resolve-loader-alias-fields-reset",
+        "description": "clear all items provided in 'resolveLoader.aliasFields' configuration. Fields in the description file (usually package.json) which are used to redirect requests"
+      },
+      {
+        "long": "resolve-loader-cache",
+        "description": "enable caching of successfully resolved requests (cache entries are revalidated)"
+      },
+      {
+        "long": "no-resolve-loader-cache",
+        "description": "negative 'resolve-loader-cache' option"
+      },
+      {
+        "long": "resolve-loader-cache-with-context",
+        "description": "include the context information in the cache identifier when caching"
+      },
+      {
+        "long": "no-resolve-loader-cache-with-context",
+        "description": "negative 'resolve-loader-cache-with-context' option"
+      },
+      {
+        "long": "resolve-loader-condition-names",
+        "description": "condition names for exports field entry point",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "resolve-loader-condition-names-reset",
+        "description": "clear all items provided in 'resolveLoader.conditionNames' configuration. Condition names for exports field entry point"
+      },
+      {
+        "long": "resolve-loader-description-files",
+        "description": "filename used to find a description file (like a package.json)",
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "resolve-loader-description-files-reset",
+        "description": "clear all items provided in 'resolveLoader.descriptionFiles' configuration. Filenames used to find a description file (like a package.json)"
+      },
+      {
+        "long": "resolve-loader-enforce-extension",
+        "description": "enforce the resolver to use one of the extensions from the extensions option (User must specify requests without extension)"
+      },
+      {
+        "long": "no-resolve-loader-enforce-extension",
+        "description": "negative 'resolve-loader-enforce-extension' option"
+      },
+      {
+        "long": "resolve-loader-exports-fields",
+        "description": "field name from the description file (usually package.json) which is used to provide entry points of a package",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "resolve-loader-exports-fields-reset",
+        "description": "clear all items provided in 'resolveLoader.exportsFields' configuration. Field names from the description file (usually package.json) which are used to provide "
+      },
+      {
+        "long": "resolve-loader-extensions",
+        "description": "extension added to the request when trying to find the file",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "resolve-loader-extensions-reset",
+        "description": "clear all items provided in 'resolveLoader.extensions' configuration. Extensions added to the request when trying to find the file"
+      },
+      {
+        "long": "resolve-loader-fallback-alias",
+        "description": "ignore request (replace with empty module). New request",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-resolve-loader-fallback-alias",
+        "description": "negative 'resolve-loader-fallback-alias' option"
+      },
+      {
+        "long": "resolve-loader-fallback-name",
+        "description": "request to be redirected",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "resolve-loader-fallback-only-module",
+        "description": "redirect only exact matching request"
+      },
+      {
+        "long": "no-resolve-loader-fallback-only-module",
+        "description": "negative 'resolve-loader-fallback-only-module' option"
+      },
+      {
+        "long": "resolve-loader-fallback-reset",
+        "description": "clear all items provided in 'resolveLoader.fallback' configuration. Redirect module requests"
+      },
+      {
+        "long": "resolve-loader-fully-specified",
+        "description": "treats the request specified by the user as fully specified, meaning no extensions are added and the mainFiles in directories are not resolved (This doesn't aff"
+      },
+      {
+        "long": "no-resolve-loader-fully-specified",
+        "description": "negative 'resolve-loader-fully-specified' option"
+      },
+      {
+        "long": "resolve-loader-imports-fields",
+        "description": "field name from the description file (usually package.json) which is used to provide internal request of a package (requests starting with # are considered as i",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "resolve-loader-imports-fields-reset",
+        "description": "clear all items provided in 'resolveLoader.importsFields' configuration. Field names from the description file (usually package.json) which are used to provide "
+      },
+      {
+        "long": "resolve-loader-main-fields",
+        "description": "field name from the description file (package.json) which are used to find the default entry point",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "resolve-loader-main-fields-reset",
+        "description": "clear all items provided in 'resolveLoader.mainFields' configuration. Field names from the description file (package.json) which are used to find the default en"
+      },
+      {
+        "long": "resolve-loader-main-files",
+        "description": "filename used to find the default entry point if there is no description file or main field",
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "resolve-loader-main-files-reset",
+        "description": "clear all items provided in 'resolveLoader.mainFiles' configuration. Filenames used to find the default entry point if there is no description file or main fiel"
+      },
+      {
+        "long": "resolve-loader-modules",
+        "description": "folder name or directory path where to find modules",
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "resolve-loader-modules-reset",
+        "description": "clear all items provided in 'resolveLoader.modules' configuration. Folder names or directory paths where to find modules"
+      },
+      {
+        "long": "resolve-loader-prefer-absolute",
+        "description": "prefer to resolve server-relative URLs (starting with '/') as absolute paths before falling back to resolve in 'resolve.roots'"
+      },
+      {
+        "long": "no-resolve-loader-prefer-absolute",
+        "description": "negative 'resolve-loader-prefer-absolute' option"
+      },
+      {
+        "long": "resolve-loader-prefer-relative",
+        "description": "prefer to resolve module requests as relative request and fallback to resolving as module"
+      },
+      {
+        "long": "no-resolve-loader-prefer-relative",
+        "description": "negative 'resolve-loader-prefer-relative' option"
+      },
+      {
+        "long": "resolve-loader-restrictions",
+        "description": "resolve restriction. Resolve result must fulfill this restriction",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "resolve-loader-restrictions-reset",
+        "description": "clear all items provided in 'resolveLoader.restrictions' configuration. A list of resolve restrictions. Resolve results must fulfill all of these restrictions t"
+      },
+      {
+        "long": "resolve-loader-roots",
+        "description": "directory in which requests that are server-relative URLs (starting with '/') are resolved",
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "resolve-loader-roots-reset",
+        "description": "clear all items provided in 'resolveLoader.roots' configuration. A list of directories in which requests that are server-relative URLs (starting with '/') are r"
+      },
+      {
+        "long": "resolve-loader-symlinks",
+        "description": "enable resolving symlinks to the original location"
+      },
+      {
+        "long": "no-resolve-loader-symlinks",
+        "description": "negative 'resolve-loader-symlinks' option"
+      },
+      {
+        "long": "resolve-loader-unsafe-cache",
+        "description": "enable caching of successfully resolved requests (cache entries are not revalidated)"
+      },
+      {
+        "long": "no-resolve-loader-unsafe-cache",
+        "description": "negative 'resolve-loader-unsafe-cache' option"
+      },
+      {
+        "long": "resolve-loader-use-sync-file-system-calls",
+        "description": "use synchronous filesystem calls for the resolver"
+      },
+      {
+        "long": "no-resolve-loader-use-sync-file-system-calls",
+        "description": "negative 'resolve-loader-use-sync-file-system-calls' option"
+      },
+      {
+        "long": "snapshot-build-dependencies-hash",
+        "description": "use hashes of the content of the files/directories to determine invalidation"
+      },
+      {
+        "long": "no-snapshot-build-dependencies-hash",
+        "description": "negative 'snapshot-build-dependencies-hash' option"
+      },
+      {
+        "long": "snapshot-build-dependencies-timestamp",
+        "description": "use timestamps of the files/directories to determine invalidation"
+      },
+      {
+        "long": "no-snapshot-build-dependencies-timestamp",
+        "description": "negative 'snapshot-build-dependencies-timestamp' option"
+      },
+      {
+        "long": "snapshot-immutable-paths",
+        "description": "a RegExp matching an immutable directory (usually a package manager cache directory, including the tailing slash) A path to an immutable directory (usually a pa",
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "snapshot-immutable-paths-reset",
+        "description": "clear all items provided in 'snapshot.immutablePaths' configuration. List of paths that are managed by a package manager and contain a version or hash in its pa"
+      },
+      {
+        "long": "snapshot-managed-paths",
+        "description": "a RegExp matching a managed directory (usually a node_modules directory, including the tailing slash) A path to a managed directory (usually a node_modules dire",
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "snapshot-managed-paths-reset",
+        "description": "clear all items provided in 'snapshot.managedPaths' configuration. List of paths that are managed by a package manager and can be trusted to not be modified oth"
+      },
+      {
+        "long": "snapshot-module-hash",
+        "description": "use hashes of the content of the files/directories to determine invalidation"
+      },
+      {
+        "long": "no-snapshot-module-hash",
+        "description": "negative 'snapshot-module-hash' option"
+      },
+      {
+        "long": "snapshot-module-timestamp",
+        "description": "use timestamps of the files/directories to determine invalidation"
+      },
+      {
+        "long": "no-snapshot-module-timestamp",
+        "description": "negative 'snapshot-module-timestamp' option"
+      },
+      {
+        "long": "snapshot-resolve-hash",
+        "description": "use hashes of the content of the files/directories to determine invalidation"
+      },
+      {
+        "long": "no-snapshot-resolve-hash",
+        "description": "negative 'snapshot-resolve-hash' option"
+      },
+      {
+        "long": "snapshot-resolve-timestamp",
+        "description": "use timestamps of the files/directories to determine invalidation"
+      },
+      {
+        "long": "no-snapshot-resolve-timestamp",
+        "description": "negative 'snapshot-resolve-timestamp' option"
+      },
+      {
+        "long": "snapshot-resolve-build-dependencies-hash",
+        "description": "use hashes of the content of the files/directories to determine invalidation"
+      },
+      {
+        "long": "no-snapshot-resolve-build-dependencies-hash",
+        "description": "negative 'snapshot-resolve-build-dependencies-hash' option"
+      },
+      {
+        "long": "snapshot-resolve-build-dependencies-timestamp",
+        "description": "use timestamps of the files/directories to determine invalidation"
+      },
+      {
+        "long": "no-snapshot-resolve-build-dependencies-timestamp",
+        "description": "negative 'snapshot-resolve-build-dependencies-timestamp' option"
+      },
+      {
+        "long": "stats",
+        "description": "it instructs webpack on how to treat the stats e.g. verbose",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-stats",
+        "description": "disable stats output"
+      },
+      {
+        "long": "stats-all",
+        "description": "fallback value for stats options when an option is not defined (has precedence over local webpack defaults)"
+      },
+      {
+        "long": "no-stats-all",
+        "description": "negative 'stats-all' option"
+      },
+      {
+        "long": "stats-assets",
+        "description": "add assets information"
+      },
+      {
+        "long": "no-stats-assets",
+        "description": "negative 'stats-assets' option"
+      },
+      {
+        "long": "stats-assets-sort",
+        "description": "sort the assets by that field",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "stats-assets-space",
+        "description": "space to display assets (groups will be collapsed to fit this space)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "stats-built-at",
+        "description": "add built at time information"
+      },
+      {
+        "long": "no-stats-built-at",
+        "description": "negative 'stats-built-at' option"
+      },
+      {
+        "long": "stats-cached",
+        "description": "add information about cached (not built) modules (deprecated: use 'cachedModules' instead)",
+        "deprecated": true
+      },
+      {
+        "long": "no-stats-cached",
+        "description": "negative 'stats-cached' option"
+      },
+      {
+        "long": "stats-cached-assets",
+        "description": "show cached assets (setting this to `false` only shows emitted files)"
+      },
+      {
+        "long": "no-stats-cached-assets",
+        "description": "negative 'stats-cached-assets' option"
+      },
+      {
+        "long": "stats-cached-modules",
+        "description": "add information about cached (not built) modules"
+      },
+      {
+        "long": "no-stats-cached-modules",
+        "description": "negative 'stats-cached-modules' option"
+      },
+      {
+        "long": "stats-children",
+        "description": "add children information"
+      },
+      {
+        "long": "no-stats-children",
+        "description": "negative 'stats-children' option"
+      },
+      {
+        "long": "stats-chunk-group-auxiliary",
+        "description": "display auxiliary assets in chunk groups"
+      },
+      {
+        "long": "no-stats-chunk-group-auxiliary",
+        "description": "negative 'stats-chunk-group-auxiliary' option"
+      },
+      {
+        "long": "stats-chunk-group-children",
+        "description": "display children of chunk groups"
+      },
+      {
+        "long": "no-stats-chunk-group-children",
+        "description": "negative 'stats-chunk-group-children' option"
+      },
+      {
+        "long": "stats-chunk-group-max-assets",
+        "description": "limit of assets displayed in chunk groups",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "stats-chunk-groups",
+        "description": "display all chunk groups with the corresponding bundles"
+      },
+      {
+        "long": "no-stats-chunk-groups",
+        "description": "negative 'stats-chunk-groups' option"
+      },
+      {
+        "long": "stats-chunk-modules",
+        "description": "add built modules information to chunk information"
+      },
+      {
+        "long": "no-stats-chunk-modules",
+        "description": "negative 'stats-chunk-modules' option"
+      },
+      {
+        "long": "stats-chunk-modules-space",
+        "description": "space to display chunk modules (groups will be collapsed to fit this space, value is in number of modules/group)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "stats-chunk-origins",
+        "description": "add the origins of chunks and chunk merging info"
+      },
+      {
+        "long": "no-stats-chunk-origins",
+        "description": "negative 'stats-chunk-origins' option"
+      },
+      {
+        "long": "stats-chunk-relations",
+        "description": "add information about parent, children and sibling chunks to chunk information"
+      },
+      {
+        "long": "no-stats-chunk-relations",
+        "description": "negative 'stats-chunk-relations' option"
+      },
+      {
+        "long": "stats-chunks",
+        "description": "add chunk information"
+      },
+      {
+        "long": "no-stats-chunks",
+        "description": "negative 'stats-chunks' option"
+      },
+      {
+        "long": "stats-chunks-sort",
+        "description": "sort the chunks by that field",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "stats-colors",
+        "description": "enables/Disables colorful output"
+      },
+      {
+        "long": "no-stats-colors",
+        "description": "negative 'stats-colors' option"
+      },
+      {
+        "long": "stats-colors-bold",
+        "description": "custom color for bold text",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "stats-colors-cyan",
+        "description": "custom color for cyan text",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "stats-colors-green",
+        "description": "custom color for green text",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "stats-colors-magenta",
+        "description": "custom color for magenta text",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "stats-colors-red",
+        "description": "custom color for red text",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "stats-colors-yellow",
+        "description": "custom color for yellow text",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "stats-context",
+        "description": "context directory for request shortening",
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "stats-dependent-modules",
+        "description": "show chunk modules that are dependencies of other modules of the chunk"
+      },
+      {
+        "long": "no-stats-dependent-modules",
+        "description": "negative 'stats-dependent-modules' option"
+      },
+      {
+        "long": "stats-depth",
+        "description": "add module depth in module graph"
+      },
+      {
+        "long": "no-stats-depth",
+        "description": "negative 'stats-depth' option"
+      },
+      {
+        "long": "stats-entrypoints",
+        "description": "display the entry points with the corresponding bundles",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-stats-entrypoints",
+        "description": "negative 'stats-entrypoints' option"
+      },
+      {
+        "long": "stats-env",
+        "description": "add --env information"
+      },
+      {
+        "long": "no-stats-env",
+        "description": "negative 'stats-env' option"
+      },
+      {
+        "long": "stats-error-details",
+        "description": "add details to errors (like resolving log)",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-stats-error-details",
+        "description": "negative 'stats-error-details' option"
+      },
+      {
+        "long": "stats-error-stack",
+        "description": "add internal stack trace to errors"
+      },
+      {
+        "long": "no-stats-error-stack",
+        "description": "negative 'stats-error-stack' option"
+      },
+      {
+        "long": "stats-errors",
+        "description": "add errors"
+      },
+      {
+        "long": "no-stats-errors",
+        "description": "negative 'stats-errors' option"
+      },
+      {
+        "long": "stats-errors-count",
+        "description": "add errors count"
+      },
+      {
+        "long": "no-stats-errors-count",
+        "description": "negative 'stats-errors-count' option"
+      },
+      {
+        "long": "stats-exclude-assets",
+        "description": "suppress assets that match the specified filters. Filters can be Strings, RegExps or Functions",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "stats-exclude-assets-reset",
+        "description": "clear all items provided in 'stats.excludeAssets' configuration. Suppress assets that match the specified filters. Filters can be Strings, RegExps or Functions"
+      },
+      {
+        "long": "stats-exclude-modules",
+        "description": "suppress modules that match the specified filters. Filters can be Strings, RegExps, Booleans or Functions",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-stats-exclude-modules",
+        "description": "negative 'stats-exclude-modules' option"
+      },
+      {
+        "long": "stats-exclude-modules-reset",
+        "description": "clear all items provided in 'stats.excludeModules' configuration. Suppress modules that match the specified filters. Filters can be Strings, RegExps, Booleans o"
+      },
+      {
+        "long": "stats-group-assets-by-chunk",
+        "description": "group assets by how their are related to chunks"
+      },
+      {
+        "long": "no-stats-group-assets-by-chunk",
+        "description": "negative 'stats-group-assets-by-chunk' option"
+      },
+      {
+        "long": "stats-group-assets-by-emit-status",
+        "description": "group assets by their status (emitted, compared for emit or cached)"
+      },
+      {
+        "long": "no-stats-group-assets-by-emit-status",
+        "description": "negative 'stats-group-assets-by-emit-status' option"
+      },
+      {
+        "long": "stats-group-assets-by-extension",
+        "description": "group assets by their extension"
+      },
+      {
+        "long": "no-stats-group-assets-by-extension",
+        "description": "negative 'stats-group-assets-by-extension' option"
+      },
+      {
+        "long": "stats-group-assets-by-info",
+        "description": "group assets by their asset info (immutable, development, hotModuleReplacement, etc)"
+      },
+      {
+        "long": "no-stats-group-assets-by-info",
+        "description": "negative 'stats-group-assets-by-info' option"
+      },
+      {
+        "long": "stats-group-assets-by-path",
+        "description": "group assets by their path"
+      },
+      {
+        "long": "no-stats-group-assets-by-path",
+        "description": "negative 'stats-group-assets-by-path' option"
+      },
+      {
+        "long": "stats-group-modules-by-attributes",
+        "description": "group modules by their attributes (errors, warnings, assets, optional, orphan, or dependent)"
+      },
+      {
+        "long": "no-stats-group-modules-by-attributes",
+        "description": "negative 'stats-group-modules-by-attributes' option"
+      },
+      {
+        "long": "stats-group-modules-by-cache-status",
+        "description": "group modules by their status (cached or built and cacheable)"
+      },
+      {
+        "long": "no-stats-group-modules-by-cache-status",
+        "description": "negative 'stats-group-modules-by-cache-status' option"
+      },
+      {
+        "long": "stats-group-modules-by-extension",
+        "description": "group modules by their extension"
+      },
+      {
+        "long": "no-stats-group-modules-by-extension",
+        "description": "negative 'stats-group-modules-by-extension' option"
+      },
+      {
+        "long": "stats-group-modules-by-layer",
+        "description": "group modules by their layer"
+      },
+      {
+        "long": "no-stats-group-modules-by-layer",
+        "description": "negative 'stats-group-modules-by-layer' option"
+      },
+      {
+        "long": "stats-group-modules-by-path",
+        "description": "group modules by their path"
+      },
+      {
+        "long": "no-stats-group-modules-by-path",
+        "description": "negative 'stats-group-modules-by-path' option"
+      },
+      {
+        "long": "stats-group-modules-by-type",
+        "description": "group modules by their type"
+      },
+      {
+        "long": "no-stats-group-modules-by-type",
+        "description": "negative 'stats-group-modules-by-type' option"
+      },
+      {
+        "long": "stats-group-reasons-by-origin",
+        "description": "group reasons by their origin module"
+      },
+      {
+        "long": "no-stats-group-reasons-by-origin",
+        "description": "negative 'stats-group-reasons-by-origin' option"
+      },
+      {
+        "long": "stats-hash",
+        "description": "add the hash of the compilation"
+      },
+      {
+        "long": "no-stats-hash",
+        "description": "negative 'stats-hash' option"
+      },
+      {
+        "long": "stats-ids",
+        "description": "add ids"
+      },
+      {
+        "long": "no-stats-ids",
+        "description": "negative 'stats-ids' option"
+      },
+      {
+        "long": "stats-logging",
+        "description": "specify log level of logging output. Enable/disable logging output (`true`: shows normal logging output, loglevel: log)",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-stats-logging",
+        "description": "negative 'stats-logging' option"
+      },
+      {
+        "long": "stats-logging-debug",
+        "description": "enable/Disable debug logging for all loggers. Include debug logging of specified loggers (i. e. for plugins or loaders). Filters can be Strings, RegExps or Func",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-stats-logging-debug",
+        "description": "negative 'stats-logging-debug' option"
+      },
+      {
+        "long": "stats-logging-debug-reset",
+        "description": "clear all items provided in 'stats.loggingDebug' configuration. Include debug logging of specified loggers (i. e. for plugins or loaders). Filters can be String"
+      },
+      {
+        "long": "stats-logging-trace",
+        "description": "add stack traces to logging output"
+      },
+      {
+        "long": "no-stats-logging-trace",
+        "description": "negative 'stats-logging-trace' option"
+      },
+      {
+        "long": "stats-module-assets",
+        "description": "add information about assets inside modules"
+      },
+      {
+        "long": "no-stats-module-assets",
+        "description": "negative 'stats-module-assets' option"
+      },
+      {
+        "long": "stats-module-trace",
+        "description": "add dependencies and origin of warnings/errors"
+      },
+      {
+        "long": "no-stats-module-trace",
+        "description": "negative 'stats-module-trace' option"
+      },
+      {
+        "long": "stats-modules",
+        "description": "add built modules information"
+      },
+      {
+        "long": "no-stats-modules",
+        "description": "negative 'stats-modules' option"
+      },
+      {
+        "long": "stats-modules-sort",
+        "description": "sort the modules by that field",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "stats-modules-space",
+        "description": "space to display modules (groups will be collapsed to fit this space, value is in number of modules/groups)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "stats-nested-modules",
+        "description": "add information about modules nested in other modules (like with module concatenation)"
+      },
+      {
+        "long": "no-stats-nested-modules",
+        "description": "negative 'stats-nested-modules' option"
+      },
+      {
+        "long": "stats-nested-modules-space",
+        "description": "space to display modules nested within other modules (groups will be collapsed to fit this space, value is in number of modules/group)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "stats-optimization-bailout",
+        "description": "show reasons why optimization bailed out for modules"
+      },
+      {
+        "long": "no-stats-optimization-bailout",
+        "description": "negative 'stats-optimization-bailout' option"
+      },
+      {
+        "long": "stats-orphan-modules",
+        "description": "add information about orphan modules"
+      },
+      {
+        "long": "no-stats-orphan-modules",
+        "description": "negative 'stats-orphan-modules' option"
+      },
+      {
+        "long": "stats-output-path",
+        "description": "add output path information"
+      },
+      {
+        "long": "no-stats-output-path",
+        "description": "negative 'stats-output-path' option"
+      },
+      {
+        "long": "stats-performance",
+        "description": "add performance hint flags"
+      },
+      {
+        "long": "no-stats-performance",
+        "description": "negative 'stats-performance' option"
+      },
+      {
+        "long": "stats-preset",
+        "description": "preset for the default values",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-stats-preset",
+        "description": "negative 'stats-preset' option"
+      },
+      {
+        "long": "stats-provided-exports",
+        "description": "show exports provided by modules"
+      },
+      {
+        "long": "no-stats-provided-exports",
+        "description": "negative 'stats-provided-exports' option"
+      },
+      {
+        "long": "stats-public-path",
+        "description": "add public path information"
+      },
+      {
+        "long": "no-stats-public-path",
+        "description": "negative 'stats-public-path' option"
+      },
+      {
+        "long": "stats-reasons",
+        "description": "add information about the reasons why modules are included"
+      },
+      {
+        "long": "no-stats-reasons",
+        "description": "negative 'stats-reasons' option"
+      },
+      {
+        "long": "stats-reasons-space",
+        "description": "space to display reasons (groups will be collapsed to fit this space)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "stats-related-assets",
+        "description": "add information about assets that are related to other assets (like SourceMaps for assets)"
+      },
+      {
+        "long": "no-stats-related-assets",
+        "description": "negative 'stats-related-assets' option"
+      },
+      {
+        "long": "stats-runtime",
+        "description": "add information about runtime modules (deprecated: use 'runtimeModules' instead)",
+        "deprecated": true
+      },
+      {
+        "long": "no-stats-runtime",
+        "description": "negative 'stats-runtime' option"
+      },
+      {
+        "long": "stats-runtime-modules",
+        "description": "add information about runtime modules"
+      },
+      {
+        "long": "no-stats-runtime-modules",
+        "description": "negative 'stats-runtime-modules' option"
+      },
+      {
+        "long": "stats-source",
+        "description": "add the source code of modules"
+      },
+      {
+        "long": "no-stats-source",
+        "description": "negative 'stats-source' option"
+      },
+      {
+        "long": "stats-timings",
+        "description": "add timing information"
+      },
+      {
+        "long": "no-stats-timings",
+        "description": "negative 'stats-timings' option"
+      },
+      {
+        "long": "stats-used-exports",
+        "description": "show exports used by modules"
+      },
+      {
+        "long": "no-stats-used-exports",
+        "description": "negative 'stats-used-exports' option"
+      },
+      {
+        "long": "stats-version",
+        "description": "add webpack version information"
+      },
+      {
+        "long": "no-stats-version",
+        "description": "negative 'stats-version' option"
+      },
+      {
+        "long": "stats-warnings",
+        "description": "add warnings"
+      },
+      {
+        "long": "no-stats-warnings",
+        "description": "negative 'stats-warnings' option"
+      },
+      {
+        "long": "stats-warnings-count",
+        "description": "add warnings count"
+      },
+      {
+        "long": "no-stats-warnings-count",
+        "description": "negative 'stats-warnings-count' option"
+      },
+      {
+        "long": "stats-warnings-filter",
+        "description": "suppress listing warnings that match the specified filters (they will still be counted). Filters can be Strings, RegExps or Functions",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "stats-warnings-filter-reset",
+        "description": "clear all items provided in 'stats.warningsFilter' configuration. Suppress listing warnings that match the specified filters (they will still be counted). Filte"
+      },
+      {
+        "long": "target",
+        "short": "t",
+        "description": "sets the build target e.g. node",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "no-target",
+        "description": "negative 'target' option"
+      },
+      {
+        "long": "target-reset",
+        "description": "clear all items provided in 'target' configuration. Environment to build for. An array of environments to build for all of them when possible"
+      },
+      {
+        "long": "watch",
+        "short": "w",
+        "description": "watch for files changes"
+      },
+      {
+        "long": "no-watch",
+        "description": "do not watch for file changes"
+      },
+      {
+        "long": "watch-options-aggregate-timeout",
+        "description": "delay the rebuilt after the first change. Value is a time in ms",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "watch-options-follow-symlinks",
+        "description": "resolve symlinks and watch symlink and real file. This is usually not needed as webpack already resolves symlinks ('resolve.symlinks')"
+      },
+      {
+        "long": "no-watch-options-follow-symlinks",
+        "description": "negative 'watch-options-follow-symlinks' option"
+      },
+      {
+        "long": "watch-options-ignored",
+        "description": "a glob pattern for files that should be ignored from watching. Ignore some files from watching (glob pattern or regexp)",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "watch-options-ignored-reset",
+        "description": "clear all items provided in 'watchOptions.ignored' configuration. Ignore some files from watching (glob pattern or regexp)"
+      },
+      {
+        "long": "watch-options-poll",
+        "description": "`number`: use polling with specified interval. `true`: use polling",
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "no-watch-options-poll",
+        "description": "negative 'watch-options-poll' option"
+      },
+      {
+        "long": "watch-options-stdin",
+        "description": "stop watching when stdin stream has ended"
+      },
+      {
+        "long": "no-watch-options-stdin",
+        "description": "do not stop watching when stdin stream has ended"
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "build",
+        "aliases": [
+          "bundle",
+          "b"
+        ],
+        "description": "run webpack (default command, can be omitted)"
+      },
+      {
+        "name": "configtest",
+        "aliases": [
+          "t"
+        ],
+        "description": "validate a webpack configuration",
+        "options": [
+          {
+            "spellings": [
+              "config-path"
+            ],
+            "description": "path to the webpack configuration file",
+            "value": {
+              "name": "config",
+              "provider": "configFiles"
+            }
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "aliases": [
+          "h"
+        ],
+        "description": "display help for command and options"
+      },
+      {
+        "name": "info",
+        "aliases": [
+          "i"
+        ],
+        "description": "display information about your system"
+      },
+      {
+        "name": "init",
+        "aliases": [
+          "create",
+          "c",
+          "new",
+          "n"
+        ],
+        "description": "initialize a new webpack project"
+      },
+      {
+        "name": "loader",
+        "aliases": [
+          "l"
+        ],
+        "description": "scaffold a webpack loader"
+      },
+      {
+        "name": "plugin",
+        "aliases": [
+          "p"
+        ],
+        "description": "scaffold a webpack plugin"
+      },
+      {
+        "name": "serve",
+        "aliases": [
+          "server",
+          "s"
+        ],
+        "description": "run the webpack development server"
+      },
+      {
+        "name": "version",
+        "aliases": [
+          "v"
+        ],
+        "description": "display the version number of webpack, webpack-cli, and webpack-dev-server commands"
+      },
+      {
+        "name": "watch",
+        "aliases": [
+          "w"
+        ],
+        "description": "run webpack and watch for file changes"
+      }
+    ],
+    "providers": {
+      "files": {
+        "builtin": "files"
+      },
+      "configFiles": {
+        "values": [
+          "webpack.config",
+          ".webpack/webpack.config",
+          ".webpack/webpackfile"
+        ]
+      }
+    }
+  }
+}
