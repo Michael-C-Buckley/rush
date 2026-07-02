@@ -1,0 +1,554 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "oci",
+    "description": "Oracle Cloud Infrastructure CLI",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "Show help for oci",
+        "inherit": false
+      },
+      {
+        "long": "profile",
+        "short": "p",
+        "description": "The profile to load from the config file",
+        "inherit": false,
+        "value": {
+          "name": "profile"
+        }
+      },
+      {
+        "long": "config-file",
+        "description": "The path to the config file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "region",
+        "description": "The region to make calls against",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": {
+            "values": [
+              "us-ashburn-1",
+              "us-phoenix-1",
+              "us-chicago-1",
+              "ca-montreal-1",
+              "ca-toronto-1",
+              "sa-saopaulo-1",
+              "sa-vinhedo-1",
+              "sa-santiago-1",
+              "eu-frankfurt-1",
+              "eu-amsterdam-1",
+              "eu-zurich-1",
+              "eu-madrid-1",
+              "uk-london-1",
+              "uk-cardiff-1",
+              "ap-tokyo-1",
+              "ap-osaka-1",
+              "ap-seoul-1",
+              "ap-sydney-1",
+              "ap-melbourne-1",
+              "ap-hyderabad-1",
+              "ap-mumbai-1",
+              "me-dubai-1"
+            ]
+          }
+        }
+      },
+      {
+        "long": "output",
+        "description": "The output format",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": {
+            "values": [
+              "json",
+              "table",
+              "text"
+            ]
+          }
+        }
+      },
+      {
+        "long": "debug",
+        "description": "Turn on debug logging",
+        "inherit": false
+      },
+      {
+        "long": "auth",
+        "description": "The type of auth to use",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": {
+            "values": [
+              "api_key",
+              "instance_principal",
+              "resource_principal",
+              "security_token",
+              "raw_token"
+            ]
+          }
+        }
+      },
+      {
+        "long": "key-file",
+        "description": "The path to the private key file",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "wait-for-state",
+        "description": "Wait until resource reaches a given state",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": {
+            "values": [
+              "ACCEPTED",
+              "AVAILABLE",
+              "RUNNING",
+              "PROVISIONING",
+              "STOPPED",
+              "TERMINATED",
+              "FAILED"
+            ]
+          }
+        }
+      },
+      {
+        "long": "wait-interval-seconds",
+        "description": "Check interval seconds for --wait-for-state",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "long": "max-wait-seconds",
+        "description": "Maximum time to wait",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "long": "raw-output",
+        "description": "Output raw response from OCI API",
+        "inherit": false
+      },
+      {
+        "long": "output-format",
+        "description": "The output format for commands",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": {
+            "values": [
+              "json",
+              "table",
+              "text"
+            ]
+          }
+        }
+      },
+      {
+        "long": "query",
+        "description": "JMESPath query to filter the output",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "compute",
+        "description": "Manage Compute resources like instances and images",
+        "subcommands": [
+          {
+            "name": "instance",
+            "description": "Manage Compute instances",
+            "subcommands": [
+              {
+                "name": "launch",
+                "description": "Launch a new compute instance",
+                "options": [
+                  {
+                    "long": "availability-domain",
+                    "description": "The availability domain of the instance",
+                    "inherit": false
+                  },
+                  {
+                    "long": "compartment-id",
+                    "description": "The OCID of the compartment",
+                    "inherit": false
+                  },
+                  {
+                    "long": "shape",
+                    "description": "The shape of the instance",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "terminate",
+                "description": "Terminate a compute instance",
+                "options": [
+                  {
+                    "long": "instance-id",
+                    "description": "The OCID of the instance",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "start",
+                "description": "Start a stopped instance",
+                "options": [
+                  {
+                    "long": "instance-id",
+                    "description": "The OCID of the instance",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "stop",
+                "description": "Stop a running instance",
+                "options": [
+                  {
+                    "long": "instance-id",
+                    "description": "The OCID of the instance",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "image",
+            "description": "Manage Custom Images",
+            "subcommands": [
+              {
+                "name": "list",
+                "description": "List available compute images",
+                "options": [
+                  {
+                    "long": "compartment-id",
+                    "description": "The OCID of the compartment",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "network",
+        "description": "Manage Virtual Cloud Network resources",
+        "subcommands": [
+          {
+            "name": "vcn",
+            "description": "Manage Virtual Cloud Networks",
+            "subcommands": [
+              {
+                "name": "create",
+                "description": "Create a new VCN",
+                "options": [
+                  {
+                    "long": "compartment-id",
+                    "description": "The OCID of the compartment",
+                    "inherit": false
+                  },
+                  {
+                    "long": "cidr-block",
+                    "description": "The CIDR block of the VCN",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "db",
+        "description": "Manage Database resources",
+        "subcommands": [
+          {
+            "name": "autonomous-database",
+            "description": "Manage Autonomous Databases",
+            "subcommands": [
+              {
+                "name": "create",
+                "description": "Create an Autonomous Database",
+                "options": [
+                  {
+                    "long": "compartment-id",
+                    "description": "The OCID of the compartment",
+                    "inherit": false
+                  },
+                  {
+                    "long": "db-name",
+                    "description": "The database name",
+                    "inherit": false
+                  },
+                  {
+                    "long": "cpu-core-count",
+                    "description": "Number of CPU cores",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "os",
+        "description": "Object Storage commands",
+        "subcommands": [
+          {
+            "name": "bucket",
+            "description": "Manage buckets",
+            "subcommands": [
+              {
+                "name": "create",
+                "description": "Create a new bucket",
+                "options": [
+                  {
+                    "long": "compartment-id",
+                    "description": "The OCID of the compartment",
+                    "inherit": false
+                  },
+                  {
+                    "long": "name",
+                    "description": "The name of the bucket",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "iam",
+        "description": "Manage Identity and Access Management resources",
+        "subcommands": [
+          {
+            "name": "user",
+            "description": "Manage users",
+            "subcommands": [
+              {
+                "name": "create",
+                "description": "Create a new user",
+                "options": [
+                  {
+                    "long": "name",
+                    "description": "Name of the user",
+                    "inherit": false
+                  },
+                  {
+                    "long": "description",
+                    "description": "Description for the user",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "policy",
+            "description": "Manage IAM policies",
+            "subcommands": [
+              {
+                "name": "create",
+                "description": "Create a new policy",
+                "options": [
+                  {
+                    "long": "name",
+                    "description": "Name of the policy",
+                    "inherit": false
+                  },
+                  {
+                    "long": "statements",
+                    "description": "Policy statements",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "group",
+            "description": "Manage IAM groups",
+            "subcommands": [
+              {
+                "name": "create",
+                "description": "Create a new group",
+                "options": [
+                  {
+                    "long": "name",
+                    "description": "The name of the group",
+                    "inherit": false
+                  },
+                  {
+                    "long": "description",
+                    "description": "Description for the group",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "compartment",
+            "description": "Manage compartments",
+            "subcommands": [
+              {
+                "name": "create",
+                "description": "Create a new compartment",
+                "options": [
+                  {
+                    "long": "name",
+                    "description": "The name of the compartment",
+                    "inherit": false
+                  },
+                  {
+                    "long": "description",
+                    "description": "Description for the compartment",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "kms",
+        "description": "Manage Key Management resources",
+        "subcommands": [
+          {
+            "name": "key",
+            "description": "Manage encryption keys",
+            "subcommands": [
+              {
+                "name": "create",
+                "description": "Create a new key",
+                "options": [
+                  {
+                    "long": "compartment-id",
+                    "description": "The OCID of the compartment",
+                    "inherit": false
+                  },
+                  {
+                    "long": "display-name",
+                    "description": "Display name of the key",
+                    "inherit": false
+                  },
+                  {
+                    "long": "key-shape",
+                    "description": "Shape of the key",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": {
+                        "values": [
+                          "AES",
+                          "RSA",
+                          "ECDSA"
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "monitoring",
+        "description": "Manage Monitoring and Alerts",
+        "subcommands": [
+          {
+            "name": "alarm",
+            "description": "Manage monitoring alarms",
+            "subcommands": [
+              {
+                "name": "create",
+                "description": "Create a new alarm",
+                "options": [
+                  {
+                    "long": "display-name",
+                    "description": "Display name of the alarm",
+                    "inherit": false
+                  },
+                  {
+                    "long": "metric-compartment-id",
+                    "description": "Compartment OCID containing the metric",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "budget",
+        "description": "Manage Budgets and Cost Controls",
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "Create a new budget",
+            "options": [
+              {
+                "long": "compartment-id",
+                "description": "The OCID of the compartment",
+                "inherit": false
+              },
+              {
+                "long": "amount",
+                "description": "The amount for the budget",
+                "inherit": false
+              },
+              {
+                "long": "reset-period",
+                "description": "The reset period for the budget",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      "MONTHLY",
+                      "YEARLY"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
