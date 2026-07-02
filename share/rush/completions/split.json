@@ -1,0 +1,73 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "split",
+    "description": "split files into pieces",
+    "options": [
+      {
+        "short": "a",
+        "description": "use suffix_length letters to form the suffix of the file name",
+        "inherit": false,
+        "value": {
+          "name": "suffix_length"
+        }
+      },
+      {
+        "short": "b",
+        "description": "create split files byte_count bytes in length. If k or K is appended to the number, the file is split into byte_count kilobyte pieces. If m or M is appended to",
+        "inherit": false,
+        "value": {
+          "name": "byte_count",
+          "description": "n[K|k|M|m|G|g]"
+        }
+      },
+      {
+        "short": "d",
+        "description": "use a numeric suffix instead of a alphabetic suffix",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "description": "create split files line_count lines in length",
+        "inherit": false,
+        "value": {
+          "name": "line_count"
+        }
+      },
+      {
+        "short": "p",
+        "description": "the file is split whenever an input line matches pattern, which is interpreted as an extended regular expression. The matching line will be the first line of th",
+        "inherit": false,
+        "value": {
+          "name": "pattern"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "description": "input file",
+          "provider": "builtin.files",
+          "index": 0
+        },
+        {
+          "name": "prefix",
+          "description": "prefix for the names of the files into which the file is split",
+          "provider": {
+            "values": [
+              "x"
+            ]
+          },
+          "index": 1
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
