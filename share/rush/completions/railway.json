@@ -1,0 +1,374 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "railway",
+    "description": "manage Railway apps",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for railway",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "show railway version",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "short": "v",
+        "description": "enable verbose output",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "add",
+        "description": "add a plugin to your project"
+      },
+      {
+        "name": "completion",
+        "description": "generate shell-completions",
+        "arguments": {
+          "states": [
+            {
+              "name": "shell",
+              "description": "the shell to generate completions for",
+              "provider": {
+                "values": [
+                  "bash",
+                  "zsh",
+                  "fish",
+                  "powershell"
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "connect",
+        "description": "connect to a plugin",
+        "arguments": {
+          "states": [
+            {
+              "name": "plugin",
+              "description": "the plugin to connect to",
+              "provider": {
+                "values": [
+                  "postgresql",
+                  "mysql",
+                  "redis",
+                  "mongodb"
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete",
+        "description": "delete a project",
+        "arguments": {
+          "states": [
+            {
+              "name": "project-id",
+              "description": "the project to delete",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "docs",
+        "description": "open Railway Documentation in default browser"
+      },
+      {
+        "name": "down",
+        "description": "remove the most recent deployment",
+        "options": [
+          {
+            "short": "e",
+            "long": "environment",
+            "description": "environment to delete from",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          }
+        ]
+      },
+      {
+        "name": "environment",
+        "description": "change your environment",
+        "arguments": {
+          "states": [
+            {
+              "name": "environment",
+              "description": "the environment to change to",
+              "provider": {
+                "values": [
+                  "production",
+                  "preview"
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "get help about any command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "description": "the command to get help about",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "init",
+        "description": "create a new railway project"
+      },
+      {
+        "name": "link",
+        "description": "connect to an existing railway project",
+        "arguments": {
+          "states": [
+            {
+              "name": "project-id",
+              "description": "the project to link to",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "list all railway projects"
+      },
+      {
+        "name": "login",
+        "description": "login to railway",
+        "options": [
+          {
+            "long": "browserless",
+            "description": "login without opening a browser",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "logout",
+        "description": "logout of railway"
+      },
+      {
+        "name": "logs",
+        "description": "show logs for the most-recent deployment",
+        "options": [
+          {
+            "short": "n",
+            "long": "lines",
+            "description": "output a specific number of lines",
+            "inherit": false,
+            "value": {
+              "name": "lines",
+              "description": "The number of lines to output"
+            }
+          }
+        ]
+      },
+      {
+        "name": "open",
+        "description": "open the project",
+        "subcommands": [
+          {
+            "name": "live",
+            "description": "open the live project"
+          },
+          {
+            "name": "metrics",
+            "description": "open project metrics"
+          },
+          {
+            "name": "settings",
+            "description": "open project settings"
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "run a local command using variables from the active environment",
+        "options": [
+          {
+            "short": "e",
+            "long": "environment",
+            "description": "environment to run in",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "s",
+            "long": "service",
+            "description": "define specific service",
+            "inherit": false,
+            "value": {
+              "name": "service"
+            }
+          }
+        ]
+      },
+      {
+        "name": "shell",
+        "description": "open a subshell with Railway variables available",
+        "options": [
+          {
+            "short": "s",
+            "long": "service",
+            "description": "deploy app to specific service",
+            "inherit": false,
+            "value": {
+              "name": "service"
+            }
+          }
+        ]
+      },
+      {
+        "name": "status",
+        "description": "view the status of railway project"
+      },
+      {
+        "name": "unlink",
+        "description": "disconnects the current directory from a Railway project"
+      },
+      {
+        "name": "up",
+        "description": "deploy to railway",
+        "options": [
+          {
+            "short": "d",
+            "long": "detach",
+            "description": "detach from build logs",
+            "inherit": false
+          },
+          {
+            "short": "e",
+            "long": "environment",
+            "description": "environment to run in",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "service",
+            "description": "deploy app to specific service",
+            "inherit": false,
+            "value": {
+              "name": "service"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "path to deploy to",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "variables",
+        "description": "work with environment variables",
+        "options": [
+          {
+            "short": "e",
+            "long": "environment",
+            "description": "environment",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "service",
+            "description": "deploy app to specific service",
+            "inherit": false,
+            "value": {
+              "name": "service"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "delete",
+            "description": "delete variable",
+            "arguments": {
+              "states": [
+                {
+                  "name": "variable",
+                  "description": "the name of the variable you want to delete",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "get",
+            "description": "get variable value",
+            "arguments": {
+              "states": [
+                {
+                  "name": "variable",
+                  "description": "the name of the variable you want to get",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "set",
+            "description": "set variable value",
+            "arguments": {
+              "states": [
+                {
+                  "name": "variable",
+                  "description": "the name of the variable you want to set",
+                  "index": 0
+                },
+                {
+                  "name": "value",
+                  "description": "value of the variable",
+                  "index": 1
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "get the version of railway's CLI"
+      },
+      {
+        "name": "whoami",
+        "description": "get the logged in user"
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
