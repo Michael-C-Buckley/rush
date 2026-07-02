@@ -1,0 +1,1623 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "gem",
+    "description": "manage Ruby gems",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for gem",
+        "inherit": true
+      },
+      {
+        "short": "V",
+        "long": "verbose",
+        "description": "set the verbose level of output",
+        "inherit": true
+      },
+      {
+        "long": "no-verbose",
+        "description": "do not set the verbose level of output",
+        "inherit": true
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "silence command progress meter",
+        "inherit": true
+      },
+      {
+        "long": "silent",
+        "description": "silence RubyGems output",
+        "inherit": true
+      },
+      {
+        "spellings": [
+          "-config-file"
+        ],
+        "description": "use this config file instead of default",
+        "inherit": true,
+        "value": {
+          "name": "FILE",
+          "description": "the config file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "backtrace",
+        "description": "show stack backtrace on errors",
+        "inherit": true
+      },
+      {
+        "long": "debug",
+        "description": "turn on Ruby debugging",
+        "inherit": true
+      },
+      {
+        "long": "norc",
+        "description": "avoid loading any .gemrc file",
+        "inherit": true
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show the gem version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "help",
+        "description": "help about any command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "install",
+        "aliases": [
+          "i"
+        ],
+        "description": "install a gem into the local repository",
+        "options": [
+          {
+            "long": "platform",
+            "description": "specify the platform of gem to install",
+            "inherit": false,
+            "value": {
+              "name": "PLATFORM",
+              "description": "the platform of gem"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "GEMNAME",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "cert",
+        "description": "manage RubyGems certificates and signing settings",
+        "options": [
+          {
+            "short": "a",
+            "long": "add",
+            "description": "add a trusted certificate",
+            "inherit": false,
+            "value": {
+              "name": "CERT",
+              "description": "the trusted certificate",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "l",
+            "long": "list",
+            "description": "list trusted certificates where the subject contains FILTER",
+            "inherit": false,
+            "value": {
+              "name": "FILTER",
+              "description": "the filter",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "short": "r",
+            "long": "remove",
+            "description": "remove trusted certificates where the subject contains FILTER",
+            "inherit": false,
+            "value": {
+              "name": "FILTER",
+              "description": "the filter"
+            }
+          },
+          {
+            "short": "b",
+            "long": "build",
+            "description": "build private key and self-signed certificate for EMAIL_ADDR",
+            "inherit": false,
+            "value": {
+              "name": "EMAIL_ADDR",
+              "description": "the email address"
+            }
+          },
+          {
+            "short": "C",
+            "long": "certificate",
+            "description": "signing certificate for --sign",
+            "inherit": false,
+            "value": {
+              "name": "CERT",
+              "description": "the certificate",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "K",
+            "long": "private-key",
+            "description": "key for --sign or --build",
+            "inherit": false,
+            "value": {
+              "name": "KEY",
+              "description": "the key",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "A",
+            "long": "key-algorithm",
+            "description": "select which key algorithm to use for --build",
+            "inherit": false,
+            "value": {
+              "name": "ALGORITHM",
+              "description": "the algorithm"
+            }
+          },
+          {
+            "short": "s",
+            "long": "sign",
+            "description": "signs CERT with the key from -K and the certificate from -C",
+            "inherit": false,
+            "value": {
+              "name": "CERT",
+              "description": "the certificate",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "d",
+            "long": "days",
+            "description": "days before the certificate expires",
+            "inherit": false,
+            "value": {
+              "name": "NUMBER_OF_DAYS",
+              "description": "the number of days"
+            }
+          },
+          {
+            "short": "R",
+            "long": "re-sign",
+            "description": "re-signs the certificate from -C with the key from -K",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "check",
+        "description": "check a gem repository for added or missing files",
+        "options": [
+          {
+            "short": "a",
+            "long": "alien",
+            "description": "report 'unmanaged' or rogue files in the gem repository",
+            "inherit": false
+          },
+          {
+            "long": "no-alien",
+            "description": "report 'managed' or rogue files in the gem repository",
+            "inherit": false
+          },
+          {
+            "long": "doctor",
+            "description": "clean up uninstalled gems and broken specifications",
+            "inherit": false
+          },
+          {
+            "long": "no-doctor",
+            "description": "do not clean up uninstalled gems and broken specifications",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "do not remove files, only report what would be removed",
+            "inherit": false
+          },
+          {
+            "long": "no-dry-run",
+            "description": "remove files",
+            "inherit": false
+          },
+          {
+            "long": "gems",
+            "description": "check installed gems for problems",
+            "inherit": false
+          },
+          {
+            "long": "no-gems",
+            "description": "check not installed gems for problems",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "version",
+            "description": "specify version of gem to check",
+            "inherit": false,
+            "value": {
+              "name": "VERSION",
+              "description": "the version of the gem"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "GEMNAME",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "cleanup",
+        "description": "clean up old versions of installed gems",
+        "options": [
+          {
+            "short": "n",
+            "long": "dry-run",
+            "spellings": [
+              "-d"
+            ],
+            "description": "do not uninstall gems",
+            "inherit": false
+          },
+          {
+            "short": "D",
+            "long": "check-development",
+            "description": "check development dependencies while uninstalling (default: true)",
+            "inherit": false
+          },
+          {
+            "long": "no-check-development",
+            "description": "do not check development dependencies while uninstalling",
+            "inherit": false
+          },
+          {
+            "long": "user-install",
+            "description": "cleanup in user\u2019s home directory instead of GEM_HOME",
+            "inherit": false
+          },
+          {
+            "long": "no-user-install",
+            "description": "cleanup in GEM_HOME instead of user\u2019s home directory",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "GEMNAME",
+              "description": "name of gem to cleanup",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "contents",
+        "description": "display the contents of the installed gems",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "specify version of gem to contents",
+            "inherit": false,
+            "value": {
+              "name": "VERSION",
+              "description": "the version of the gem"
+            }
+          },
+          {
+            "long": "all",
+            "description": "contents for all gems",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "spec-dir",
+            "description": "search for gems under specific paths",
+            "inherit": false,
+            "value": {
+              "name": "DIR",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "l",
+            "long": "lib-only",
+            "description": "only return files in the Gem\u2019s lib_dirs",
+            "inherit": false
+          },
+          {
+            "long": "no-lib-only",
+            "description": "not only return files in the Gem\u2019s lib_dirs",
+            "inherit": false
+          },
+          {
+            "long": "prefix",
+            "description": "don\u2019t include installed path prefix",
+            "inherit": false
+          },
+          {
+            "long": "no-prefix",
+            "description": "include installed path prefix",
+            "inherit": false
+          },
+          {
+            "long": "show-install-dir",
+            "description": "show only the gem install dir",
+            "inherit": false
+          },
+          {
+            "long": "no-show-install-dir",
+            "description": "do not show only the gem install dir",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "GEMNAME",
+              "description": "name of gem to list contents for",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "dependency",
+        "description": "show the dependencies of an installed gem",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "specify version of gem to dependency",
+            "inherit": false,
+            "value": {
+              "name": "VERSION",
+              "description": "the version of gem"
+            }
+          },
+          {
+            "long": "platform",
+            "description": "specify the platform of gem to dependency",
+            "inherit": false,
+            "value": {
+              "name": "PLATFORM",
+              "description": "the platform of gem"
+            }
+          },
+          {
+            "long": "prerelease",
+            "description": "allow prerelease versions of a gem",
+            "inherit": false
+          },
+          {
+            "long": "no-prerelease",
+            "description": "do not allow prerelease versions of a gem",
+            "inherit": false
+          },
+          {
+            "short": "R",
+            "long": "reverse-dependencies",
+            "description": "include reverse dependencies in the output",
+            "inherit": false
+          },
+          {
+            "long": "no-reverse-dependencies",
+            "description": "do not include reverse dependencies in the output",
+            "inherit": false
+          },
+          {
+            "long": "pipe",
+            "description": "pipe Format (name --version ver)",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "REGEXP",
+              "description": "show dependencies for gems whose names start with REGEXP",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "environment",
+        "description": "display information about the RubyGems environment",
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "home",
+                    "description": "display the path where gems are installed. Aliases: gemhome, gemdir, GEM_HOME"
+                  },
+                  {
+                    "value": "path",
+                    "description": "display path used to search for gems. Aliases: gempath, GEM_PATH"
+                  },
+                  {
+                    "value": "user_gemhome",
+                    "description": "display the path where gems are installed when --user-install is given. Aliases: user_gemdir"
+                  },
+                  {
+                    "value": "version",
+                    "description": "display the gem format version"
+                  },
+                  {
+                    "value": "remotesources",
+                    "description": "display the remote gem servers"
+                  },
+                  {
+                    "value": "platform",
+                    "description": "display the supported gem platforms"
+                  }
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "fetch",
+        "description": "download a gem and place it in the current directory",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "specify version of gem to fetch",
+            "inherit": false,
+            "value": {
+              "name": "VERSION",
+              "description": "the version of the gem"
+            }
+          },
+          {
+            "long": "platform",
+            "description": "specify the platform of gem to fetch",
+            "inherit": false,
+            "value": {
+              "name": "PLATFORM",
+              "description": "the platform of gem"
+            }
+          },
+          {
+            "long": "prerelease",
+            "description": "allow prerelease versions of a gem",
+            "inherit": false
+          },
+          {
+            "long": "no-prerelease",
+            "description": "do not allow prerelease versions of a gem",
+            "inherit": false
+          },
+          {
+            "long": "suggestions",
+            "description": "suggest alternates when gems are not found",
+            "inherit": false
+          },
+          {
+            "long": "no-suggestions",
+            "description": "do not suggest alternates when gems are not found",
+            "inherit": false
+          },
+          {
+            "short": "B",
+            "long": "bulk-threshold",
+            "description": "threshold for switching to bulk synchronization (default 1000)",
+            "inherit": false,
+            "value": {
+              "name": "COUNT",
+              "description": "the threshold"
+            }
+          },
+          {
+            "short": "s",
+            "long": "source",
+            "description": "append URL to list of remote gem sources",
+            "inherit": false,
+            "value": {
+              "name": "URL",
+              "description": "the URL"
+            }
+          },
+          {
+            "long": "clear-sources",
+            "description": "clear the gem sources",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "GEMNAME",
+              "description": "name of gem to download",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "generate_index",
+        "description": "generates the index files for a gem server directory",
+        "options": [
+          {
+            "short": "d",
+            "long": "directory",
+            "description": "repository base dir containing gems subdir",
+            "inherit": false,
+            "value": {
+              "name": "DIRNAME",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "modern",
+            "description": "generate indexes for RubyGems (always true)",
+            "inherit": false
+          },
+          {
+            "long": "no-modern",
+            "description": "do not generate indexes for RubyGems",
+            "inherit": false
+          },
+          {
+            "long": "update",
+            "description": "update modern indexes with gems added since the last update",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "info",
+        "description": "show information for the given gem",
+        "options": [
+          {
+            "short": "I",
+            "description": "equivalent to --no-installed",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "GEMNAME",
+              "description": "name of the gem to print information about",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "lock",
+        "description": "generate a lockdown list of gems",
+        "options": [
+          {
+            "short": "s",
+            "long": "strict",
+            "description": "fail if unable to satisfy a dependency",
+            "inherit": false
+          },
+          {
+            "long": "no-strict",
+            "description": "do not fail if unable to satisfy a dependency",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "GEMNAME-VERSION",
+              "description": "name and the version of gem to lock, ex: rails-1.0.0",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "mirror",
+        "description": "mirror all gem files (requires rubygems-mirror)"
+      },
+      {
+        "name": "open",
+        "description": "open gem sources in editor",
+        "options": [
+          {
+            "short": "e",
+            "long": "editor",
+            "description": "prepends COMMAND to gem path. Could be used to specify editor",
+            "inherit": false,
+            "value": {
+              "name": "COMMAND",
+              "description": "the prepends command to gem path"
+            }
+          },
+          {
+            "short": "v",
+            "long": "version",
+            "description": "opens specific gem version",
+            "inherit": false,
+            "value": {
+              "name": "VERSION",
+              "description": "the specify version of gem"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "GEMNAME",
+              "description": "name of the gem to print information about",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "pristine",
+        "description": "restores installed gems to pristine condition from files located in the gem cache",
+        "options": [
+          {
+            "long": "all",
+            "description": "restore all installed gems to pristine condition",
+            "inherit": false
+          },
+          {
+            "long": "skip",
+            "description": "restore all installed gems to pristine condition",
+            "inherit": false,
+            "value": {
+              "name": "GEMNAME",
+              "description": "name of the gem to print information about"
+            }
+          },
+          {
+            "long": "extensions",
+            "description": "restore gems with extensions in addition to regular gems",
+            "inherit": false
+          },
+          {
+            "long": "no-extensions",
+            "description": "do not restore gems with extensions in addition to regular gems",
+            "inherit": false
+          },
+          {
+            "long": "only-executables",
+            "description": "only restore executables",
+            "inherit": false
+          },
+          {
+            "long": "only-plugins",
+            "description": "only restore plugins",
+            "inherit": false
+          },
+          {
+            "short": "E",
+            "long": "env-shebang",
+            "description": "rewrite executables with a shebang of /usr/bin/env",
+            "inherit": false
+          },
+          {
+            "long": "no-env-shebang",
+            "description": "do not rewrite executables with a shebang of /usr/bin/env",
+            "inherit": false
+          },
+          {
+            "short": "i",
+            "long": "install-dir",
+            "description": "gem repository to get binstubs and plugins installed",
+            "inherit": false,
+            "value": {
+              "name": "DIR",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "n",
+            "long": "bindir",
+            "description": "directory where executables are located",
+            "inherit": false,
+            "value": {
+              "name": "DIR",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "v",
+            "long": "version",
+            "description": "specify version of gem to restore to pristine condition",
+            "inherit": false,
+            "value": {
+              "name": "VERSION",
+              "description": "the specify version of gem"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "GEMNAME",
+              "description": "name of the gem to print information about",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "query",
+        "description": "query gem information in local or remote repositories",
+        "options": [
+          {
+            "short": "n",
+            "long": "name-matches",
+            "description": "name of gem(s) to query on matches the provided REGEXP",
+            "inherit": false,
+            "value": {
+              "name": "REGEXP",
+              "description": "the rule of the regexp"
+            }
+          },
+          {
+            "short": "I",
+            "description": "equivalent to --no-installed",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "details",
+            "description": "display detailed information of gem(s)",
+            "inherit": false
+          },
+          {
+            "long": "no-details",
+            "description": "do not display detailed information of gem(s)",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "rdoc",
+        "description": "generates RDoc for pre-installed gems",
+        "options": [
+          {
+            "long": "all",
+            "description": "generate RDoc/RI documentation for all installed gems",
+            "inherit": false
+          },
+          {
+            "long": "rdoc",
+            "description": "generate RDoc HTML",
+            "inherit": false
+          },
+          {
+            "long": "no-rdoc",
+            "description": "do not generate RDoc HTML",
+            "inherit": false
+          },
+          {
+            "long": "ri",
+            "description": "generate RI data",
+            "inherit": false
+          },
+          {
+            "long": "no-ri",
+            "description": "do not generate RI data",
+            "inherit": false
+          },
+          {
+            "long": "overwrite",
+            "description": "overwrite installed documents",
+            "inherit": false
+          },
+          {
+            "long": "no-overwrite",
+            "description": "do not overwrite installed documents",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "version",
+            "description": "specify version of gem to rdoc",
+            "inherit": false,
+            "value": {
+              "name": "VERSION",
+              "description": "the specify version of gem"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "GEMNAME",
+              "description": "gem to generate documentation for (unless \u2013all)",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "search",
+        "description": "display remote gems whose name matches REGEXP",
+        "options": [
+          {
+            "short": "I",
+            "description": "equivalent to --no-installed",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "details",
+            "description": "display detailed information of gem(s)",
+            "inherit": false
+          },
+          {
+            "long": "no-details",
+            "description": "do not display detailed information of gem(s)",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "REGEXP",
+              "description": "regexp to look for in gem name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "signin",
+        "description": "sign in to any gemcutter-compatible host. It defaults to https://rubygems.org",
+        "options": [
+          {
+            "long": "host",
+            "description": "use another gemcutter-compatible host (e.g. https://rubygems.org)",
+            "inherit": false,
+            "value": {
+              "name": "HOST",
+              "description": "the host"
+            }
+          },
+          {
+            "long": "otp",
+            "description": "digit code for multifactor authentication You can also use the environment variable GEM_HOST_OTP_CODE",
+            "inherit": false,
+            "value": {
+              "name": "CODE",
+              "description": "the GEM host otp code"
+            }
+          }
+        ]
+      },
+      {
+        "name": "signout",
+        "description": "sign out from all the current sessions"
+      },
+      {
+        "name": "sources",
+        "description": "manage the sources and cache file RubyGems uses to search for gems",
+        "options": [
+          {
+            "short": "a",
+            "long": "add",
+            "description": "add source",
+            "inherit": false,
+            "value": {
+              "name": "SOURCE_URI",
+              "description": "the source URI"
+            }
+          },
+          {
+            "short": "l",
+            "long": "list",
+            "description": "list sources",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "long": "remove",
+            "description": "remove source",
+            "inherit": false,
+            "value": {
+              "name": "SOURCE_URI",
+              "description": "the source URI"
+            }
+          },
+          {
+            "short": "c",
+            "long": "clear-all",
+            "description": "remove all sources (clear the cache)",
+            "inherit": false
+          },
+          {
+            "short": "u",
+            "long": "update",
+            "description": "update source cache",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "force",
+            "description": "do not show any confirmation prompts and behave as if 'yes' was always answered",
+            "inherit": false
+          },
+          {
+            "long": "no-force",
+            "description": "show any confirmation prompts and behave as if 'yes' was always answered",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "specification",
+        "description": "display gem specification (in yaml)",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "specify version of gem to examine",
+            "inherit": false,
+            "value": {
+              "name": "VERSION",
+              "description": "the version of gem"
+            }
+          },
+          {
+            "long": "platform",
+            "description": "specify the platform of gem to specification",
+            "inherit": false,
+            "value": {
+              "name": "PLATFORM",
+              "description": "the platform of gem"
+            }
+          },
+          {
+            "long": "prerelease",
+            "description": "allow prerelease versions of a gem",
+            "inherit": false
+          },
+          {
+            "long": "no-prerelease",
+            "description": "do not allow prerelease versions of a gem",
+            "inherit": false
+          },
+          {
+            "long": "all",
+            "description": "output specifications for all versions of the gem",
+            "inherit": false
+          },
+          {
+            "long": "ruby",
+            "description": "output ruby format",
+            "inherit": false
+          },
+          {
+            "long": "yaml",
+            "description": "output YAML format",
+            "inherit": false
+          },
+          {
+            "long": "marshal",
+            "description": "output Marshal format",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "GEMFILE",
+              "description": "name of gem to show the gemspec for",
+              "index": 0
+            },
+            {
+              "name": "FIELD",
+              "description": "name of gemspec field to show",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "stale",
+        "description": "list gems along with access times"
+      },
+      {
+        "name": "unpack",
+        "description": "unpack an installed gem to the current directory",
+        "options": [
+          {
+            "long": "target",
+            "description": "target directory for unpacking",
+            "inherit": false,
+            "value": {
+              "name": "DIR",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "spec",
+            "description": "unpack the gem specification",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "version",
+            "description": "specify version of gem to unpack",
+            "inherit": false,
+            "value": {
+              "name": "VERSION",
+              "description": "the specify version of gem"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "GEMNAME",
+              "description": "name of gem to unpack",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "yank",
+        "description": "remove a pushed gem from the index",
+        "options": [
+          {
+            "short": "v",
+            "long": "version",
+            "description": "specify version of gem to dependency",
+            "inherit": false,
+            "value": {
+              "name": "VERSION",
+              "description": "the version of gem"
+            }
+          },
+          {
+            "long": "platform",
+            "description": "specify the platform of gem to dependency",
+            "inherit": false,
+            "value": {
+              "name": "PLATFORM",
+              "description": "the platform of gem"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "GEM",
+              "description": "name of gem",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "uninstall",
+        "description": "uninstall gems from the local repository",
+        "options": [
+          {
+            "short": "a",
+            "long": "all",
+            "description": "uninstall all matching versions",
+            "inherit": false
+          },
+          {
+            "short": "I",
+            "long": "ignore-dependencies",
+            "description": "ignore dependency requirements while uninstalling",
+            "inherit": false
+          },
+          {
+            "short": "D",
+            "long": "check-development",
+            "description": "check development dependencies while uninstalling (default: false)",
+            "inherit": false
+          },
+          {
+            "short": "x",
+            "long": "executables",
+            "description": "uninstall applicable executables without confirmation",
+            "inherit": false
+          },
+          {
+            "short": "i",
+            "long": "install-dir",
+            "description": "directory to uninstall gem from",
+            "inherit": false,
+            "value": {
+              "name": "DIR",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "n",
+            "long": "bindir",
+            "description": "directory to remove executables from",
+            "inherit": false,
+            "value": {
+              "name": "DIR",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "user-install",
+            "description": "uninstall from user\u2019s home directory in addition to GEM_HOME",
+            "inherit": false
+          },
+          {
+            "long": "format-executable",
+            "description": "assume executable names match Ruby\u2019s prefix and suffix",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "description": "uninstall all versions of the named gems ignoring dependencies",
+            "inherit": false
+          },
+          {
+            "long": "abort-on-dependent",
+            "description": "prevent uninstalling gems that are depended on by other gems",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "version",
+            "description": "specify version of gem to uninstall",
+            "inherit": false,
+            "value": {
+              "name": "VERSION",
+              "description": "the specify version of gem"
+            }
+          },
+          {
+            "long": "platform",
+            "description": "specify the platform of gem to uninstall",
+            "inherit": false,
+            "value": {
+              "name": "PLATFORM",
+              "description": "the platform of gem"
+            }
+          },
+          {
+            "long": "vendor",
+            "description": "uninstall gem from the vendor directory. Only for use by gem repackagers",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "GEMNAME",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "display local gems whose name matches REGEXP",
+        "options": [
+          {
+            "short": "d",
+            "long": "details",
+            "description": "display detailed information of gem(s)",
+            "inherit": false
+          },
+          {
+            "long": "no-details",
+            "description": "do not display detailed information of gem(s)",
+            "inherit": false
+          },
+          {
+            "short": "u",
+            "long": "update-sources",
+            "description": "[Deprecated] Update local source cache",
+            "inherit": false,
+            "deprecated": true
+          },
+          {
+            "long": "no-update-sources",
+            "description": "[Deprecated] Do not update local source cache",
+            "inherit": false,
+            "deprecated": true
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "REGEXP",
+              "description": "regexp to look for in gem name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "build",
+        "description": "build a gem from a gemspec",
+        "options": [
+          {
+            "long": "platform",
+            "description": "specify the platform of gem to build",
+            "inherit": false,
+            "value": {
+              "name": "PLATFORM",
+              "description": "the platform of gem"
+            }
+          },
+          {
+            "long": "force",
+            "description": "skip validation of the spec",
+            "inherit": false
+          },
+          {
+            "long": "strict",
+            "description": "consider warnings as errors when validating the spec",
+            "inherit": false
+          },
+          {
+            "short": "o",
+            "long": "output",
+            "description": "output gem with the given filename",
+            "inherit": false,
+            "value": {
+              "name": "FILE",
+              "description": "the filename",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "C",
+            "description": "run as if gem build was started in <PATH> instead of the current working directory",
+            "inherit": false,
+            "value": {
+              "name": "PATH",
+              "description": "the filename",
+              "provider": "builtin.directories"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "GEMSPEC_FILE",
+              "description": "gemspec file name to build a gem for",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "push",
+        "description": "push a gem up to the gem server",
+        "arguments": {
+          "states": [
+            {
+              "name": "GEM",
+              "description": "built gem to push up",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "server",
+        "description": "starts up a web server that hosts the RDoc (requires rubygems-server)"
+      },
+      {
+        "name": "owner",
+        "description": "manage gem owners of a gem on the push server",
+        "options": [
+          {
+            "short": "a",
+            "long": "add",
+            "description": "add an owner by user identifier",
+            "inherit": false,
+            "value": {
+              "name": "NEW_OWNER",
+              "description": "the new owner"
+            }
+          },
+          {
+            "short": "r",
+            "long": "remove",
+            "description": "remove an owner by user identifier",
+            "inherit": false,
+            "value": {
+              "name": "OLD_OWNER",
+              "description": "the old owner"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "GEMNAME",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "which",
+        "description": "find the location of a library file you can require",
+        "options": [
+          {
+            "short": "a",
+            "long": "all",
+            "description": "show all matching files",
+            "inherit": false
+          },
+          {
+            "short": "g",
+            "long": "gems-first",
+            "description": "search gems before non-gems",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "FILE",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "outdated",
+        "description": "display all gems that need updates",
+        "options": [
+          {
+            "long": "platform",
+            "description": "specify the platform of gem to outdated",
+            "inherit": false,
+            "value": {
+              "name": "PLATFORM"
+            }
+          }
+        ]
+      },
+      {
+        "name": "update",
+        "description": "update installed gems to the latest version",
+        "options": [
+          {
+            "long": "system",
+            "description": "update the RubyGems system software",
+            "inherit": false,
+            "value": {
+              "name": "VERSION",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "platform",
+            "description": "update the RubyGems system software",
+            "inherit": false,
+            "value": {
+              "name": "PLATFORM"
+            }
+          },
+          {
+            "long": "prerelease",
+            "description": "allow prerelease versions of a gem as update targets",
+            "inherit": false
+          },
+          {
+            "long": "install-dir",
+            "short": "i",
+            "description": "gem repository directory to get installed gems",
+            "inherit": false,
+            "value": {
+              "name": "DIR",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "bindir",
+            "short": "n",
+            "description": "directory where executables will be placed when the gem is installed",
+            "inherit": false,
+            "value": {
+              "name": "DIR",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "document",
+            "description": "generate documentation for installed gems",
+            "inherit": false,
+            "value": {
+              "name": "TYPES",
+              "provider": {
+                "values": [
+                  "rdoc",
+                  "ri"
+                ]
+              }
+            }
+          },
+          {
+            "long": "build-root",
+            "description": "temporary installation root. Useful for building packages. Do not use this when installing remote gems",
+            "inherit": false,
+            "value": {
+              "name": "DIR",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "vendor",
+            "description": "install gem into the vendor directory. Only for use by gem repackagers",
+            "inherit": false
+          },
+          {
+            "long": "no-document",
+            "short": "N",
+            "description": "disable documentation generation",
+            "inherit": false
+          },
+          {
+            "long": "env-shebang",
+            "short": "E",
+            "description": "rewrite the shebang line on installed scripts to use /usr/bin/env",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "short": "f",
+            "description": "force gem to install, bypassing dependency checks",
+            "inherit": false
+          },
+          {
+            "long": "wrappers",
+            "short": "w",
+            "description": "use bin wrappers for executables. Not available on dosish platforms",
+            "inherit": false
+          },
+          {
+            "long": "trust-policy",
+            "short": "P",
+            "description": "specify gem trust policy",
+            "inherit": false,
+            "value": {
+              "name": "POLICY"
+            }
+          },
+          {
+            "long": "ignore-dependencies",
+            "description": "do not install any required dependent gems",
+            "inherit": false
+          },
+          {
+            "long": "format-executable",
+            "description": "make installed executable names match Ruby",
+            "inherit": false
+          },
+          {
+            "long": "user-install",
+            "description": "install in user's home directory instead of GEM_HOME",
+            "inherit": false
+          },
+          {
+            "long": "development",
+            "description": "install additional development dependencies",
+            "inherit": false
+          },
+          {
+            "long": "development-all",
+            "description": "install development dependencies for all gems (including dev deps themselves)",
+            "inherit": false
+          },
+          {
+            "long": "conservative",
+            "description": "don't attempt to upgrade gems already meeting version requirement",
+            "inherit": false
+          },
+          {
+            "long": "minimal-deps",
+            "description": "don't upgrade any dependencies that already meet version requirements",
+            "inherit": false
+          },
+          {
+            "long": "post-install-message",
+            "description": "print post install message",
+            "inherit": false
+          },
+          {
+            "long": "file",
+            "short": "g",
+            "description": "read from a gem dependencies API file and install the listed gems",
+            "inherit": false,
+            "value": {
+              "name": "FILE",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "without",
+            "description": "omit the named groups (comma separated) when installing from a gem dependencies file",
+            "inherit": false,
+            "value": {
+              "name": "GROUPS"
+            }
+          },
+          {
+            "long": "default",
+            "description": "add the gem's full specification to specifications/default and extract only its bin",
+            "inherit": false
+          },
+          {
+            "long": "explain",
+            "description": "rather than install the gems, indicate which would be installed",
+            "inherit": false
+          },
+          {
+            "long": "lock",
+            "description": "create a lock file (when used with -g/--file)",
+            "inherit": false
+          },
+          {
+            "long": "suggestions",
+            "description": "suggest alternates when gems are not found",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "GEMNAME",
+              "description": "the gem(s) you want to update",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
