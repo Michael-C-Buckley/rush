@@ -1,0 +1,87 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "gltfjsx",
+    "description": "convert GLTF files to JSX",
+    "options": [
+      {
+        "short": "t",
+        "long": "types",
+        "description": "add Typescript definitions",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "verbose output w/ names and empty groups",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "long": "meta",
+        "description": "include metadata (as userData)",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "shadows",
+        "description": "let meshes cast and receive shadows",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "printwidth",
+        "description": "prettier printWidth (default: 120)",
+        "inherit": false,
+        "value": {
+          "name": "width"
+        }
+      },
+      {
+        "short": "p",
+        "long": "precision",
+        "description": "number of fractional digits (default: 2)",
+        "inherit": false,
+        "value": {
+          "name": "digits"
+        }
+      },
+      {
+        "short": "d",
+        "long": "draco",
+        "description": "draco binary path",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "r",
+        "long": "root",
+        "description": "sets directory from which .gltf file is served",
+        "inherit": false,
+        "value": {
+          "name": "root",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "D",
+        "long": "debug",
+        "description": "debug output",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "provider": "builtin.files",
+          "index": 0
+        }
+      ]
+    }
+  }
+}
