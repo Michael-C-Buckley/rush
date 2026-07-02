@@ -1,0 +1,1582 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pod",
+    "description": "manage CocoaPods dependencies",
+    "options": [
+      {
+        "long": "silent",
+        "description": "show nothing",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "description": "show more debugging information",
+        "inherit": false
+      },
+      {
+        "long": "no-ansi",
+        "description": "show output without ANSI codes",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "description": "show help banner of specified command",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "deintegrate",
+        "description": "deintegrate CocoaPods from your project",
+        "options": [
+          {
+            "long": "project-directory",
+            "description": "the path to the root of the project directory",
+            "inherit": false,
+            "value": {
+              "name": "/project/dir/",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "allow-root",
+            "description": "allows CocoaPods to run as root",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "XCODE_PROJECT",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "cache",
+        "description": "manipulate the CocoaPods cache",
+        "options": [
+          {
+            "long": "allow-root",
+            "description": "allows CocoaPods to run as root",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "clean",
+            "description": "remove the cache for pods",
+            "options": [
+              {
+                "long": "all",
+                "description": "remove all the cached pods without asking",
+                "inherit": false
+              },
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list the paths of pod caches for each known pod",
+            "options": [
+              {
+                "long": "short",
+                "description": "only print the path relative to the cache root",
+                "inherit": false
+              },
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "list",
+        "description": "list pods",
+        "options": [
+          {
+            "long": "update",
+            "description": "run `pod repo update` before listing",
+            "inherit": false
+          },
+          {
+            "long": "stats",
+            "description": "show additional stats (like GitHub watchers and forks)",
+            "inherit": false
+          },
+          {
+            "long": "allow-root",
+            "description": "allows CocoaPods to run as root",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "setup",
+        "description": "setup the CocoaPods environment",
+        "options": [
+          {
+            "long": "allow-root",
+            "description": "allows CocoaPods to run as root",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "spec",
+        "description": "manage pod specs",
+        "options": [
+          {
+            "long": "allow-root",
+            "description": "allows CocoaPods to run as root",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "edit",
+            "description": "edit a spec file",
+            "options": [
+              {
+                "long": "regex",
+                "description": "interpret the `QUERY` as a regular expression",
+                "inherit": false
+              },
+              {
+                "long": "show-all",
+                "description": "pick from all versions of the given podspec",
+                "inherit": false
+              },
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "QUERY",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "create",
+            "description": "create spec file stub",
+            "options": [
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME|https://github.com/USER/REPO",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "cat",
+            "description": "prints a spec file",
+            "options": [
+              {
+                "long": "regex",
+                "description": "interpret the `QUERY` as a regular expression",
+                "inherit": false
+              },
+              {
+                "long": "show-all",
+                "description": "pick from all versions of the given podspec",
+                "inherit": false
+              },
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "QUERY",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "which",
+            "description": "prints the path of the given spec",
+            "options": [
+              {
+                "long": "regex",
+                "description": "interpret the `QUERY` as a regular expression",
+                "inherit": false
+              },
+              {
+                "long": "show-all",
+                "description": "print all versions of the given podspec",
+                "inherit": false
+              },
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "QUERY",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "lint",
+            "description": "validates a spec file",
+            "options": [
+              {
+                "long": "quick",
+                "description": "lint skips checks that would require to download and build the spec",
+                "inherit": false
+              },
+              {
+                "long": "allow-warnings",
+                "description": "lint validates even if warnings are present",
+                "inherit": false
+              },
+              {
+                "long": "subspec",
+                "description": "lint validates only the given subspec",
+                "inherit": false,
+                "value": {
+                  "name": "NAME"
+                }
+              },
+              {
+                "long": "no-subspecs",
+                "description": "lint skips validation of subspecs",
+                "inherit": false
+              },
+              {
+                "long": "no-clean",
+                "description": "lint leaves the build directory intact for inspection",
+                "inherit": false
+              },
+              {
+                "long": "fail-fast",
+                "description": "lint stops on the first failing platform or subspec",
+                "inherit": false
+              },
+              {
+                "long": "use-libraries",
+                "description": "lint uses static libraries to install the spec",
+                "inherit": false
+              },
+              {
+                "long": "use-modular-headers",
+                "description": "lint uses modular headers during installation",
+                "inherit": false
+              },
+              {
+                "long": "use-static-frameworks",
+                "description": "lint uses static frameworks during installation",
+                "inherit": false
+              },
+              {
+                "long": "sources",
+                "description": "the sources from which to pull dependent pods (defaults to https://cdn.cocoapods.org/)....",
+                "inherit": false,
+                "value": {
+                  "name": "source",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "https://cdn.cocoapods.org/"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "platforms",
+                "description": "lint against specific platforms (defaults to all platforms supported by the podspec). M...",
+                "inherit": false,
+                "value": {
+                  "name": "platform",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "ios"
+                      },
+                      {
+                        "value": "macos"
+                      },
+                      {
+                        "value": "ios,macos"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "private",
+                "description": "lint skips checks that apply only to public specs",
+                "inherit": false
+              },
+              {
+                "long": "swift-version",
+                "description": "the `SWIFT_VERSION` that should be used to lint the spec. This takes precedence over th...",
+                "inherit": false,
+                "value": {
+                  "name": "VERSION"
+                }
+              },
+              {
+                "long": "skip-import-validation",
+                "description": "lint skips validating that the pod can be imported",
+                "inherit": false
+              },
+              {
+                "long": "skip-tests",
+                "description": "lint skips building and running tests during validation",
+                "inherit": false
+              },
+              {
+                "long": "test-specs",
+                "description": "list of test specs to run",
+                "inherit": false,
+                "value": {
+                  "name": "test-spec"
+                }
+              },
+              {
+                "long": "analyze",
+                "description": "validate with the Xcode Static Analysis tool",
+                "inherit": false
+              },
+              {
+                "long": "configuration",
+                "description": "build using the given configuration (defaults to Release)",
+                "inherit": false,
+                "value": {
+                  "name": "CONFIGURATION"
+                }
+              },
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME.podspec|DIRECTORY|http://PATH/NAME.podspec",
+                  "index": 0,
+                  "provider": [
+                    "builtin.files",
+                    "builtin.directories"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "install project dependencies according to versions from a Podfile.lock",
+        "options": [
+          {
+            "long": "repo-update",
+            "description": "force running `pod repo update` before install",
+            "inherit": false
+          },
+          {
+            "long": "deployment",
+            "description": "disallow any changes to the Podfile or the Podfile.lock during installation",
+            "inherit": false
+          },
+          {
+            "long": "clean-install",
+            "description": "ignore the contents of the project cache and force a full pod installation. This only a...",
+            "inherit": false
+          },
+          {
+            "long": "project-directory",
+            "description": "the path to the root of the project directory",
+            "inherit": false,
+            "value": {
+              "name": "/project/dir/",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "allow-root",
+            "description": "allows CocoaPods to run as root",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "env",
+        "description": "display pod environment",
+        "options": [
+          {
+            "long": "allow-root",
+            "description": "allows CocoaPods to run as root",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "outdated",
+        "description": "show outdated project dependencies",
+        "options": [
+          {
+            "long": "project-directory",
+            "description": "the path to the root of the project directory",
+            "inherit": false,
+            "value": {
+              "name": "/project/dir/",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "no-repo-update",
+            "description": "skip running `pod repo update` before install",
+            "inherit": false
+          },
+          {
+            "long": "allow-root",
+            "description": "allows CocoaPods to run as root",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "generate a Podfile for the current directory",
+        "options": [
+          {
+            "long": "allow-root",
+            "description": "allows CocoaPods to run as root",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "XCODEPROJ",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "ipc",
+        "description": "inter-process communication",
+        "options": [
+          {
+            "long": "allow-root",
+            "description": "allows CocoaPods to run as root",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "lists the specifications known to CocoaPods",
+            "options": [
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "update-search-index",
+            "description": "updates the search index",
+            "options": [
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "podfile-json",
+            "description": "converts a Podfile to JSON",
+            "options": [
+              {
+                "long": "project-directory",
+                "description": "the path to the root of the project directory",
+                "inherit": false,
+                "value": {
+                  "name": "/project/dir/",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "PATH",
+                  "provider": "builtin.files",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "spec",
+            "description": "converts a podspec to JSON",
+            "options": [
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "PATH",
+                  "index": 0,
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "podfile",
+            "description": "converts a Podfile to YAML",
+            "options": [
+              {
+                "long": "project-directory",
+                "description": "the path to the root of the project directory",
+                "inherit": false,
+                "value": {
+                  "name": "/project/dir/",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "PATH",
+                  "provider": "builtin.files",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "repl",
+            "description": "the repl listens to commands on standard input",
+            "options": [
+              {
+                "long": "project-directory",
+                "description": "the path to the root of the project directory",
+                "inherit": false,
+                "value": {
+                  "name": "/project/dir/",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "plugins",
+        "description": "show available CocoaPods plugins",
+        "options": [
+          {
+            "long": "allow-root",
+            "description": "allows CocoaPods to run as root",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "search",
+            "description": "search for known plugins",
+            "options": [
+              {
+                "long": "full",
+                "description": "search by name author, and description",
+                "inherit": false
+              },
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "QUERY",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "installed",
+            "description": "list plugins installed on your machine",
+            "options": [
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "description": "creates a new plugin",
+            "options": [
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                },
+                {
+                  "name": "TEMPLATE_URL",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "publish",
+            "description": "request to add the plugin to the official plugins list",
+            "options": [
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "lib",
+        "description": "develop pods",
+        "options": [
+          {
+            "long": "allow-root",
+            "description": "allows CocoaPods to run as root",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "creates a new Pod",
+            "options": [
+              {
+                "long": "template-url",
+                "description": "the URL of the git repo containing a compatible template",
+                "inherit": false,
+                "value": {
+                  "name": "URL"
+                }
+              },
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "lint",
+            "description": "validates a Pod",
+            "options": [
+              {
+                "long": "quick",
+                "description": "lint skips checks that would require to download and build the spec",
+                "inherit": false
+              },
+              {
+                "long": "allow-warnings",
+                "description": "lint validates even if warnings are present",
+                "inherit": false
+              },
+              {
+                "long": "subspec",
+                "description": "lint validates only the given subspec",
+                "inherit": false,
+                "value": {
+                  "name": "NAME"
+                }
+              },
+              {
+                "long": "no-subspecs",
+                "description": "lint skips validation of subspecs",
+                "inherit": false
+              },
+              {
+                "long": "no-clean",
+                "description": "lint leaves the build directory intact for inspection",
+                "inherit": false
+              },
+              {
+                "long": "fail-fast",
+                "description": "lint stops on the first failing platform or subspec",
+                "inherit": false
+              },
+              {
+                "long": "use-libraries",
+                "description": "lint uses static libraries to install the spec",
+                "inherit": false
+              },
+              {
+                "long": "use-modular-headers",
+                "description": "lint uses modular headers during installation",
+                "inherit": false
+              },
+              {
+                "long": "use-static-frameworks",
+                "description": "lint uses static frameworks during installation",
+                "inherit": false
+              },
+              {
+                "long": "sources",
+                "description": "the sources from which to pull dependent pods (defaults to https://cdn.cocoapods.org/)....",
+                "inherit": false,
+                "value": {
+                  "name": "source",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "https://cdn.cocoapods.org/"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "platforms",
+                "description": "lint against specific platforms (defaults to all platforms supported by the podspec). M...",
+                "inherit": false,
+                "value": {
+                  "name": "platform",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "ios"
+                      },
+                      {
+                        "value": "macos"
+                      },
+                      {
+                        "value": "ios,macos"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "private",
+                "description": "lint skips checks that apply only to public specs",
+                "inherit": false
+              },
+              {
+                "long": "swift-version",
+                "description": "the `SWIFT_VERSION` that should be used to lint the spec. This takes precedence over th...",
+                "inherit": false,
+                "value": {
+                  "name": "VERSION"
+                }
+              },
+              {
+                "long": "include-podspecs",
+                "description": "additional ancillary podspecs which are used for linting via :path",
+                "inherit": false,
+                "value": {
+                  "name": "podspec",
+                  "provider": [
+                    "builtin.files",
+                    "builtin.directories"
+                  ]
+                }
+              },
+              {
+                "long": "external-podspecs",
+                "description": "additional ancillary podspecs which are used for linting via :podspec. If there are --i...",
+                "inherit": false,
+                "value": {
+                  "name": "podspec",
+                  "provider": [
+                    "builtin.files",
+                    "builtin.directories"
+                  ]
+                }
+              },
+              {
+                "long": "skip-import-validation",
+                "description": "lint skips validating that the pod can be imported",
+                "inherit": false
+              },
+              {
+                "long": "skip-tests",
+                "description": "lint skips building and running tests during validation",
+                "inherit": false
+              },
+              {
+                "long": "test-specs",
+                "description": "list of test specs to run",
+                "inherit": false,
+                "value": {
+                  "name": "test-spec"
+                }
+              },
+              {
+                "long": "analyze",
+                "description": "validate with the Xcode Static Analysis tool",
+                "inherit": false
+              },
+              {
+                "long": "configuration",
+                "description": "build using the given configuration (defaults to Release)",
+                "inherit": false,
+                "value": {
+                  "name": "CONFIGURATION"
+                }
+              },
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "PODSPEC_PATHS",
+                  "index": 0,
+                  "provider": [
+                    "builtin.files",
+                    "builtin.directories"
+                  ]
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "search",
+        "description": "search for pods",
+        "options": [
+          {
+            "long": "regex",
+            "description": "interpret the `QUERY` as a regular expression",
+            "inherit": false
+          },
+          {
+            "long": "simple",
+            "description": "search only by name",
+            "inherit": false
+          },
+          {
+            "long": "stats",
+            "description": "show additional stats (like GitHub watchers and forks)",
+            "inherit": false
+          },
+          {
+            "long": "web",
+            "description": "searches on cocoapods.org",
+            "inherit": false
+          },
+          {
+            "long": "ios",
+            "description": "restricts the search to Pods supported on iOS",
+            "inherit": false
+          },
+          {
+            "long": "osx",
+            "description": "restricts the search to Pods supported on macOS",
+            "inherit": false
+          },
+          {
+            "long": "watchos",
+            "description": "restricts the search to Pods supported on watchOS",
+            "inherit": false
+          },
+          {
+            "long": "tvos",
+            "description": "restricts the search to Pods supported on tvOS",
+            "inherit": false
+          },
+          {
+            "long": "no-pager",
+            "description": "do not pipe search results into a pager",
+            "inherit": false
+          },
+          {
+            "long": "allow-root",
+            "description": "allows CocoaPods to run as root",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "QUERY",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "repo",
+        "description": "manage spec-repositories",
+        "options": [
+          {
+            "long": "allow-root",
+            "description": "allows CocoaPods to run as root",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "push",
+            "description": "push new specifications to a spec-repo",
+            "options": [
+              {
+                "long": "allow-warnings",
+                "description": "allows pushing even if there are warnings",
+                "inherit": false
+              },
+              {
+                "long": "use-libraries",
+                "description": "linter uses static libraries to install the spec",
+                "inherit": false
+              },
+              {
+                "long": "use-modular-headers",
+                "description": "lint uses modular headers during installation",
+                "inherit": false
+              },
+              {
+                "long": "sources",
+                "description": "the sources from which to pull dependent pods (defaults to all available repos). Multip...",
+                "inherit": false,
+                "value": {
+                  "name": "source",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "https://cdn.cocoapods.org/"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "local-only",
+                "description": "does not perform the step of pushing REPO to its remote",
+                "inherit": false
+              },
+              {
+                "long": "no-private",
+                "description": "lint includes checks that apply only to public repos",
+                "inherit": false
+              },
+              {
+                "long": "skip-import-validation",
+                "description": "lint skips validating that the pod can be imported",
+                "inherit": false
+              },
+              {
+                "long": "skip-tests",
+                "description": "lint skips building and running tests during validation",
+                "inherit": false
+              },
+              {
+                "long": "commit-message",
+                "description": "add custom commit message. Opens default editor if no commit message is specified",
+                "inherit": false,
+                "value": {
+                  "name": "message"
+                }
+              },
+              {
+                "long": "use-json",
+                "description": "convert the podspec to JSON before pushing it to the repo",
+                "inherit": false
+              },
+              {
+                "long": "swift-version",
+                "description": "the `SWIFT_VERSION` that should be used when linting the spec. This takes precedence ov...",
+                "inherit": false,
+                "value": {
+                  "name": "VERSION"
+                }
+              },
+              {
+                "long": "no-overwrite",
+                "description": "disallow pushing that would overwrite an existing spec",
+                "inherit": false
+              },
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "REPO",
+                  "index": 0
+                },
+                {
+                  "name": "NAME.podspec",
+                  "index": 1,
+                  "provider": [
+                    "builtin.files",
+                    "builtin.directories"
+                  ]
+                }
+              ]
+            }
+          },
+          {
+            "name": "add",
+            "description": "add a spec repo",
+            "options": [
+              {
+                "long": "progress",
+                "description": "show the progress of cloning the spec repository",
+                "inherit": false
+              },
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                },
+                {
+                  "name": "URL",
+                  "index": 1
+                },
+                {
+                  "name": "BRANCH",
+                  "index": 2
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove",
+            "description": "remove a spec repo",
+            "options": [
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "add-cdn",
+            "description": "add a spec repo backed by a CDN",
+            "options": [
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                },
+                {
+                  "name": "URL",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "lint",
+            "description": "validates all specs in a repo list",
+            "options": [
+              {
+                "long": "only-errors",
+                "description": "lint presents only the errors",
+                "inherit": false
+              },
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME|DIRECTORY",
+                  "index": 0,
+                  "provider": "builtin.directories"
+                }
+              ]
+            }
+          },
+          {
+            "name": "update",
+            "description": "update a spec repo",
+            "options": [
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "trunk",
+        "description": "interact with the CocoaPods API (e.g. publishing new specs)",
+        "options": [
+          {
+            "long": "allow-root",
+            "description": "allows CocoaPods to run as root",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "push",
+            "description": "publish a podspec",
+            "options": [
+              {
+                "long": "allow-warnings",
+                "description": "allows push even if there are lint warnings",
+                "inherit": false
+              },
+              {
+                "long": "use-libraries",
+                "description": "linter uses static libraries to install the spec",
+                "inherit": false
+              },
+              {
+                "long": "use-modular-headers",
+                "description": "lint uses modular headers during installation",
+                "inherit": false
+              },
+              {
+                "long": "swift-version",
+                "description": "the SWIFT_VERSION that should be used to lint the spec. This takes precedence over a .s...",
+                "inherit": false,
+                "value": {
+                  "name": "VERSION"
+                }
+              },
+              {
+                "long": "skip-import-validation",
+                "description": "lint skips validating that the pod can be imported",
+                "inherit": false
+              },
+              {
+                "long": "skip-tests",
+                "description": "lint skips building and running tests during validation",
+                "inherit": false
+              },
+              {
+                "long": "synchronous",
+                "description": "if validation depends on other recently pushed pods ,synchronize",
+                "inherit": false
+              },
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "PATH",
+                  "index": 0,
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "deprecate",
+            "description": "deprecates a pod",
+            "options": [
+              {
+                "long": "in-favor-of",
+                "description": "the pod to deprecate this pod in favor of",
+                "inherit": false,
+                "value": {
+                  "name": "OTHER_NAME"
+                }
+              },
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "deletes a version of a pod",
+            "options": [
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                },
+                {
+                  "name": "VERSION",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "add-owner",
+            "description": "add an owner to a pod",
+            "options": [
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "POD",
+                  "index": 0
+                },
+                {
+                  "name": "OWNER-EMAIL",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove-owner",
+            "description": "remove an owner from a pod",
+            "options": [
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "POD",
+                  "index": 0
+                },
+                {
+                  "name": "OWNER-EMAIL",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "me",
+            "description": "display information about your sessions",
+            "options": [
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "clean-sessions",
+                "description": "remove sessions",
+                "options": [
+                  {
+                    "long": "all",
+                    "description": "removes all your sessions except for the current one",
+                    "inherit": false
+                  },
+                  {
+                    "long": "allow-root",
+                    "description": "allows CocoaPods to run as root",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "register",
+            "description": "manage sessions",
+            "options": [
+              {
+                "long": "description",
+                "description": "an arbitrary description to easily identify your session later on",
+                "inherit": false,
+                "value": {
+                  "name": "DESCRIPTION"
+                }
+              },
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "EMAIL",
+                  "index": 0
+                },
+                {
+                  "name": "YOUR_NAME",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "info",
+            "description": "returns information about a Pod",
+            "options": [
+              {
+                "long": "allow-root",
+                "description": "allows CocoaPods to run as root",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "update",
+        "description": "update outdated project dependencies and create new Podfile.lock",
+        "options": [
+          {
+            "long": "sources",
+            "description": "the sources from which to update dependent pods. Multiple sources must be comma-delimited",
+            "inherit": false,
+            "value": {
+              "name": "https://cdn.cocoapods.org/",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "exclude-pods",
+            "description": "pods to exclude during update. Multiple pods must be comma-delimited",
+            "inherit": false,
+            "value": {
+              "name": "podName"
+            }
+          },
+          {
+            "long": "clean-install",
+            "description": "ignore the contents of the project cache and force a full pod installation. This only a...",
+            "inherit": false
+          },
+          {
+            "long": "project-directory",
+            "description": "the path to the root of the project directory",
+            "inherit": false,
+            "value": {
+              "name": "/project/dir/",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "no-repo-update",
+            "description": "skip running `pod repo update` before install",
+            "inherit": false
+          },
+          {
+            "long": "allow-root",
+            "description": "allows CocoaPods to run as root",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "POD_NAMES",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "try",
+        "description": "try a Pod!",
+        "options": [
+          {
+            "long": "podspec_name",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "description": "The name of the podspec file within the Git Repository"
+            }
+          },
+          {
+            "long": "no-repo-update",
+            "description": "skip running `pod repo update` before install",
+            "inherit": false
+          },
+          {
+            "long": "allow-root",
+            "description": "allows CocoaPods to run as root",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "NAME|URL",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
