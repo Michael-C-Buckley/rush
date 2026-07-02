@@ -1,0 +1,27 @@
+__rush_complete_pass_store_dir() {
+  if test -n "$PASSWORD_STORE_DIR"; then
+    printf '%s\n' "$PASSWORD_STORE_DIR"
+  else
+    printf '%s\n' "$HOME/.password-store"
+  fi
+}
+
+__rush_complete_pass_entries() {
+  store=$(__rush_complete_pass_store_dir)
+  test -d "$store" || return
+  find "$store" -path '*/.git' -prune -o -name '*.gpg' -type f -print 2>/dev/null | while IFS= read -r path; do
+    name=${path#"$store"/}
+    name=${name%.gpg}
+    test -n "$name" && rush_complete candidate "$name" --kind plain --description 'password entry' --priority 35
+  done
+}
+
+__rush_complete_pass_directories() {
+  store=$(__rush_complete_pass_store_dir)
+  test -d "$store" || return
+  find "$store" -path '*/.git' -prune -o -type d -print 2>/dev/null | while IFS= read -r path; do
+    test "$path" = "$store" && continue
+    name=${path#"$store"/}
+    test -n "$name" && rush_complete candidate "$name" --kind directory --description 'password directory' --priority 35
+  done
+}
