@@ -1,0 +1,98 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "remix",
+    "description": "build and run Remix applications",
+    "options": [
+      {
+        "long": "help",
+        "description": "output usage information",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "output the version number",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "build",
+        "description": "create an optimized production build of your application",
+        "options": [
+          {
+            "long": "sourcemap",
+            "description": "Enables production sourcemap",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "dir",
+              "description": "Remix application directory",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "dev",
+        "description": "start the application in development mode",
+        "arguments": {
+          "states": [
+            {
+              "name": "dir",
+              "description": "Remix application directory",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "setup",
+        "description": "prepare node_modules/remix folder (after installation of packages)",
+        "arguments": {
+          "states": [
+            {
+              "name": "dir",
+              "description": "Remix application directory",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "routes",
+        "description": "generate the route config of the application",
+        "options": [
+          {
+            "long": "json",
+            "description": "Print the route config as JSON",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "dir",
+              "description": "Remix application directory",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
