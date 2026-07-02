@@ -1,0 +1,189 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "knex",
+    "description": "SQL query builder for JavaScript",
+    "options": [
+      {
+        "long": "version",
+        "description": "output the version number",
+        "inherit": false
+      },
+      {
+        "long": "debug",
+        "description": "run with debugging",
+        "inherit": false
+      },
+      {
+        "long": "knexfile",
+        "description": "specify the knexfile path",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "knexpath",
+        "description": "specify the path to knex instance",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "cwd",
+        "description": "specify the working directory",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "client",
+        "description": "set DB client without a knexfile",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "connection",
+        "description": "set DB connection without a knexfile",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "migrations-directory",
+        "description": "set migrations directory without a knexfile",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "migrations-table-name",
+        "description": "set migrations table name without a knexfile",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "env",
+        "description": "environment, default: process.env.NODE_ENV || development",
+        "inherit": false,
+        "value": {
+          "name": "environment"
+        }
+      },
+      {
+        "long": "esm",
+        "description": "enable ESM interop",
+        "inherit": false
+      },
+      {
+        "long": "specific",
+        "description": "specify one seed file to execute",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "timestamp-filename-prefix",
+        "description": "enable a timestamp prefix on name of generated seed files",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "description": "display help for command",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "create a fresh knexfile"
+      },
+      {
+        "name": "migrate:make",
+        "description": "create a named migration file",
+        "arguments": {
+          "states": [
+            {
+              "name": "migration-name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "migrate:latest",
+        "description": "run all migrations that have not yet been run"
+      },
+      {
+        "name": "migrate:up",
+        "description": "run the next or the specified migration that has not yet been run"
+      },
+      {
+        "name": "migrate:rollback",
+        "description": "rollback the last batch of migrations performed"
+      },
+      {
+        "name": "migrate:down",
+        "description": "undo the last or the specified migration that was already run"
+      },
+      {
+        "name": "migrate:currentVersion",
+        "description": "view the current version for the migration"
+      },
+      {
+        "name": "migrate:list",
+        "description": "list all migrations files with status",
+        "aliases": [
+          "migrate:status"
+        ]
+      },
+      {
+        "name": "migrate:unlock",
+        "description": "forcibly unlocks the migrations lock table"
+      },
+      {
+        "name": "seed:make",
+        "description": "create a named seed file",
+        "arguments": {
+          "states": [
+            {
+              "name": "seed-name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "seed:run",
+        "description": "run seed files"
+      },
+      {
+        "name": "help",
+        "description": "display help for command"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
