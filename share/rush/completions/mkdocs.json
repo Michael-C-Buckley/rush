@@ -1,0 +1,366 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "mkdocs",
+    "description": "build project documentation from markdown",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help and exit",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "show version and exit",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "build",
+        "description": "build the MkDocs documentation",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help for build",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "silence warnings",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "enable verbose output",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "config-file",
+            "description": "use a specific MkDocs config file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "s",
+            "long": "strict",
+            "description": "abort the build on warnings",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "theme",
+            "description": "theme to use when building documentation",
+            "inherit": false,
+            "value": {
+              "name": "theme"
+            }
+          },
+          {
+            "long": "use-directory-urls",
+            "description": "use directory URLs when building pages",
+            "inherit": false
+          },
+          {
+            "long": "no-directory-urls",
+            "description": "do not use directory URLs when building pages",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "clean",
+            "description": "remove old files from the site directory before building",
+            "inherit": false
+          },
+          {
+            "long": "dirty",
+            "description": "only rebuild pages modified since the last build",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "site-dir",
+            "description": "directory for the built documentation",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          }
+        ]
+      },
+      {
+        "name": "gh-deploy",
+        "description": "deploy documentation to GitHub Pages",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help for gh-deploy",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "silence warnings",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "enable verbose output",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "config-file",
+            "description": "use a specific MkDocs config file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "s",
+            "long": "strict",
+            "description": "abort the build on warnings",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "theme",
+            "description": "theme to use when building documentation",
+            "inherit": false,
+            "value": {
+              "name": "theme"
+            }
+          },
+          {
+            "long": "use-directory-urls",
+            "description": "use directory URLs when building pages",
+            "inherit": false
+          },
+          {
+            "long": "no-directory-urls",
+            "description": "do not use directory URLs when building pages",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "clean",
+            "description": "remove old files from the site directory before building",
+            "inherit": false
+          },
+          {
+            "long": "dirty",
+            "description": "only rebuild pages modified since the last build",
+            "inherit": false
+          },
+          {
+            "short": "m",
+            "long": "message",
+            "description": "commit message for the GitHub Pages branch",
+            "inherit": false,
+            "value": {
+              "name": "message"
+            }
+          },
+          {
+            "short": "b",
+            "long": "remote-branch",
+            "description": "remote branch to commit to for GitHub Pages",
+            "inherit": false,
+            "value": {
+              "name": "branch"
+            }
+          },
+          {
+            "short": "r",
+            "long": "remote-name",
+            "description": "remote name to commit to for GitHub Pages",
+            "inherit": false,
+            "value": {
+              "name": "remote"
+            }
+          },
+          {
+            "long": "force",
+            "description": "force the push to the repository",
+            "priority": -10,
+            "inherit": false
+          },
+          {
+            "long": "no-history",
+            "description": "replace the Git history with one new commit",
+            "priority": -10,
+            "inherit": false
+          },
+          {
+            "long": "ignore-version",
+            "description": "ignore older MkDocs version checks",
+            "inherit": false
+          },
+          {
+            "long": "shell",
+            "description": "use the shell when invoking Git",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "new",
+        "description": "create a new MkDocs project",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help for new",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "silence warnings",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "enable verbose output",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "directory",
+              "index": 0,
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "serve",
+        "description": "run the built-in development server",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help for serve",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "silence warnings",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "enable verbose output",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "config-file",
+            "description": "use a specific MkDocs config file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "s",
+            "long": "strict",
+            "description": "abort the build on warnings",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "theme",
+            "description": "theme to use when building documentation",
+            "inherit": false,
+            "value": {
+              "name": "theme"
+            }
+          },
+          {
+            "long": "use-directory-urls",
+            "description": "use directory URLs when building pages",
+            "inherit": false
+          },
+          {
+            "long": "no-directory-urls",
+            "description": "do not use directory URLs when building pages",
+            "inherit": false
+          },
+          {
+            "short": "a",
+            "long": "dev-addr",
+            "description": "IP address and port for the local server",
+            "inherit": false,
+            "value": {
+              "name": "ip:port"
+            }
+          },
+          {
+            "long": "live-reload",
+            "description": "enable live reloading",
+            "inherit": false
+          },
+          {
+            "long": "no-reload",
+            "description": "disable live reloading",
+            "inherit": false
+          },
+          {
+            "long": "dirtyreload",
+            "description": "rebuild only changed files while live reloading",
+            "inherit": false
+          },
+          {
+            "long": "watch-theme",
+            "description": "watch theme files for live reloading",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "long": "watch",
+            "description": "file or directory to watch for live reloading",
+            "inherit": false,
+            "repeatable": true,
+            "value": {
+              "name": "path",
+              "provider": [
+                "builtin.directories",
+                "builtin.files"
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
