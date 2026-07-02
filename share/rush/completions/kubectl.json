@@ -1,0 +1,3431 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "kubectl",
+    "description": "control Kubernetes clusters",
+    "options": [
+      {
+        "short": "n",
+        "long": "namespace",
+        "description": "if present, the namespace scope for this CLI request",
+        "inherit": false,
+        "value": {
+          "name": "namespace"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "alpha",
+        "description": "these commands correspond to alpha features that are not enabled in Kubernetes clusters by default",
+        "subcommands": [
+          {
+            "name": "debug",
+            "description": "tools for debugging Kubernetes resources",
+            "options": [
+              {
+                "long": "arguments-only",
+                "description": "if specified, everything after -- will be passed to the new container as Args instead of Command",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "attach",
+                "description": "if true, wait for the Pod to start running, and then attach to the Pod as if 'kubectl attach ...' were called. Default false, unless '-i/--stdin' is set, in whi",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "container",
+                "description": "container name to use for debug container",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "env",
+                "description": "environment variables to set in the container",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "image",
+                "description": "container image to use for debug container",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "image-pull-policy",
+                "description": "the image pull policy for the container",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "quiet",
+                "description": "if true, suppress prompt messages",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "short": "i",
+                "long": "stdin",
+                "description": "keep stdin open on the container(s) in the pod, even if nothing is attached",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "target",
+                "description": "target processes in this container name",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "short": "t",
+                "long": "tty",
+                "description": "allocated a TTY for each container in the pod",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "annotate",
+        "description": "update the annotations on one or more resources",
+        "arguments": {
+          "states": [
+            {
+              "name": "KEY=VAL",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "api-resources",
+        "description": "print the supported API resources on the server",
+        "options": [
+          {
+            "long": "api-group",
+            "description": "limit to resources in the specified API group",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "cached",
+            "description": "use the cached list of resources if available",
+            "inherit": false
+          },
+          {
+            "long": "namespaced",
+            "description": "if false, non-namespaced resources will be returned, otherwise returning namespaced resources by default",
+            "inherit": false
+          },
+          {
+            "long": "no-headers",
+            "description": "when using the default or custom-column output format, don't print headers (default print headers)",
+            "inherit": false
+          },
+          {
+            "long": "sort-by",
+            "description": "if non-empty, sort nodes list using specified field. The field can be either 'name' or 'kind'",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "verbs",
+            "description": "limit to resources that support the specified verbs",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          }
+        ]
+      },
+      {
+        "name": "api-versions",
+        "description": "print the supported API versions on the server, in the form of \"group/version\""
+      },
+      {
+        "name": "apply",
+        "description": "apply a configuration to a resource by filename or stdin. The resource name must be specified. This resource will be created if it doesn't exist yet. To use 'ap",
+        "subcommands": [
+          {
+            "name": "edit-last-applied",
+            "description": "edit the latest last-applied-configuration annotations of resources from the default editor",
+            "options": [
+              {
+                "long": "windows-line-endings",
+                "description": "defaults to the line ending native to your platform",
+                "inherit": false
+              },
+              {
+                "long": "field-manager",
+                "description": "name of the manager used to track field ownership",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "show-manged-fields",
+                "description": "if true, keep the managedFields when printing objects in JSON or YAML format",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "set-last-applied",
+            "description": "set the latest last-applied-configuration annotations by setting it to match the contents of a file. This results in the last-applied-configuration being update",
+            "options": [
+              {
+                "long": "show-manged-fields",
+                "description": "if true, keep the managedFields when printing objects in JSON or YAML format",
+                "inherit": false
+              },
+              {
+                "long": "create-annotation",
+                "description": "will create 'last-applied-configuration' annotations if current objects doesn't have one",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "view-last-applied",
+            "description": "view the latest last-applied-configuration annotations by type/name or file"
+          }
+        ]
+      },
+      {
+        "name": "attach",
+        "description": "attach to a process that is already running inside an existing container",
+        "options": [
+          {
+            "short": "c",
+            "long": "container",
+            "description": "container name. If omitted, the first container in the pod will be chosen",
+            "inherit": false
+          },
+          {
+            "long": "pod-running-timeout",
+            "description": "the length of time (like 5s, 2m, or 3h, higher than zero) to wait until at least one pod is running",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "i",
+            "long": "stdin",
+            "description": "pass stdin to the container",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "tty",
+            "description": "stdin is a TTY",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "auth",
+        "description": "inspect authorization",
+        "subcommands": [
+          {
+            "name": "can-i",
+            "description": "check whether an action is allowed",
+            "options": [
+              {
+                "short": "A",
+                "long": "all-namespaces",
+                "description": "if true, check the specified action in all namespaces",
+                "inherit": false
+              },
+              {
+                "long": "list",
+                "description": "if true, prints all allowed actions",
+                "inherit": false
+              },
+              {
+                "long": "no-headers",
+                "description": "if true, prints allowed actions without headers",
+                "inherit": false
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "if true, suppress output and just return the exit code",
+                "inherit": false
+              },
+              {
+                "long": "subresource",
+                "description": "subResource such as pod/log or deployment/scale",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "VERB",
+                  "provider": {
+                    "values": [
+                      "*",
+                      "get",
+                      "list",
+                      "watch",
+                      "delete",
+                      "create",
+                      "update",
+                      "patch"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "reconcile",
+            "description": "reconciles rules for RBAC Role, RoleBinding, ClusterRole, and ClusterRole binding objects",
+            "options": [
+              {
+                "long": "remove-extra-permissions",
+                "description": "if true, removes extra permissions added to roles",
+                "inherit": false
+              },
+              {
+                "long": "remove-extra-subjects",
+                "description": "if true, removes extra subjects added to rolebindings",
+                "inherit": false
+              },
+              {
+                "long": "show-managed-fields",
+                "description": "if true, keep the managedFields when printing objects in JSON or YAML format",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "autoscale",
+        "description": "creates an autoscaler that automatically chooses and sets the number of pods that run in a kubernetes cluster",
+        "options": [
+          {
+            "long": "cpu-percent",
+            "description": "the target average CPU utilization (represented as a percent of requested CPU) over all the pods. If it's not specified or negative, a default autoscaling polic",
+            "inherit": false,
+            "value": {
+              "name": "INT-(Percent)"
+            }
+          },
+          {
+            "long": "generator",
+            "description": "the name of the API generator to use. Currently there is only 1 generator",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "max",
+            "description": "the upper limit for the number of pods that can be set by the autoscaler. Required",
+            "inherit": false,
+            "value": {
+              "name": "INT"
+            }
+          },
+          {
+            "long": "min",
+            "description": "the lower limit for the number of pods that can be set by the autoscaler. If it's not specified or negative, the server will apply a default value",
+            "inherit": false,
+            "value": {
+              "name": "INT"
+            }
+          },
+          {
+            "long": "name",
+            "description": "the name for the newly created object. If not specified, the name of the input resource will be used",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "save-config",
+            "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "certificate",
+        "description": "modify certificate resources",
+        "subcommands": [
+          {
+            "name": "approve",
+            "description": "approve a certificate signing request",
+            "options": [
+              {
+                "long": "force",
+                "description": "update the CSR even if it is already approved",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "deny",
+            "description": "deny a certificate signing request",
+            "options": [
+              {
+                "long": "force",
+                "description": "update the CSR even if it is already approved",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "cluster-info",
+        "description": "display addresses of the master and services with label kubernetes.io/cluster-service=true To further debug and diagnose cluster problems, use 'kubectl cluster-",
+        "subcommands": [
+          {
+            "name": "dump",
+            "description": "dumps cluster info out suitable for debugging and diagnosing cluster problems. By default, dumps everything to stdout. You can optionally specify a directory wi",
+            "options": [
+              {
+                "short": "A",
+                "long": "all-namespaces",
+                "description": "if true, dump all namespaces. If true, --namespaces is ignored",
+                "inherit": false
+              },
+              {
+                "long": "namespaces",
+                "description": "a comma separated list of namespaces to dump",
+                "inherit": false,
+                "value": {
+                  "name": "Namespaces-(Comma-separated)"
+                }
+              },
+              {
+                "long": "output-directory",
+                "description": "where to output the files. If empty or '-' uses stdout, otherwise creates a directory hierarchy in that directory",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "pod-running-timeout",
+                "description": "the length of time (like 5s, 2m, or 3h, higher than zero) to wait until at least one pod is running",
+                "inherit": false,
+                "value": {
+                  "name": "Length-of-Time"
+                }
+              },
+              {
+                "long": "show-managed-fields",
+                "description": "if true, keep the managedFields when printing objects in JSON or YAML format",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "completion",
+        "description": "output shell completion code for the specified shell (bash or zsh). The shell code must be evaluated to provide interactive completion of kubectl commands. This"
+      },
+      {
+        "name": "config",
+        "description": "modify kubeconfig files using subcommands like \"kubectl config set current-context my-context\"",
+        "options": [
+          {
+            "long": "kubeconfig",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "current-context",
+            "description": "displays the current-context"
+          },
+          {
+            "name": "delete-cluster",
+            "description": "delete the specified cluster from the kubeconfig"
+          },
+          {
+            "name": "delete-context",
+            "description": "delete the specified context from the kubeconfig"
+          },
+          {
+            "name": "get-clusters",
+            "description": "display clusters defined in the kubeconfig"
+          },
+          {
+            "name": "get-contexts",
+            "description": "displays one or many contexts from the kubeconfig file",
+            "options": [
+              {
+                "long": "no-headers",
+                "description": "when using the default or custom-column output format, don't print headers (default print headers)",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "get-users",
+            "description": "display users defined in the kubeconfig"
+          },
+          {
+            "name": "rename-context",
+            "description": "renames a context from the kubeconfig file",
+            "arguments": {
+              "states": [
+                {
+                  "name": "New-Context-Name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "set",
+            "description": "sets an individual value in a kubeconfig file",
+            "options": [
+              {
+                "long": "set-raw-bytes",
+                "description": "when writing a []byte PROPERTY_VALUE, write the given string directly without base64 decoding",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "PROPERTY_NAME",
+                  "index": 0
+                },
+                {
+                  "name": "PROPERTY_VALUE",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "set-cluster",
+            "description": "sets a cluster entry in kubeconfig",
+            "options": [
+              {
+                "long": "embed-certs",
+                "description": "embed-certs for the cluster entry in kubeconfig",
+                "inherit": false
+              },
+              {
+                "long": "server",
+                "inherit": false,
+                "value": {
+                  "name": "Server"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority",
+                "inherit": false,
+                "value": {
+                  "name": "Certificate-Authority",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      "true",
+                      "false"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "tls-server-name",
+                "inherit": false,
+                "value": {
+                  "name": "TLS-Server-Name"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "set-context",
+            "description": "sets a context entry in kubeconfig",
+            "options": [
+              {
+                "long": "current",
+                "description": "modify the current context",
+                "inherit": false
+              },
+              {
+                "long": "cluster",
+                "inherit": false,
+                "value": {
+                  "name": "cluster_nickname"
+                }
+              },
+              {
+                "long": "user",
+                "inherit": false,
+                "value": {
+                  "name": "user_nickname"
+                }
+              },
+              {
+                "long": "namespace",
+                "inherit": false,
+                "value": {
+                  "name": "namespace"
+                }
+              }
+            ]
+          },
+          {
+            "name": "set-credentials",
+            "description": "sets a user entry in kubeconfig",
+            "options": [
+              {
+                "long": "client-certificate",
+                "description": "client cert for user entry",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "client-key",
+                "description": "client key for user entry",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "token",
+                "description": "bearer Token for user entry",
+                "inherit": false,
+                "value": {
+                  "name": "Bearer-Token"
+                }
+              },
+              {
+                "long": "username",
+                "description": "username for basic authentication",
+                "inherit": false,
+                "value": {
+                  "name": "Username"
+                }
+              },
+              {
+                "long": "password",
+                "description": "password for basic authentication",
+                "inherit": false,
+                "value": {
+                  "name": "Password"
+                }
+              },
+              {
+                "long": "auth-provider",
+                "description": "auth provider for the user entry in kubeconfig",
+                "inherit": false,
+                "value": {
+                  "name": "Auth-Provider"
+                }
+              },
+              {
+                "long": "auth-provider-arg",
+                "description": "'key=value' arguments for the auth provider",
+                "inherit": false,
+                "value": {
+                  "name": "key=value"
+                }
+              },
+              {
+                "long": "embed-certs",
+                "description": "embed client cert/key for the user entry in kubeconfig",
+                "inherit": false
+              },
+              {
+                "long": "exec-api-version",
+                "description": "aPI version of the exec credential plugin for the user entry in kubeconfig",
+                "inherit": false,
+                "value": {
+                  "name": "API-Version"
+                }
+              },
+              {
+                "long": "exec-arg",
+                "description": "new arguments for the exec credential plugin command for the user entry in kubeconfig",
+                "inherit": false,
+                "value": {
+                  "name": "Exec-Arg"
+                }
+              },
+              {
+                "long": "exec-command",
+                "description": "command for the exec credential plugin for the user entry in kubeconfig",
+                "inherit": false,
+                "value": {
+                  "name": "Exec-Command"
+                }
+              },
+              {
+                "long": "exec-env",
+                "description": "'key=value' environment values for the exec credential plugin",
+                "inherit": false,
+                "value": {
+                  "name": "key=value"
+                }
+              }
+            ]
+          },
+          {
+            "name": "unset",
+            "description": "unsets an individual value in a kubeconfig file",
+            "arguments": {
+              "states": [
+                {
+                  "name": "PROPERTY_NAME",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "use-context",
+            "description": "sets the current-context in a kubeconfig file"
+          },
+          {
+            "name": "view",
+            "description": "display merged kubeconfig settings or a specified kubeconfig file",
+            "options": [
+              {
+                "long": "flatten",
+                "description": "flatten the resulting kubeconfig file into self-contained output (useful for creating portable kubeconfig files)",
+                "inherit": false
+              },
+              {
+                "long": "merge",
+                "description": "merge the full hierarchy of kubeconfig files",
+                "inherit": false
+              },
+              {
+                "long": "minify",
+                "description": "remove all information not used by current-context from the output",
+                "inherit": false
+              },
+              {
+                "long": "raw",
+                "description": "display raw byte data",
+                "inherit": false
+              },
+              {
+                "long": "show-managed-fields",
+                "description": "if true, keep the managedFields when printing objects in JSON or YAML format",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "convert",
+        "description": "convert config files between different API versions. Both YAML and JSON formats are accepted",
+        "options": [
+          {
+            "long": "local",
+            "description": "if true, convert will NOT try to contact api-server but run locally",
+            "inherit": false
+          },
+          {
+            "long": "output-version",
+            "description": "output the formatted object with the given group version (for ex: 'extensions/v1beta1')",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "validate",
+            "description": "if true, use a schema to validate the input before sending it",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "cordon",
+        "description": "mark node as unschedulable"
+      },
+      {
+        "name": "cp",
+        "description": "copy files and directories to and from containers",
+        "options": [
+          {
+            "short": "c",
+            "long": "container",
+            "description": "container name. If omitted, the first container in the pod will be chosen",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "no-preserve",
+            "description": "the copied file/directory's ownership and permissions will not be preserved in the container",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "create",
+        "description": "create a resource from a file or from stdin",
+        "options": [
+          {
+            "long": "edit",
+            "description": "edit the API resource before creating",
+            "inherit": false
+          },
+          {
+            "long": "raw",
+            "description": "raw URI to POST to the server. Uses the transport specified by the kubeconfig file",
+            "inherit": false
+          },
+          {
+            "long": "save-config",
+            "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+            "inherit": false
+          },
+          {
+            "long": "validate",
+            "description": "if true, use a schema to validate the input before sending it",
+            "inherit": false
+          },
+          {
+            "long": "windows-line-endings",
+            "description": "only relevant if --edit=true. Defaults to the line ending native to your platform",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "clusterrole",
+            "description": "create a ClusterRole",
+            "options": [
+              {
+                "long": "aggregation-rule",
+                "description": "an aggregation label selector for combining ClusterRoles",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "non-resource-url",
+                "description": "a partial url that user should have access to",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "resource",
+                "description": "resource that the rule applies to",
+                "inherit": false
+              },
+              {
+                "long": "resource-name",
+                "description": "resource in the white list that the rule applies to, repeat this flag for multiple items",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "save-config",
+                "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+                "inherit": false
+              },
+              {
+                "long": "validate",
+                "description": "if true, use a schema to validate the input before sending it",
+                "inherit": false
+              },
+              {
+                "long": "verb",
+                "description": "verb that applies to the resources contained in the rule",
+                "inherit": false,
+                "value": {
+                  "name": "VERB",
+                  "provider": {
+                    "values": [
+                      "*",
+                      "get",
+                      "list",
+                      "watch",
+                      "delete",
+                      "create",
+                      "update",
+                      "patch"
+                    ]
+                  }
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "clusterrolebinding",
+            "description": "create a ClusterRoleBinding for a particular ClusterRole",
+            "options": [
+              {
+                "long": "clusterrole",
+                "description": "clusterRole this ClusterRoleBinding should reference",
+                "inherit": false
+              },
+              {
+                "long": "user",
+                "inherit": false,
+                "value": {
+                  "name": "User-Name"
+                }
+              },
+              {
+                "long": "group",
+                "description": "groups to bind to the clusterrole",
+                "inherit": false,
+                "value": {
+                  "name": "Group-Name"
+                }
+              },
+              {
+                "long": "save-config",
+                "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+                "inherit": false
+              },
+              {
+                "long": "serviceaccount",
+                "description": "service accounts to bind to the clusterrole, in the format <namespace>:<name>",
+                "inherit": false,
+                "value": {
+                  "name": "<namespace>:<name>"
+                }
+              },
+              {
+                "long": "validate",
+                "description": "if true, use a schema to validate the input before sending it",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "configmap",
+            "description": "create a configmap based on a file, directory, or specified literal value",
+            "options": [
+              {
+                "long": "append-hash",
+                "description": "append a hash of the configmap to its name",
+                "inherit": false
+              },
+              {
+                "long": "from-env-file",
+                "description": "specify the path to a file to read lines of key=val pairs to create a configmap (i.e. a Docker .env file)",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "from-file",
+                "description": "key file can be specified using its file path, in which case file basename will be used as configmap key, or optionally with a key and file path, in which case",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "from-literal",
+                "description": "specify a key and literal value to insert in configmap (i.e. mykey=somevalue)",
+                "inherit": false,
+                "value": {
+                  "name": "key=value"
+                }
+              },
+              {
+                "long": "save-config",
+                "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+                "inherit": false
+              },
+              {
+                "long": "validate",
+                "description": "if true, use a schema to validate the input before sending it",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "cronjob",
+            "description": "create a cronjob with the specified name",
+            "options": [
+              {
+                "long": "image",
+                "description": "image name to run",
+                "inherit": false,
+                "value": {
+                  "name": "Image"
+                }
+              },
+              {
+                "long": "restart",
+                "description": "job's restart policy. supported values: OnFailure, Never",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      "OnFailure",
+                      "Never"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "save-config",
+                "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+                "inherit": false
+              },
+              {
+                "long": "schedule",
+                "description": "a schedule in the Cron format the job should be run with",
+                "inherit": false,
+                "value": {
+                  "name": "Cron"
+                }
+              },
+              {
+                "long": "validate",
+                "description": "if true, use a schema to validate the input before sending it",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "deployment",
+            "description": "create a deployment with the specified name",
+            "options": [
+              {
+                "long": "image",
+                "description": "image name to run",
+                "inherit": false,
+                "value": {
+                  "name": "Image"
+                }
+              },
+              {
+                "long": "save-config",
+                "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+                "inherit": false
+              },
+              {
+                "long": "validate",
+                "description": "if true, use a schema to validate the input before sending it",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "ingress",
+            "description": "create an ingress with the specified name",
+            "options": [
+              {
+                "long": "annotation",
+                "description": "annotation to insert in the ingress object, in the format annotation=value",
+                "inherit": false,
+                "value": {
+                  "name": "annotation=value"
+                }
+              },
+              {
+                "long": "class",
+                "description": "ingress Class to be used",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "default-backend",
+                "description": "default service for backend, in format of svcname:port",
+                "inherit": false,
+                "value": {
+                  "name": "svcname:port"
+                }
+              },
+              {
+                "long": "field-manager",
+                "description": "name of the manager used to track field ownership",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "rule",
+                "description": "rule in format host/path=service:port[,tls=secretname]. Paths containing the leading character '*' are considered pathType=Prefix. tls argument is optional",
+                "inherit": false,
+                "value": {
+                  "name": "host/path=service:port[,tls=secretname]"
+                }
+              },
+              {
+                "long": "show-managed-fields",
+                "description": "if true, keep the managedFields when printing objects in JSON or YAML format",
+                "inherit": false
+              },
+              {
+                "long": "validate",
+                "description": "if true, use a schema to validate the input before sending it",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "job",
+            "description": "create a job with the specified name",
+            "options": [
+              {
+                "long": "from",
+                "description": "the name of the resource to create a Job from (only cronjob is supported)",
+                "inherit": false,
+                "value": {
+                  "name": "Cronjob"
+                }
+              },
+              {
+                "long": "image",
+                "description": "image name to run",
+                "inherit": false,
+                "value": {
+                  "name": "Image"
+                }
+              },
+              {
+                "long": "save-config",
+                "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+                "inherit": false
+              },
+              {
+                "long": "validate",
+                "description": "if true, use a schema to validate the input before sending it",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                },
+                {
+                  "name": "COMMAND",
+                  "provider": "builtin.executables",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "namespace",
+            "description": "create a namespace with the specified name",
+            "options": [
+              {
+                "long": "save-config",
+                "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+                "inherit": false
+              },
+              {
+                "long": "validate",
+                "description": "if true, use a schema to validate the input before sending it",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "poddisruptionbudget",
+            "description": "create a pod disruption budget with the specified name, selector, and desired minimum available pods",
+            "options": [
+              {
+                "long": "max-unavailable",
+                "description": "the maximum number or percentage of unavailable pods this budget requires",
+                "inherit": false,
+                "value": {
+                  "name": "INT-(Percent)"
+                }
+              },
+              {
+                "long": "min-available",
+                "description": "the minimum number or percentage of available pods this budget requires",
+                "inherit": false,
+                "value": {
+                  "name": "INT-(Percent)"
+                }
+              },
+              {
+                "long": "save-config",
+                "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+                "inherit": false
+              },
+              {
+                "long": "validate",
+                "description": "if true, use a schema to validate the input before sending it",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "priorityclass",
+            "description": "create a priorityclass with the specified name, value, globalDefault and description",
+            "options": [
+              {
+                "long": "description",
+                "description": "description is an arbitrary string that usually provides guidelines on when this priority class should be used",
+                "inherit": false,
+                "value": {
+                  "name": "Description"
+                }
+              },
+              {
+                "long": "global-default",
+                "description": "global-default specifies whether this PriorityClass should be considered as the default priority",
+                "inherit": false
+              },
+              {
+                "long": "preemption-policy",
+                "description": "preemption-policy is the policy for preempting pods with lower priority",
+                "inherit": false,
+                "value": {
+                  "name": "Preemption-Policy"
+                }
+              },
+              {
+                "long": "save-config",
+                "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+                "inherit": false
+              },
+              {
+                "long": "validate",
+                "description": "if true, use a schema to validate the input before sending it",
+                "inherit": false
+              },
+              {
+                "long": "value",
+                "description": "the value of this priority class",
+                "inherit": false,
+                "value": {
+                  "name": "INT"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "quota",
+            "description": "create a resourcequota with the specified name, hard limits and optional scopes",
+            "options": [
+              {
+                "long": "field-manager",
+                "description": "name of the manager used to track field ownership",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "hard",
+                "description": "a comma-delimited set of resource=quantity pairs that define a hard limit",
+                "inherit": false,
+                "value": {
+                  "name": "key=value-(Comma-delimited)"
+                }
+              },
+              {
+                "long": "save-config",
+                "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+                "inherit": false
+              },
+              {
+                "long": "scopes",
+                "description": "a comma-delimited set of quota scopes that must all match each object tracked by the quota",
+                "inherit": false,
+                "value": {
+                  "name": "Scopes-(Comma-delimited)"
+                }
+              },
+              {
+                "long": "validate",
+                "description": "if true, use a schema to validate the input before sending it",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "role",
+            "description": "create a role with single rule",
+            "options": [
+              {
+                "long": "resource",
+                "description": "resource that the rule applies to",
+                "inherit": false
+              },
+              {
+                "long": "resource-name",
+                "description": "resource in the white list that the rule applies to, repeat this flag for multiple items",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "save-config",
+                "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+                "inherit": false
+              },
+              {
+                "long": "validate",
+                "description": "if true, use a schema to validate the input before sending it",
+                "inherit": false
+              },
+              {
+                "long": "verb",
+                "description": "verb that applies to the resources contained in the rule",
+                "inherit": false,
+                "value": {
+                  "name": "VERB",
+                  "provider": {
+                    "values": [
+                      "get",
+                      "list",
+                      "watch",
+                      "delete"
+                    ]
+                  }
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "rolebinding",
+            "description": "create a RoleBinding for a particular Role or ClusterRole",
+            "options": [
+              {
+                "long": "clusterrole",
+                "description": "clusterRole this RoleBinding should reference",
+                "inherit": false
+              },
+              {
+                "long": "group",
+                "description": "groups to bind to the role",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "role",
+                "description": "role this RoleBinding should reference",
+                "inherit": false,
+                "value": {
+                  "name": "Role"
+                }
+              },
+              {
+                "long": "save-config",
+                "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+                "inherit": false
+              },
+              {
+                "long": "serviceaccount",
+                "description": "service accounts to bind to the role, in the format <namespace>:<name>",
+                "inherit": false,
+                "value": {
+                  "name": "<namespace>:<name>"
+                }
+              },
+              {
+                "long": "username",
+                "inherit": false,
+                "value": {
+                  "name": "Username"
+                }
+              },
+              {
+                "long": "validate",
+                "description": "if true, use a schema to validate the input before sending it",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "secret",
+            "description": "create a secret using specified subcommand",
+            "subcommands": [
+              {
+                "name": "docker-registry",
+                "description": "create a new secret for use with Docker registries",
+                "options": [
+                  {
+                    "long": "append-hash",
+                    "description": "append a hash of the secret to its name",
+                    "inherit": false
+                  },
+                  {
+                    "long": "docker-email",
+                    "description": "email for Docker registry",
+                    "inherit": false,
+                    "value": {
+                      "name": "Email"
+                    }
+                  },
+                  {
+                    "long": "docker-password",
+                    "description": "password for Docker registry authentication",
+                    "inherit": false,
+                    "value": {
+                      "name": "Password"
+                    }
+                  },
+                  {
+                    "long": "docker-server",
+                    "description": "server location for Docker registry",
+                    "inherit": false,
+                    "value": {
+                      "name": "Server"
+                    }
+                  },
+                  {
+                    "long": "docker-username",
+                    "description": "username for Docker registry authentication",
+                    "inherit": false,
+                    "value": {
+                      "name": "Username"
+                    }
+                  },
+                  {
+                    "long": "from-file",
+                    "description": "key files can be specified using their file path, in which case a default name will be given to them, or optionally with a name and file path, in which case the",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "save-config",
+                    "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+                    "inherit": false
+                  },
+                  {
+                    "long": "validate",
+                    "description": "if true, use a schema to validate the input before sending it",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "NAME",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "generic",
+                "description": "create a secret based on a file, directory, or specified literal value",
+                "options": [
+                  {
+                    "long": "append-hash",
+                    "description": "append a hash of the secret to its name",
+                    "inherit": false
+                  },
+                  {
+                    "long": "from-env-file",
+                    "description": "specify the path to a file to read lines of key=val pairs to create a secret (i.e. a Docker .env file)",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "from-file",
+                    "description": "key files can be specified using their file path, in which case a default name will be given to them, or optionally with a name and file path, in which case the",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "from-literal",
+                    "description": "specify a key and literal value to insert in secret (i.e. mykey=somevalue)",
+                    "inherit": false,
+                    "value": {
+                      "name": "key=value"
+                    }
+                  },
+                  {
+                    "long": "save-config",
+                    "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+                    "inherit": false
+                  },
+                  {
+                    "long": "type",
+                    "description": "the type of secret to create",
+                    "inherit": false,
+                    "value": {
+                      "name": "value"
+                    }
+                  },
+                  {
+                    "long": "validate",
+                    "description": "if true, use a schema to validate the input before sending it",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "NAME",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "tls",
+                "description": "create a TLS secret from the given public/private key pair",
+                "options": [
+                  {
+                    "long": "append-hash",
+                    "description": "append a hash of the secret to its name",
+                    "inherit": false
+                  },
+                  {
+                    "long": "cert",
+                    "description": "path to PEM encoded public key certificate",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "key",
+                    "description": "path to private key associated with given certificate",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "save-config",
+                    "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+                    "inherit": false
+                  },
+                  {
+                    "long": "validate",
+                    "description": "if true, use a schema to validate the input before sending it",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "NAME",
+                      "index": 0
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "service",
+            "description": "create a service using specified subcommand",
+            "subcommands": [
+              {
+                "name": "clusterip",
+                "description": "create a ClusterIP service with the specified name",
+                "options": [
+                  {
+                    "long": "clusterip",
+                    "description": "assign your own ClusterIP or set to 'None' for a 'headless' service (no loadbalancing)",
+                    "inherit": false,
+                    "value": {
+                      "name": "ClusterIP",
+                      "provider": {
+                        "values": [
+                          "None"
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "long": "save-config",
+                    "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+                    "inherit": false
+                  },
+                  {
+                    "long": "tcp",
+                    "description": "port pairs can be specified as '<port>:<targetPort>'",
+                    "inherit": false,
+                    "value": {
+                      "name": "<port>:<targetPort>"
+                    }
+                  },
+                  {
+                    "long": "validate",
+                    "description": "if true, use a schema to validate the input before sending it",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "NAME",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "externalname",
+                "description": "create an ExternalName service with the specified name",
+                "options": [
+                  {
+                    "long": "external-name",
+                    "description": "external name of service",
+                    "inherit": false,
+                    "value": {
+                      "name": "External-name"
+                    }
+                  },
+                  {
+                    "long": "save-config",
+                    "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+                    "inherit": false
+                  },
+                  {
+                    "long": "tcp",
+                    "description": "port pairs can be specified as '<port>:<targetPort>'",
+                    "inherit": false,
+                    "value": {
+                      "name": "<port>:<targetPort>"
+                    }
+                  },
+                  {
+                    "long": "validate",
+                    "description": "if true, use a schema to validate the input before sending it",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "NAME",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "loadbalancer",
+                "description": "create a LoadBalancer service with the specified name",
+                "options": [
+                  {
+                    "long": "save-config",
+                    "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+                    "inherit": false
+                  },
+                  {
+                    "long": "tcp",
+                    "description": "port pairs can be specified as '<port>:<targetPort>'",
+                    "inherit": false,
+                    "value": {
+                      "name": "<port>:<targetPort>"
+                    }
+                  },
+                  {
+                    "long": "validate",
+                    "description": "if true, use a schema to validate the input before sending it",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "NAME",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "nodeport",
+                "description": "create a NodePort service with the specified name",
+                "options": [
+                  {
+                    "long": "node-port",
+                    "description": "port used to expose the service on each node in a cluster",
+                    "inherit": false,
+                    "value": {
+                      "name": "Port-(INT)"
+                    }
+                  },
+                  {
+                    "long": "save-config",
+                    "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+                    "inherit": false
+                  },
+                  {
+                    "long": "tcp",
+                    "description": "port pairs can be specified as '<port>:<targetPort>'",
+                    "inherit": false,
+                    "value": {
+                      "name": "<port>:<targetPort>"
+                    }
+                  },
+                  {
+                    "long": "validate",
+                    "description": "if true, use a schema to validate the input before sending it",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "NAME",
+                      "index": 0
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "serviceaccount",
+            "description": "create a service account with the specified name",
+            "options": [
+              {
+                "long": "save-config",
+                "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+                "inherit": false
+              },
+              {
+                "long": "validate",
+                "description": "if true, use a schema to validate the input before sending it",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "delete",
+        "description": "delete resources by filenames, stdin, resources and names, or by resources and label selector",
+        "options": [
+          {
+            "short": "A",
+            "long": "all-namespaces",
+            "description": "if present, list the requested object(s) across all namespaces. Namespace in current context is ignored even if specified with --namespace",
+            "inherit": false
+          },
+          {
+            "long": "cascade",
+            "description": "if true, cascade the deletion of the resources managed by this resource (e.g. Pods created by a ReplicationController). Default true",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "description": "if true, immediately remove resources from API and bypass graceful deletion. Note that immediate deletion of some resources may result in inconsistency or data",
+            "inherit": false
+          },
+          {
+            "long": "grace-period",
+            "description": "period of time in seconds given to the resource to terminate gracefully. Ignored if negative. Set to 1 for immediate shutdown. Can only be set to 0 when --force",
+            "inherit": false,
+            "value": {
+              "name": "INT-(Seconds)"
+            }
+          },
+          {
+            "long": "ignore-not-found",
+            "description": "treat \"resource not found\" as a successful delete. Defaults to \"true\" when --all is specified",
+            "inherit": false
+          },
+          {
+            "long": "now",
+            "description": "if true, resources are signaled for immediate shutdown (same as --grace-period=1)",
+            "inherit": false
+          },
+          {
+            "long": "raw",
+            "description": "raw URI to DELETE to the server. Uses the transport specified by the kubeconfig file",
+            "inherit": false
+          },
+          {
+            "long": "timeout",
+            "description": "the length of time to wait before giving up on a delete, zero means determine a timeout from the size of the object",
+            "inherit": false,
+            "value": {
+              "name": "INT-(Seconds)"
+            }
+          },
+          {
+            "long": "wait",
+            "description": "if true, wait for resources to be gone before returning. This waits for finalizers",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "describe",
+        "description": "show details of a specific resource or group of resources",
+        "options": [
+          {
+            "short": "A",
+            "long": "all-namespaces",
+            "description": "if present, list the requested object(s) across all namespaces. Namespace in current context is ignored even if specified with --namespace",
+            "inherit": false
+          },
+          {
+            "long": "show-events",
+            "description": "if true, display events related to the described object",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "diff",
+        "description": "diff configurations specified by filename or stdin between the current online configuration, and the configuration as it would be if applied",
+        "options": [
+          {
+            "long": "field-manager",
+            "description": "name of the manager used to track field ownership",
+            "inherit": false,
+            "value": {
+              "name": "Field-Manager"
+            }
+          },
+          {
+            "long": "force-conflicts",
+            "description": "if true, server-side apply will force the changes against conflicts",
+            "inherit": false
+          },
+          {
+            "long": "server-side",
+            "description": "if true, apply runs in the server instead of the client",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "drain",
+        "description": "drain node in preparation for maintenance",
+        "options": [
+          {
+            "long": "delete-local-data",
+            "description": "continue even if there are pods using emptyDir (local data that will be deleted when the node is drained)",
+            "inherit": false
+          },
+          {
+            "long": "disable-eviction",
+            "description": "force drain to use delete, even if eviction is supported. This will bypass checking PodDisruptionBudgets, use with caution",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "description": "continue even if there are pods not managed by a ReplicationController, ReplicaSet, Job, DaemonSet or StatefulSet",
+            "inherit": false
+          },
+          {
+            "long": "grace-period",
+            "description": "period of time in seconds given to each pod to terminate gracefully. If negative, the default value specified in the pod will be used",
+            "inherit": false,
+            "value": {
+              "name": "INT-(Seconds)"
+            }
+          },
+          {
+            "long": "ignore-daemonsets",
+            "description": "ignore DaemonSet-managed pods",
+            "inherit": false
+          },
+          {
+            "long": "pod-selector",
+            "description": "label selector to filter pods on the node",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "skip-wait-for-delete-timeout",
+            "description": "if pod DeletionTimestamp older than N seconds, skip waiting for the pod. Seconds must be greater than 0 to skip",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "timeout",
+            "description": "the length of time to wait before giving up, zero means infinite",
+            "inherit": false,
+            "value": {
+              "name": "INT-(Seconds)"
+            }
+          }
+        ]
+      },
+      {
+        "name": "edit",
+        "description": "edit a resource from the default editor",
+        "options": [
+          {
+            "long": "output-patch",
+            "description": "output the patch if the resource is edited",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "save-config",
+            "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+            "inherit": false
+          },
+          {
+            "long": "validate",
+            "description": "if true, use a schema to validate the input before sending it",
+            "inherit": false
+          },
+          {
+            "long": "windows-line-endings",
+            "description": "defaults to the line ending native to your platform",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "exec",
+        "description": "execute a command in a container",
+        "options": [
+          {
+            "short": "c",
+            "long": "container",
+            "description": "container name. If omitted, the first container in the pod will be chosen",
+            "inherit": false
+          },
+          {
+            "long": "pod-running-timeout",
+            "description": "the length of time (like 5s, 2m, or 3h, higher than zero) to wait until at least one pod is running",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "i",
+            "long": "stdin",
+            "description": "pass stdin to the container",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "tty",
+            "description": "stdin is a TTY",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "COMMAND",
+              "provider": "builtin.executables",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "explain",
+        "description": "list the fields for supported resources",
+        "options": [
+          {
+            "long": "api-version",
+            "description": "get different explanations for particular API version",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "recursive",
+            "description": "print the fields of fields (Currently only 1 level deep)",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "expose",
+        "description": "expose a resource as a new Kubernetes service",
+        "options": [
+          {
+            "long": "cluster-ip",
+            "description": "clusterIP to be assigned to the service. Leave empty to auto-allocate, or set to 'None' to create a headless service",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "external-ip",
+            "description": "additional external IP address (not managed by Kubernetes) to accept for the service. If this IP is routed to a node, the service can be accessed by this IP in",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "generator",
+            "description": "the name of the API generator to use. There are 2 generators: 'service/v1' and 'service/v2'. The only difference between them is that service port in v1 is name",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "l",
+            "long": "labels",
+            "description": "labels to apply to the service created by this call",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "load-balancer-ip",
+            "description": "iP to assign to the LoadBalancer. If empty, an ephemeral IP will be created and used (cloud-provider specific)",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "name",
+            "description": "the name for the newly created object",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "overrides",
+            "description": "an inline JSON override for the generated object. If this is non-empty, it is used to override the generated object. Requires that the object supply a valid api",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "port",
+            "description": "the port that the service should serve on. Copied from the resource being exposed, if unspecified",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "protocol",
+            "description": "the network protocol for the service to be created. Default is 'TCP'",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  "TCP",
+                  "UDP",
+                  "SCTP"
+                ]
+              }
+            }
+          },
+          {
+            "long": "save-config",
+            "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+            "inherit": false
+          },
+          {
+            "long": "session-affinity",
+            "description": "if non-empty, set the session affinity for the service to this; legal values: 'None', 'ClientIP'",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "target-port",
+            "description": "name or number for the port on the container that the service should direct traffic to. Optional",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "type",
+            "description": "type for this service: ClusterIP, NodePort, LoadBalancer, or ExternalName. Default is 'ClusterIP'",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  "ClusterIP",
+                  "NodePort",
+                  "LoadBalancer",
+                  "ExternalName"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "get",
+        "description": "display one or many resources",
+        "options": [
+          {
+            "short": "A",
+            "long": "all-namespaces",
+            "description": "if present, list the requested object(s) across all namespaces. Namespace in current context is ignored even if specified with --namespace",
+            "inherit": false
+          },
+          {
+            "long": "chunk-size",
+            "description": "return large lists in chunks rather than all at once. Pass 0 to disable. This flag is beta and may change in the future",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "ignore-not-found",
+            "description": "if the requested object does not exist the command will return exit code 0",
+            "inherit": false
+          },
+          {
+            "short": "L",
+            "long": "label-columns",
+            "description": "accepts a comma separated list of labels that are going to be presented as columns. Names are case-sensitive. You can also use multiple flag options like -L lab",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "no-headers",
+            "description": "when using the default or custom-column output format, don't print headers (default print headers)",
+            "inherit": false
+          },
+          {
+            "long": "output-watch-events",
+            "description": "output watch event objects when --watch or --watch-only is used. Existing objects are output as initial ADDED events",
+            "inherit": false
+          },
+          {
+            "long": "raw",
+            "description": "raw URI to request from the server. Uses the transport specified by the kubeconfig file",
+            "inherit": false
+          },
+          {
+            "long": "server-print",
+            "description": "if true, have the server return the appropriate table output. Supports extension APIs and CRDs",
+            "inherit": false
+          },
+          {
+            "long": "show-kind",
+            "description": "if present, list the resource type for the requested object(s)",
+            "inherit": false
+          },
+          {
+            "long": "show-labels",
+            "description": "when printing, show all labels as the last column (default hide labels column)",
+            "inherit": false
+          },
+          {
+            "long": "sort-by",
+            "description": "if non-empty, sort list types using this field specification. The field specification is expressed as a JSONPath expression (e.g. '{.metadata.name}'). The field",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "w",
+            "long": "watch",
+            "description": "after listing/getting the requested object, watch for changes. Uninitialized objects are excluded if no object name is provided",
+            "inherit": false
+          },
+          {
+            "long": "watch-only",
+            "description": "watch for changes to the requested object(s), without listing/getting first",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "kustomize",
+        "description": "print a set of API resources generated from instructions in a kustomization.yaml file",
+        "options": [
+          {
+            "long": "allow-id-changes",
+            "description": "enable changes to a resourceId",
+            "inherit": false
+          },
+          {
+            "long": "enable-alpha-plugins",
+            "description": "enable kustomize plugins",
+            "inherit": false
+          },
+          {
+            "long": "enable-managedby-label",
+            "description": "enable adding app.kubernetes.io/managed-by",
+            "inherit": false
+          },
+          {
+            "long": "env",
+            "short": "e",
+            "description": "a list of environment variables to be used by functions",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "load-restrictor",
+            "description": "if set to 'LoadRestrictionsNone', local kustomizations may load files from outside their root. This does, however, break the relocatability of the kustomization",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "mount",
+            "description": "a list of storage options read from the filesystem",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "network",
+            "description": "enable network access for functions that declare it",
+            "inherit": false
+          },
+          {
+            "long": "network-name",
+            "description": "the docker network to run the container in",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "reorder",
+            "description": "reorder the resources just before output. Use 'legacy' to apply a legacy reordering (Namespaces first, Webhooks last, etc). Use 'none' to suppress a final reord",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "DIR",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "label",
+        "description": "update the labels on a resource",
+        "options": [
+          {
+            "long": "all",
+            "description": "select all resources, including uninitialized ones, in the namespace of the specified resource types",
+            "inherit": false
+          },
+          {
+            "long": "list",
+            "description": "if true, display the labels for a given resource",
+            "inherit": false
+          },
+          {
+            "long": "overwrite",
+            "description": "if true, allow labels to be overwritten, otherwise reject label updates that overwrite existing labels",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "logs",
+        "description": "print the logs for a container in a pod or specified resource. If the pod has only one container, the container name is optional",
+        "options": [
+          {
+            "long": "all-containers",
+            "description": "get all containers' logs in the pod(s)",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "container",
+            "description": "print the logs of this container",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "f",
+            "long": "follow",
+            "description": "specify if the logs should be streamed",
+            "inherit": false
+          },
+          {
+            "long": "ignore-errors",
+            "description": "if watching / following pod logs, allow for any errors that occur to be non-fatal",
+            "inherit": false
+          },
+          {
+            "long": "insecure-skip-tls-verify-backend",
+            "description": "skip verifying the identity of the kubelet that logs are requested from. In theory, an attacker could provide invalid log content back. You might want to use th",
+            "inherit": false
+          },
+          {
+            "long": "limit-bytes",
+            "description": "maximum bytes of logs to return. Defaults to no limit",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "max-log-requests",
+            "description": "specify maximum number of concurrent logs to follow when using by a selector. Defaults to 5",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "pod-running-timeout",
+            "description": "the length of time (like 5s, 2m, or 3h, higher than zero) to wait until at least one pod is running",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "prefix",
+            "description": "prefix each log line with the log source (pod name and container name)",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "previous",
+            "description": "if true, print the logs for the previous instance of the container in a pod if it exists",
+            "inherit": false
+          },
+          {
+            "long": "since",
+            "description": "only return logs newer than a relative duration like 5s, 2m, or 3h. Defaults to all logs. Only one of since-time / since may be used",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "since-time",
+            "description": "only return logs after a specific date (RFC3339). Defaults to all logs. Only one of since-time / since may be used",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "tail",
+            "description": "lines of recent log file to display. Defaults to -1 with no selector, showing all log lines otherwise 10, if a selector is provided",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "timestamps",
+            "description": "include timestamps on each line in the log output",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "patch",
+        "description": "update field(s) of a resource using strategic merge patch, a JSON merge patch, or a JSON patch",
+        "options": [
+          {
+            "short": "p",
+            "long": "patch",
+            "description": "the patch to be applied to the resource JSON file",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "type",
+            "description": "the type of patch being provided; one of [json merge strategic]",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  "json",
+                  "merge",
+                  "strategic"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "plugin",
+        "description": "provides utilities for interacting with plugins"
+      },
+      {
+        "name": "port-forward",
+        "description": "forward one or more local ports to a pod. This command requires the node to have 'socat' installed",
+        "options": [
+          {
+            "long": "address",
+            "description": "addresses to listen on (comma separated). Only accepts IP addresses or localhost as a value. When localhost is supplied, kubectl will try to bind on both 127.0.",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "pod-running-timeout",
+            "description": "the length of time (like 5s, 2m, or 3h, higher than zero) to wait until at least one pod is running",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "[LOCAL_PORT:REMOTE_PORT]",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "proxy",
+        "description": "creates a proxy server or application-level gateway between localhost and the Kubernetes API Server. It also allows serving static content over specified HTTP p",
+        "options": [
+          {
+            "long": "accept-hosts",
+            "description": "regular expression for hosts that the proxy should accept",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "accept-paths",
+            "description": "regular expression for paths that the proxy should accept",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "address",
+            "description": "the IP address on which to serve on",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "api-prefix",
+            "description": "prefix to serve the proxied API under",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "disable-filter",
+            "description": "if true, disable request filtering in the proxy. This is dangerous, and can leave you vulnerable to XSRF attacks, when used with an accessible port",
+            "inherit": false
+          },
+          {
+            "long": "keepalive",
+            "description": "keepalive specifies the keep-alive period for an active network connection. Set to 0 to disable keepalive",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "p",
+            "long": "port",
+            "description": "the port on which to run the proxy. Set to 0 to pick a random port",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "reject-methods",
+            "description": "regular expression for HTTP methods that the proxy should reject (example --reject-methods='POST,PUT,PATCH')",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "reject-paths",
+            "description": "regular expression for paths that the proxy should reject. Paths specified here will be rejected even accepted by --accept-paths",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "u",
+            "long": "unix-socket",
+            "description": "unix socket on which to run the proxy",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "w",
+            "long": "www",
+            "description": "also serve static files from the given directory under the specified prefix",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "P",
+            "long": "www-prefix",
+            "description": "prefix to serve static files under, if static file directory is specified",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          }
+        ]
+      },
+      {
+        "name": "replace",
+        "description": "replace a resource by filename or stdin",
+        "options": [
+          {
+            "long": "cascade",
+            "description": "if true, cascade the deletion of the resources managed by this resource (e.g. Pods created by a ReplicationController). Default true",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "description": "if true, immediately remove resources from API and bypass graceful deletion. Note that immediate deletion of some resources may result in inconsistency or data",
+            "inherit": false
+          },
+          {
+            "long": "grace-period",
+            "description": "period of time in seconds given to the resource to terminate gracefully. Ignored if negative. Set to 1 for immediate shutdown. Can only be set to 0 when --force",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "raw",
+            "description": "raw URI to PUT to the server. Uses the transport specified by the kubeconfig file",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "save-config",
+            "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+            "inherit": false
+          },
+          {
+            "long": "timeout",
+            "description": "the length of time to wait before giving up on a delete, zero means determine a timeout from the size of the object",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "validate",
+            "description": "if true, use a schema to validate the input before sending it",
+            "inherit": false
+          },
+          {
+            "long": "wait",
+            "description": "if true, wait for resources to be gone before returning. This waits for finalizers",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "rollout",
+        "description": "manage the rollout of a resource",
+        "subcommands": [
+          {
+            "name": "history",
+            "description": "view previous rollout revisions and configurations",
+            "options": [
+              {
+                "long": "revision",
+                "description": "see the details, including podTemplate of the revision specified",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              }
+            ]
+          },
+          {
+            "name": "pause",
+            "description": "mark the provided resource as paused"
+          },
+          {
+            "name": "restart",
+            "description": "restart a resource"
+          },
+          {
+            "name": "resume",
+            "description": "resume a paused resource"
+          },
+          {
+            "name": "status",
+            "description": "show the status of the rollout",
+            "options": [
+              {
+                "long": "revision",
+                "description": "pin to a specific revision for showing its status. Defaults to 0 (last revision)",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "timeout",
+                "description": "the length of time to wait before ending watch, zero means never. Any other values should contain a corresponding time unit (e.g. 1s, 2m, 3h)",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "short": "w",
+                "long": "watch",
+                "description": "watch the status of the rollout until it's done",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "undo",
+            "description": "rollback to a previous rollout",
+            "options": [
+              {
+                "long": "to_revision",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "timeout",
+                "description": "the length of time to wait before ending watch, zero means never. Any other values should contain a corresponding time unit (e.g. 1s, 2m, 3h)",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "create and run a particular image in a pod",
+        "options": [
+          {
+            "long": "annotations",
+            "description": "annotations to apply to the pod",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "attach",
+            "description": "if true, wait for the Pod to start running, and then attach to the Pod as if 'kubectl attach ...' were called. Default false, unless '-i/--stdin' is set, in whi",
+            "inherit": false
+          },
+          {
+            "long": "cascade",
+            "description": "must be \"background\", \"orphan\", or \"foreground\". Selects the deletion cascading strategy for the dependents (e.g. Pods created by a ReplicationController). Defa",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  "background",
+                  "orphan",
+                  "foreground"
+                ]
+              }
+            }
+          },
+          {
+            "long": "command",
+            "description": "if true and extra arguments are present, use them as the 'command' field in the container, rather than the 'args' field which is the default",
+            "inherit": false
+          },
+          {
+            "long": "env",
+            "description": "environment variables to set in the container",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "expose",
+            "description": "if true, service is created for the container(s) which are run",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "description": "if true, immediately remove resources from API and bypass graceful deletion. Note that immediate deletion of some resources may result in inconsistency or data",
+            "inherit": false
+          },
+          {
+            "long": "grace-period",
+            "description": "period of time in seconds given to the resource to terminate gracefully. Ignored if negative. Set to 1 for immediate shutdown. Can only be set to 0 when --force",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "hostport",
+            "description": "the host port mapping for the container port. To demonstrate a single-machine container",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "image",
+            "description": "the image for the container to run",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "image-pull-policy",
+            "description": "the image pull policy for the container. If left empty, this value will not be specified by the client and defaulted by the server",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "l",
+            "long": "labels",
+            "description": "comma separated labels to apply to the pod(s). Will override previous values",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "leave-stdin-open",
+            "description": "if the pod is started in interactive mode or with stdin, leave stdin open after the first attach completes. By default, stdin will be closed after the first att",
+            "inherit": false
+          },
+          {
+            "long": "limits",
+            "description": "the resource requirement limits for this container. For example, 'cpu=200m,memory=512Mi'. Note that server side components may assign limits depending on the se",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "overrides",
+            "description": "an inline JSON override for the generated object. If this is non-empty, it is used to override the generated object. Requires that the object supply a valid api",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "pod-running-timeout",
+            "description": "the length of time (like 5s, 2m, or 3h, higher than zero) to wait until at least one pod is running",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "port",
+            "description": "the port that this container exposes",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "quiet",
+            "description": "if true, suppress prompt messages",
+            "inherit": false
+          },
+          {
+            "long": "requests",
+            "description": "the resource requirement requests for this container. For example, 'cpu=100m,memory=256Mi'. Note that server side components may assign requests depending on th",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "restart",
+            "description": "the restart policy for this Pod. Legal values [Always, OnFailure, Never]. If set to 'Always' a deployment is created, if set to 'OnFailure' a job is created, if",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  "Always",
+                  "OnFailure",
+                  "Never"
+                ]
+              }
+            }
+          },
+          {
+            "long": "rm",
+            "description": "if true, delete resources created in this command for attached containers",
+            "inherit": false
+          },
+          {
+            "long": "save-config",
+            "description": "if true, the configuration of current object will be saved in its annotation. Otherwise, the annotation will be unchanged. This flag is useful when you want to",
+            "inherit": false
+          },
+          {
+            "long": "serviceaccount",
+            "description": "service account to set in the pod spec",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "i",
+            "long": "stdin",
+            "description": "keep stdin open on the container(s) in the pod, even if nothing is attached",
+            "inherit": false
+          },
+          {
+            "long": "timeout",
+            "description": "the length of time to wait before giving up on a delete, zero means determine a timeout from the size of the object",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "t",
+            "long": "tty",
+            "description": "allocated a TTY for each container in the pod",
+            "inherit": false
+          },
+          {
+            "long": "wait",
+            "description": "if true, wait for resources to be gone before returning. This waits for finalizers",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "NAME",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "scale",
+        "description": "set a new size for a Deployment, ReplicaSet, Replication Controller, or StatefulSet",
+        "options": [
+          {
+            "long": "all",
+            "description": "select all resources in the namespace of the specified resource types",
+            "inherit": false
+          },
+          {
+            "long": "current-replicas",
+            "description": "precondition for current size. Requires that the current size of the resource match this value in order to scale",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "replicas",
+            "description": "the new desired number of replicas. Required",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "timeout",
+            "description": "the length of time to wait before giving up on a scale operation, zero means don't wait. Any other values should contain a corresponding time unit (e.g. 1s, 2m,",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          }
+        ]
+      },
+      {
+        "name": "set",
+        "description": "configure application resources",
+        "subcommands": [
+          {
+            "name": "env",
+            "description": "update environment variables on a pod template",
+            "options": [
+              {
+                "long": "all",
+                "description": "if true, select all resources in the namespace of the specified resource types",
+                "inherit": false
+              },
+              {
+                "short": "c",
+                "long": "containers",
+                "description": "the names of containers in the selected pod templates to change - may use wildcards",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "short": "e",
+                "long": "env",
+                "description": "specify a key-value pair for an environment variable to set into each container",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "from",
+                "description": "the name of a resource from which to inject environment variables",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "keys",
+                "description": "comma-separated list of keys to import from specified resource",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "list",
+                "description": "if true, display the environment and any changes in the standard format. this flag will removed when we have kubectl view env",
+                "inherit": false
+              },
+              {
+                "long": "overwrite",
+                "description": "if true, allow environment to be overwritten, otherwise reject updates that overwrite existing environment",
+                "inherit": false
+              },
+              {
+                "long": "prefix",
+                "description": "prefix to append to variable names",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "resolve",
+                "description": "if true, show secret or configmap references when listing variables",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "KEY=VALUE",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "image",
+            "description": "update existing container image(s) of resources",
+            "options": [
+              {
+                "long": "all",
+                "description": "select all resources, including uninitialized ones, in the namespace of the specified resource types",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "CONTAINER_NAME=IMAGE_NAME",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "resources",
+            "description": "specify compute resource requirements (cpu, memory) for any resource that defines a pod template. If a pod is successfully scheduled, it is guaranteed the amoun",
+            "options": [
+              {
+                "long": "all",
+                "description": "select all resources, including uninitialized ones, in the namespace of the specified resource types",
+                "inherit": false
+              },
+              {
+                "short": "c",
+                "long": "containers",
+                "description": "the names of containers in the selected pod templates to change, all containers are selected by default - may use wildcards",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "limits",
+                "description": "the resource requirement requests for this container. For example, 'cpu=100m,memory=256Mi'. Note that server side components may assign requests depending on th",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "requests",
+                "description": "the resource requirement requests for this container. For example, 'cpu=100m,memory=256Mi'. Note that server side components may assign requests depending on th",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              }
+            ]
+          },
+          {
+            "name": "selector",
+            "description": "set the selector on a resource. Note that the new selector will overwrite the old selector if the resource had one prior to the invocation of 'set selector'",
+            "options": [
+              {
+                "long": "all",
+                "description": "select all resources in the namespace of the specified resource types",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "EXPRESSIONS",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "serviceaccount",
+            "description": "update ServiceAccount of pod template resources",
+            "options": [
+              {
+                "long": "all",
+                "description": "select all resources, including uninitialized ones, in the namespace of the specified resource types",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "subject",
+            "description": "update User, Group or ServiceAccount in a RoleBinding/ClusterRoleBinding",
+            "options": [
+              {
+                "long": "all",
+                "description": "select all resources, including uninitialized ones, in the namespace of the specified resource types",
+                "inherit": false
+              },
+              {
+                "long": "group",
+                "description": "groups to bind to the role",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "serviceaccount",
+                "description": "service accounts to bind to the role",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "taint",
+        "description": "update the taints on one or more nodes",
+        "options": [
+          {
+            "long": "all",
+            "description": "select all nodes in the cluster",
+            "inherit": false
+          },
+          {
+            "long": "overwrite",
+            "description": "if true, allow taints to be overwritten, otherwise reject taint updates that overwrite existing taints",
+            "inherit": false
+          },
+          {
+            "long": "validate",
+            "description": "if true, use a schema to validate the input before sending it",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "top",
+        "description": "display Resource (CPU/Memory/Storage) usage"
+      },
+      {
+        "name": "uncordon",
+        "description": "mark node as schedulable"
+      },
+      {
+        "name": "version",
+        "description": "print the client and server version information for the current context",
+        "options": [
+          {
+            "long": "client",
+            "description": "if true, shows client version only (no server required)",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "wait",
+        "description": "experimental: Wait for a specific condition on one or many resources",
+        "options": [
+          {
+            "long": "all",
+            "description": "select all resources in the namespace of the specified resource types",
+            "inherit": false
+          },
+          {
+            "short": "A",
+            "long": "all-namespaces",
+            "description": "if present, list the requested object(s) across all namespaces. Namespace in current context is ignored even if specified with --namespace",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "for",
+            "description": "the condition to wait on: [delete|condition=condition-name]",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "timeout",
+            "description": "the length of time to wait before giving up. Zero means check once and don't wait, negative means wait for a week",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
