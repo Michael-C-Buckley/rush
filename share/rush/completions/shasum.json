@@ -1,0 +1,142 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "shasum",
+    "description": "compute SHA checksums",
+    "options": [
+      {
+        "short": "a",
+        "long": "algorithm",
+        "description": "select SHA algorithm",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": {
+            "values": [
+              {
+                "value": "1",
+                "description": "sHA-1 (default)"
+              },
+              {
+                "value": "224",
+                "description": "sHA-224"
+              },
+              {
+                "value": "256",
+                "description": "sHA-256"
+              },
+              {
+                "value": "384",
+                "description": "sHA-384"
+              },
+              {
+                "value": "512",
+                "description": "sHA-512"
+              },
+              {
+                "value": "512224",
+                "description": "sHA-512/224"
+              },
+              {
+                "value": "512256",
+                "description": "sHA-512/256"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "b",
+        "long": "binary",
+        "description": "read in binary mode",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "long": "check",
+        "description": "read SHA sums from the FILEs and check them",
+        "inherit": false
+      },
+      {
+        "long": "tag",
+        "description": "create a BSD-style checksum",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "long": "text",
+        "description": "read in text mode (default)",
+        "inherit": false
+      },
+      {
+        "short": "U",
+        "long": "UNIVERSAL",
+        "description": "read in Universal Newlines mode - produces same digest on Windows/Unix/Mac",
+        "inherit": false
+      },
+      {
+        "short": "0",
+        "long": "01",
+        "description": "read in BITS mode - ASCII '0' as 0-bit, ASCII '1' as 1-bit, others ignored",
+        "inherit": false
+      },
+      {
+        "long": "ignore-missing",
+        "description": "don't fail or report status for missing files",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "don't print OK for each successfully verified file",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "status",
+        "description": "don't output anything, status code shows success",
+        "inherit": false
+      },
+      {
+        "long": "strict",
+        "description": "exit non-zero for improperly formatted checksum lines",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "warn",
+        "description": "warn about improperly formatted checksum lines",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "display help and exit",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "output version information and exit",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "FILE",
+          "description": "file to checksum",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
