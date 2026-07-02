@@ -1,0 +1,1062 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "react-native",
+    "description": "use the React Native CLI",
+    "options": [
+      {
+        "long": "version",
+        "description": "print CLI version",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "description": "increase logging verbosity",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "output usage information",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "doctor",
+        "description": "diagnose and fix common Node.js, iOS, Android & React Native issues",
+        "options": [
+          {
+            "long": "fix",
+            "description": "attempt to fix all diagnosed issues",
+            "inherit": false
+          },
+          {
+            "long": "contributor",
+            "description": "add healthchecks required to installations required for contributing to React Native",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "bundle",
+        "description": "builds the javascript bundle for offline use",
+        "options": [
+          {
+            "long": "entry-file",
+            "description": "path to the root JS file, either absolute or relative to JS root",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "platform",
+            "description": "either \"ios\" or \"android\" (default: \"ios\")",
+            "inherit": false,
+            "value": {
+              "name": "platform",
+              "provider": "react-native.platforms"
+            }
+          },
+          {
+            "long": "transformer",
+            "description": "specify a custom transformer to be used",
+            "inherit": false,
+            "value": {
+              "name": "transformer"
+            }
+          },
+          {
+            "long": "dev",
+            "description": "if false, warnings are disabled and the bundle is minified (default: true)",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "required": false,
+              "style": "optional",
+              "provider": "react-native.booleans"
+            }
+          },
+          {
+            "long": "minify",
+            "description": "allows overriding whether bundle is minified. This defaults to false if dev is true, and true if dev is false. Disabling minification can be useful for speeding",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "required": false,
+              "style": "optional",
+              "provider": "react-native.booleans"
+            }
+          },
+          {
+            "long": "bundle-output",
+            "description": "file name where to store the resulting bundle, ex. /tmp/groups.bundle",
+            "inherit": false,
+            "value": {
+              "name": "bundle-file"
+            }
+          },
+          {
+            "long": "bundle-encoding",
+            "description": "encoding the bundle should be written in (https://nodejs.org/api/buffer.html#buffer_buffer). (default: \"utf8\")",
+            "inherit": false,
+            "value": {
+              "name": "encoding",
+              "provider": "react-native.encodings"
+            }
+          },
+          {
+            "long": "max-workers",
+            "description": "specifies the maximum number of workers the worker-pool will spawn for transforming files. This defaults to the number of the cores available on your machine",
+            "inherit": false,
+            "value": {
+              "name": "number-of-workers"
+            }
+          },
+          {
+            "long": "sourcemap-output",
+            "description": "file name where to store the sourcemap file for resulting bundle, ex. /tmp/groups.map",
+            "inherit": false,
+            "value": {
+              "name": "sourcemap-output"
+            }
+          },
+          {
+            "long": "sourcemap-sources-root",
+            "description": "path to make sourcemap's sources entries relative to, ex. /root/dir",
+            "inherit": false,
+            "value": {
+              "name": "root",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "sourcemap-use-absolute-path",
+            "description": "report SourceMapURL using its full path",
+            "inherit": false
+          },
+          {
+            "long": "assets-dest",
+            "description": "directory name where to store assets referenced in the bundle",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "unstable-transform-profile",
+            "description": "experimental, transform JS for a specific JS engine. Currently supported: hermes, hermes-canary, default",
+            "inherit": false,
+            "value": {
+              "name": "transform-profile",
+              "provider": {
+                "values": [
+                  {
+                    "value": "hermes"
+                  },
+                  {
+                    "value": "hermes-canary"
+                  },
+                  {
+                    "value": "default"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "reset-cache",
+            "description": "removes cached files",
+            "inherit": false
+          },
+          {
+            "long": "read-global-cache",
+            "description": "try to fetch transformed JS code from the global cache, if configured",
+            "inherit": false
+          },
+          {
+            "long": "config",
+            "description": "path to the CLI configuration file",
+            "inherit": false,
+            "value": {
+              "name": "string",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "initialize a new React Native project named <projectName> in a directory of the same name",
+        "options": [
+          {
+            "long": "version",
+            "description": "shortcut for `--template react-native@version`",
+            "inherit": false,
+            "value": {
+              "name": "version"
+            }
+          },
+          {
+            "long": "template",
+            "description": "uses a custom template. Valid arguments are the ones supported by `yarn add [package]` or `npm install [package]`, if you are using `--npm` option",
+            "inherit": false,
+            "value": {
+              "name": "template"
+            }
+          },
+          {
+            "long": "npm",
+            "description": "forces using npm for initialization",
+            "inherit": false
+          },
+          {
+            "long": "directory",
+            "description": "uses a custom directory instead of `<projectName>`",
+            "inherit": false,
+            "value": {
+              "name": "string",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "title",
+            "description": "uses a custom app title name for application",
+            "inherit": false,
+            "value": {
+              "name": "title"
+            }
+          },
+          {
+            "long": "skip-install",
+            "description": "skips dependencies installation step",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "projectname",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "uninstall",
+        "description": "uninstall and unlink native dependencies",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "packagename",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "start",
+        "description": "starts the webserver",
+        "options": [
+          {
+            "long": "port",
+            "description": "port on which to listen to",
+            "inherit": false,
+            "value": {
+              "name": "free-port"
+            }
+          },
+          {
+            "long": "host",
+            "description": "change the default host",
+            "inherit": false,
+            "value": {
+              "name": "new-host"
+            }
+          },
+          {
+            "long": "projectRoot",
+            "description": "path to a custom project root",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "watchFolders",
+            "description": "specify any additional folders to be added to the watch list",
+            "inherit": false,
+            "value": {
+              "name": "folders",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "assetPlugins",
+            "description": "specify any additional asset plugins to be used by the packager by full filepath",
+            "inherit": false,
+            "value": {
+              "name": "plugins",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "sourceExts",
+            "description": "specify any additional source extensions to be used by the packager",
+            "inherit": false,
+            "value": {
+              "name": "sourceexts",
+              "provider": {
+                "values": [
+                  {
+                    "value": "js"
+                  },
+                  {
+                    "value": "css"
+                  },
+                  {
+                    "value": "png"
+                  },
+                  {
+                    "value": "xml"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "max-workers",
+            "description": "specifies the maximum number of workers the worker-pool will spawn for transforming files. This defaults to the number of the cores available on your machine",
+            "inherit": false,
+            "value": {
+              "name": "number-of-workers"
+            }
+          },
+          {
+            "long": "transformer",
+            "description": "specify a custom transformer to be used",
+            "inherit": false,
+            "value": {
+              "name": "transformer"
+            }
+          },
+          {
+            "long": "reset-cache",
+            "aliases": [
+              "resetCache"
+            ],
+            "description": "removes cached files",
+            "inherit": false
+          },
+          {
+            "long": "custom-log-reporter-path",
+            "aliases": [
+              "customLogReporterPath"
+            ],
+            "description": "path to a JavaScript file that exports a log reporter as a replacement for TerminalReporter",
+            "inherit": false,
+            "value": {
+              "name": "logfile",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "enables logging",
+            "inherit": false
+          },
+          {
+            "long": "https",
+            "description": "enables https connections to the server",
+            "inherit": false
+          },
+          {
+            "long": "key",
+            "description": "path to custom SSL key",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert",
+            "description": "path to custom SSL cert",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "config",
+            "description": "path to the CLI configuration file",
+            "inherit": false,
+            "value": {
+              "name": "string",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "no-interactive",
+            "description": "disables interactive mode",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "ram-bundle",
+        "description": "builds javascript as a \"Random Access Module\" bundle for offline use",
+        "options": [
+          {
+            "long": "entry-file",
+            "description": "path to the root JS file, either absolute or relative to JS root",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "platform",
+            "description": "either \"ios\" or \"android\" (default: \"ios\")",
+            "inherit": false,
+            "value": {
+              "name": "platform",
+              "provider": "react-native.platforms"
+            }
+          },
+          {
+            "long": "transformer",
+            "description": "specify a custom transformer to be used",
+            "inherit": false,
+            "value": {
+              "name": "transformer"
+            }
+          },
+          {
+            "long": "dev",
+            "description": "if false, warnings are disabled and the bundle is minified (default: true)",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "required": false,
+              "style": "optional",
+              "provider": "react-native.booleans"
+            }
+          },
+          {
+            "long": "minify",
+            "description": "allows overriding whether bundle is minified. This defaults to false if dev is true, and true if dev is false. Disabling minification can be useful for speeding",
+            "inherit": false,
+            "value": {
+              "name": "boolean",
+              "required": false,
+              "style": "optional",
+              "provider": "react-native.booleans"
+            }
+          },
+          {
+            "long": "bundle-output",
+            "description": "file name where to store the resulting bundle, ex. /tmp/groups.bundle",
+            "inherit": false,
+            "value": {
+              "name": "output-file"
+            }
+          },
+          {
+            "long": "bundle-encoding",
+            "description": "encoding the bundle should be written in (https://nodejs.org/api/buffer.html#buffer_buffer). (default: \"utf8\")",
+            "inherit": false,
+            "value": {
+              "name": "encoding",
+              "provider": "react-native.encodings"
+            }
+          },
+          {
+            "long": "max-workers",
+            "description": "specifies the maximum number of workers the worker-pool will spawn for transforming files. This defaults to the number of the cores available on your machine",
+            "inherit": false,
+            "value": {
+              "name": "number-of-workers"
+            }
+          },
+          {
+            "long": "sourcemap-output",
+            "description": "file name where to store the sourcemap file for resulting bundle, ex. /tmp/groups.map",
+            "inherit": false,
+            "value": {
+              "name": "sourcemap-output"
+            }
+          },
+          {
+            "long": "sourcemap-sources-root",
+            "description": "path to make sourcemap's sources entries relative to, ex. /root/dir",
+            "inherit": false,
+            "value": {
+              "name": "root",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "sourcemap-use-absolute-path",
+            "description": "report SourceMapURL using its full path",
+            "inherit": false
+          },
+          {
+            "long": "assets-dest",
+            "description": "directory name where to store assets referenced in the bundle",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "unstable-transform-profile",
+            "description": "experimental, transform JS for a specific JS engine. Currently supported: hermes, hermes-canary, default",
+            "inherit": false,
+            "value": {
+              "name": "transform-profile",
+              "provider": {
+                "values": [
+                  {
+                    "value": "hermes"
+                  },
+                  {
+                    "value": "hermes-canary"
+                  },
+                  {
+                    "value": "default"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "reset-cache",
+            "description": "removes cached files",
+            "inherit": false
+          },
+          {
+            "long": "read-global-cache",
+            "description": "try to fetch transformed JS code from the global cache, if configured",
+            "inherit": false
+          },
+          {
+            "long": "config",
+            "description": "path to the CLI configuration file",
+            "inherit": false,
+            "value": {
+              "name": "string",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "indexed-ram-bundle",
+            "description": "force the \"Indexed RAM\" bundle file format, even when building for android",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "link",
+        "description": "links assets and optionally native modules",
+        "options": [
+          {
+            "long": "platforms",
+            "description": "scope linking to specified platforms",
+            "inherit": false,
+            "value": {
+              "name": "list",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "all",
+            "description": "link all native modules and assets",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "packagename",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "upgrade",
+        "description": "upgrade your app's template files to the specified or latest npm version using `rn-diff-purge` project. Only valid semver versions are allowed",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "info",
+        "description": "get relevant version info about OS, toolchain and libraries",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "install and link native dependencies",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "packagename",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "config",
+        "description": "print CLI configuration",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "unlink",
+        "description": "unlink native dependency",
+        "options": [
+          {
+            "long": "platforms",
+            "description": "scope unlinking to specified platforms",
+            "inherit": false,
+            "value": {
+              "name": "list",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "packagename",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "log-ios",
+        "description": "starts iOS device syslog tail",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "profile-hermes",
+        "description": "pull and convert a Hermes tracing profile to Chrome tracing profile, then store it in the directory <destinationDir> of the local machine",
+        "options": [
+          {
+            "long": "filename",
+            "description": "file name of the profile to be downloaded, eg. sampling-profiler-trace8593107139682635366.cpuprofile",
+            "inherit": false,
+            "value": {
+              "name": "profile",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "raw",
+            "description": "pulls the original Hermes tracing profile without any transformation",
+            "inherit": false
+          },
+          {
+            "long": "sourcemap-path",
+            "description": "the local path to your source map file, eg. /tmp/sourcemap.json",
+            "inherit": false,
+            "value": {
+              "name": "sourcemap-path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "generate-sourcemap",
+            "description": "generates the JS bundle and source map",
+            "inherit": false
+          },
+          {
+            "long": "port",
+            "description": "default: \"8081\"",
+            "inherit": false,
+            "value": {
+              "name": "free-port"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "destination-dir",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "log-android",
+        "description": "starts logkitty",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "run-android",
+        "description": "builds your app and starts it on a connected Android emulator or device",
+        "options": [
+          {
+            "long": "root",
+            "description": "[DEPRECATED - root is discovered automatically] Override the root directory for the android build (which contains the android directory) (default: \"\")",
+            "inherit": false,
+            "value": {
+              "name": "root",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "variant",
+            "description": "specify your app's build variant (default: \"debug\")",
+            "inherit": false,
+            "value": {
+              "name": "variant",
+              "provider": {
+                "values": [
+                  {
+                    "value": "debug"
+                  },
+                  {
+                    "value": "release"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "appFolder",
+            "description": "[DEPRECATED \u2013 use \"project.android.appName\" in react-native.config.js] Specify a different application folder name for the android source. If not, we assume is ",
+            "inherit": false,
+            "value": {
+              "name": "string",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "appId",
+            "description": "specify an applicationId to launch after build. If not specified, `package` from AndroidManifest.xml will be used. (default: \"\")",
+            "inherit": false,
+            "value": {
+              "name": "appid"
+            }
+          },
+          {
+            "long": "appIdSuffix",
+            "description": "specify an applicationIdSuffix to launch after build. (default: \"\")",
+            "inherit": false,
+            "value": {
+              "name": "appidsuffix"
+            }
+          },
+          {
+            "long": "main-activity",
+            "description": "name of the activity to start (default: \"MainActivity\")",
+            "inherit": false,
+            "value": {
+              "name": "main-activity"
+            }
+          },
+          {
+            "long": "deviceId",
+            "description": "builds your app and starts it on a specific device/simulator with the given device id (listed by running \"adb devices\" on the command line)",
+            "inherit": false,
+            "value": {
+              "name": "deviceid"
+            }
+          },
+          {
+            "long": "no-packager",
+            "description": "do not launch packager while building",
+            "inherit": false
+          },
+          {
+            "long": "port",
+            "description": "default: 8081",
+            "inherit": false,
+            "value": {
+              "name": "free-port"
+            }
+          },
+          {
+            "long": "terminal",
+            "description": "launches the Metro Bundler in a new window using the specified terminal path. (default: \"Apple_Terminal\")",
+            "inherit": false,
+            "value": {
+              "name": "terminal-path"
+            }
+          },
+          {
+            "long": "tasks",
+            "description": "run custom Gradle tasks. By default it's \"installDebug\"",
+            "inherit": false,
+            "value": {
+              "name": "task-list"
+            }
+          },
+          {
+            "long": "no-jetifier",
+            "description": "do not run \"jetifier\" \u2013 the AndroidX transition tool. By default it runs before Gradle to ease working with libraries that don't support AndroidX yet. See more ",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "run-ios",
+        "description": "builds your app and starts it on iOS simulator",
+        "options": [
+          {
+            "long": "simulator",
+            "description": "explicitly set simulator to use. Optionally include iOS version between parenthesis at the end to match an exact version: \"iPhone 6 (10.0)\" (default: \"iPhone 12",
+            "inherit": false,
+            "value": {
+              "name": "simulator"
+            }
+          },
+          {
+            "long": "configuration",
+            "description": "explicitly set the scheme configuration to use (default: \"Debug\")",
+            "inherit": false,
+            "value": {
+              "name": "config-scheme",
+              "provider": "react-native.configurations"
+            }
+          },
+          {
+            "long": "scheme",
+            "description": "explicitly set Xcode scheme to use",
+            "inherit": false,
+            "value": {
+              "name": "scheme"
+            }
+          },
+          {
+            "long": "project-path",
+            "description": "path relative to project root where the Xcode project (.xcodeproj) lives. (default: \"ios\")",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "device",
+            "description": "explicitly set device to use by name",
+            "inherit": false,
+            "value": {
+              "name": "device-name",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "udid",
+            "description": "explicitly set device to use by udid",
+            "inherit": false,
+            "value": {
+              "name": "udid"
+            }
+          },
+          {
+            "long": "no-packager",
+            "description": "do not launch packager while building",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "do not use xcpretty even if installed",
+            "inherit": false
+          },
+          {
+            "long": "port",
+            "description": "default: 8081",
+            "inherit": false,
+            "value": {
+              "name": "free-port"
+            }
+          },
+          {
+            "long": "terminal",
+            "description": "launches the Metro Bundler in a new window using the specified terminal path. (default: \"Apple_Terminal\")",
+            "inherit": false,
+            "value": {
+              "name": "terminal-path"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "react-native.platforms": {
+        "values": [
+          "android",
+          "ios"
+        ]
+      },
+      "react-native.booleans": {
+        "values": [
+          "true",
+          "false"
+        ]
+      },
+      "react-native.encodings": {
+        "values": [
+          "utf8",
+          "utf16le",
+          "latin1"
+        ]
+      },
+      "react-native.source-exts": {
+        "values": [
+          "js",
+          "css",
+          "png",
+          "xml"
+        ]
+      },
+      "react-native.configurations": {
+        "values": [
+          "Debug",
+          "Release"
+        ]
+      }
+    }
+  }
+}
