@@ -1,0 +1,6 @@
+__rush_complete_trap_signals() {
+  command kill -l 2>/dev/null | tr ' )' '\n\n' | while IFS= read -r signal; do
+    case "$signal" in ''|*[!A-Za-z0-9_+-]*) continue ;; esac
+    rush_complete candidate "$signal" --kind plain --description signal
+  done
+}

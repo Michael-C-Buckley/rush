@@ -1,0 +1,43 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "trap",
+    "description": "execute commands when signals are received",
+    "options": [
+      {
+        "long": "print",
+        "short": "p",
+        "description": "prints all defined signal handlers",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "displays help about using this command",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "function-name",
+          "index": 0,
+          "description": "handler command"
+        },
+        {
+          "name": "signal",
+          "index": 1,
+          "description": "signal name or number",
+          "repeatable": true,
+          "provider": "trap.signals"
+        }
+      ]
+    },
+    "providers": {
+      "trap.signals": {
+        "function": "__rush_complete_trap_signals"
+      }
+    }
+  }
+}
