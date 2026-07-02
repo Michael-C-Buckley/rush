@@ -1,0 +1,456 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "prettier",
+    "description": "format code with Prettier",
+    "options": [
+      {
+        "short": "c",
+        "long": "check",
+        "description": "check formatting",
+        "inherit": false,
+        "value": {
+          "name": "file,-dir,-or-glob",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "short": "l",
+        "long": "list-different",
+        "description": "list unformatted files",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "write",
+        "description": "write formatted files",
+        "priority": -10,
+        "inherit": false
+      },
+      {
+        "long": "arrow-parens",
+        "description": "Include parentheses around a sole arrow function parameter",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": "prettier.arrow-parens"
+        }
+      },
+      {
+        "long": "no-bracket-spacing",
+        "description": "Do not print spaces between brackets",
+        "inherit": false
+      },
+      {
+        "long": "embedded-language-formatting",
+        "description": "Control how Prettier formats quoted code embedded in the file",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": "prettier.embedded-language-formatting"
+        }
+      },
+      {
+        "long": "end-of-line",
+        "description": "Which end of line characters to apply",
+        "inherit": false,
+        "value": {
+          "name": "choice",
+          "provider": "prettier.end-of-line"
+        }
+      },
+      {
+        "long": "html-whitespace-sensitivity",
+        "description": "How to handle whitespaces in HTML",
+        "inherit": false,
+        "value": {
+          "name": "choice",
+          "provider": "prettier.html-whitespace-sensitivity"
+        }
+      },
+      {
+        "long": "jsx-bracket-same-line",
+        "description": "Put > on the last line instead of at a new line",
+        "inherit": false
+      },
+      {
+        "long": "jsx-single-quote",
+        "description": "Use single quotes in JSX",
+        "inherit": false
+      },
+      {
+        "long": "parser",
+        "description": "Which parser to use",
+        "inherit": false,
+        "value": {
+          "name": "parser",
+          "provider": "prettier.parser"
+        }
+      },
+      {
+        "long": "print-width",
+        "description": "set print width",
+        "inherit": false,
+        "value": {
+          "name": "int"
+        }
+      },
+      {
+        "long": "prose-wrap",
+        "description": "How to wrap prose",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "prettier.prose-wrap"
+        }
+      },
+      {
+        "long": "quote-props",
+        "description": "Change when properties in objects are quoted",
+        "inherit": false,
+        "value": {
+          "name": "when",
+          "provider": "prettier.quote-props"
+        }
+      },
+      {
+        "long": "no-semi",
+        "description": "Do not print semicolons, except at the beginning of lines which may need them",
+        "inherit": false
+      },
+      {
+        "long": "single-quote",
+        "description": "Use single quotes instead of double quotes",
+        "inherit": false
+      },
+      {
+        "long": "tab-width",
+        "description": "set tab width",
+        "inherit": false,
+        "value": {
+          "name": "int"
+        }
+      },
+      {
+        "long": "trailing-comma",
+        "description": "Print trailing commas wherever possible when multi-line",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": "prettier.trailing-comma"
+        }
+      },
+      {
+        "long": "use-tabs",
+        "description": "Indent with tabs instead of spaces",
+        "inherit": false
+      },
+      {
+        "long": "vue-indent-script-and-style",
+        "description": "Indent script and style tags in Vue files",
+        "inherit": false
+      },
+      {
+        "long": "config",
+        "description": "set config file",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        },
+        "excludes": [
+          "--no-config"
+        ]
+      },
+      {
+        "long": "no-config",
+        "description": "ignore config files",
+        "inherit": false,
+        "excludes": [
+          "--config"
+        ]
+      },
+      {
+        "long": "config-precedence",
+        "description": "Define in which order config files and CLI options should be evaluated",
+        "inherit": false,
+        "value": {
+          "name": "precedence",
+          "provider": "prettier.config-precedence"
+        }
+      },
+      {
+        "long": "no-editorconfig",
+        "description": "Don't take .editorconfig into account when parsing configuration",
+        "inherit": false
+      },
+      {
+        "long": "find-config-path",
+        "description": "find config path for file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "ignore-path",
+        "description": "set ignore file",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "plugin",
+        "description": "add plugin directory",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "plugin-search-dir",
+        "description": "set plugin search directory",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "with-node-modules",
+        "description": "Process files inside 'node_modules' directory",
+        "inherit": false
+      },
+      {
+        "long": "cursor-offset",
+        "description": "set cursor offset",
+        "inherit": false,
+        "value": {
+          "name": "int"
+        },
+        "excludes": [
+          "--range-start",
+          "--range-end"
+        ]
+      },
+      {
+        "long": "range-end",
+        "description": "set range end",
+        "inherit": false,
+        "value": {
+          "name": "int"
+        },
+        "excludes": [
+          "--cursor-offset"
+        ]
+      },
+      {
+        "long": "range-start",
+        "description": "set range start",
+        "inherit": false,
+        "value": {
+          "name": "int"
+        }
+      },
+      {
+        "long": "no-color",
+        "description": "Do not colorize error messages",
+        "inherit": false
+      },
+      {
+        "long": "file-info",
+        "description": "print file info as JSON",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false,
+        "value": {
+          "name": "flag",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "short": "u",
+        "long": "ignore-unknown",
+        "description": "ignore unknown files",
+        "inherit": false
+      },
+      {
+        "long": "insert-pragma",
+        "description": "Insert @format pragma into file's first docblock comment",
+        "inherit": false
+      },
+      {
+        "long": "loglevel",
+        "description": "What level of logs to report",
+        "inherit": false,
+        "value": {
+          "name": "level",
+          "provider": "prettier.loglevel"
+        }
+      },
+      {
+        "long": "require-pragma",
+        "description": "Require either '@prettier' or '@format' to be present in the file's first docblock comment in order for it to be formatted",
+        "inherit": false
+      },
+      {
+        "long": "stdin-filepath",
+        "description": "Path to the file to pretend that stdin comes from",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "support-info",
+        "description": "Print support information as JSON",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "long": "debug-check",
+        "description": "check formatting correctness",
+        "inherit": false
+      },
+      {
+        "long": "no-error-on-unmatched-pattern",
+        "description": "ignore unmatched patterns",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "path",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 0,
+          "repeatable": true,
+          "description": "file, directory, or glob"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "prettier.arrow-parens": {
+        "values": [
+          "always",
+          "avoid"
+        ]
+      },
+      "prettier.embedded-language-formatting": {
+        "values": [
+          "auto",
+          "off"
+        ]
+      },
+      "prettier.end-of-line": {
+        "values": [
+          "lf",
+          "crlf",
+          "cr",
+          "auto"
+        ]
+      },
+      "prettier.html-whitespace-sensitivity": {
+        "values": [
+          "css",
+          "strict",
+          "ignore"
+        ]
+      },
+      "prettier.parser": {
+        "values": [
+          "flow",
+          "babel",
+          "babel-flow",
+          "babel-ts",
+          "typescript",
+          "espree",
+          "meriyah",
+          "css",
+          "less",
+          "scss",
+          "json",
+          "json5",
+          "json-stringify",
+          "graphql",
+          "markdown",
+          "mdx",
+          "vue",
+          "yaml",
+          "html",
+          "angular",
+          "lwc"
+        ]
+      },
+      "prettier.prose-wrap": {
+        "values": [
+          "always",
+          "never",
+          "preserve"
+        ]
+      },
+      "prettier.quote-props": {
+        "values": [
+          "as-needed",
+          "consistent",
+          "preserve"
+        ]
+      },
+      "prettier.trailing-comma": {
+        "values": [
+          "es5",
+          "none",
+          "all"
+        ]
+      },
+      "prettier.config-precedence": {
+        "values": [
+          "cli-override",
+          "file-override",
+          "prefer-file"
+        ]
+      },
+      "prettier.loglevel": {
+        "values": [
+          "silent",
+          "error",
+          "warn",
+          "log",
+          "debug"
+        ]
+      }
+    }
+  }
+}
