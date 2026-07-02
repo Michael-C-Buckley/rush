@@ -1,0 +1,1347 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "osqueryi",
+    "description": "query the operating system with sql",
+    "options": [
+      {
+        "long": "flagfile",
+        "description": "Line-delimited file of additional flags",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "D",
+        "description": "Run as a daemon process",
+        "inherit": false
+      },
+      {
+        "long": "S",
+        "description": "Run as a shell process",
+        "inherit": false
+      },
+      {
+        "long": "alarm_timeout",
+        "description": "Seconds to allow for shutdown. Minimum is 10",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "carver_block_size",
+        "description": "Size of blocks used for POSTing data back to remote endpoints",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "carver_compression",
+        "description": "Compress archives using zstd prior to upload (default false)",
+        "inherit": false
+      },
+      {
+        "long": "carver_continue_endpoint",
+        "description": "TLS/HTTPS endpoint that receives carved content after session creation",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "carver_disable_function",
+        "description": "Disable the osquery file carver function (default true)",
+        "inherit": false
+      },
+      {
+        "long": "carver_expiry",
+        "description": "Seconds to store successful carve result metadata (in carves table)",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "carver_start_endpoint",
+        "description": "TLS/HTTPS init endpoint for forensic carver",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "config_accelerated_refresh",
+        "description": "Interval to wait if reading a configuration fails",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "config_check",
+        "description": "Check the format of an osquery config and exit",
+        "inherit": false
+      },
+      {
+        "long": "config_dump",
+        "description": "Dump the contents of the configuration, then exit",
+        "inherit": false
+      },
+      {
+        "long": "config_enable_backup",
+        "description": "Backup config and use it when refresh fails",
+        "inherit": false
+      },
+      {
+        "long": "config_path",
+        "description": "Path to JSON config file",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "config_plugin",
+        "description": "Config plugin name",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "config_refresh",
+        "description": "Optional interval in seconds to re-read configuration",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "config_tls_endpoint",
+        "description": "TLS/HTTPS endpoint for config retrieval",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "config_tls_max_attempts",
+        "description": "Number of attempts to retry a TLS config request",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "daemonize",
+        "description": "Attempt to daemonize (POSIX only)",
+        "inherit": false
+      },
+      {
+        "long": "database_dump",
+        "description": "Dump the contents of the backing store",
+        "inherit": false
+      },
+      {
+        "long": "database_path",
+        "description": "If using a disk-based backing store, specify a path",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "disable_carver",
+        "description": "Disable the osquery file carver (default true)",
+        "inherit": false
+      },
+      {
+        "long": "disable_enrollment",
+        "description": "Disable enrollment functions on related config/logger plugins",
+        "inherit": false
+      },
+      {
+        "long": "disable_extensions",
+        "description": "Disable extension API",
+        "inherit": false
+      },
+      {
+        "long": "disable_reenrollment",
+        "description": "Disable re-enrollment attempts if related plugins return invalid",
+        "inherit": false
+      },
+      {
+        "long": "disable_tables",
+        "description": "Comma-delimited list of table names to be disabled",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "osqueryi.tables"
+        }
+      },
+      {
+        "long": "disable_watchdog",
+        "description": "Disable userland watchdog process",
+        "inherit": false
+      },
+      {
+        "long": "enable_extensions_watchdog",
+        "description": "Enable userland watchdog for extensions processes",
+        "inherit": false
+      },
+      {
+        "long": "enable_tables",
+        "description": "Comma-delimited list of table names to be enabled",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "osqueryi.tables"
+        }
+      },
+      {
+        "long": "enroll_always",
+        "description": "On startup, send a new enrollment request",
+        "inherit": false
+      },
+      {
+        "long": "enroll_secret_env",
+        "description": "Name of environment variable holding enrollment-auth secret",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "enroll_secret_path",
+        "description": "Path to an optional client enrollment-auth secret",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "enroll_tls_endpoint",
+        "description": "TLS/HTTPS endpoint for client enrollment",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "extensions_autoload",
+        "description": "Optional path to a list of autoloaded & managed extensions",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "extensions_interval",
+        "description": "Seconds delay between connectivity checks",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "extensions_require",
+        "description": "Comma-separated list of required extensions",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "extensions_socket",
+        "description": "Path to the extensions UNIX domain socket",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "extensions_timeout",
+        "description": "Seconds to wait for autoloaded extensions",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "force",
+        "description": "Force osqueryd to kill previously-running daemons",
+        "inherit": false
+      },
+      {
+        "long": "install",
+        "description": "Install osqueryd as a service",
+        "inherit": false
+      },
+      {
+        "long": "logger_mode",
+        "description": "Octal mode for log files (default '0640')",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "logger_plugin",
+        "description": "Logger plugin name",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "logger_stderr",
+        "description": "Write status logs to stderr",
+        "inherit": false
+      },
+      {
+        "long": "logtostderr",
+        "description": "Log messages to stderr in addition to the logger plugin(s)",
+        "inherit": false
+      },
+      {
+        "long": "pidfile",
+        "description": "Path to the daemon pidfile mutex",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "proxy_hostname",
+        "description": "Optional HTTP proxy hostname",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "stderrthreshold",
+        "description": "Stderr log level threshold",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "tls_client_cert",
+        "description": "Optional path to a TLS client-auth PEM certificate",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "tls_client_key",
+        "description": "Optional path to a TLS client-auth PEM private key",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "tls_enroll_max_attempts",
+        "description": "The total number of attempts that will be made to the enroll endpoint if a request fails, 0 for infinite",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "tls_enroll_max_interval",
+        "description": "Maximum wait time in seconds between enroll retry attempts",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "tls_hostname",
+        "description": "TLS/HTTPS hostname for Config, Logger, and Enroll plugins",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "tls_server_certs",
+        "description": "Optional path to a TLS server PEM certificate(s) bundle",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "tls_session_reuse",
+        "description": "Reuse TLS session sockets",
+        "inherit": false
+      },
+      {
+        "long": "tls_session_timeout",
+        "description": "TLS session keep alive timeout in seconds",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "uninstall",
+        "description": "Uninstall osqueryd as a service",
+        "inherit": false
+      },
+      {
+        "long": "watchdog_delay",
+        "description": "Initial delay in seconds before watchdog starts",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "watchdog_forced_shutdown_delay",
+        "description": "Seconds that the watchdog will wait to do a forced shutdown after a graceful shutdown request, when a resource limit is hit",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "watchdog_latency_limit",
+        "description": "Override watchdog profile CPU utilization latency limit",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "watchdog_level",
+        "description": "Performance limit level",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": {
+            "values": [
+              {
+                "value": "0",
+                "description": "Normal"
+              },
+              {
+                "value": "1",
+                "description": "Restrictive"
+              },
+              {
+                "value": "-1",
+                "description": "Off"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "watchdog_memory_limit",
+        "description": "Override watchdog profile memory limit (e.g., 300, for 300MB)",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "watchdog_utilization_limit",
+        "description": "Override watchdog profile CPU utilization limit",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "audit_allow_config",
+        "description": "Allow the audit publisher to change auditing configuration",
+        "inherit": false
+      },
+      {
+        "long": "audit_allow_fim_events",
+        "description": "Allow the audit publisher to install filesystem-related rules",
+        "inherit": false
+      },
+      {
+        "long": "audit_allow_process_events",
+        "description": "Allow the audit publisher to install process-related rules",
+        "inherit": false
+      },
+      {
+        "long": "audit_allow_sockets",
+        "description": "Allow the audit publisher to install socket-related rules",
+        "inherit": false
+      },
+      {
+        "long": "audit_allow_user_events",
+        "description": "Allow the audit publisher to install user-related rules",
+        "inherit": false
+      },
+      {
+        "long": "augeas_lenses",
+        "description": "Directory that contains augeas lenses files",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "aws_access_key_id",
+        "description": "AWS access key ID",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "aws_debug",
+        "description": "Enable AWS SDK debug logging",
+        "inherit": false
+      },
+      {
+        "long": "aws_enable_proxy",
+        "description": "Enable proxying of HTTP/HTTPS requests in AWS client config",
+        "inherit": false
+      },
+      {
+        "long": "aws_firehose_endpoint",
+        "description": "Custom Firehose endpoint",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "aws_firehose_period",
+        "description": "Seconds between flushing logs to Firehose (default 10)",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "aws_firehose_stream",
+        "description": "Name of Firehose stream for logging",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "aws_kinesis_disable_log_status",
+        "description": "Disable status logs processing",
+        "inherit": false
+      },
+      {
+        "long": "aws_kinesis_endpoint",
+        "description": "Custom Kinesis endpoint",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "aws_kinesis_period",
+        "description": "Seconds between flushing logs to Kinesis (default 10)",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "aws_kinesis_random_partition_key",
+        "description": "Enable random kinesis partition keys",
+        "inherit": false
+      },
+      {
+        "long": "aws_kinesis_stream",
+        "description": "Name of Kinesis stream for logging",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "aws_profile_name",
+        "description": "AWS profile for authentication and region configuration",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "aws_proxy_host",
+        "description": "Proxy host for use in AWS client config",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "aws_proxy_password",
+        "description": "Proxy password for use in AWS client config",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "aws_proxy_port",
+        "description": "Proxy port for use in AWS client config",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "aws_proxy_scheme",
+        "description": "Proxy HTTP scheme for use in AWS client config (http or https, default https)",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "aws_proxy_username",
+        "description": "Proxy username for use in AWS client config",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "aws_region",
+        "description": "AWS region",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "aws_secret_access_key",
+        "description": "AWS secret access key",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "aws_session_token",
+        "description": "AWS STS session token",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "aws_sts_arn_role",
+        "description": "AWS STS ARN role",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "aws_sts_region",
+        "description": "AWS STS region",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "aws_sts_session_name",
+        "description": "AWS STS session name",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "aws_sts_timeout",
+        "description": "AWS STS assume role credential validity in seconds (default 3600)",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "buffered_log_max",
+        "description": "Maximum number of logs in buffered output plugins (0 = unlimited)",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "decorations_top_level",
+        "description": "Add decorators as top level JSON objects",
+        "inherit": false
+      },
+      {
+        "long": "disable_audit",
+        "description": "Disable receiving events from the audit subsystem",
+        "inherit": false
+      },
+      {
+        "long": "disable_caching",
+        "description": "Disable scheduled query caching",
+        "inherit": false
+      },
+      {
+        "long": "disable_database",
+        "description": "Disable the persistent RocksDB storage",
+        "inherit": false
+      },
+      {
+        "long": "disable_decorators",
+        "description": "Disable log result decoration",
+        "inherit": false
+      },
+      {
+        "long": "disable_distributed",
+        "description": "Disable distributed queries (default true)",
+        "inherit": false
+      },
+      {
+        "long": "disable_endpointsecurity",
+        "description": "Disable receiving events from the EndpointSecurity subsystem",
+        "inherit": false
+      },
+      {
+        "long": "disable_endpointsecurity_fim",
+        "description": "Disable file events from the EndpointSecurity subsystem",
+        "inherit": false
+      },
+      {
+        "long": "disable_events",
+        "description": "Disable osquery publish/subscribe system",
+        "inherit": false
+      },
+      {
+        "long": "disable_hash_cache",
+        "description": "Cache calculated file hashes, re-calculate only if inode times change",
+        "inherit": false
+      },
+      {
+        "long": "disable_logging",
+        "description": "Disable ERROR/INFO logging",
+        "inherit": false
+      },
+      {
+        "long": "distributed_interval",
+        "description": "Seconds between polling for new queries (default 60)",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "distributed_loginfo",
+        "description": "Log the running distributed queries name at INFO level",
+        "inherit": false
+      },
+      {
+        "long": "distributed_plugin",
+        "description": "Distributed plugin name",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "distributed_tls_max_attempts",
+        "description": "Number of times to attempt a request",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "distributed_tls_read_endpoint",
+        "description": "TLS/HTTPS endpoint for distributed query retrieval",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "distributed_tls_write_endpoint",
+        "description": "TLS/HTTPS endpoint for distributed query results",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "docker_socket",
+        "description": "Docker UNIX domain socket path",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "enable_file_events",
+        "description": "Enables the file_events publisher",
+        "inherit": false
+      },
+      {
+        "long": "enable_foreign",
+        "description": "Enable no-op foreign virtual tables",
+        "inherit": false
+      },
+      {
+        "long": "enable_keyboard_events",
+        "description": "Enable listening for keyboard events",
+        "inherit": false
+      },
+      {
+        "long": "enable_mouse_events",
+        "description": "Enable listening for mouse events",
+        "inherit": false
+      },
+      {
+        "long": "enable_numeric_monitoring",
+        "description": "Enable numeric monitoring system",
+        "inherit": false
+      },
+      {
+        "long": "ephemeral",
+        "description": "Skip pidfile and database state checks",
+        "inherit": false
+      },
+      {
+        "long": "es_fim_mute_path_literal",
+        "description": "Comma delimited list of path literals to be muted for FIM",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "es_fim_mute_path_prefix",
+        "description": "Comma delimited list of path prefxes to be muted for FIM",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "events_expiry",
+        "description": "Timeout to expire event subscriber results",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "events_max",
+        "description": "Maximum number of event batches per type to buffer",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "events_optimize",
+        "description": "Optimize subscriber select queries (scheduler only)",
+        "inherit": false
+      },
+      {
+        "long": "extensions_default_index",
+        "description": "Enable INDEX on all extension table columns (default true)",
+        "inherit": false
+      },
+      {
+        "long": "hash_cache_max",
+        "description": "Size of LRU file hash cache",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "host_identifier",
+        "description": "Field used to identify the host running osquery (hostname, uuid, instance, ephemeral, specified)",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "logger_event_type",
+        "description": "Log scheduled results as events",
+        "inherit": false
+      },
+      {
+        "long": "logger_kafka_acks",
+        "description": "The number of acknowledgments the leader has to receive (0, 1, 'all')",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": {
+            "values": [
+              "0",
+              "1",
+              "all"
+            ]
+          }
+        }
+      },
+      {
+        "long": "logger_kafka_brokers",
+        "description": "Bootstrap broker(s) as a comma-separated list of host or host:port (default port 9092)",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "logger_kafka_compression",
+        "description": "Compression codec to use for compressing message sets ('none' or 'gzip')",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": {
+            "values": [
+              "none",
+              "gzip"
+            ]
+          }
+        }
+      },
+      {
+        "long": "logger_kafka_topic",
+        "description": "Kafka topic to publish logs under",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "logger_min_status",
+        "description": "Minimum level for status log recording",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "logger_min_stderr",
+        "description": "Minimum level for statuses written to stderr",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "logger_numerics",
+        "description": "Use numeric JSON syntax for numeric values",
+        "inherit": false
+      },
+      {
+        "long": "logger_path",
+        "description": "Directory path for ERROR/WARN/INFO and results logging",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "logger_rotate",
+        "description": "Use filesystem log rotation",
+        "inherit": false
+      },
+      {
+        "long": "logger_rotate_max_files",
+        "description": "Max number of files to keep in rotation",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "logger_rotate_size",
+        "description": "Size for each filesystem log in bytes",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "logger_snapshot_event_type",
+        "description": "Log scheduled snapshot results as events",
+        "inherit": false
+      },
+      {
+        "long": "logger_syslog_facility",
+        "description": "Syslog facility for status and results logs (0-23, default 19)",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "logger_syslog_prepend_cee",
+        "description": "Prepend @cee: tag to logged JSON messages",
+        "inherit": false
+      },
+      {
+        "long": "logger_tls_compress",
+        "description": "GZip compress TLS/HTTPS request body",
+        "inherit": false
+      },
+      {
+        "long": "logger_tls_endpoint",
+        "description": "TLS/HTTPS endpoint for results logging",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "logger_tls_max_lines",
+        "description": "Max number of logs to send per period",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "logger_tls_max_linesize",
+        "description": "Max size in bytes allowed per log line",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "logger_tls_period",
+        "description": "Seconds between flushing logs over TLS/HTTPS",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "nullvalue",
+        "description": "Set string for NULL values, default ''",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "numeric_monitoring_filesystem_path",
+        "description": "File to dump numeric monitoring records one per line. The format of the line is <PATH><TAB><VALUE><TAB><TIMESTAMP>",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "numeric_monitoring_plugins",
+        "description": "Comma separated numeric monitoring plugins names",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "numeric_monitoring_pre_aggregation_time",
+        "description": "Time period in seconds for numeric monitoring pre-aggregation buffer",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "pack_delimiter",
+        "description": "Delimiter for pack and query names",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "pack_refresh_interval",
+        "description": "Cache expiration for a packs discovery queries",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "read_max",
+        "description": "Maximum file read size",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "schedule_default_interval",
+        "description": "Query interval to use if none is provided",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "schedule_epoch",
+        "description": "Epoch for scheduled queries",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "schedule_lognames",
+        "description": "Log the running scheduled query name at INFO level",
+        "inherit": false
+      },
+      {
+        "long": "schedule_max_drift",
+        "description": "Max time drift in seconds",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "schedule_reload",
+        "description": "Interval in seconds to reload database arenas",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "schedule_splay_percent",
+        "description": "Percent to splay config times",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "schedule_timeout",
+        "description": "Limit the schedule to a duration in seconds, 0 for no limit",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "specified_identifier",
+        "description": "Field used to specify the host_identifier when set to 'specified'",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "table_delay",
+        "description": "Add an optional microsecond delay between table scans",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "table_exceptions",
+        "description": "Allow tables to throw exceptions",
+        "inherit": false
+      },
+      {
+        "long": "thrift_string_size_limit",
+        "description": "Sets the maximum string size allowed in a thrift message, use 0 for unlimited",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "thrift_timeout",
+        "description": "Timeout for thrift socket operations",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "thrift_verbose",
+        "description": "Enable the thrift log handler",
+        "inherit": false
+      },
+      {
+        "long": "tls_disable_status_log",
+        "description": "Disable sending status logs",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "description": "Enable verbose informational messages",
+        "inherit": false
+      },
+      {
+        "long": "worker_threads",
+        "description": "Number of work dispatch threads",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "yara_delay",
+        "description": "Time in ms to sleep after scan of each file (default 50) to reduce memory spikes",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "A",
+        "description": "Select all from a table",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "L",
+        "description": "List all table names",
+        "inherit": false
+      },
+      {
+        "long": "connect",
+        "description": "Connect to an extension socket",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "csv",
+        "description": "Set output mode to 'csv'",
+        "inherit": false
+      },
+      {
+        "long": "extension",
+        "description": "Path to a single extension to autoload",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "header",
+        "description": "Toggle column headers true/false",
+        "inherit": false
+      },
+      {
+        "long": "json",
+        "description": "Set output mode to 'json'",
+        "inherit": false
+      },
+      {
+        "long": "json_pretty",
+        "description": "Set output mode to 'json_pretty'",
+        "inherit": false
+      },
+      {
+        "long": "line",
+        "description": "Set output mode to 'line'",
+        "inherit": false
+      },
+      {
+        "long": "list",
+        "description": "Set output mode to 'list'",
+        "inherit": false
+      },
+      {
+        "long": "pack",
+        "description": "Run all queries in a pack",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "planner",
+        "description": "Enable osquery runtime planner output",
+        "inherit": false
+      },
+      {
+        "long": "profile",
+        "description": "Enable profile mode when non-0, set number of iterations",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "separator",
+        "description": "Set output field separator, default '|'",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "osqueryi.tables": {
+        "function": "__rush_complete_osqueryi_tables"
+      }
+    }
+  }
+}

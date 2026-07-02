@@ -1,0 +1,7 @@
+__rush_complete_osqueryi_tables() {
+  command -v osqueryi >/dev/null 2>&1 || return
+  osqueryi --L 2>/dev/null | while IFS= read -r table; do
+    case "$table" in ''|*' '*|*':'*) continue ;; esac
+    rush_complete candidate "$table" --kind plain --description table --priority 30
+  done
+}
