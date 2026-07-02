@@ -1,0 +1,67 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ibus",
+    "subcommands": [
+      {
+        "name": "engine",
+        "description": "set or get engine",
+        "arguments": {
+          "states": [
+            {
+              "name": "engine",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "exit",
+        "description": "exit ibus-daemon"
+      },
+      {
+        "name": "list-engine",
+        "description": "show available engines"
+      },
+      {
+        "name": "watch",
+        "description": "not implemented",
+        "hidden": true
+      },
+      {
+        "name": "version",
+        "description": "show version"
+      },
+      {
+        "name": "read-cache",
+        "description": "show the content of registry cache"
+      },
+      {
+        "name": "write-cache",
+        "description": "create registry cache"
+      },
+      {
+        "name": "address",
+        "description": "print the D-Bus address of ibus-daemon"
+      },
+      {
+        "name": "read-config",
+        "description": "show the configuration values"
+      },
+      {
+        "name": "reset-config",
+        "description": "reset the configuration values"
+      },
+      {
+        "name": "emoji",
+        "description": "save emoji on dialog to clipboard"
+      },
+      {
+        "name": "help",
+        "description": "show this information"
+      }
+    ],
+    "description": "input bus control tool"
+  }
+}
