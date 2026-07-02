@@ -1,0 +1,272 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "iex",
+    "description": "Elixir interactive shell",
+    "options": [
+      {
+        "short": "e",
+        "long": "eval",
+        "description": "evaluates the given command",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "EXPRESSION"
+        }
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "prints this message and exits",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "description": "requires the given files/patterns",
+        "inherit": false,
+        "value": {
+          "name": "FILE",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "S",
+        "description": "finds and executes the given script in $PATH",
+        "inherit": false,
+        "value": {
+          "name": "SCRIPT"
+        }
+      },
+      {
+        "spellings": [
+          "-pr"
+        ],
+        "description": "requires the given files/patterns in parallel",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "FILE",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-pa"
+        ],
+        "description": "prepends the given path to Erlang code path",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "PATH",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-pz"
+        ],
+        "description": "appends the given path to Erlang code path",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "PATH",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "prints Elixir version and exits",
+        "inherit": false
+      },
+      {
+        "long": "app",
+        "description": "starts the given app and its dependencies",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "APP"
+        }
+      },
+      {
+        "long": "erl",
+        "description": "switches to be passed down to Erlang",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "SWITCHES"
+        }
+      },
+      {
+        "long": "logger-otp-reports",
+        "description": "enables or disables OTP reporting",
+        "inherit": false,
+        "value": {
+          "name": "BOOL",
+          "provider": "elixir.booleans"
+        }
+      },
+      {
+        "long": "logger-sasl-reports",
+        "description": "enables or disables SASL reporting",
+        "inherit": false,
+        "value": {
+          "name": "BOOL",
+          "provider": "elixir.booleans"
+        }
+      },
+      {
+        "long": "no-halt",
+        "description": "does not halt the Erlang VM after execution",
+        "inherit": false
+      },
+      {
+        "long": "werl",
+        "description": "uses Erlang's Windows shell GUI (Windows only)",
+        "inherit": false
+      },
+      {
+        "long": "cookie",
+        "description": "sets a cookie for this distributed node",
+        "inherit": false,
+        "value": {
+          "name": "COOKIE"
+        }
+      },
+      {
+        "long": "hidden",
+        "description": "makes a hidden node",
+        "inherit": false
+      },
+      {
+        "long": "name",
+        "description": "makes and assigns a name to the distributed node",
+        "inherit": false,
+        "value": {
+          "name": "NAME"
+        }
+      },
+      {
+        "long": "rpc-eval",
+        "description": "evaluates the given command on the given remote node",
+        "repeatable": true,
+        "inherit": false,
+        "value": [
+          {
+            "name": "NODE"
+          },
+          {
+            "name": "COMMAND"
+          }
+        ]
+      },
+      {
+        "long": "sname",
+        "description": "makes and assigns a short name to the distributed node",
+        "inherit": false,
+        "value": {
+          "name": "NAME"
+        }
+      },
+      {
+        "long": "boot",
+        "description": "uses the given FILE.boot to start the system",
+        "inherit": false,
+        "value": {
+          "name": "FILE",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "boot-var",
+        "description": "makes $VAR available as VALUE to FILE.boot",
+        "repeatable": true,
+        "inherit": false,
+        "value": [
+          {
+            "name": "VAR"
+          },
+          {
+            "name": "VALUE"
+          }
+        ]
+      },
+      {
+        "long": "erl-config",
+        "description": "loads configuration in FILE.config written in Erlang",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "FILE",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "pipe-to",
+        "description": "starts the Erlang VM as a named PIPEDIR and LOGDIR",
+        "inherit": false,
+        "value": [
+          {
+            "name": "PIPEDIR"
+          },
+          {
+            "name": "LOGDIR"
+          }
+        ]
+      },
+      {
+        "long": "vm-args",
+        "description": "passes the contents in file as arguments to the VM",
+        "inherit": false,
+        "value": {
+          "name": "FILE",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "dot-iex",
+        "description": "override default .iex.exs file",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "remsh",
+        "description": "connect to a node using a remote shell",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "description": "Elixir script file",
+          "index": 0,
+          "provider": "builtin.files"
+        },
+        {
+          "name": "data",
+          "index": 1,
+          "description": "script arguments"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "elixir.booleans": {
+        "values": [
+          "true",
+          "false"
+        ]
+      }
+    }
+  }
+}
