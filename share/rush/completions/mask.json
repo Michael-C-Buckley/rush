@@ -1,0 +1,36 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "mask",
+    "description": "run tasks from a maskfile",
+    "options": [
+      {
+        "long": "maskfile",
+        "description": "read tasks from a maskfile",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "task",
+          "description": "mask task",
+          "index": 0,
+          "provider": {
+            "function": "__rush_complete_mask_tasks"
+          }
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}

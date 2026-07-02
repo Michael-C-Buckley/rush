@@ -1,0 +1,9 @@
+__rush_complete_mask_tasks() {
+  maskfile=$(rush_complete option-values --long maskfile 2>/dev/null | tail -n 1)
+  test -n "$maskfile" || maskfile=maskfile.md
+  test -f "$maskfile" || return 0
+  sed -n 's/^##[[:space:]]\{1,\}//p' "$maskfile" 2>/dev/null | while IFS= read -r task; do
+    test -n "$task" || continue
+    rush_complete candidate "$task" --kind plain --description "mask task"
+  done
+}
