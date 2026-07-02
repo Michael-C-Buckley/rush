@@ -3674,8 +3674,13 @@ fn applyDeclaredArrayAssignment(
     options: DeclarationOptions,
     status: *result.ExitStatus,
 ) !void {
-    const expanded = try expandArrayAssignmentValues(shell, assignment.values, null);
-    try applyDeclaredArrayValues(shell, assignment.name, expanded, options, status);
+    if (assignment.append) {
+        try prepareDeclaredArrayAppend(shell, assignment.name, options, status);
+        if (status.* != 0) return;
+    }
+    const append_start = if (assignment.append) compoundArrayAppendStart(shell, assignment.name) else 0;
+    const expanded = try expandArrayAssignmentElements(shell, assignment.values, append_start, null);
+    try applyDeclaredArrayElements(shell, assignment.name, expanded, assignment.append, options, status);
 }
 
 fn declareUsesLocalScope(shell: anytype, options: DeclarationOptions) bool {
@@ -3798,6 +3803,23 @@ fn applyDeclaredArrayVariable(
     try applyDeclaredArrayValues(shell, name, &.{value}, options, status);
 }
 
+fn prepareDeclaredArrayAppend(
+    shell: anytype,
+    name: []const u8,
+    options: DeclarationOptions,
+    status: *result.ExitStatus,
+) !void {
+    if (!declareUsesLocalScope(shell, options)) return;
+    if (shell.state.hasSavedLocalBinding(name) and shell.state.getArray(name) != null) return;
+    shell.state.declareLocalArray(name, &.{}) catch |err| switch (err) {
+        error.ReadonlyVariable => {
+            try writeReadonlyDiagnostic(shell, name);
+            status.* = 1;
+        },
+        else => return err,
+    };
+}
+
 fn applyDeclaredArrayValues(
     shell: anytype,
     name: []const u8,
@@ -3817,6 +3839,35 @@ fn applyDeclaredArrayValues(
         },
         else => return err,
     };
+}
+
+fn applyDeclaredArrayElements(
+    shell: anytype,
+    name: []const u8,
+    elements: []const state_mod.ArrayElement,
+    append: bool,
+    options: DeclarationOptions,
+    status: *result.ExitStatus,
+) !void {
+    const uses_local_scope = declareUsesLocalScope(shell, options);
+    const applied = if (append)
+        shell.state.appendArrayElements(name, elements)
+    else if (uses_local_scope)
+        applyLocalArrayElements(shell, name, elements)
+    else
+        shell.state.putArrayElements(name, elements);
+    applied catch |err| switch (err) {
+        error.ReadonlyVariable => {
+            try writeReadonlyDiagnostic(shell, name);
+            status.* = 1;
+        },
+        else => return err,
+    };
+}
+
+fn applyLocalArrayElements(shell: anytype, name: []const u8, elements: []const state_mod.ArrayElement) !void {
+    try shell.state.declareLocalArray(name, &.{});
+    try shell.state.putArrayElements(name, elements);
 }
 
 fn applyDeclaredArrayName(
@@ -4337,6 +4388,11 @@ fn copySimpleCommand(allocator: std.mem.Allocator, command: ast.SimpleCommand) C
             .name = try allocator.dupe(u8, assignment.name),
             .value = try copyWord(allocator, assignment.value),
             .append = assignment.append,
+            .index = if (assignment.index) |assignment_index| try copyWord(allocator, assignment_index) else null,
+            .array_values = if (assignment.array_values) |values|
+                try copyArrayAssignmentElements(allocator, values)
+            else
+                null,
             .span = assignment.span,
         };
     }
@@ -4365,7 +4421,8 @@ fn copyWord(allocator: std.mem.Allocator, word: ast.Word) CopyError!ast.Word {
             .declaration_array_assignment => |assignment| .{
                 .declaration_array_assignment = .{
                     .name = try allocator.dupe(u8, assignment.name),
-                    .values = try copyWords(allocator, assignment.values),
+                    .values = try copyArrayAssignmentElements(allocator, assignment.values),
+                    .append = assignment.append,
                     .span = assignment.span,
                 },
             },
@@ -4373,6 +4430,21 @@ fn copyWord(allocator: std.mem.Allocator, word: ast.Word) CopyError!ast.Word {
         .span = word.span,
         .quoted = word.quoted,
     };
+}
+
+fn copyArrayAssignmentElements(
+    allocator: std.mem.Allocator,
+    elements: []const ast.ArrayAssignmentElement,
+) CopyError![]const ast.ArrayAssignmentElement {
+    const copied = try allocator.alloc(ast.ArrayAssignmentElement, elements.len);
+    for (elements, 0..) |element, index| {
+        copied[index] = .{
+            .index = if (element.index) |element_index| try copyWord(allocator, element_index) else null,
+            .value = try copyWord(allocator, element.value),
+            .span = element.span,
+        };
+    }
+    return copied;
 }
 
 fn copyWordParts(allocator: std.mem.Allocator, parts: []const ast.WordPart) CopyError![]const ast.WordPart {
@@ -4907,15 +4979,20 @@ fn applyAssignment(
     substitution_status: ?*?result.ExitStatus,
 ) ![]const u8 {
     if (assignment.array_values) |values| {
-        const expanded = try expandArrayAssignmentValues(shell, values, substitution_status);
-        shell.state.putArray(assignment.name, expanded) catch |err| switch (err) {
+        const append_start = if (assignment.append) compoundArrayAppendStart(shell, assignment.name) else 0;
+        const expanded = try expandArrayAssignmentElements(shell, values, append_start, substitution_status);
+        const applied = if (assignment.append)
+            shell.state.appendArrayElements(assignment.name, expanded)
+        else
+            shell.state.putArrayElements(assignment.name, expanded);
+        applied catch |err| switch (err) {
             error.ReadonlyVariable => {
                 try writeReadonlyDiagnostic(shell, assignment.name);
                 return error.AssignmentError;
             },
             else => return err,
         };
-        return joinValues(shell, expanded, " ");
+        return joinArrayElementValues(shell, expanded, " ");
     }
 
     const expanded_value = try expandAssignmentValue(shell, assignment, substitution_status);
@@ -4963,16 +5040,50 @@ fn integerAssignmentValue(shell: anytype, value: []const u8) ![]const u8 {
     return std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{arithmetic_value});
 }
 
-fn expandArrayAssignmentValues(
+fn expandArrayAssignmentElements(
     shell: anytype,
-    values: []const ast.Word,
+    values: []const ast.ArrayAssignmentElement,
+    first_index: usize,
     substitution_status: ?*?result.ExitStatus,
-) ![]const []const u8 {
-    const expanded = try shell.scratchAllocator().alloc([]const u8, values.len);
-    for (values, 0..) |value, index| {
-        expanded[index] = try expandAssignmentWordTracking(shell, value, substitution_status);
+) ![]const state_mod.ArrayElement {
+    const expanded = try shell.scratchAllocator().alloc(state_mod.ArrayElement, values.len);
+    var next_index = first_index;
+    for (values, 0..) |element, expanded_index| {
+        const index = if (element.index) |index_word| index: {
+            const explicit = try expandArrayIndex(shell, index_word);
+            next_index = std.math.add(usize, explicit, 1) catch return error.InvalidArithmetic;
+            break :index explicit;
+        } else index: {
+            const implicit = next_index;
+            next_index = std.math.add(usize, next_index, 1) catch return error.InvalidArithmetic;
+            break :index implicit;
+        };
+        expanded[expanded_index] = .{
+            .index = index,
+            .value = try expandAssignmentWordTracking(shell, element.value, substitution_status),
+        };
     }
     return expanded;
+}
+
+fn compoundArrayAppendStart(shell: anytype, name: []const u8) usize {
+    if (shell.state.getArray(name)) |array| {
+        if (array.elements.len != 0) return array.elements[array.elements.len - 1].index + 1;
+        return 0;
+    }
+    if (shell.state.getVariable(name) != null) return 1;
+    return 0;
+}
+
+fn joinArrayElementValues(
+    shell: anytype,
+    elements: []const state_mod.ArrayElement,
+    separator: []const u8,
+) ![]const u8 {
+    if (elements.len == 0) return "";
+    const values = try shell.scratchAllocator().alloc([]const u8, elements.len);
+    for (elements, 0..) |element, index| values[index] = element.value;
+    return joinValues(shell, values, separator);
 }
 
 fn applyDynamicVariableAssignment(shell: anytype, name: []const u8, value: []const u8) bool {

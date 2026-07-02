@@ -107,7 +107,7 @@ pub const Assignment = struct {
     value: Word,
     append: bool = false,
     index: ?Word = null,
-    array_values: ?[]const Word = null,
+    array_values: ?[]const ArrayAssignmentElement = null,
     span: source.Span = .{},
 
     pub fn validate(self: Assignment) void {
@@ -115,6 +115,18 @@ pub const Assignment = struct {
         self.value.validate();
         if (self.index) |index| index.validate();
         if (self.array_values) |values| for (values) |value| value.validate();
+        self.span.validate();
+    }
+};
+
+pub const ArrayAssignmentElement = struct {
+    index: ?Word = null,
+    value: Word,
+    span: source.Span = .{},
+
+    pub fn validate(self: ArrayAssignmentElement) void {
+        if (self.index) |index| index.validate();
+        self.value.validate();
         self.span.validate();
     }
 };
@@ -146,7 +158,8 @@ pub const WordData = union(enum) {
 
 pub const DeclarationArrayAssignment = struct {
     name: []const u8,
-    values: []const Word,
+    values: []const ArrayAssignmentElement,
+    append: bool = false,
     span: source.Span = .{},
 
     pub fn validate(self: DeclarationArrayAssignment) void {

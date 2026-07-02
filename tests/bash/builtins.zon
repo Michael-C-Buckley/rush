@@ -398,13 +398,15 @@
             \\x=foo
             \\declare -a x
             \\declare -a y=bar
-            \\declare -p x y
+            \\declare -a sparse=([2]=z [4]=q)
+            \\declare -p x y sparse
             ,
             .stdout =
             \\declare -a arr
             \\declare -a arr=([2]="z")
             \\declare -a x=([0]="foo")
             \\declare -a y=([0]="bar")
+            \\declare -a sparse=([2]="z" [4]="q")
             \\
             ,
             .stderr = "",

@@ -100,6 +100,49 @@
             .status = 0,
         },
         .{
+            .name = "indexed array compound assignments preserve sparse indices and append",
+            .script =
+            \\arr=([2]=two three [7]=seven)
+            \\printf 'initial-i=<%s>\n' "${!arr[@]}"
+            \\printf 'initial-v=<%s>\n' "${arr[@]}"
+            \\arr+=(eight [10]=ten eleven)
+            \\printf 'append-i=<%s>\n' "${!arr[@]}"
+            \\printf 'append-v=<%s>\n' "${arr[@]}"
+            \\scalar=zero
+            \\scalar+=(one two)
+            \\printf 'scalar=<%s>\n' "${!scalar[@]}" "${scalar[@]}"
+            ,
+            .stdout =
+            \\initial-i=<2>
+            \\initial-i=<3>
+            \\initial-i=<7>
+            \\initial-v=<two>
+            \\initial-v=<three>
+            \\initial-v=<seven>
+            \\append-i=<2>
+            \\append-i=<3>
+            \\append-i=<7>
+            \\append-i=<8>
+            \\append-i=<10>
+            \\append-i=<11>
+            \\append-v=<two>
+            \\append-v=<three>
+            \\append-v=<seven>
+            \\append-v=<eight>
+            \\append-v=<ten>
+            \\append-v=<eleven>
+            \\scalar=<0>
+            \\scalar=<1>
+            \\scalar=<2>
+            \\scalar=<zero>
+            \\scalar=<one>
+            \\scalar=<two>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command substitution clears errexit by default",
             .script =
             \\set -e

@@ -434,6 +434,26 @@ pub const State = struct {
         self.clearFunctionAutoloadMissesIfSearchVariable(name);
     }
 
+    pub fn putArrayElements(self: *State, name: []const u8, elements: []const ArrayElement) !void {
+        std.debug.assert(name.len != 0);
+        if (self.getVariableAttributes(name)) |attributes| if (attributes.readonly) return error.ReadonlyVariable;
+        if (self.getVariable(name)) |variable| if (variable.readonly) return error.ReadonlyVariable;
+
+        try self.putArray(name, &.{});
+        for (elements) |element| try self.putArrayElement(name, element.index, element.value);
+    }
+
+    pub fn appendArrayElements(self: *State, name: []const u8, elements: []const ArrayElement) !void {
+        std.debug.assert(name.len != 0);
+        if (self.getVariableAttributes(name)) |attributes| if (attributes.readonly) return error.ReadonlyVariable;
+        if (self.getVariable(name)) |variable| {
+            if (variable.readonly) return error.ReadonlyVariable;
+            if (self.getArray(name) == null) try self.putArray(name, &.{variable.value});
+        }
+        if (self.getArray(name) == null) try self.putArray(name, &.{});
+        for (elements) |element| try self.putArrayElement(name, element.index, element.value);
+    }
+
     pub fn putArrayElement(self: *State, name: []const u8, index: usize, value: []const u8) !void {
         std.debug.assert(name.len != 0);
         if (self.getVariableAttributes(name)) |attributes| if (attributes.readonly) return error.ReadonlyVariable;
@@ -610,6 +630,11 @@ pub const State = struct {
 
     pub fn hasLocalFrame(self: State) bool {
         return self.local_frames.items.len != 0;
+    }
+
+    pub fn hasSavedLocalBinding(self: State, name: []const u8) bool {
+        std.debug.assert(self.local_frames.items.len != 0);
+        return self.local_frames.items[self.local_frames.items.len - 1].saved.contains(name);
     }
 
     pub fn declareLocal(self: *State, name: []const u8, value: ?[]const u8) !void {

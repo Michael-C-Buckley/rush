@@ -805,6 +805,7 @@ const Parser = struct {
                         .data = .{ .declaration_array_assignment = .{
                             .name = assignment.name,
                             .values = assignment.array_values.?,
+                            .append = assignment.append,
                             .span = assignment.span,
                         } },
                         .span = assignment.span,
@@ -935,17 +936,50 @@ const Parser = struct {
         return assignment;
     }
 
-    fn parseArrayAssignmentValues(self: *Parser) ParserError![]const ast.Word {
+    fn parseArrayAssignmentValues(self: *Parser) ParserError![]const ast.ArrayAssignmentElement {
         try self.expect(.left_paren);
-        var values: std.ArrayList(ast.Word) = .empty;
+        var values: std.ArrayList(ast.ArrayAssignmentElement) = .empty;
         errdefer values.deinit(self.allocator);
         while (true) {
             try self.skipLinebreak();
             if (self.eat(.right_paren) != null) break;
             const word_token = self.eat(.word) orelse return error.UnexpectedToken;
-            try values.append(self.allocator, try self.parseWordToken(word_token));
+            try values.append(self.allocator, try self.parseArrayAssignmentElement(word_token));
         }
         return values.toOwnedSlice(self.allocator);
+    }
+
+    fn parseArrayAssignmentElement(self: *Parser, word_token: token.Token) ParserError!ast.ArrayAssignmentElement {
+        if (compoundArrayElementEqualsIndex(word_token.text)) |equals_index| {
+            const index_span = spanFromRelativeOffsets(word_token.span, word_token.text, 1, equals_index - 1);
+            const value_span = spanFromRelativeOffsets(
+                word_token.span,
+                word_token.text,
+                equals_index + 1,
+                word_token.text.len,
+            );
+            const element: ast.ArrayAssignmentElement = .{
+                .index = try self.parseWordText(word_token.text[1 .. equals_index - 1], index_span),
+                .value = try self.parseWordText(word_token.text[equals_index + 1 ..], value_span),
+                .span = word_token.span,
+            };
+            element.validate();
+            return element;
+        }
+
+        const element: ast.ArrayAssignmentElement = .{
+            .value = try self.parseWordToken(word_token),
+            .span = word_token.span,
+        };
+        element.validate();
+        return element;
+    }
+
+    fn compoundArrayElementEqualsIndex(text: []const u8) ?usize {
+        if (text.len < 4 or text[0] != '[') return null;
+        const close_index = std.mem.indexOfScalar(u8, text, ']') orelse return null;
+        if (close_index == 1 or close_index + 1 >= text.len or text[close_index + 1] != '=') return null;
+        return close_index + 1;
     }
 
     fn parseArrayAssignmentIndex(
