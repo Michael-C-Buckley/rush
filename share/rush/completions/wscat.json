@@ -1,0 +1,229 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "wscat",
+    "description": "communicate over WebSocket",
+    "options": [
+      {
+        "short": "c",
+        "long": "connect",
+        "description": "connect to a WebSocket server",
+        "value": {
+          "name": "url"
+        }
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "output the version number"
+      },
+      {
+        "long": "auth",
+        "description": "add basic HTTP authentication header",
+        "value": {
+          "name": "username:password"
+        }
+      },
+      {
+        "long": "ca",
+        "description": "specify a Certificate Authority",
+        "value": {
+          "name": "ca",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "cert",
+        "description": "specify a Client SSL Certificate",
+        "value": {
+          "name": "cert",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "host",
+        "description": "optional host",
+        "value": {
+          "name": "host"
+        }
+      },
+      {
+        "long": "key",
+        "description": "specify a Client SSL Certificate's key",
+        "value": {
+          "name": "key",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "max-redirects",
+        "description": "maximum number of redirects allowed (default: 10)",
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "long": "no-color",
+        "description": "run without color"
+      },
+      {
+        "long": "passphrase",
+        "description": "specify a Client SSL Certificate Key's passphrase . If you don't provide a value, it will be prompted for",
+        "value": {
+          "name": "passphrase"
+        }
+      },
+      {
+        "long": "proxy",
+        "description": "connect via a proxy. Proxy must support CONNECT method",
+        "value": {
+          "name": "[protocol://]host[:port]"
+        }
+      },
+      {
+        "long": "slash",
+        "description": "enable slash commands for control frames (/ping, /pong, /close [code [, reason]])"
+      },
+      {
+        "short": "H",
+        "long": "header",
+        "description": "set an HTTP header. Repeat to set multiple (default: [])",
+        "value": {
+          "name": "header:value"
+        },
+        "repeatable": true
+      },
+      {
+        "short": "L",
+        "long": "location",
+        "description": "follow redirects"
+      },
+      {
+        "short": "l",
+        "long": "listen",
+        "description": "listen on port",
+        "value": {
+          "name": "port"
+        }
+      },
+      {
+        "short": "n",
+        "long": "no-check",
+        "description": "do not check for unauthorized certificates"
+      },
+      {
+        "short": "o",
+        "long": "origin",
+        "description": "optional origin",
+        "value": {
+          "name": "origin"
+        }
+      },
+      {
+        "short": "p",
+        "long": "protocol",
+        "description": "optional protocol version",
+        "value": {
+          "name": "protocol"
+        }
+      },
+      {
+        "short": "P",
+        "long": "show-ping-pong",
+        "description": "print a notification when a ping or pong is received"
+      },
+      {
+        "short": "s",
+        "long": "subprotocol",
+        "description": "optional subprotocol (default: [])",
+        "value": {
+          "name": "protocol",
+          "provider": {
+            "values": [
+              "MBWS.huawei.com",
+              "MBLWS.huawei.com",
+              "soap",
+              "wamp",
+              "v10.stomp",
+              "v11.stomp",
+              "v12.stomp",
+              "ocpp1.2",
+              "ocpp1.5",
+              "ocpp1.6",
+              "ocpp2.0",
+              "ocpp2.0.1",
+              "rfb",
+              "sip",
+              "notificationchannel-netapi-rest.openmobilealliance.org",
+              "wpcp",
+              "amqp\t",
+              "mqtt",
+              "jsflow",
+              "rwpcp",
+              "xmpp",
+              "ship",
+              "mielecloudconnect",
+              "v10.pcp.sap.com",
+              "msrp",
+              "v1.saltyrtc.org",
+              "TLCP-2.0.0.lightstreamer.com",
+              "bfcp",
+              "sldp.softvelum.com",
+              "opcua+uacp",
+              "opcua+uajson",
+              "v1.swindon-lattice+json",
+              "v1.usp",
+              "mles-websocket",
+              "coap",
+              "TLCP-2.1.0.lightstreamer.com",
+              "sqlnet.oracle.com",
+              "oneM2M.R2.0.json",
+              "oneM2M.R2.0.xml",
+              "oneM2M.R2.0.cbor",
+              "transit",
+              "2016.serverpush.dash.mpeg.org",
+              "2018.mmt.mpeg.org",
+              "clue",
+              "webrtc.softvelum.com",
+              "cobra.v2.json",
+              "drp",
+              "hub.bsc.bacnet.org",
+              "dc.bsc.bacnet.org",
+              "jmap",
+              "t140",
+              "done",
+              "TLCP-2.2.0.lightstreamer.com",
+              "collection-update",
+              "TLCP-2.3.0.lightstreamer.com",
+              "text.ircv3.net",
+              "binary.ircv3.net",
+              "v3.penguin-stats.live+proto"
+            ]
+          }
+        }
+      },
+      {
+        "short": "w",
+        "long": "wait",
+        "description": "wait given seconds after executing command",
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "short": "x",
+        "long": "execute",
+        "description": "execute command after connecting",
+        "value": {
+          "name": "command"
+        }
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "display help for command"
+      }
+    ]
+  }
+}
