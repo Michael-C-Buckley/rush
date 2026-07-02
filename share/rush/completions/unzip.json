@@ -1,0 +1,69 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "unzip",
+    "description": "extract ZIP archives",
+    "options": [
+      {
+        "short": "l",
+        "description": "list the contents of a zip file without extracting",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "c",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        },
+        "description": "extract files to stdout"
+      },
+      {
+        "short": "0",
+        "description": "extract a zip file created in windows, containing files with non-ascii (chinese) filenames",
+        "inherit": false,
+        "value": [
+          {
+            "name": "gbk"
+          },
+          {
+            "name": "file",
+            "provider": "builtin.files"
+          }
+        ]
+      },
+      {
+        "short": "d",
+        "inherit": false,
+        "value": {
+          "name": "destination",
+          "provider": "builtin.directories"
+        },
+        "description": "extract into destination directory"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "provider": "builtin.files",
+          "index": 0,
+          "description": "zip archive"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
