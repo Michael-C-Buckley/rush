@@ -1,0 +1,347 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "sed",
+    "description": "edit streams with sed",
+    "options": [
+      {
+        "short": "E",
+        "description": "interprets regular expressions as extended (modern) regular expressions rather than basic regular expressions",
+        "inherit": false
+      },
+      {
+        "short": "a",
+        "description": "causes sed to delay opening each file until a command containing the related ``w'' function is applied to a line of input",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "description": "appends the editing commands specified by the command argument to the list of commands",
+        "inherit": false,
+        "value": {
+          "name": "command"
+        }
+      },
+      {
+        "short": "f",
+        "description": "appends the editing commands found in the file command_file to the list of commands. The editing commands should each be listed on a separate line",
+        "inherit": false,
+        "value": {
+          "name": "command_file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "I",
+        "description": "edits files in-place, saving backups with the specified extension. If a zero-length extension is given, no backup will be saved",
+        "inherit": false,
+        "value": {
+          "name": "extension"
+        }
+      },
+      {
+        "short": "i",
+        "description": "edits files in-place similarly to `-I`, but treats each file independently from other files. In particular, line numbers in each file start at 1, the ``$'' addr",
+        "inherit": false,
+        "value": {
+          "name": "extension"
+        }
+      },
+      {
+        "short": "l",
+        "description": "makes output line buffered",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "description": "by default, each line of input is echoed to the standard output after all of the commands have been applied to it. The `-n` option suppresses this behavior",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "description": "same as `-E` for compatibility with GNU sed",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "description": "makes output unbuffered",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "command",
+          "index": 0
+        },
+        {
+          "name": "file",
+          "provider": "builtin.files",
+          "index": 1,
+          "repeatable": true,
+          "description": "input file"
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "a",
+        "description": "appends `text` after a line",
+        "arguments": {
+          "states": [
+            {
+              "name": "text",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "b",
+        "description": "branch unconditionally to `label`",
+        "arguments": {
+          "states": [
+            {
+              "name": "label",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "c",
+        "description": "replace (change) lines with `text`",
+        "arguments": {
+          "states": [
+            {
+              "name": "text",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "d",
+        "description": "delete the pattern space; immediately start next cycle"
+      },
+      {
+        "name": "D",
+        "description": "if pattern space contains newlines, delete text in the pattern space up to the first newline, and restart cycle with the resultant pattern space, without readin"
+      },
+      {
+        "name": "e",
+        "description": "executes the command that is found in pattern space and replaces the pattern space with the output; a trailing newline is suppressed",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "provider": "builtin.executables",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "F",
+        "description": "prints the file name of the current input file"
+      },
+      {
+        "name": "g",
+        "description": "replaces the contents of the pattern space with the contents of the hold space"
+      },
+      {
+        "name": "G",
+        "description": "appends a newline to the contents of the pattern space, and then appends the contents of the hold space to that of the pattern space"
+      },
+      {
+        "name": "h",
+        "description": "replaces the contents of the hold space with the contents of the pattern space"
+      },
+      {
+        "name": "H",
+        "description": "appends a newline to the contents of the hold space, and then appends the contents of the pattern space to that of the hold space"
+      },
+      {
+        "name": "i",
+        "description": "insert text before a line",
+        "arguments": {
+          "states": [
+            {
+              "name": "text",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "l",
+        "description": "prints the pattern space in an unambiguous form"
+      },
+      {
+        "name": "n",
+        "description": "prints the pattern space, then, regardless, replaces the pattern space with the next line of input. If there is no more input then sed exits without processing"
+      },
+      {
+        "name": "N",
+        "description": "adds a newline to the pattern space, then appends the next line of input to the pattern space. If there is no more input then sed exits without processing any m"
+      },
+      {
+        "name": "p",
+        "description": "prints the pattern space"
+      },
+      {
+        "name": "P",
+        "description": "prints the pattern space up to the first newline"
+      },
+      {
+        "name": "q",
+        "description": "exit sed without processing any more commands or input",
+        "arguments": {
+          "states": [
+            {
+              "name": "Exit-Code",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "Q",
+        "description": "this command is the same as q, but will not print the contents of pattern space",
+        "arguments": {
+          "states": [
+            {
+              "name": "Exit-Code",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "r",
+        "description": "reads file",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "R",
+        "description": "queue a line of filename to be read and inserted into the output stream at the end of the current cycle, or when the next input line is read",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "s",
+        "aliases": [
+          "regexp",
+          "replacement"
+        ],
+        "description": "match the regular-expression against the content of the pattern space. If found, replace matched string with replacement"
+      },
+      {
+        "name": "t",
+        "description": "(test) Branch to label only if there has been a successful substitution since the last input line was read or conditional branch was taken. The label may be omi",
+        "arguments": {
+          "states": [
+            {
+              "name": "label",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "T",
+        "description": "(test) Branch to label only if there have been no successful substitutions since the last input line was read or conditional branch was taken. The label may be",
+        "arguments": {
+          "states": [
+            {
+              "name": "label",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "v",
+        "description": "makes sed fail if GNU sed extensions are not supported, or if the requested version is not available",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "w",
+        "description": "writes the pattern space to the file",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "W",
+        "description": "writes to the given filename the portion of the pattern space up to the first newline",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "x",
+        "description": "exchanges the contents of the hold and pattern spaces"
+      },
+      {
+        "name": "y",
+        "aliases": [
+          "src",
+          "dst"
+        ],
+        "description": "transliterate any characters in the pattern space which match any of the source-chars with the corresponding character in dest-chars"
+      },
+      {
+        "name": "z",
+        "description": "(zap) Empties the content of pattern space"
+      },
+      {
+        "name": "#",
+        "description": "comment until the next newline"
+      }
+    ],
+    "providers": {
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
