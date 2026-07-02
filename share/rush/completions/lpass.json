@@ -1,0 +1,1088 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "lpass",
+    "description": "manage LastPass vault entries",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "display the help for lpass",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "display the version of lpass",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "login",
+        "description": "log in to LastPass",
+        "options": [
+          {
+            "long": "trust",
+            "description": "subsequent logins will not require multifactor authentication",
+            "inherit": false
+          },
+          {
+            "long": "plaintext-key",
+            "description": "save decryption key to the hard disk in plaintext",
+            "inherit": false,
+            "value": {
+              "name": "--force",
+              "description": "skip user confirmation",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "color",
+            "description": "control colored output to the terminal",
+            "inherit": false,
+            "value": {
+              "name": "color",
+              "required": false,
+              "style": "optional",
+              "provider": {
+                "values": [
+                  "auto",
+                  "never",
+                  "always"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "USERNAME",
+              "description": "lastPass account username (email address)",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "logout",
+        "description": "log out of LastPass",
+        "options": [
+          {
+            "long": "force",
+            "description": "skip user confirmation",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "ls",
+        "description": "list names in groups in a tree structure",
+        "options": [
+          {
+            "long": "color",
+            "description": "control colored output to the terminal",
+            "inherit": false,
+            "value": {
+              "name": "color",
+              "required": false,
+              "style": "optional",
+              "provider": {
+                "values": [
+                  "auto",
+                  "never",
+                  "always"
+                ]
+              }
+            }
+          },
+          {
+            "long": "long",
+            "short": "l",
+            "description": "show the last modification time",
+            "inherit": false
+          },
+          {
+            "short": "m",
+            "description": "show the last modified time",
+            "inherit": false
+          },
+          {
+            "short": "u",
+            "description": "show the last used time",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "GROUP",
+              "description": "group of entries to list",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "passwd",
+        "description": "change LastPass password and reencrypt all entries"
+      },
+      {
+        "name": "show",
+        "description": "show password or selected field",
+        "options": [
+          {
+            "long": "sync",
+            "description": "when the current operation syncs to server",
+            "inherit": false,
+            "value": {
+              "name": "sync",
+              "required": false,
+              "style": "optional",
+              "provider": {
+                "values": [
+                  "auto",
+                  "now",
+                  "no"
+                ]
+              }
+            }
+          },
+          {
+            "long": "clip",
+            "short": "c",
+            "description": "copy to the clipboard",
+            "inherit": false
+          },
+          {
+            "long": "quiet",
+            "short": "q",
+            "description": "display no output and only sets return code",
+            "inherit": false
+          },
+          {
+            "long": "expand-multi",
+            "short": "x",
+            "description": "show information from all matching sites",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "short": "j",
+            "description": "generate json output instead of human-readable text",
+            "inherit": false
+          },
+          {
+            "long": "all",
+            "description": "show all fields",
+            "inherit": false
+          },
+          {
+            "long": "username",
+            "description": "show only the username",
+            "inherit": false
+          },
+          {
+            "long": "password",
+            "description": "show only the password",
+            "inherit": false
+          },
+          {
+            "long": "url",
+            "description": "show only the URL",
+            "inherit": false
+          },
+          {
+            "long": "notes",
+            "description": "show only the notes",
+            "inherit": false
+          },
+          {
+            "long": "field",
+            "description": "show only the field",
+            "inherit": false,
+            "value": {
+              "name": "FIELD",
+              "description": "show only this field"
+            }
+          },
+          {
+            "long": "id",
+            "description": "show only the ID",
+            "inherit": false
+          },
+          {
+            "long": "name",
+            "description": "show only the name",
+            "inherit": false
+          },
+          {
+            "long": "attach",
+            "description": "show only the attachment",
+            "inherit": false,
+            "value": {
+              "name": "ATTACHID",
+              "description": "attachment ID"
+            }
+          },
+          {
+            "long": "basic-regexp",
+            "short": "G",
+            "description": "show sites matching case-insensitive regular expression",
+            "inherit": false
+          },
+          {
+            "long": "fixed-strings",
+            "short": "F",
+            "description": "show sites matching this exact substring",
+            "inherit": false
+          },
+          {
+            "long": "color",
+            "description": "control colored output to the terminal",
+            "inherit": false,
+            "value": {
+              "name": "color",
+              "required": false,
+              "style": "optional",
+              "provider": {
+                "values": [
+                  "auto",
+                  "never",
+                  "always"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "UNIQENAME|UNIQUEID",
+              "description": "shows entry with this unique name or ID",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "mv",
+        "description": "move LastPass entry to a different group",
+        "options": [
+          {
+            "long": "color",
+            "description": "control colored output to the terminal",
+            "inherit": false,
+            "value": {
+              "name": "color",
+              "required": false,
+              "style": "optional",
+              "provider": {
+                "values": [
+                  "auto",
+                  "never",
+                  "always"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "UNIQUENAME|UNIQUEID",
+              "description": "unique name or ID to move",
+              "index": 0
+            },
+            {
+              "name": "GROUP",
+              "description": "destination group",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "add",
+        "description": "add a new entry",
+        "options": [
+          {
+            "long": "sync",
+            "description": "when the current operation syncs to server",
+            "inherit": false,
+            "value": {
+              "name": "sync",
+              "required": false,
+              "style": "optional",
+              "provider": {
+                "values": [
+                  "auto",
+                  "now",
+                  "no"
+                ]
+              }
+            }
+          },
+          {
+            "long": "non-interactive",
+            "description": "accept data until EOF or, unless the notes field is being edited, the first new line",
+            "inherit": false
+          },
+          {
+            "long": "color",
+            "description": "control colored output to the terminal",
+            "inherit": false,
+            "value": {
+              "name": "color",
+              "required": false,
+              "style": "optional",
+              "provider": {
+                "values": [
+                  "auto",
+                  "never",
+                  "always"
+                ]
+              }
+            }
+          },
+          {
+            "long": "username",
+            "description": "add only the username",
+            "inherit": false
+          },
+          {
+            "long": "password",
+            "description": "add only the password",
+            "inherit": false
+          },
+          {
+            "long": "url",
+            "description": "add only the URL",
+            "inherit": false
+          },
+          {
+            "long": "notes",
+            "description": "add only the notes",
+            "inherit": false
+          },
+          {
+            "long": "field",
+            "description": "add only the field",
+            "inherit": false,
+            "value": {
+              "name": "FIELD",
+              "description": "add only this field"
+            }
+          },
+          {
+            "long": "note-type",
+            "description": "add only the note",
+            "inherit": false,
+            "value": {
+              "name": "NOTETYPE",
+              "description": "type of note to add",
+              "provider": {
+                "values": [
+                  "amex",
+                  "bank",
+                  "credit",
+                  "database",
+                  "drivers_license",
+                  "email",
+                  "health_insurance",
+                  "im",
+                  "mastercard",
+                  "membership",
+                  "passport",
+                  "server",
+                  "software_license",
+                  "ssh_key",
+                  "ssn",
+                  "visa",
+                  "wifi"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "NAME|UNIQUEID",
+              "description": "name or unique ID of the entry to add",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "edit",
+        "description": "edit existing entry",
+        "options": [
+          {
+            "long": "sync",
+            "description": "when the current operation syncs to server",
+            "inherit": false,
+            "value": {
+              "name": "sync",
+              "required": false,
+              "style": "optional",
+              "provider": {
+                "values": [
+                  "auto",
+                  "now",
+                  "no"
+                ]
+              }
+            }
+          },
+          {
+            "long": "non-interactive",
+            "description": "accept data until EOF or, unless the notes field is being edited, the first new line",
+            "inherit": false
+          },
+          {
+            "long": "color",
+            "description": "control colored output to the terminal",
+            "inherit": false,
+            "value": {
+              "name": "color",
+              "required": false,
+              "style": "optional",
+              "provider": {
+                "values": [
+                  "auto",
+                  "never",
+                  "always"
+                ]
+              }
+            }
+          },
+          {
+            "long": "name",
+            "aliases": [
+              "username"
+            ],
+            "description": "edit only the name (or username)",
+            "inherit": false
+          },
+          {
+            "long": "password",
+            "description": "edit only the password",
+            "inherit": false
+          },
+          {
+            "long": "url",
+            "description": "edit only the URL",
+            "inherit": false
+          },
+          {
+            "long": "notes",
+            "description": "edit only the notes",
+            "inherit": false
+          },
+          {
+            "long": "field",
+            "description": "edit only the field",
+            "inherit": false,
+            "value": {
+              "name": "FIELD",
+              "description": "edit just this field"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "NAME|UNIQUEID",
+              "description": "name or unique ID of the entry to edit",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "generate",
+        "description": "create randomly generated password",
+        "options": [
+          {
+            "long": "sync",
+            "description": "when the current operation syncs to server",
+            "inherit": false,
+            "value": {
+              "name": "sync",
+              "required": false,
+              "style": "optional",
+              "provider": {
+                "values": [
+                  "auto",
+                  "now",
+                  "no"
+                ]
+              }
+            }
+          },
+          {
+            "long": "color",
+            "description": "control colored output to the terminal",
+            "inherit": false,
+            "value": {
+              "name": "color",
+              "required": false,
+              "style": "optional",
+              "provider": {
+                "values": [
+                  "auto",
+                  "never",
+                  "always"
+                ]
+              }
+            }
+          },
+          {
+            "long": "clip",
+            "short": "c",
+            "description": "copy the text to the clipboard",
+            "inherit": false
+          },
+          {
+            "long": "username",
+            "description": "generate password for this username",
+            "inherit": false,
+            "value": {
+              "name": "USERNAME",
+              "description": "username to generate the password for"
+            }
+          },
+          {
+            "long": "url",
+            "description": "generate password for this URL",
+            "inherit": false,
+            "value": {
+              "name": "URL",
+              "description": "uRL to generate the password for"
+            }
+          },
+          {
+            "long": "no-symbols",
+            "description": "generate password without symbols",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "NAME|UNIQUEID",
+              "description": "name or unique ID of the entry to generate the password for",
+              "index": 0
+            },
+            {
+              "name": "LENGTH",
+              "description": "length of the password to create",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "duplicate",
+        "description": "duplicate existing entry",
+        "options": [
+          {
+            "long": "sync",
+            "description": "when the current operation syncs to server",
+            "inherit": false,
+            "value": {
+              "name": "sync",
+              "required": false,
+              "style": "optional",
+              "provider": {
+                "values": [
+                  "auto",
+                  "now",
+                  "no"
+                ]
+              }
+            }
+          },
+          {
+            "long": "color",
+            "description": "control colored output to the terminal",
+            "inherit": false,
+            "value": {
+              "name": "color",
+              "required": false,
+              "style": "optional",
+              "provider": {
+                "values": [
+                  "auto",
+                  "never",
+                  "always"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "UNIQUENAME|UNIQUEID",
+              "description": "unique name or unique ID of the entry to duplicate",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "rm",
+        "description": "removes existing entry",
+        "options": [
+          {
+            "long": "sync",
+            "description": "when the current operation syncs to server",
+            "inherit": false,
+            "value": {
+              "name": "sync",
+              "required": false,
+              "style": "optional",
+              "provider": {
+                "values": [
+                  "auto",
+                  "now",
+                  "no"
+                ]
+              }
+            }
+          },
+          {
+            "long": "color",
+            "description": "control colored output to the terminal",
+            "inherit": false,
+            "value": {
+              "name": "color",
+              "required": false,
+              "style": "optional",
+              "provider": {
+                "values": [
+                  "auto",
+                  "never",
+                  "always"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "UNIQUENAME|UNIQUEID",
+              "description": "unique name or unique ID of the entry to remove",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "status",
+        "description": "show the LastPass login status",
+        "options": [
+          {
+            "long": "quiet",
+            "short": "q",
+            "description": "display no output and only sets return code",
+            "inherit": false
+          },
+          {
+            "long": "color",
+            "description": "control colored output to the terminal",
+            "inherit": false,
+            "value": {
+              "name": "color",
+              "required": false,
+              "style": "optional",
+              "provider": {
+                "values": [
+                  "auto",
+                  "never",
+                  "always"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "sync",
+        "description": "sync the local cache against the LastPass server",
+        "options": [
+          {
+            "long": "background",
+            "short": "b",
+            "description": "syncronization occurs in a daemonized process",
+            "inherit": false
+          },
+          {
+            "long": "color",
+            "description": "control colored output to the terminal",
+            "inherit": false,
+            "value": {
+              "name": "color",
+              "required": false,
+              "style": "optional",
+              "provider": {
+                "values": [
+                  "auto",
+                  "never",
+                  "always"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "import",
+        "description": "import account information from an unencrypted CSV",
+        "options": [
+          {
+            "long": "sync",
+            "description": "when the current operation syncs to server",
+            "inherit": false,
+            "value": {
+              "name": "sync",
+              "required": false,
+              "style": "optional",
+              "provider": {
+                "values": [
+                  "auto",
+                  "now",
+                  "no"
+                ]
+              }
+            }
+          },
+          {
+            "long": "keep-dupes",
+            "description": "keeps any duplicate entries",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "FILENAME",
+              "description": "cSV filename to import from",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "export",
+        "description": "export account information to an unencrypted CSV",
+        "options": [
+          {
+            "long": "sync",
+            "description": "when the current operation syncs to server",
+            "inherit": false,
+            "value": {
+              "name": "sync",
+              "required": false,
+              "style": "optional",
+              "provider": {
+                "values": [
+                  "auto",
+                  "now",
+                  "no"
+                ]
+              }
+            }
+          },
+          {
+            "long": "color",
+            "description": "control colored output to the terminal",
+            "inherit": false,
+            "value": {
+              "name": "color",
+              "required": false,
+              "style": "optional",
+              "provider": {
+                "values": [
+                  "auto",
+                  "never",
+                  "always"
+                ]
+              }
+            }
+          },
+          {
+            "long": "fields",
+            "description": "comma-separated subset of: id, url, username, password, extra, name, fav, id, grouping, group, fullname, last_touch, last_modified_gmt, attachpresent",
+            "inherit": false,
+            "value": {
+              "name": "FIELDLIST",
+              "provider": {
+                "values": [
+                  "id,url,username,password,extra,name,fav,id,grouping,group,fullname,last_touch,last_modified_gmt,attachpresent"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "FILENAME",
+              "description": "cSV filename to export to",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "share",
+        "description": "lastPass Sharing Center functionality",
+        "arguments": {
+          "states": [
+            {
+              "name": "SHARE",
+              "description": "lastPass Shared folder to query",
+              "index": 0
+            }
+          ]
+        },
+        "subcommands": [
+          {
+            "name": "userls",
+            "description": "list the LastPass users which have access to the Shared Folders"
+          },
+          {
+            "name": "useradd",
+            "description": "add user to Shared Folders",
+            "options": [
+              {
+                "long": "read-only",
+                "description": "control read or write access",
+                "inherit": false,
+                "value": [
+                  {
+                    "name": "true",
+                    "description": "grant read only access"
+                  },
+                  {
+                    "name": "false",
+                    "description": "grant write access"
+                  }
+                ]
+              },
+              {
+                "long": "hidden",
+                "description": "share user view permission",
+                "inherit": false,
+                "value": [
+                  {
+                    "name": "true",
+                    "description": "user can only view entry"
+                  },
+                  {
+                    "name": "false",
+                    "description": "user can view entry and secrets"
+                  }
+                ]
+              },
+              {
+                "long": "admin",
+                "description": "share user administer permission",
+                "inherit": false,
+                "value": [
+                  {
+                    "name": "true",
+                    "description": "user can administer entry"
+                  },
+                  {
+                    "name": "false",
+                    "description": "user cannot administer entry"
+                  }
+                ]
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "SHARE",
+                  "description": "entry to share",
+                  "index": 0
+                },
+                {
+                  "name": "USERNAME",
+                  "description": "user to share entry with",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "usermod",
+            "description": "modify user on Shared Folders",
+            "options": [
+              {
+                "long": "read-only",
+                "description": "control read or write access",
+                "inherit": false,
+                "value": [
+                  {
+                    "name": "true",
+                    "description": "grant read only access"
+                  },
+                  {
+                    "name": "false",
+                    "description": "grant write access"
+                  }
+                ]
+              },
+              {
+                "long": "hidden",
+                "description": "share user view permission",
+                "inherit": false,
+                "value": [
+                  {
+                    "name": "true",
+                    "description": "user can only view entry"
+                  },
+                  {
+                    "name": "false",
+                    "description": "user can view entry and secrets"
+                  }
+                ]
+              },
+              {
+                "long": "admin",
+                "description": "share user administer permission",
+                "inherit": false,
+                "value": [
+                  {
+                    "name": "true",
+                    "description": "user can administer entry"
+                  },
+                  {
+                    "name": "false",
+                    "description": "user cannot administer entry"
+                  }
+                ]
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "SHARE",
+                  "description": "entry to modify",
+                  "index": 0
+                },
+                {
+                  "name": "USERNAME",
+                  "description": "user access to modify",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "userdel",
+            "description": "remove user from Shared Folders",
+            "arguments": {
+              "states": [
+                {
+                  "name": "SHARE",
+                  "description": "lastPass entry to remove user from",
+                  "index": 0
+                },
+                {
+                  "name": "USERNAME",
+                  "description": "lastPass user to remove",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "create",
+            "description": "create new LastPass Shared Folder",
+            "arguments": {
+              "states": [
+                {
+                  "name": "SHARE",
+                  "description": "lastPass Shared Folder to create",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "rm",
+            "description": "lastPass Shared Folder to remove",
+            "arguments": {
+              "states": [
+                {
+                  "name": "SHARE",
+                  "description": "lastPass Shared Folder to remove",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "limit",
+            "description": "manipulate LastPass Shared Folder access",
+            "options": [
+              {
+                "long": "deny",
+                "aliases": [
+                  "allow"
+                ],
+                "description": "deny or allow access",
+                "inherit": false
+              },
+              {
+                "long": "add",
+                "aliases": [
+                  "rm",
+                  "clear"
+                ],
+                "description": "add, remove, or clear acces",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "SHARE",
+                  "description": "shared Folder to remove",
+                  "index": 0
+                },
+                {
+                  "name": "USERNAME",
+                  "description": "user access to manipulate",
+                  "index": 1
+                },
+                {
+                  "name": "sites",
+                  "description": "lastPass sites to manipulate",
+                  "index": 2
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
