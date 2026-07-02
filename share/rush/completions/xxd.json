@@ -1,0 +1,158 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "xxd",
+    "description": "make or reverse a hexdump",
+    "options": [
+      {
+        "short": "h",
+        "spellings": [
+          "-help"
+        ],
+        "description": "show help for xxd"
+      },
+      {
+        "short": "a",
+        "spellings": [
+          "-autoskip"
+        ],
+        "description": "toggle autoskip: A single '*' replaces nul-lines. Default off"
+      },
+      {
+        "short": "b",
+        "spellings": [
+          "-bits"
+        ],
+        "description": "switch to bits (binary digits) dump, rather than hexdump"
+      },
+      {
+        "short": "c",
+        "spellings": [
+          "-cols"
+        ],
+        "description": "format <cols> octets per line. Default 16",
+        "value": {
+          "name": "cols"
+        }
+      },
+      {
+        "short": "C",
+        "spellings": [
+          "-capitalize"
+        ],
+        "description": "capitalize variable names in C include file style, when using -i"
+      },
+      {
+        "short": "E",
+        "spellings": [
+          "-EBCDIC"
+        ],
+        "description": "change the character encoding in the righthand column from ASCII to EBCDIC"
+      },
+      {
+        "short": "e",
+        "description": "switch to little-endian hexdump"
+      },
+      {
+        "short": "g",
+        "spellings": [
+          "-groupsize"
+        ],
+        "description": "separate the output of every <bytes> bytes",
+        "value": {
+          "name": "bytes"
+        }
+      },
+      {
+        "short": "i",
+        "spellings": [
+          "-include"
+        ],
+        "description": "output in C include file style"
+      },
+      {
+        "short": "l",
+        "spellings": [
+          "-len"
+        ],
+        "description": "stop after writing <len> octets",
+        "value": {
+          "name": "len"
+        }
+      },
+      {
+        "short": "n",
+        "spellings": [
+          "-name"
+        ],
+        "description": "override the variable name output when -i is used",
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "short": "o",
+        "description": "add <offset> to the displayed file position",
+        "value": {
+          "name": "offset"
+        }
+      },
+      {
+        "short": "p",
+        "spellings": [
+          "-postscript",
+          "-plain",
+          "-ps"
+        ],
+        "description": "output in postscript continuous hexdump style"
+      },
+      {
+        "short": "r",
+        "spellings": [
+          "-revert"
+        ],
+        "description": "reverse operation: convert (or patch) hexdump into binary"
+      },
+      {
+        "spellings": [
+          "-seek"
+        ],
+        "description": "when used after -r: revert with <offset> added to file positions found in hexdump",
+        "value": {
+          "name": "offset"
+        }
+      },
+      {
+        "short": "u",
+        "description": "use upper case hex letters. Default is lower case"
+      },
+      {
+        "short": "v",
+        "spellings": [
+          "-version"
+        ],
+        "description": "show version string"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "infile",
+          "provider": "builtin.files",
+          "index": 0
+        },
+        {
+          "name": "outfile",
+          "provider": "builtin.files",
+          "index": 1
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
