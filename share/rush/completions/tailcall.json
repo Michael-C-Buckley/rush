@@ -1,0 +1,104 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "tailcall",
+    "description": "manage TailCall GraphQL configurations",
+    "subcommands": [
+      {
+        "name": "check",
+        "description": "validate a composition spec",
+        "options": [
+          {
+            "long": "n-plus-one-queries",
+            "description": "detect N+1 queries",
+            "inherit": true
+          },
+          {
+            "long": "schema",
+            "description": "display schema",
+            "inherit": true
+          },
+          {
+            "long": "format",
+            "description": "set input format",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  "gql",
+                  "graphql",
+                  "yml",
+                  "yaml",
+                  "json"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "start",
+        "description": "launch the GraphQL server",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ],
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "init",
+        "description": "bootstrap a project",
+        "arguments": {
+          "states": [
+            {
+              "name": "directory",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "gen",
+        "description": "generate GraphQL configuration",
+        "arguments": {
+          "states": [
+            {
+              "name": "config-file",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
