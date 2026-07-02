@@ -2713,6 +2713,18 @@ fn evalReadBuiltin(shell: anytype, args: []const []const u8, assignments: []cons
         }
         var option_index: usize = 1;
         while (option_index < arg.len) : (option_index += 1) switch (arg[option_index]) {
+            'a' => {
+                if (shell.state.options.mode == .posix) return .{ .status = 2 };
+                options.array_name = if (option_index + 1 < arg.len) name: {
+                    defer option_index = arg.len;
+                    break :name arg[option_index + 1 ..];
+                } else name: {
+                    index += 1;
+                    if (index >= args.len) return .{ .status = 2 };
+                    break :name args[index];
+                };
+                break;
+            },
             'r' => options.raw = true,
             'd' => {
                 if (option_index + 1 < arg.len) {
@@ -2774,7 +2786,11 @@ fn evalReadBuiltin(shell: anytype, args: []const []const u8, assignments: []cons
     }
 
     const names = if (index < args.len) args[index..] else &[_][]const u8{"REPLY"};
-    for (names) |name| if (!isAssignmentName(name)) return .{ .status = 2 };
+    if (options.array_name) |name| {
+        if (!isAssignmentName(name)) return .{ .status = 2 };
+    } else {
+        for (names) |name| if (!isAssignmentName(name)) return .{ .status = 2 };
+    }
 
     if (options.prompt) |prompt| {
         if (shell.host.isTerminalFd(.stdin)) try shell.host.writeAll(.stderr, prompt);
@@ -2789,6 +2805,17 @@ fn evalReadBuiltin(shell: anytype, args: []const []const u8, assignments: []cons
     errdefer if (!restored_assignments) restoreVariables(shell, saved);
     try applyAssignments(shell, assignments);
     const ifs = parameterValue(shell, "IFS") orelse " \t\n";
+    if (options.array_name) |name| {
+        const values = if (options.exact_count)
+            try readExactFieldValues(shell, line_result.line, 1)
+        else
+            try readArrayFieldValues(shell, line_result.line, ifs);
+        restoreVariables(shell, saved);
+        restored_assignments = true;
+        try shell.state.putArray(name, values);
+        if (line_result.timed_out) return .{ .status = 142 };
+        return .{ .status = if (line_result.found_delimiter) 0 else 1 };
+    }
     const values = if (options.exact_count)
         try readExactFieldValues(shell, line_result.line, names.len)
     else
@@ -2811,6 +2838,7 @@ const ReadOptions = struct {
     prompt: ?[]const u8 = null,
     timeout_ms: ?u64 = null,
     silent: bool = false,
+    array_name: ?[]const u8 = null,
 };
 
 fn parseReadCount(text: []const u8) ?usize {
@@ -2984,6 +3012,22 @@ fn readFieldValues(shell: anytype, line: []const u8, count: usize, ifs: []const 
     if (!starts_with_nonwhitespace_delimiter) end = trimOneTrailingIfsNonWhitespace(line, last_start, end, ifs);
     values[value_index] = try cleanReadField(shell, line[last_start..end]);
     return values;
+}
+
+fn readArrayFieldValues(shell: anytype, line: []const u8, ifs: []const u8) ![]const []const u8 {
+    const allocator = shell.scratchAllocator();
+    if (ifs.len == 0) return allocator.dupe([]const u8, &.{try cleanReadField(shell, line)});
+
+    var values: std.ArrayList([]const u8) = .empty;
+    var pos = skipIfsWhitespace(line, 0, ifs);
+    while (pos < line.len) {
+        const start = pos;
+        while (pos < line.len and ifsMatchAt(line, pos, ifs) == null) pos += utf8CharLen(line, pos);
+        const end = if (pos == line.len) trimTrailingIfsWhitespace(line, start, line.len, ifs) else pos;
+        try values.append(allocator, try cleanReadField(shell, line[start..end]));
+        pos = consumeReadDelimiter(line, pos, ifs);
+    }
+    return values.toOwnedSlice(allocator);
 }
 
 fn cleanReadField(shell: anytype, field: []const u8) ![]const u8 {

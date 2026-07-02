@@ -116,6 +116,28 @@
             .status = 0,
         },
         .{
+            .name = "read -a assigns split fields to an indexed array",
+            .script =
+            \\printf 'a b  c\n' | {
+            \\    read -ra arr ignored
+            \\    declare -p arr
+            \\    printf 'ignored=<%s>\n' "${ignored-unset}"
+            \\}
+            \\printf 'a::b:\n' | {
+            \\    IFS=: read -ra arr
+            \\    declare -p arr
+            \\}
+            ,
+            .stdout =
+            \\declare -a arr=([0]="a" [1]="b" [2]="c")
+            \\ignored=<unset>
+            \\declare -a arr=([0]="a" [1]="" [2]="b")
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "read -n counts multibyte characters",
             .script =
             \\printf 'éx' | {
