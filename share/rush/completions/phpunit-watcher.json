@@ -1,0 +1,24 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "phpunit-watcher",
+    "description": "rerun PHPUnit tests when files change",
+    "subcommands": [
+      {
+        "name": "watch",
+        "description": "watch source and test files",
+        "options": [
+          {
+            "long": "filter",
+            "description": "watch a specific test",
+            "inherit": false,
+            "value": {
+              "name": "test"
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
