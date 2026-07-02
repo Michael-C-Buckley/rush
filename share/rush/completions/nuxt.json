@@ -1,0 +1,64 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "nuxt",
+    "description": "nuxt cli",
+    "subcommands": [
+      {
+        "name": "dev",
+        "description": "launch the development server"
+      },
+      {
+        "name": "start",
+        "description": "start the production server"
+      },
+      {
+        "name": "generate",
+        "description": "generate static html output"
+      },
+      {
+        "name": "build",
+        "description": "build and optimize for production"
+      },
+      {
+        "name": "webpack",
+        "description": "inspect the webpack config",
+        "options": [
+          {
+            "long": "name",
+            "description": "bundle name to inspect",
+            "inherit": false,
+            "value": {
+              "name": "bundle",
+              "provider": "nuxt.bundles"
+            }
+          },
+          {
+            "long": "dev",
+            "description": "inspect dev webpack config",
+            "inherit": false
+          },
+          {
+            "long": "depth",
+            "description": "inspection depth",
+            "inherit": false,
+            "value": {
+              "name": "depth"
+            }
+          },
+          {
+            "long": "no-colors",
+            "description": "disable ansi colors",
+            "inherit": false
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "nuxt.bundles": {
+        "values": ["client", "server", "modern"]
+      }
+    }
+  }
+}
