@@ -1,0 +1,178 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "mosh",
+    "description": "mobile shell for remote terminals",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "client",
+        "description": "local mosh client command",
+        "inherit": false
+      },
+      {
+        "long": "server",
+        "description": "remote mosh server command",
+        "inherit": false
+      },
+      {
+        "long": "predict",
+        "description": "set local echo behavior",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": {
+            "values": [
+              {
+                "value": "adaptive",
+                "description": "Local echo for slower links [default]"
+              },
+              {
+                "value": "always",
+                "description": "Use local echo even on fast links"
+              },
+              {
+                "value": "never",
+                "description": "Never use local echo"
+              },
+              {
+                "value": "experimental",
+                "description": "Aggressively echo even when incorrect"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "4",
+        "description": "Use IPv4 only",
+        "inherit": false
+      },
+      {
+        "short": "6",
+        "description": "Use IPv6 only",
+        "inherit": false
+      },
+      {
+        "long": "family",
+        "description": "set network address family",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": {
+            "values": [
+              {
+                "value": "inet",
+                "description": "Use IPv4 only"
+              },
+              {
+                "value": "ine6",
+                "description": "Use IPv6 only"
+              },
+              {
+                "value": "auto",
+                "description": "Autodetect network type for single-family hosts only"
+              },
+              {
+                "value": "all",
+                "description": "Try all network types"
+              },
+              {
+                "value": "prefer-inet4",
+                "description": "Use all network types, but try IPv4 first [default]"
+              },
+              {
+                "value": "prefer-inet6",
+                "description": "Use all network types, but try IPv6 first"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "port",
+        "short": "p",
+        "description": "server-side UDP port or range",
+        "inherit": false,
+        "value": {
+          "name": "port"
+        }
+      },
+      {
+        "long": "bind-server",
+        "description": "set server reply address",
+        "inherit": false,
+        "value": {
+          "name": "ssh|any|ip"
+        }
+      },
+      {
+        "long": "ssh",
+        "description": "ssh command for session setup",
+        "inherit": false,
+        "value": {
+          "name": "command",
+          "provider": "builtin.executables"
+        }
+      },
+      {
+        "long": "no-ssh-pty",
+        "description": "Do not allocate a pseudo tty on ssh connection",
+        "inherit": false
+      },
+      {
+        "long": "no-init",
+        "description": "Do not send terminal initialization string",
+        "inherit": false
+      },
+      {
+        "long": "local",
+        "description": "Run mosh-server locally without using ssh",
+        "inherit": false
+      },
+      {
+        "long": "experimental-remote-ip",
+        "description": "set remote IP discovery method",
+        "inherit": false,
+        "value": {
+          "name": "method",
+          "provider": {
+            "values": [
+              "local",
+              "remote",
+              "proxy"
+            ]
+          }
+        }
+      },
+      {
+        "long": "version",
+        "description": "show version information",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "user@host",
+          "description": "Address of remote machine to log into",
+          "index": 0,
+          "provider": {
+            "function": "__rush_complete_mosh_hosts"
+          }
+        }
+      ]
+    },
+    "providers": {
+      "builtin.executables": {
+        "builtin": "executables"
+      }
+    }
+  }
+}

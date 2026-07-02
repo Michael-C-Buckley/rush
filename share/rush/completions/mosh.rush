@@ -1,0 +1,36 @@
+__rush_complete_mosh_hosts() {
+  for config in "$HOME/.ssh/config" /etc/ssh/ssh_config; do
+    test -r "$config" || continue
+    while IFS= read -r line; do
+      set -- $line
+      test "$1" = Host || test "$1" = host || continue
+      shift
+      for host in "$@"; do
+        case "$host" in
+          '*'*|'?'*|'!'*) continue ;;
+        esac
+        rush_complete candidate "$host" --kind plain --description "ssh config host"
+      done
+    done < "$config"
+  done
+
+  for known_hosts in "$HOME/.ssh/known_hosts" "$HOME/.ssh/known_hosts2"; do
+    test -r "$known_hosts" || continue
+    while IFS= read -r line; do
+      case "$line" in ''|'#'*|'|'*) continue ;; esac
+      hosts=${line%% *}
+      old_ifs=$IFS
+      IFS=,
+      for host in $hosts; do
+        IFS=$old_ifs
+        host=${host#\[}
+        host=${host%%\]*}
+        host=${host%%:*}
+        test -n "$host" || continue
+        rush_complete candidate "$host" --kind plain --description "known ssh host"
+        IFS=,
+      done
+      IFS=$old_ifs
+    done < "$known_hosts"
+  done
+}
