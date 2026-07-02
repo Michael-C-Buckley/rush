@@ -1,0 +1,127 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "hyper",
+    "description": "Electron-based terminal",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "inherit": false,
+        "description": "output usage information"
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "inherit": false,
+        "description": "enable verbose mode"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "directory",
+          "provider": "builtin.directories",
+          "index": 0
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "install",
+        "aliases": [
+          "i"
+        ],
+        "description": "install a plugin",
+        "arguments": {
+          "states": [
+            {
+              "name": "plugin",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "docs",
+        "aliases": [
+          "d",
+          "h",
+          "home"
+        ],
+        "description": "open the npm page of a plugin",
+        "arguments": {
+          "states": [
+            {
+              "name": "plugin",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "display help"
+      },
+      {
+        "name": "list",
+        "aliases": [
+          "ls"
+        ],
+        "description": "list installed plugins"
+      },
+      {
+        "name": "list-remote",
+        "aliases": [
+          "ls-remote",
+          "lsr"
+        ],
+        "description": "list plugins available on npm"
+      },
+      {
+        "name": "search",
+        "aliases": [
+          "s"
+        ],
+        "description": "search for plugins on npm",
+        "arguments": {
+          "states": [
+            {
+              "name": "query",
+              "description": "Your search query",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "uninstall",
+        "aliases": [
+          "u",
+          "rm",
+          "remove"
+        ],
+        "description": "uninstall plugin",
+        "arguments": {
+          "states": [
+            {
+              "name": "plugin",
+              "description": "Plugin to uninstall",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "version",
+        "description": "show version"
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
