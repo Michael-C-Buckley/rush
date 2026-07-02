@@ -1,0 +1,31 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "sw_vers",
+    "description": "print macOS version information",
+    "options": [
+      {
+        "spellings": [
+          "-productName"
+        ],
+        "description": "print product name",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-productVersion"
+        ],
+        "description": "print product version",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-buildVersion"
+        ],
+        "description": "print build version",
+        "inherit": false
+      }
+    ]
+  }
+}
