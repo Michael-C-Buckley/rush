@@ -1,0 +1,69 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "luz",
+    "description": "build Apple Darwin projects",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for Luz",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "build",
+        "description": "build the target in the current directory",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help for the build command",
+            "inherit": false
+          },
+          {
+            "long": "clean",
+            "short": "c",
+            "description": "clean the build directory before building",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "gen",
+        "description": "generate a new project",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help for the gen command",
+            "inherit": false
+          },
+          {
+            "long": "type",
+            "short": "t",
+            "description": "the type of project to generate",
+            "inherit": false,
+            "value": {
+              "name": "type",
+              "provider": {
+                "values": [
+                  {
+                    "value": "tool",
+                    "description": "a command-line tool"
+                  },
+                  {
+                    "value": "tweak",
+                    "description": "a tweak"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
