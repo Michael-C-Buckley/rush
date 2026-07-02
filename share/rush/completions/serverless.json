@@ -1,0 +1,1797 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "serverless",
+    "description": "deploy and manage Serverless Framework services",
+    "options": [
+      {
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "deploy",
+        "description": "deploy a Serverless service",
+        "options": [
+          {
+            "long": "region",
+            "short": "r",
+            "description": "set AWS region",
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "aws-profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "app",
+            "description": "set Serverless app",
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set Serverless org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "use-local-credentials",
+            "description": "use local credentials"
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set service config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "set stage",
+            "value": {
+              "name": "stage"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show version"
+          },
+          {
+            "long": "force",
+            "description": "forces a deployment to take place",
+            "inherit": false
+          },
+          {
+            "long": "aws-s3-accelerate",
+            "description": "enables S3 Transfer Acceleration making uploading artifacts much faster",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "function",
+            "options": [
+              {
+                "long": "region",
+                "short": "r",
+                "description": "set AWS region",
+                "value": {
+                  "name": "region"
+                }
+              },
+              {
+                "long": "aws-profile",
+                "description": "set AWS profile",
+                "value": {
+                  "name": "profile"
+                }
+              },
+              {
+                "long": "app",
+                "description": "set Serverless app",
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "org",
+                "description": "set Serverless org",
+                "value": {
+                  "name": "org"
+                }
+              },
+              {
+                "long": "use-local-credentials",
+                "description": "use local credentials"
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "set service config file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "stage",
+                "short": "s",
+                "description": "set stage",
+                "value": {
+                  "name": "stage"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              },
+              {
+                "long": "version",
+                "short": "v",
+                "description": "show version"
+              },
+              {
+                "long": "force",
+                "description": "forces a deployment to take place",
+                "inherit": false
+              },
+              {
+                "long": "update-config",
+                "short": "u",
+                "description": "updates function configuration, e.g. Timeout or Memory Size without deploying code",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "subcommands": [
+              {
+                "name": "functions",
+                "options": [
+                  {
+                    "long": "region",
+                    "short": "r",
+                    "description": "set AWS region",
+                    "value": {
+                      "name": "region"
+                    }
+                  },
+                  {
+                    "long": "aws-profile",
+                    "description": "set AWS profile",
+                    "value": {
+                      "name": "profile"
+                    }
+                  },
+                  {
+                    "long": "app",
+                    "description": "set Serverless app",
+                    "value": {
+                      "name": "app"
+                    }
+                  },
+                  {
+                    "long": "org",
+                    "description": "set Serverless org",
+                    "value": {
+                      "name": "org"
+                    }
+                  },
+                  {
+                    "long": "use-local-credentials",
+                    "description": "use local credentials"
+                  },
+                  {
+                    "long": "config",
+                    "short": "c",
+                    "description": "set service config file",
+                    "value": {
+                      "name": "file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "stage",
+                    "short": "s",
+                    "description": "set stage",
+                    "value": {
+                      "name": "stage"
+                    }
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "show help"
+                  },
+                  {
+                    "long": "version",
+                    "short": "v",
+                    "description": "show version"
+                  }
+                ]
+              }
+            ],
+            "options": [
+              {
+                "long": "region",
+                "short": "r",
+                "description": "set AWS region",
+                "value": {
+                  "name": "region"
+                }
+              },
+              {
+                "long": "aws-profile",
+                "description": "set AWS profile",
+                "value": {
+                  "name": "profile"
+                }
+              },
+              {
+                "long": "app",
+                "description": "set Serverless app",
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "org",
+                "description": "set Serverless org",
+                "value": {
+                  "name": "org"
+                }
+              },
+              {
+                "long": "use-local-credentials",
+                "description": "use local credentials"
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "set service config file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "stage",
+                "short": "s",
+                "description": "set stage",
+                "value": {
+                  "name": "stage"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              },
+              {
+                "long": "version",
+                "short": "v",
+                "description": "show version"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "info",
+        "description": "display information about the service",
+        "options": [
+          {
+            "long": "region",
+            "short": "r",
+            "description": "set AWS region",
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "aws-profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "app",
+            "description": "set Serverless app",
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set Serverless org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "use-local-credentials",
+            "description": "use local credentials"
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set service config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "set stage",
+            "value": {
+              "name": "stage"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "invoke",
+        "description": "invoke a deployed function",
+        "options": [
+          {
+            "long": "region",
+            "short": "r",
+            "description": "set AWS region",
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "aws-profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "app",
+            "description": "set Serverless app",
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set Serverless org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "use-local-credentials",
+            "description": "use local credentials"
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set service config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "set stage",
+            "value": {
+              "name": "stage"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show version"
+          },
+          {
+            "long": "function",
+            "short": "f",
+            "description": "set function name",
+            "value": {
+              "name": "function"
+            }
+          },
+          {
+            "long": "path",
+            "short": "p",
+            "description": "set event data file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "data",
+            "short": "d",
+            "description": "set event data",
+            "value": {
+              "name": "data"
+            }
+          },
+          {
+            "long": "raw",
+            "description": "pass raw input data"
+          },
+          {
+            "long": "context",
+            "description": "set context data",
+            "value": {
+              "name": "context"
+            }
+          },
+          {
+            "long": "context-path",
+            "description": "set context data file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "local",
+            "options": [
+              {
+                "long": "region",
+                "short": "r",
+                "description": "set AWS region",
+                "value": {
+                  "name": "region"
+                }
+              },
+              {
+                "long": "aws-profile",
+                "description": "set AWS profile",
+                "value": {
+                  "name": "profile"
+                }
+              },
+              {
+                "long": "app",
+                "description": "set Serverless app",
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "org",
+                "description": "set Serverless org",
+                "value": {
+                  "name": "org"
+                }
+              },
+              {
+                "long": "use-local-credentials",
+                "description": "use local credentials"
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "set service config file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "stage",
+                "short": "s",
+                "description": "set stage",
+                "value": {
+                  "name": "stage"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              },
+              {
+                "long": "version",
+                "short": "v",
+                "description": "show version"
+              },
+              {
+                "long": "function",
+                "short": "f",
+                "description": "set function name",
+                "value": {
+                  "name": "function"
+                }
+              },
+              {
+                "long": "path",
+                "short": "p",
+                "description": "set event data file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "data",
+                "short": "d",
+                "description": "set event data",
+                "value": {
+                  "name": "data"
+                }
+              },
+              {
+                "long": "raw",
+                "description": "pass raw input data"
+              },
+              {
+                "long": "context",
+                "description": "set context data",
+                "value": {
+                  "name": "context"
+                }
+              },
+              {
+                "long": "context-path",
+                "description": "set context data file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "logs",
+        "description": "output the logs of a deployed function",
+        "options": [
+          {
+            "long": "region",
+            "short": "r",
+            "description": "set AWS region",
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "aws-profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "app",
+            "description": "set Serverless app",
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set Serverless org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "use-local-credentials",
+            "description": "use local credentials"
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set service config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "set stage",
+            "value": {
+              "name": "stage"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "metrics",
+        "description": "show metrics for a specific function",
+        "options": [
+          {
+            "long": "region",
+            "short": "r",
+            "description": "set AWS region",
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "aws-profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "app",
+            "description": "set Serverless app",
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set Serverless org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "use-local-credentials",
+            "description": "use local credentials"
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set service config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "set stage",
+            "value": {
+              "name": "stage"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "remove",
+        "description": "remove Serverless service and all resources",
+        "options": [
+          {
+            "long": "region",
+            "short": "r",
+            "description": "set AWS region",
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "aws-profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "app",
+            "description": "set Serverless app",
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set Serverless org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "use-local-credentials",
+            "description": "use local credentials"
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set service config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "set stage",
+            "value": {
+              "name": "stage"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "rollback",
+        "description": "rollback the Serverless service to a specific deployment",
+        "options": [
+          {
+            "long": "region",
+            "short": "r",
+            "description": "set AWS region",
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "aws-profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "app",
+            "description": "set Serverless app",
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set Serverless org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "use-local-credentials",
+            "description": "use local credentials"
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set service config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "set stage",
+            "value": {
+              "name": "stage"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "studio",
+        "description": "develop a Serverless application in the cloud",
+        "options": [
+          {
+            "long": "region",
+            "short": "r",
+            "description": "set AWS region",
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "aws-profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "app",
+            "description": "set Serverless app",
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set Serverless org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "use-local-credentials",
+            "description": "use local credentials"
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set service config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "set stage",
+            "value": {
+              "name": "stage"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "test",
+        "description": "run HTTP tests",
+        "options": [
+          {
+            "long": "region",
+            "short": "r",
+            "description": "set AWS region",
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "aws-profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "app",
+            "description": "set Serverless app",
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set Serverless org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "use-local-credentials",
+            "description": "use local credentials"
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set service config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "set stage",
+            "value": {
+              "name": "stage"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "package",
+        "description": "package a Serverless service",
+        "options": [
+          {
+            "long": "region",
+            "short": "r",
+            "description": "set AWS region",
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "aws-profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "app",
+            "description": "set Serverless app",
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set Serverless org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "use-local-credentials",
+            "description": "use local credentials"
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set service config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "set stage",
+            "value": {
+              "name": "stage"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "plugin",
+        "description": "handle plugins",
+        "options": [
+          {
+            "long": "region",
+            "short": "r",
+            "description": "set AWS region",
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "aws-profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "app",
+            "description": "set Serverless app",
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set Serverless org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "use-local-credentials",
+            "description": "use local credentials"
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set service config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "set stage",
+            "value": {
+              "name": "stage"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "print",
+        "description": "print your compiled and resolved config file",
+        "options": [
+          {
+            "long": "region",
+            "short": "r",
+            "description": "set AWS region",
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "aws-profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "app",
+            "description": "set Serverless app",
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set Serverless org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "use-local-credentials",
+            "description": "use local credentials"
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set service config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "set stage",
+            "value": {
+              "name": "stage"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "create",
+        "description": "create new Serverless service",
+        "options": [
+          {
+            "long": "region",
+            "short": "r",
+            "description": "set AWS region",
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "aws-profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "app",
+            "description": "set Serverless app",
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set Serverless org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "use-local-credentials",
+            "description": "use local credentials"
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set service config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "set stage",
+            "value": {
+              "name": "stage"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "dashboard",
+        "description": "open the Serverless dashboard",
+        "options": [
+          {
+            "long": "region",
+            "short": "r",
+            "description": "set AWS region",
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "aws-profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "app",
+            "description": "set Serverless app",
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set Serverless org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "use-local-credentials",
+            "description": "use local credentials"
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set service config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "set stage",
+            "value": {
+              "name": "stage"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "generate-event",
+        "description": "generate event",
+        "options": [
+          {
+            "long": "region",
+            "short": "r",
+            "description": "set AWS region",
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "aws-profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "app",
+            "description": "set Serverless app",
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set Serverless org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "use-local-credentials",
+            "description": "use local credentials"
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set service config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "set stage",
+            "value": {
+              "name": "stage"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "install a Serverless service from GitHub or a plugin from the Serverless registry",
+        "options": [
+          {
+            "long": "region",
+            "short": "r",
+            "description": "set AWS region",
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "aws-profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "app",
+            "description": "set Serverless app",
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set Serverless org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "use-local-credentials",
+            "description": "use local credentials"
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set service config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "set stage",
+            "value": {
+              "name": "stage"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "login",
+        "description": "login or sign up for Serverless",
+        "options": [
+          {
+            "long": "region",
+            "short": "r",
+            "description": "set AWS region",
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "aws-profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "app",
+            "description": "set Serverless app",
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set Serverless org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "use-local-credentials",
+            "description": "use local credentials"
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set service config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "set stage",
+            "value": {
+              "name": "stage"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "logout",
+        "description": "logout from Serverless",
+        "options": [
+          {
+            "long": "region",
+            "short": "r",
+            "description": "set AWS region",
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "aws-profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "app",
+            "description": "set Serverless app",
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set Serverless org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "use-local-credentials",
+            "description": "use local credentials"
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set service config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "set stage",
+            "value": {
+              "name": "stage"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "output",
+        "description": "get/list value of dashboard deployment profile parameter",
+        "options": [
+          {
+            "long": "region",
+            "short": "r",
+            "description": "set AWS region",
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "aws-profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "app",
+            "description": "set Serverless app",
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set Serverless org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "use-local-credentials",
+            "description": "use local credentials"
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set service config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "set stage",
+            "value": {
+              "name": "stage"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "param",
+        "description": "get/list value of dashboard service output",
+        "options": [
+          {
+            "long": "region",
+            "short": "r",
+            "description": "set AWS region",
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "aws-profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "app",
+            "description": "set Serverless app",
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set Serverless org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "use-local-credentials",
+            "description": "use local credentials"
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set service config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "set stage",
+            "value": {
+              "name": "stage"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "slstats",
+        "description": "enable or disable stats",
+        "options": [
+          {
+            "long": "region",
+            "short": "r",
+            "description": "set AWS region",
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "aws-profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "app",
+            "description": "set Serverless app",
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "org",
+            "description": "set Serverless org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "use-local-credentials",
+            "description": "use local credentials"
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "set service config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "set stage",
+            "value": {
+              "name": "stage"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show version"
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "serverless.compose-services": {
+        "function": "__rush_complete_serverless_compose_services"
+      }
+    },
+    "arguments": {
+      "states": [
+        {
+          "name": "service",
+          "index": 0,
+          "provider": "serverless.compose-services",
+          "description": "compose service"
+        }
+      ]
+    }
+  }
+}

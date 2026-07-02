@@ -1,0 +1,19 @@
+__rush_complete_serverless_compose_services() {
+  command -v node >/dev/null 2>&1 || return
+  node -e '
+const fs = require("fs");
+let text;
+try { text = fs.readFileSync("serverless-compose.yml", "utf8"); } catch (_) { process.exit(0); }
+const lines = text.split(/\r?\n/);
+let inServices = false;
+for (const line of lines) {
+  if (/^services:\s*$/.test(line)) { inServices = true; continue; }
+  if (!inServices) continue;
+  if (/^[^\s#]/.test(line)) break;
+  const match = line.match(/^\s{2}([A-Za-z0-9_.-]+):\s*$/);
+  if (match) console.log(match[1]);
+}
+' 2>/dev/null | while IFS= read -r service; do
+    test -n "$service" && rush_complete candidate "$service" --kind subcommand --description 'compose service'
+  done
+}
