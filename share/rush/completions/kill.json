@@ -1,0 +1,43 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "kill",
+    "description": "terminate or signal a process",
+    "options": [
+      {
+        "short": "s",
+        "description": "signal name to send",
+        "inherit": false,
+        "value": {
+          "name": "signal",
+          "provider": {
+            "function": "__rush_complete_kill_signals"
+          }
+        }
+      },
+      {
+        "short": "l",
+        "description": "list signal names or translate an exit status",
+        "inherit": false,
+        "value": {
+          "name": "exit-status",
+          "required": false,
+          "style": "optional"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "pid",
+          "index": 0,
+          "repeatable": true,
+          "provider": {
+            "function": "__rush_complete_kill_processes"
+          }
+        }
+      ]
+    }
+  }
+}

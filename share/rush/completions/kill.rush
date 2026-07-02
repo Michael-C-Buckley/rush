@@ -1,0 +1,17 @@
+__rush_complete_kill_signals() {
+  env kill -l 2>/dev/null | tr ' ' '\n' | while read signal; do
+    test -n "$signal" || continue
+    case "$signal" in
+      *[!A-Za-z0-9_]*) continue ;;
+    esac
+    rush_complete candidate "$signal" --kind plain --description "send $signal"
+  done
+}
+
+__rush_complete_kill_processes() {
+  ps axo pid=,comm= 2>/dev/null | while read pid command; do
+    test -n "$pid" || continue
+    test -n "$command" || command=process
+    rush_complete candidate "$pid" --kind plain --description "$command"
+  done
+}
