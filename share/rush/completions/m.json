@@ -1,0 +1,1777 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "m",
+    "description": "swiss Army knife for macOS",
+    "options": [
+      {
+        "long": "update",
+        "description": "update m-cli to the latest version",
+        "inherit": false
+      },
+      {
+        "long": "uninstall",
+        "description": "uninstall m-cli",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "airdrop",
+        "description": "manage AirDrop",
+        "subcommands": [
+          {
+            "name": "status",
+            "description": "show AirDrop status"
+          },
+          {
+            "name": "on",
+            "description": "enable AirDrop"
+          },
+          {
+            "name": "enable",
+            "description": "enable AirDrop"
+          },
+          {
+            "name": "off",
+            "description": "disable AirDrop"
+          },
+          {
+            "name": "disable",
+            "description": "disable AirDrop"
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "appearance",
+        "description": "manage appearance",
+        "subcommands": [
+          {
+            "name": "darkmode",
+            "description": "manage dark mode",
+            "arguments": {
+              "states": [
+                {
+                  "name": "status",
+                  "description": "whether to use dark versions of interface elements",
+                  "provider": {
+                    "values": [
+                      "YES",
+                      "NO"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "transparency",
+            "description": "manage transparency",
+            "arguments": {
+              "states": [
+                {
+                  "name": "status",
+                  "description": "whether to allow the OS to make certain elements semi-transparent",
+                  "provider": {
+                    "values": [
+                      "YES",
+                      "NO"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "antialiasthreshold",
+            "description": "manage antialiasing threshold",
+            "arguments": {
+              "states": [
+                {
+                  "name": "threshold",
+                  "description": "the threshold above which antialiasing is turned on",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "sidebariconsize",
+            "description": "manage sidebar icon size",
+            "arguments": {
+              "states": [
+                {
+                  "name": "size",
+                  "description": "the size of the icons in various window sidebars",
+                  "provider": {
+                    "values": [
+                      "small",
+                      "medium",
+                      "large"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "maincolor",
+            "description": "manage main color",
+            "arguments": {
+              "states": [
+                {
+                  "name": "color",
+                  "description": "the color used for the majority of the interface elements",
+                  "provider": {
+                    "values": [
+                      "blue",
+                      "graphite"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "highlightcolor",
+            "description": "manage highlight color",
+            "arguments": {
+              "states": [
+                {
+                  "name": "color",
+                  "description": "the color used for highlights",
+                  "provider": {
+                    "values": [
+                      "graphite",
+                      "cayenne",
+                      "asparagus",
+                      "clover",
+                      "teal",
+                      "midnight",
+                      "plum",
+                      "tin",
+                      "nickel",
+                      "mocha",
+                      "fern",
+                      "moss",
+                      "ocean",
+                      "eggplant",
+                      "maroon",
+                      "steel",
+                      "aluminum",
+                      "maraschino",
+                      "lemon",
+                      "spring",
+                      "turquoise",
+                      "blueberry",
+                      "magenta",
+                      "iron",
+                      "magnesium",
+                      "tangerine",
+                      "lime",
+                      "seafoam",
+                      "aqua",
+                      "grape",
+                      "strawberry",
+                      "tungsten",
+                      "silver",
+                      "salmon",
+                      "banana",
+                      "flora",
+                      "ice",
+                      "orchid",
+                      "bubblegum",
+                      "lead",
+                      "mercery",
+                      "cantaloupe",
+                      "honeydew",
+                      "spindrift",
+                      "sky",
+                      "lavender",
+                      "carnation",
+                      "licorice",
+                      "snow"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "battery",
+        "description": "manage battery",
+        "subcommands": [
+          {
+            "name": "status",
+            "description": "show battery status"
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "bluetooth",
+        "description": "manage Bluetooth",
+        "subcommands": [
+          {
+            "name": "status",
+            "description": "show bluetooth status"
+          },
+          {
+            "name": "on",
+            "description": "enable bluetooth"
+          },
+          {
+            "name": "enable",
+            "description": "enable bluetooth"
+          },
+          {
+            "name": "off",
+            "description": "disable bluetooth"
+          },
+          {
+            "name": "disable",
+            "description": "disable bluetooth"
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "dir",
+        "description": "manage directories",
+        "subcommands": [
+          {
+            "name": "tree",
+            "description": "show tree view of folders in the current path",
+            "arguments": {
+              "states": [
+                {
+                  "name": "path",
+                  "description": "path to show tree view of folders",
+                  "provider": "builtin.directories",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete folders",
+            "subcommands": [
+              {
+                "name": "empty",
+                "description": "delete empty folders recursively in the current path",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "path",
+                      "description": "path to delete empty folders",
+                      "provider": "builtin.directories",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "dsfiles",
+                "description": "delete .DS_Store files recursively in the current path",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "path",
+                      "description": "delete .DS_Store files recursively in a specific path",
+                      "provider": "builtin.directories",
+                      "index": 0
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "dsfiles",
+            "description": "manage .DS_Store files",
+            "subcommands": [
+              {
+                "name": "on",
+                "description": "restore generation of .DS_Store"
+              },
+              {
+                "name": "off",
+                "description": "prohibit generation of .DS_Store"
+              }
+            ]
+          },
+          {
+            "name": "size",
+            "description": "calculate current folder size",
+            "arguments": {
+              "states": [
+                {
+                  "name": "path",
+                  "description": "path to calculate folder size",
+                  "provider": "builtin.directories",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "disk",
+        "description": "manage disks",
+        "subcommands": [
+          {
+            "name": "ls",
+            "aliases": [
+              "list"
+            ],
+            "description": "list disk partitions",
+            "arguments": {
+              "states": [
+                {
+                  "name": "path",
+                  "description": "path to the disk file",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "info",
+            "description": "show disk information",
+            "arguments": {
+              "states": [
+                {
+                  "name": "path",
+                  "description": "path to show disk information",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "ejectall",
+            "description": "eject all mountable volumes"
+          },
+          {
+            "name": "verify",
+            "description": "verify disk",
+            "subcommands": [
+              {
+                "name": "volume",
+                "description": "verify volume",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "path",
+                      "description": "path to verify volume",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "disk",
+                "description": "verify disk",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "path",
+                      "description": "path to verify disk",
+                      "index": 0
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "repair",
+            "description": "repair disk",
+            "subcommands": [
+              {
+                "name": "volume",
+                "description": "repair volume",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "path",
+                      "description": "path to repair volume",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "disk",
+                "description": "repair disk",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "path",
+                      "description": "path to repair disk",
+                      "index": 0
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "format",
+            "description": "format disk",
+            "subcommands": [
+              {
+                "name": "MS-DOS",
+                "description": "format the entire disk with a windows format (MS-DOS)",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "name",
+                      "description": "name of the volume",
+                      "index": 0
+                    },
+                    {
+                      "name": "path",
+                      "description": "path to format the entire disk",
+                      "index": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "volume",
+                "description": "format the volume with a windows format (MS-DOS)",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "name",
+                      "description": "name of the volume",
+                      "index": 0
+                    },
+                    {
+                      "name": "path",
+                      "description": "path to format the volume",
+                      "index": 1
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "reformat",
+            "description": "reformat a volume",
+            "arguments": {
+              "states": [
+                {
+                  "name": "path",
+                  "description": "path to reformat a volume",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "rename",
+            "description": "rename a volume",
+            "arguments": {
+              "states": [
+                {
+                  "name": "currentName",
+                  "description": "current name of the volume",
+                  "index": 0
+                },
+                {
+                  "name": "newName",
+                  "description": "new name of the volume",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "display",
+        "description": "manage displays",
+        "subcommands": [
+          {
+            "name": "status",
+            "description": "show display status"
+          },
+          {
+            "name": "help",
+            "description": "show usage"
+          },
+          {
+            "name": "up",
+            "description": "turn up the brightness"
+          },
+          {
+            "name": "down",
+            "description": "turn down the brightness"
+          }
+        ]
+      },
+      {
+        "name": "dns",
+        "description": "manage dns",
+        "subcommands": [
+          {
+            "name": "flush",
+            "description": "flush local DNS cache"
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "dock",
+        "description": "manage dock",
+        "subcommands": [
+          {
+            "name": "showdelay",
+            "description": "changes how long the Dock takes to show up when auto-hide is enabled",
+            "arguments": {
+              "states": [
+                {
+                  "name": "seconds",
+                  "description": "seconds to show delay",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "autohide",
+            "description": "enable or disable Dock's auto hide feature",
+            "arguments": {
+              "states": [
+                {
+                  "name": "YES/NO",
+                  "description": "yES/NO to enable/disable Dock's auto hide feature",
+                  "provider": {
+                    "values": [
+                      "YES",
+                      "NO"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "autohidedelay",
+            "description": "changes how long it takes to detect you want to show up the dock",
+            "arguments": {
+              "states": [
+                {
+                  "name": "seconds",
+                  "description": "seconds to auto hide delay",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "magnification",
+            "description": "turn magnification on or off",
+            "arguments": {
+              "states": [
+                {
+                  "name": "YES/NO",
+                  "description": "yES/NO to turn magnification on or off",
+                  "provider": {
+                    "values": [
+                      "YES",
+                      "NO"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "position",
+            "description": "change Dock's position",
+            "arguments": {
+              "states": [
+                {
+                  "name": "position",
+                  "description": "position to change Dock's position",
+                  "provider": {
+                    "values": [
+                      "BOTTOM",
+                      "LEFT",
+                      "RIGHT"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "addblankspace",
+            "description": "add a blank space (separator) to the Dock"
+          },
+          {
+            "name": "addrecentitems",
+            "description": "add a stack containg your recent items to the Dock"
+          },
+          {
+            "name": "prune",
+            "description": "remove all items from dock"
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "finder",
+        "description": "manage finder",
+        "subcommands": [
+          {
+            "name": "showhiddenfiles",
+            "description": "show hidden files Status",
+            "arguments": {
+              "states": [
+                {
+                  "name": "YES/NO",
+                  "description": "yES/NO to show hidden files",
+                  "provider": {
+                    "values": [
+                      "YES",
+                      "NO"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "showextensions",
+            "description": "show all file extensions Status",
+            "arguments": {
+              "states": [
+                {
+                  "name": "YES/NO",
+                  "description": "yES/NO to show all file extensions",
+                  "provider": {
+                    "values": [
+                      "YES",
+                      "NO"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "showdesktop",
+            "description": "show the desktop Status",
+            "arguments": {
+              "states": [
+                {
+                  "name": "YES/NO",
+                  "description": "yES/NO to show the desktop",
+                  "provider": {
+                    "values": [
+                      "YES",
+                      "NO"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "showpath",
+            "description": "show the current opened folder path on the top bar of the Finder window",
+            "arguments": {
+              "states": [
+                {
+                  "name": "YES/NO",
+                  "description": "yES/NO to show the current opened folder path on the top bar of the Finder window",
+                  "provider": {
+                    "values": [
+                      "YES",
+                      "NO"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "firewall",
+        "description": "manage firewall",
+        "subcommands": [
+          {
+            "name": "status",
+            "description": "show status"
+          },
+          {
+            "name": "enable",
+            "description": "enable firewall"
+          },
+          {
+            "name": "disable",
+            "description": "disable firewall"
+          },
+          {
+            "name": "list",
+            "description": "list applications handled by firewall"
+          },
+          {
+            "name": "add",
+            "description": "add app to firewall",
+            "arguments": {
+              "states": [
+                {
+                  "name": "path",
+                  "description": "path of the app to add to firewall",
+                  "provider": "builtin.files",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove",
+            "description": "remove app from firewall",
+            "arguments": {
+              "states": [
+                {
+                  "name": "path",
+                  "description": "path of the app to remove from firewall",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "flightmode",
+        "description": "manage flight mode",
+        "subcommands": [
+          {
+            "name": "off",
+            "description": "turn flight mode off"
+          },
+          {
+            "name": "on",
+            "description": "turn flight mode on"
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "gatekeeper",
+        "description": "manage gatekeeper",
+        "subcommands": [
+          {
+            "name": "status",
+            "description": "show status"
+          },
+          {
+            "name": "enable",
+            "description": "enable gatekeeper",
+            "arguments": {
+              "states": [
+                {
+                  "name": "rule",
+                  "description": "rule to enable",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "disable",
+            "description": "disable gatekeeper",
+            "arguments": {
+              "states": [
+                {
+                  "name": "rule",
+                  "description": "rule to disable",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list rules"
+          },
+          {
+            "name": "create",
+            "description": "create a rule for the application",
+            "arguments": {
+              "states": [
+                {
+                  "name": "RULENAME",
+                  "description": "name of the rule",
+                  "index": 0
+                },
+                {
+                  "name": "/path/to/program",
+                  "description": "path to the program",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "group",
+        "description": "manage groups",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list groups"
+          },
+          {
+            "name": "info",
+            "description": "get group information",
+            "arguments": {
+              "states": [
+                {
+                  "name": "group",
+                  "description": "group to get information",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "adduser",
+            "description": "add user to group",
+            "arguments": {
+              "states": [
+                {
+                  "name": "user",
+                  "description": "user to add to group",
+                  "index": 0
+                },
+                {
+                  "name": "group",
+                  "description": "group to add user to",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "removeuser",
+            "description": "remove user from group",
+            "arguments": {
+              "states": [
+                {
+                  "name": "user",
+                  "description": "user to remove from group",
+                  "index": 0
+                },
+                {
+                  "name": "group",
+                  "description": "group to remove user from",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "ismember",
+            "description": "check if user is a member of group",
+            "arguments": {
+              "states": [
+                {
+                  "name": "user",
+                  "description": "user to check membership",
+                  "index": 0
+                },
+                {
+                  "name": "group",
+                  "description": "group to check membership",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "hostname",
+        "description": "manage hostname",
+        "subcommands": [
+          {
+            "name": "newhostname",
+            "description": "set new hostname"
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "info",
+        "description": "show system information"
+      },
+      {
+        "name": "help"
+      },
+      {
+        "name": "itunes",
+        "description": "manage iTunes",
+        "subcommands": [
+          {
+            "name": "status",
+            "description": "show status"
+          },
+          {
+            "name": "play",
+            "description": "play track"
+          },
+          {
+            "name": "pause",
+            "description": "pause track"
+          },
+          {
+            "name": "next",
+            "description": "play next track"
+          },
+          {
+            "name": "prev",
+            "description": "play previous track"
+          },
+          {
+            "name": "mute",
+            "description": "mute iTunes"
+          },
+          {
+            "name": "unmute",
+            "description": "unmute iTunes"
+          },
+          {
+            "name": "vol",
+            "description": "volume",
+            "arguments": {
+              "states": [
+                {
+                  "name": "up/down/#",
+                  "description": "up/Down/Number",
+                  "provider": {
+                    "values": [
+                      "up",
+                      "down"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "stop",
+            "description": "stop track"
+          },
+          {
+            "name": "quit",
+            "description": "quit iTunes"
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "localhost",
+        "description": "manage localhost",
+        "subcommands": [
+          {
+            "name": "ls",
+            "aliases": [
+              "list"
+            ],
+            "description": "list current records in localhost"
+          },
+          {
+            "name": "add",
+            "description": "add a new host to the localhost file",
+            "arguments": {
+              "states": [
+                {
+                  "name": "IP",
+                  "description": "iP of the host",
+                  "index": 0
+                },
+                {
+                  "name": "HOSTNAME",
+                  "description": "hostname of the host",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove",
+            "description": "remove a host from the localhost file",
+            "arguments": {
+              "states": [
+                {
+                  "name": "HOSTNAME",
+                  "description": "hostname of the host",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "lock",
+        "description": "lock session"
+      },
+      {
+        "name": "network",
+        "description": "manage network",
+        "subcommands": [
+          {
+            "name": "ls",
+            "aliases": [
+              "list"
+            ],
+            "description": "list network interfaces"
+          },
+          {
+            "name": "location",
+            "description": "manage location",
+            "subcommands": [
+              {
+                "name": "ls",
+                "aliases": [
+                  "list"
+                ],
+                "description": "list locations"
+              },
+              {
+                "name": "create",
+                "description": "create a location",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "name",
+                      "description": "name of the location",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "delete",
+                "description": "delete a location",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "name",
+                      "description": "name of the location",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "switch",
+                "description": "switch location",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "name",
+                      "description": "name of the location",
+                      "index": 0
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "nosleep",
+        "description": "manage no sleep",
+        "subcommands": [
+          {
+            "name": "until",
+            "description": "no sleep until",
+            "arguments": {
+              "states": [
+                {
+                  "name": "time-or-script",
+                  "provider": "builtin.files",
+                  "index": 0
+                }
+              ]
+            },
+            "subcommands": [
+              {
+                "name": "pid",
+                "description": "no sleep until process id ends",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "pid",
+                      "description": "process id",
+                      "index": 0
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "notification",
+        "description": "manage notification",
+        "subcommands": [
+          {
+            "name": "showcenter",
+            "description": "show notification center",
+            "arguments": {
+              "states": [
+                {
+                  "name": "YES/NO",
+                  "description": "enable/Disable notification center",
+                  "provider": {
+                    "values": [
+                      "YES",
+                      "NO"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "ntp",
+        "description": "manage ntp",
+        "subcommands": [
+          {
+            "name": "status",
+            "description": "status of the network time service"
+          },
+          {
+            "name": "enable",
+            "description": "enable clock to use network time"
+          },
+          {
+            "name": "disable",
+            "description": "disable clock to use network time"
+          },
+          {
+            "name": "set",
+            "description": "set network time server",
+            "arguments": {
+              "states": [
+                {
+                  "name": "hostname",
+                  "description": "network time server",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "printer",
+        "description": "manage printer",
+        "subcommands": [
+          {
+            "name": "settings",
+            "description": "printer settings"
+          },
+          {
+            "name": "name",
+            "description": "display printer names on system"
+          },
+          {
+            "name": "queue",
+            "description": "display items in printer queue on system"
+          },
+          {
+            "name": "drivers",
+            "description": "display all printer drivers"
+          },
+          {
+            "name": "web",
+            "description": "enable and show web interface"
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "restart",
+        "description": "restart computer (needs confirmation)",
+        "subcommands": [
+          {
+            "name": "-f",
+            "aliases": [],
+            "description": "restart computer (without confirmation)"
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "safeboot",
+        "description": "manage safe boot",
+        "subcommands": [
+          {
+            "name": "status",
+            "description": "get the boot args"
+          },
+          {
+            "name": "enable",
+            "description": "enable safe boot"
+          },
+          {
+            "name": "disable",
+            "description": "disable safeboot"
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "screensaver",
+        "description": "manage screensaver",
+        "subcommands": [
+          {
+            "name": "status",
+            "description": "get the current status"
+          },
+          {
+            "name": "askforpassword",
+            "description": "get password requirement to unlock",
+            "arguments": {
+              "states": [
+                {
+                  "name": "YES/NO",
+                  "description": "enable/Disable password requirement to unlock",
+                  "provider": {
+                    "values": [
+                      "YES",
+                      "NO"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "service",
+        "description": "manage service",
+        "subcommands": [
+          {
+            "name": "--status-all",
+            "description": "list all services"
+          },
+          {
+            "name": "--ls",
+            "aliases": [],
+            "description": "list all services",
+            "arguments": {
+              "states": [
+                {
+                  "name": "service",
+                  "description": "service name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "start",
+            "description": "start a service",
+            "arguments": {
+              "states": [
+                {
+                  "name": "service",
+                  "description": "service name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "stop",
+            "description": "stop a service",
+            "arguments": {
+              "states": [
+                {
+                  "name": "service",
+                  "description": "service name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "load",
+            "description": "load a service",
+            "arguments": {
+              "states": [
+                {
+                  "name": "service",
+                  "description": "service name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "unload",
+            "description": "unload a service",
+            "arguments": {
+              "states": [
+                {
+                  "name": "service",
+                  "description": "service name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "shutdown",
+        "description": "shutdown computer (needs confirmation)",
+        "subcommands": [
+          {
+            "name": "-f",
+            "description": "shutdown computer (without confirmation)"
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "sleep",
+        "description": "put computer to sleep",
+        "subcommands": [
+          {
+            "name": "help",
+            "description": "show help"
+          }
+        ]
+      },
+      {
+        "name": "timezone",
+        "description": "get current timezone",
+        "subcommands": [
+          {
+            "name": "ls",
+            "aliases": [
+              "list"
+            ],
+            "description": "list available timezones"
+          },
+          {
+            "name": "set",
+            "description": "set timezone",
+            "arguments": {
+              "states": [
+                {
+                  "name": "timezone",
+                  "description": "timezone",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "touchbar",
+        "description": "manage touchbar",
+        "subcommands": [
+          {
+            "name": "reset",
+            "description": "reset touchbar"
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "trash",
+        "description": "manage trash",
+        "subcommands": [
+          {
+            "name": "status",
+            "description": "get trash info"
+          },
+          {
+            "name": "clean",
+            "description": "clean trash"
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "user",
+        "description": "manage user",
+        "subcommands": [
+          {
+            "name": "ls",
+            "aliases": [
+              "list"
+            ],
+            "description": "list all users"
+          },
+          {
+            "name": "info",
+            "description": "get user info",
+            "arguments": {
+              "states": [
+                {
+                  "name": "username",
+                  "description": "username",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "create",
+            "description": "create a new user"
+          },
+          {
+            "name": "delete",
+            "description": "delete a user",
+            "arguments": {
+              "states": [
+                {
+                  "name": "username",
+                  "description": "username",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "volume",
+        "description": "manage volume level",
+        "arguments": {
+          "states": [
+            {
+              "name": "volume",
+              "description": "volume level up/down/(+/-)number",
+              "index": 0
+            }
+          ]
+        },
+        "subcommands": [
+          {
+            "name": "mute",
+            "description": "set mute"
+          },
+          {
+            "name": "unmute",
+            "description": "unset mute"
+          },
+          {
+            "name": "ismute",
+            "description": "check the volume status"
+          },
+          {
+            "name": "up",
+            "description": "increase the volume by 6.25"
+          },
+          {
+            "name": "down",
+            "description": "decrease the volume by 6.25"
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "vpn",
+        "description": "manage VPN connections",
+        "subcommands": [
+          {
+            "name": "ls",
+            "aliases": [
+              "list"
+            ],
+            "description": "list VPN connections"
+          },
+          {
+            "name": "start",
+            "description": "start a VPN connection",
+            "arguments": {
+              "states": [
+                {
+                  "name": "VPN",
+                  "description": "vPN connection name",
+                  "index": 0
+                },
+                {
+                  "name": "USER",
+                  "description": "vPN connection user",
+                  "index": 1
+                },
+                {
+                  "name": "PASS",
+                  "description": "vPN connection password",
+                  "index": 2
+                },
+                {
+                  "name": "SECRET",
+                  "description": "vPN connection secret",
+                  "index": 3
+                }
+              ]
+            }
+          },
+          {
+            "name": "stop",
+            "description": "stop a VPN connection",
+            "arguments": {
+              "states": [
+                {
+                  "name": "VPN",
+                  "description": "vPN connection name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "description": "get the status of a VPN connection",
+            "arguments": {
+              "states": [
+                {
+                  "name": "VPN",
+                  "description": "vPN connection name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "wallpaper",
+        "description": "change wallpaper",
+        "arguments": {
+          "states": [
+            {
+              "name": "image",
+              "description": "path to the wallpaper",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        },
+        "subcommands": [
+          {
+            "name": "help"
+          }
+        ]
+      },
+      {
+        "name": "wifi",
+        "description": "manage wifi",
+        "subcommands": [
+          {
+            "name": "status",
+            "description": "get wifi status"
+          },
+          {
+            "name": "scan",
+            "description": "scan wifi"
+          },
+          {
+            "name": "showpassword",
+            "description": "show wifi network password",
+            "arguments": {
+              "states": [
+                {
+                  "name": "ESSID",
+                  "description": "eSSID",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "ls",
+            "aliases": [
+              "list"
+            ],
+            "description": "list known wifi networks"
+          },
+          {
+            "name": "forget",
+            "description": "forget a wifi network",
+            "arguments": {
+              "states": [
+                {
+                  "name": "ESSID",
+                  "description": "eSSID",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "history",
+            "description": "wifi connection history"
+          },
+          {
+            "name": "off",
+            "description": "turn off your wifi"
+          },
+          {
+            "name": "on",
+            "description": "turn on your wifi"
+          },
+          {
+            "name": "connect",
+            "description": "join a wifi network",
+            "arguments": {
+              "states": [
+                {
+                  "name": "ESSID",
+                  "description": "eSSID",
+                  "index": 0
+                },
+                {
+                  "name": "PASSWORD",
+                  "description": "password",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "help"
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
