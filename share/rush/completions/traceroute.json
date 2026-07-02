@@ -1,0 +1,191 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "traceroute",
+    "description": "print route packets take to a network host",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for traceroute",
+        "inherit": false
+      },
+      {
+        "short": "a",
+        "description": "turn on AS# lookups for each hop encountered",
+        "inherit": false
+      },
+      {
+        "short": "A",
+        "description": "turn on AS# lookups and use the given server instead of the default",
+        "inherit": false,
+        "value": {
+          "name": "as_server"
+        }
+      },
+      {
+        "short": "d",
+        "description": "enable socket level debugging",
+        "inherit": false
+      },
+      {
+        "short": "D",
+        "description": "print differences between transmitted packet and quoted ICMP response",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "description": "firewall evasion mode. Use fixed destination ports for UDP and TCP probes. The destination port does NOT increment with each packet sent",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "description": "set the initial time-to-live used in the first outgoing probe packet",
+        "inherit": false,
+        "value": {
+          "name": "first_ttl"
+        }
+      },
+      {
+        "short": "F",
+        "description": "set the `don't fragment` bit",
+        "inherit": false
+      },
+      {
+        "short": "g",
+        "description": "specify a loose source route gateway (8 maximum)",
+        "inherit": false,
+        "value": {
+          "name": "gateway"
+        }
+      },
+      {
+        "short": "i",
+        "description": "specify network interface for outgoing probe packets",
+        "inherit": false,
+        "value": {
+          "name": "iface"
+        }
+      },
+      {
+        "short": "I",
+        "description": "use ICMP ECHO instead of UDP datagrams. (A synonym for `-P icmp`)",
+        "inherit": false
+      },
+      {
+        "short": "M",
+        "description": "set the initial time-to-live value used in outgoing probe packets. The default is 1, i.e., start with the first hop",
+        "inherit": false,
+        "value": {
+          "name": "first_ttl"
+        }
+      },
+      {
+        "short": "m",
+        "description": "set the max time-to-live (max number of hops) used in outgoing probe packets. The default is net.inet.ip.ttl hops (the same default used for TCP connections)",
+        "inherit": false,
+        "value": {
+          "name": "max_ttl"
+        }
+      },
+      {
+        "short": "n",
+        "description": "print hop addresses numerically rather than symbolically and numerically (saves a nameserver address-to-name lookup for each gateway found on the path)",
+        "inherit": false
+      },
+      {
+        "short": "P",
+        "description": "send packets using specified IP protocol",
+        "inherit": false,
+        "value": {
+          "name": "proto",
+          "provider": "traceroute.protocols"
+        }
+      },
+      {
+        "short": "p",
+        "description": "set base port number for UDP and TCP probes",
+        "inherit": false,
+        "value": {
+          "name": "port"
+        }
+      },
+      {
+        "short": "q",
+        "description": "set the number of probes per ``ttl'' to nqueries (default is three probes)",
+        "inherit": false,
+        "value": {
+          "name": "nqueries"
+        }
+      },
+      {
+        "short": "r",
+        "description": "bypass normal routing tables and send directly to attached-network host",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "use specified source IP address for outgoing probe packets",
+        "inherit": false,
+        "value": {
+          "name": "src_addr"
+        }
+      },
+      {
+        "short": "S",
+        "description": "print a summary of how many probes were not answered for each hop",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "description": "set type-of-service value in probe packets",
+        "inherit": false,
+        "value": {
+          "name": "tos"
+        }
+      },
+      {
+        "short": "v",
+        "description": "verbose output. Received ICMP packets other than TIME_EXCEEDED and UNREACHABLEs are listed",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "description": "set the time (in seconds) to wait for a response to a probe (default 5 sec.)",
+        "inherit": false
+      },
+      {
+        "short": "x",
+        "description": "toggle IP checksum calculation",
+        "inherit": false
+      },
+      {
+        "short": "z",
+        "description": "set pause in milliseconds between probes",
+        "inherit": false,
+        "value": {
+          "name": "pausemsecs"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "host",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "traceroute.protocols": {
+        "values": [
+          "udp",
+          "tcp",
+          "gre",
+          "icmp"
+        ]
+      }
+    }
+  }
+}
