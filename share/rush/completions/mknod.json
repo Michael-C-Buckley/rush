@@ -1,0 +1,68 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "mknod",
+    "description": "create device special files",
+    "options": [
+      {
+        "short": "F",
+        "description": "use device number format",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "provider": {
+            "values": [
+              "native",
+              "386bsd",
+              "4bsd",
+              "bsdos",
+              "freebsd",
+              "hpux",
+              "isc",
+              "linux",
+              "netbsd",
+              "npux",
+              "osf1",
+              "sco",
+              "solaris",
+              "sunos",
+              "svr3",
+              "svr4",
+              "ultrix"
+            ]
+          }
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "description": "file to create",
+          "index": 0
+        },
+        {
+          "name": "major",
+          "description": "major device number",
+          "index": 1
+        },
+        {
+          "name": "minor",
+          "description": "minor device number or unit subunit",
+          "index": 2
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "c",
+        "description": "create a character device"
+      },
+      {
+        "name": "b",
+        "description": "create a block device"
+      }
+    ]
+  }
+}
