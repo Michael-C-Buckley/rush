@@ -1,0 +1,381 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "jenv",
+    "description": "manage Java environments",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for jEnv",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "show version for jEnv",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "commands",
+        "description": "list all available JEnv commands"
+      },
+      {
+        "name": "help",
+        "description": "parses and displays help contents from a command's source file",
+        "options": [
+          {
+            "long": "usage",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "COMMAND",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "info",
+        "description": "show information about which command will be executed",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0,
+              "provider": "builtin.executables"
+            }
+          ]
+        }
+      },
+      {
+        "name": "add",
+        "description": "add a JDK to jenv",
+        "arguments": {
+          "states": [
+            {
+              "name": "java-home",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "enable-plugin",
+        "description": "activate a jEnv plugin",
+        "arguments": {
+          "states": [
+            {
+              "name": "pluginName",
+              "description": "plugin Name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "disable-plugin",
+        "description": "deactivate a jEnv plugin",
+        "arguments": {
+          "states": [
+            {
+              "name": "pluginName",
+              "description": "plugin Name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "doctor",
+        "description": "run jEnv diagnostics"
+      },
+      {
+        "name": "exec",
+        "description": "run an executable with selected Java version",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "provider": "builtin.executables",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "global",
+        "description": "sets the global Java version",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "global-options",
+        "description": "sets the global Java options",
+        "arguments": {
+          "states": [
+            {
+              "name": "options",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "local",
+        "description": "sets the local application-specific Java version by writing the version name to a file named `.java-version'",
+        "options": [
+          {
+            "long": "unset",
+            "description": "Remove local jEnv settings",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "local-options",
+        "description": "sets the local application-specific Java options",
+        "arguments": {
+          "states": [
+            {
+              "name": "options",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "shell",
+        "description": "sets a shell-specific Java version by setting the `JENV_VERSION'",
+        "options": [
+          {
+            "long": "unset",
+            "description": "Remove shell jEnv settings",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "shell-options",
+        "description": "sets the shell-specific Java options",
+        "arguments": {
+          "states": [
+            {
+              "name": "options",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "hooks",
+        "description": "list hook scripts for a given jenv command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0,
+              "provider": "builtin.executables"
+            }
+          ]
+        }
+      },
+      {
+        "name": "init",
+        "description": "configure the shell environment for jenv"
+      },
+      {
+        "name": "javahome",
+        "description": "display path to selected JAVA_HOME"
+      },
+      {
+        "name": "macos-javahome",
+        "description": "installs a file located at ~/Library/LaunchAgents/jenv-environment.plist . It sets JAVA_HOME for GUI applications on startup for the **currently active version "
+      },
+      {
+        "name": "options",
+        "description": "show the current Java options"
+      },
+      {
+        "name": "options-file",
+        "description": "detect the file that sets the current jenv jvm options"
+      },
+      {
+        "name": "options-file-read",
+        "description": "read options from file",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "options-file-write",
+        "description": "write options to a file",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "provider": "builtin.files",
+              "index": 0
+            },
+            {
+              "name": "options",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "prefix",
+        "description": "displays the directory where a Java version is installed",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "refresh-plugins",
+        "description": "refresh plugins links"
+      },
+      {
+        "name": "refresh-versions",
+        "description": "refresh alias names"
+      },
+      {
+        "name": "rehash",
+        "description": "rehash jenv shims (run this after installing executables)"
+      },
+      {
+        "name": "remove",
+        "description": "remove JDK installations",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "root",
+        "description": "display the root directory where versions and shims are kept"
+      },
+      {
+        "name": "shims",
+        "description": "list existing jenv shims",
+        "options": [
+          {
+            "long": "short",
+            "description": "Show only files without path",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "shows the currently selected Java version and how it was selected"
+      },
+      {
+        "name": "versions",
+        "description": "lists all Java versions found in `$JENV_ROOT/versions/*'",
+        "options": [
+          {
+            "long": "bare",
+            "description": "Display only version",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "Display verbose output",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "whence",
+        "description": "list all Java versions that contain the given executable",
+        "options": [
+          {
+            "long": "path",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0,
+              "provider": "builtin.executables"
+            }
+          ]
+        }
+      },
+      {
+        "name": "which",
+        "description": "display executable path selected by jenv",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0,
+              "provider": "builtin.executables"
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
