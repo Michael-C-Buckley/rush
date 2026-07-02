@@ -1,0 +1,40 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "shelve",
+    "description": "manage Shelve environment variables",
+    "options": [
+      { "short": "h", "long": "help", "description": "show help", "inherit": true }
+    ],
+    "subcommands": [
+      {
+        "name": "create",
+        "aliases": ["c", "init"],
+        "description": "create a new project",
+        "options": [
+          { "short": "n", "long": "name", "description": "set project name", "value": { "name": "project" } }
+        ]
+      },
+      {
+        "name": "pull",
+        "aliases": ["pl"],
+        "description": "pull environment variables to .env",
+        "options": [
+          { "short": "e", "long": "env", "description": "set environment", "value": { "name": "environment" } }
+        ]
+      },
+      {
+        "name": "push",
+        "aliases": ["ps"],
+        "description": "push environment variables to Shelve",
+        "options": [
+          { "short": "e", "long": "env", "description": "set environment", "value": { "name": "environment" } }
+        ]
+      },
+      { "name": "generate", "aliases": ["g"], "description": "generate project resources" },
+      { "name": "config", "aliases": ["cf"], "description": "show current configuration" },
+      { "name": "help", "description": "show help" }
+    ]
+  }
+}
