@@ -1,0 +1,167 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "tangram",
+    "description": "train and run Tangram models",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "show version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "app",
+        "description": "run the app",
+        "options": [
+          {
+            "short": "c",
+            "long": "config",
+            "description": "set config file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "migrate",
+        "description": "migrate app database",
+        "options": [
+          {
+            "long": "database-url",
+            "inherit": false,
+            "value": {
+              "name": "database_url"
+            },
+            "description": "set database URL"
+          }
+        ]
+      },
+      {
+        "name": "predict",
+        "description": "make model predictions",
+        "options": [
+          {
+            "short": "f",
+            "long": "file",
+            "description": "set input file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "m",
+            "long": "model",
+            "description": "set model file",
+            "inherit": false,
+            "value": {
+              "name": "model",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "o",
+            "long": "output",
+            "description": "set output file",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "p",
+            "long": "probabilities",
+            "description": "output probabilities",
+            "inherit": false,
+            "value": {
+              "name": "probabilities"
+            }
+          }
+        ]
+      },
+      {
+        "name": "train",
+        "description": "train a model",
+        "options": [
+          {
+            "short": "c",
+            "long": "config",
+            "description": "set config file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "f",
+            "long": "file",
+            "description": "set input file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "file-test",
+            "description": "set test CSV file",
+            "inherit": false,
+            "value": {
+              "name": "file_test",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "file-train",
+            "description": "set training CSV file",
+            "inherit": false,
+            "value": {
+              "name": "file_train",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "o",
+            "long": "output",
+            "description": "set output file",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "t",
+            "long": "target",
+            "description": "set target column",
+            "inherit": false,
+            "value": {
+              "name": "target"
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
