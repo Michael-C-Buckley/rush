@@ -1,0 +1,138 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "git-quick-stats",
+    "description": "show statistics for a git repository",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for git-quick-stats",
+        "inherit": false
+      },
+      {
+        "long": "suggest-reviewers",
+        "short": "r",
+        "description": "show the best people to contact to review code",
+        "inherit": false
+      },
+      {
+        "long": "detailed-git-stats",
+        "short": "T",
+        "description": "give a detailed list of git stats",
+        "inherit": false
+      },
+      {
+        "short": "R",
+        "spellings": [
+          "---git-stats-by-branch"
+        ],
+        "description": "show detailed list of git stats by branch",
+        "inherit": false
+      },
+      {
+        "long": "changelogs",
+        "short": "c",
+        "description": "show changelogs",
+        "inherit": false
+      },
+      {
+        "long": "changelogs-by-author",
+        "short": "L",
+        "description": "show changelogs by author",
+        "inherit": false
+      },
+      {
+        "long": "my-daily-stats",
+        "short": "S",
+        "description": "show your current daily stats",
+        "inherit": false
+      },
+      {
+        "long": "my-csv-output-by-branch-stats",
+        "short": "V",
+        "description": "output daily stats by branch in CSV format",
+        "inherit": false
+      },
+      {
+        "long": "json-output",
+        "short": "j",
+        "description": "save git log as a JSON formatted file to a specified area",
+        "inherit": false
+      },
+      {
+        "long": "branch-tree",
+        "short": "b",
+        "description": "show an ASCII graph of the git repo branch history",
+        "inherit": false
+      },
+      {
+        "long": "branches-by-date",
+        "short": "D",
+        "description": "show branches by date",
+        "inherit": false
+      },
+      {
+        "long": "contributors",
+        "short": "C",
+        "description": "see a list of everyone who contributed to the repo",
+        "inherit": false
+      },
+      {
+        "long": "commits-per-author",
+        "short": "a",
+        "description": "displays a list of commits per author",
+        "inherit": false
+      },
+      {
+        "long": "commits-per-day",
+        "short": "d",
+        "description": "displays a list of commits per day",
+        "inherit": false
+      },
+      {
+        "long": "commits-by-month",
+        "short": "m",
+        "description": "displays a list of commits per month",
+        "inherit": false
+      },
+      {
+        "long": "commits-by-year",
+        "short": "Y",
+        "description": "displays a list of commits per year",
+        "inherit": false
+      },
+      {
+        "long": "commits-by-weekday",
+        "short": "w",
+        "description": "displays a list of commits per weekday",
+        "inherit": false
+      },
+      {
+        "long": "commits-by-hour",
+        "short": "o",
+        "description": "displays a list of commits per hour",
+        "inherit": false
+      },
+      {
+        "long": "commits-by-author-by-hour",
+        "short": "A",
+        "description": "displays a list of commits per hour by author",
+        "inherit": false
+      },
+      {
+        "long": "commits-by-timezone",
+        "short": "z",
+        "description": "displays a list of commits per timezone",
+        "inherit": false
+      },
+      {
+        "long": "commits-by-author-by-timezone",
+        "short": "Z",
+        "description": "displays a list of commits per timezone by author",
+        "inherit": false
+      }
+    ]
+  }
+}
