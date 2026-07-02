@@ -1,0 +1,14 @@
+__rush_complete_passwd_users() {
+  if command -v dscl >/dev/null 2>&1; then
+    dscl . -list /Users 2>/dev/null | grep -E -v '^_' | while IFS= read -r user; do
+      test -n "$user" && rush_complete candidate "$user" --kind plain --description user --priority 30
+    done
+    return
+  fi
+  if test -r /etc/passwd; then
+    cut -d: -f1 /etc/passwd 2>/dev/null | while IFS= read -r user; do
+      case "$user" in _*) continue ;; esac
+      test -n "$user" && rush_complete candidate "$user" --kind plain --description user --priority 30
+    done
+  fi
+}

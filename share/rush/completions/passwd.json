@@ -1,0 +1,61 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "passwd",
+    "description": "modify user passwords",
+    "options": [
+      {
+        "short": "i",
+        "description": "Specify where the password update should be applied",
+        "inherit": false,
+        "value": {
+          "name": "infosystem",
+          "description": "The directory system",
+          "provider": {
+            "values": [
+              "PAM",
+              "opendirectory",
+              "file",
+              "nis"
+            ]
+          }
+        }
+      },
+      {
+        "short": "l",
+        "description": "Causes the password to be updated in the given location of the chosen directory system",
+        "inherit": false,
+        "value": {
+          "name": "location",
+          "description": "The location of the chosen directory system",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "short": "u",
+        "description": "Specify the user name to use when authenticating to the directory node",
+        "inherit": false,
+        "value": {
+          "name": "authname",
+          "description": "The user name",
+          "provider": "passwd.users"
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "passwd.users": {
+        "function": "__rush_complete_passwd_users"
+      }
+    }
+  }
+}
