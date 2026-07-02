@@ -1,0 +1,138 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "glow",
+    "description": "render markdown on the CLI",
+    "options": [
+      {
+        "short": "a",
+        "long": "all",
+        "description": "show system files and directories (TUI-mode only)",
+        "inherit": false
+      },
+      {
+        "long": "config",
+        "description": "config file",
+        "inherit": true,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "help for glow",
+        "inherit": true
+      },
+      {
+        "short": "l",
+        "long": "local",
+        "description": "show local files only; no network (TUI-mode only)",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "long": "pager",
+        "description": "display with pager",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "style",
+        "description": "style name or JSON path (default 'auto')",
+        "inherit": false,
+        "value": {
+          "name": "name",
+          "provider": "glow.styles"
+        }
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "version for glow",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "width",
+        "description": "word-wrap at width",
+        "inherit": false,
+        "value": {
+          "name": "column"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "source|dir",
+          "index": 0,
+          "repeatable": true,
+          "provider": "builtin.files"
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "config",
+        "description": "edit the glow config file"
+      },
+      {
+        "name": "help",
+        "description": "help about any command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "stash",
+        "description": "manage your stash of markdown files",
+        "options": [
+          {
+            "short": "m",
+            "long": "memo",
+            "description": "memo/note for stashing",
+            "inherit": false,
+            "value": {
+              "name": "note"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "glow.styles": {
+        "candidates": [
+          {
+            "value": "auto"
+          },
+          {
+            "value": "light"
+          },
+          {
+            "value": "dark"
+          },
+          {
+            "value": "notty"
+          }
+        ]
+      }
+    }
+  }
+}
