@@ -635,7 +635,10 @@ const Parser = struct {
 
     fn parseAssignment(self: *Parser, word_token: token.Token) !?ast.Assignment {
         const equals_index = std.mem.indexOfScalar(u8, word_token.text, '=') orelse return null;
-        if (!isAssignmentName(word_token.text[0..equals_index])) return null;
+        const append = equals_index > 0 and word_token.text[equals_index - 1] == '+';
+        const name_end = if (append) equals_index - 1 else equals_index;
+        if (!isAssignmentName(word_token.text[0..name_end])) return null;
+        if (append and self.mode() == .posix) return error.UnexpectedToken;
 
         const value_span = spanFromRelativeOffsets(
             word_token.span,
@@ -650,8 +653,9 @@ const Parser = struct {
         value.quoted = word_token.quoted;
         value.validate();
         const assignment: ast.Assignment = .{
-            .name = word_token.text[0..equals_index],
+            .name = word_token.text[0..name_end],
             .value = value,
+            .append = append,
             .span = word_token.span,
         };
         assignment.validate();
@@ -1809,6 +1813,44 @@ test "parser recognizes leading assignment words" {
     try std.testing.expectEqualStrings("hello", command.assignments[0].value.data.literal);
     try std.testing.expectEqual(@as(usize, 2), command.words.len);
     try std.testing.expectEqualStrings("x=arg", command.words[1].data.literal);
+}
+
+test "parser recognizes bash append assignment words" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const src: source_mod.Source = .{
+        .id = 1,
+        .kind = .command_string,
+        .name = "-c",
+        .text = "x+=hello printf x+=arg",
+    };
+    // ziglint-ignore: Z028 inline import kept local to test/helper; avoid non-semantic refactor
+    const tokens = try @import("lexer.zig").lex(allocator, src);
+    const program = try parse(allocator, src, tokens);
+    const command = program.body.entries[0].and_or.pipelines[0].pipeline.stages[0].simple;
+
+    try std.testing.expectEqual(@as(usize, 1), command.assignments.len);
+    try std.testing.expectEqualStrings("x", command.assignments[0].name);
+    try std.testing.expect(command.assignments[0].append);
+    try std.testing.expectEqualStrings("hello", command.assignments[0].value.data.literal);
+    try std.testing.expectEqual(@as(usize, 2), command.words.len);
+    try std.testing.expectEqualStrings("x+=arg", command.words[1].data.literal);
+}
+
+test "parser rejects append assignment words in POSIX mode" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "x+=hello" };
+    // ziglint-ignore: Z028 inline import kept local to test/helper; avoid non-semantic refactor
+    const tokens = try @import("lexer.zig").lex(allocator, src);
+    var shell_state = state_mod.State.init(std.testing.allocator, .{ .mode = .posix });
+    defer shell_state.deinit();
+
+    try std.testing.expectError(error.UnexpectedToken, parseWithAliases(allocator, src, tokens, shell_state));
 }
 
 test "parser builds parameter parts inside double quotes" {

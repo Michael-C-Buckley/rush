@@ -3,6 +3,68 @@
     .mode = .bash,
     .cases = .{
         .{
+            .name = "append assignment concatenates scalar values",
+            .script =
+            \\unset x
+            \\x+=a
+            \\printf 'unset:<%s>\n' "$x"
+            \\x=b x+=c
+            \\printf 'current:<%s>\n' "$x"
+            ,
+            .stdout =
+            \\unset:<a>
+            \\current:<bc>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "temporary append assignment is exported and restored",
+            .script =
+            \\x=outer
+            \\x+=-prefix sh -c 'printf "inner:<%s>\n" "$x"'
+            \\printf 'outer:<%s>\n' "$x"
+            ,
+            .stdout =
+            \\inner:<outer-prefix>
+            \\outer:<outer>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "append assignments are evaluated left to right",
+            .script =
+            \\x=outer
+            \\x=a x+=b x+=c sh -c 'printf "inner:<%s>\n" "$x"'
+            \\printf 'outer:<%s>\n' "$x"
+            ,
+            .stdout =
+            \\inner:<abc>
+            \\outer:<outer>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "env builtin sees append assignment prefixes",
+            .script =
+            \\x=outer
+            \\x+=-env env | grep '^x='
+            \\printf 'outer:<%s>\n' "$x"
+            ,
+            .stdout =
+            \\x=outer-env
+            \\outer:<outer>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command substitution clears errexit by default",
             .script =
             \\set -e

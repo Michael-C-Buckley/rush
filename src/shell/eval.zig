@@ -2163,7 +2163,7 @@ fn makeEnvBuiltinEntries(
         entry_count += 1;
     }
     for (assignments) |assignment| {
-        const value = try expandAssignmentWordTracking(shell, assignment.value, null);
+        const value = try expandEnvBuiltinAssignmentValue(shell, entries[0..entry_count], assignment);
         try validateAssignment(shell, assignment.name, value);
         entries[entry_count] = .{
             .name = assignment.name,
@@ -2180,9 +2180,30 @@ fn makeEnvBuiltinEntries(
     return entries;
 }
 
+fn expandEnvBuiltinAssignmentValue(
+    shell: anytype,
+    entries: []const AssignmentEnvEntry,
+    assignment: ast.Assignment,
+) ![]const u8 {
+    const value = try expandAssignmentWordTracking(shell, assignment.value, null);
+    if (!assignment.append) return value;
+    const existing = envEntryValue(entries, assignment.name) orelse
+        if (shell.state.getVariable(assignment.name)) |variable| variable.value else "";
+    return std.mem.concat(shell.scratchAllocator(), u8, &.{ existing, value });
+}
+
 fn envOperandAssignment(operand: []const u8) ?AssignmentEnvEntry {
     const equals = std.mem.indexOfScalar(u8, operand, '=') orelse return null;
     return .{ .name = operand[0..equals], .value = operand[equals + 1 ..] };
+}
+
+fn envEntryValue(entries: []const AssignmentEnvEntry, name: []const u8) ?[]const u8 {
+    var index = entries.len;
+    while (index > 0) {
+        index -= 1;
+        if (std.mem.eql(u8, entries[index].name, name)) return entries[index].value;
+    }
+    return null;
 }
 
 fn envEntriesPath(entries: []const AssignmentEnvEntry) ?[]const u8 {
@@ -2983,7 +3004,7 @@ fn restoreVariables(shell: anytype, saved: []const SavedVariable) void {
 fn applyExportedAssignments(shell: anytype, assignments: []const ast.Assignment) !void {
     var status: ?result.ExitStatus = null;
     for (assignments) |assignment| {
-        const value = try expandAssignmentWordTracking(shell, assignment.value, &status);
+        const value = try expandAssignmentValue(shell, assignment, &status);
         try shell.state.putVariable(.{ .name = assignment.name, .value = value, .exported = true });
     }
 }
@@ -3066,6 +3087,7 @@ fn copySimpleCommand(allocator: std.mem.Allocator, command: ast.SimpleCommand) C
         assignments[index] = .{
             .name = try allocator.dupe(u8, assignment.name),
             .value = try copyWord(allocator, assignment.value),
+            .append = assignment.append,
             .span = assignment.span,
         };
     }
@@ -3479,7 +3501,7 @@ fn validateAssignment(shell: anytype, name: []const u8, value: []const u8) !void
 fn applyAssignmentsIgnoringReadonly(shell: anytype, assignments: []const ast.Assignment) !void {
     for (assignments) |assignment| {
         var status: ?result.ExitStatus = null;
-        const value = try expandAssignmentWordTracking(shell, assignment.value, &status);
+        const value = try expandAssignmentValue(shell, assignment, &status);
         shell.state.putVariable(.{
             .name = assignment.name,
             .value = value,
@@ -3494,7 +3516,7 @@ fn applyAssignmentsIgnoringReadonly(shell: anytype, assignments: []const ast.Ass
 fn applyAssignmentsWithStatus(shell: anytype, assignments: []const ast.Assignment) !result.ExitStatus {
     var status: ?result.ExitStatus = null;
     for (assignments) |assignment| {
-        const value = try expandAssignmentWordTracking(shell, assignment.value, &status);
+        const value = try expandAssignmentValue(shell, assignment, &status);
         shell.state.putVariable(.{
             .name = assignment.name,
             .value = value,
@@ -3515,7 +3537,7 @@ fn expandAndApplyAssignments(shell: anytype, assignments: []const ast.Assignment
     const expanded = try shell.scratchAllocator().alloc(ExpandedAssignment, assignments.len);
     for (assignments, 0..) |assignment, index| {
         var status: ?result.ExitStatus = null;
-        const value = try expandAssignmentWordTracking(shell, assignment.value, &status);
+        const value = try expandAssignmentValue(shell, assignment, &status);
         shell.state.putVariable(.{
             .name = assignment.name,
             .value = value,
@@ -3530,6 +3552,17 @@ fn expandAndApplyAssignments(shell: anytype, assignments: []const ast.Assignment
         expanded[index] = .{ .name = assignment.name, .value = value, .status = status };
     }
     return expanded;
+}
+
+fn expandAssignmentValue(
+    shell: anytype,
+    assignment: ast.Assignment,
+    substitution_status: ?*?result.ExitStatus,
+) ![]const u8 {
+    const value = try expandAssignmentWordTracking(shell, assignment.value, substitution_status);
+    if (!assignment.append) return value;
+    const existing = if (shell.state.getVariable(assignment.name)) |variable| variable.value else "";
+    return std.mem.concat(shell.scratchAllocator(), u8, &.{ existing, value });
 }
 
 fn assignmentExported(shell: anytype, name: []const u8) bool {
@@ -6065,13 +6098,20 @@ fn makeExecEnvp(shell: anytype, assignments: []const ast.Assignment) ![:null]con
     for (assignments) |assignment| {
         assignment_entries[entry_count] = .{
             .name = assignment.name,
-            .value = try expandAssignmentWordTracking(shell, assignment.value, null),
+            .value = try execEnvAssignmentValue(shell, assignment),
         };
         entry_count += 1;
     }
     std.debug.assert(entry_count == assignment_entries.len);
 
     return makeEnvpFromEntries(shell, assignment_entries);
+}
+
+fn execEnvAssignmentValue(shell: anytype, assignment: ast.Assignment) ![]const u8 {
+    if (assignment.append) {
+        if (shell.state.getVariable(assignment.name)) |variable| return variable.value;
+    }
+    return expandAssignmentWordTracking(shell, assignment.value, null);
 }
 
 fn makeEnvpFromEntries(shell: anytype, assignment_entries: []const AssignmentEnvEntry) ![:null]const ?[*:0]const u8 {

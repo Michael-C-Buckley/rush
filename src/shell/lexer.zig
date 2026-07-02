@@ -169,7 +169,8 @@ fn isRedirectionOperatorKind(kind: token.Kind) bool {
 
 fn isAssignmentWord(text: []const u8) bool {
     const equals_index = std.mem.indexOfScalar(u8, text, '=') orelse return false;
-    const name = text[0..equals_index];
+    const name_end = if (equals_index > 0 and text[equals_index - 1] == '+') equals_index - 1 else equals_index;
+    const name = text[0..name_end];
     if (name.len == 0) return false;
     if (!isNameStart(name[0])) return false;
     for (name[1..]) |byte| if (!isNameContinue(byte)) return false;

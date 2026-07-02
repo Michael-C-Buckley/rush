@@ -3,6 +3,16 @@
     .mode = .posix,
     .cases = .{
         .{
+            .name = "append assignment is rejected in POSIX mode",
+            .script =
+            \\x+=a
+            \\printf 'bad\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status = 2,
+        },
+        .{
             .name = "colon builtin succeeds",
             .script =
             \\:
