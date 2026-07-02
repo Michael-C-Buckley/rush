@@ -1,0 +1,1597 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "sequelize",
+    "description": "manage Sequelize projects",
+    "options": [
+      {
+        "long": "help",
+        "description": "show help"
+      },
+      {
+        "long": "version",
+        "description": "show version"
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "db:migrate",
+        "description": "run pending migrations",
+        "options": [
+          {
+            "long": "to",
+            "description": "run migrations until this migration",
+            "value": {
+              "name": "migration"
+            }
+          },
+          {
+            "long": "from",
+            "description": "start after this migration",
+            "value": {
+              "name": "migration"
+            }
+          },
+          {
+            "long": "env",
+            "description": "set environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config",
+            "description": "set config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "options-path",
+            "description": "set JSON options file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "migrations-path",
+            "description": "set migrations directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "seeders-path",
+            "description": "set seeders directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "models-path",
+            "description": "set models directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "url",
+            "description": "set database connection string",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "show debug information"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "db:migrate:schema:timestamps:add",
+        "description": "add timestamps to the migration table",
+        "options": [
+          {
+            "long": "to",
+            "description": "run migrations until this migration",
+            "value": {
+              "name": "migration"
+            }
+          },
+          {
+            "long": "from",
+            "description": "start after this migration",
+            "value": {
+              "name": "migration"
+            }
+          },
+          {
+            "long": "env",
+            "description": "set environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config",
+            "description": "set config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "options-path",
+            "description": "set JSON options file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "migrations-path",
+            "description": "set migrations directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "seeders-path",
+            "description": "set seeders directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "models-path",
+            "description": "set models directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "url",
+            "description": "set database connection string",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "show debug information"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "db:migrate:status",
+        "description": "list migration status",
+        "options": [
+          {
+            "long": "to",
+            "description": "run migrations until this migration",
+            "value": {
+              "name": "migration"
+            }
+          },
+          {
+            "long": "from",
+            "description": "start after this migration",
+            "value": {
+              "name": "migration"
+            }
+          },
+          {
+            "long": "env",
+            "description": "set environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config",
+            "description": "set config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "options-path",
+            "description": "set JSON options file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "migrations-path",
+            "description": "set migrations directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "seeders-path",
+            "description": "set seeders directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "models-path",
+            "description": "set models directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "url",
+            "description": "set database connection string",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "show debug information"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "db:migrate:undo",
+        "description": "revert a migration",
+        "options": [
+          {
+            "long": "name",
+            "description": "migration to undo",
+            "value": {
+              "name": "migration"
+            }
+          },
+          {
+            "long": "env",
+            "description": "set environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config",
+            "description": "set config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "options-path",
+            "description": "set JSON options file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "migrations-path",
+            "description": "set migrations directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "seeders-path",
+            "description": "set seeders directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "models-path",
+            "description": "set models directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "url",
+            "description": "set database connection string",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "show debug information"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "db:migrate:undo:all",
+        "description": "revert all migrations",
+        "options": [
+          {
+            "long": "to",
+            "description": "revert to migration",
+            "value": {
+              "name": "migration"
+            }
+          },
+          {
+            "long": "env",
+            "description": "set environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config",
+            "description": "set config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "options-path",
+            "description": "set JSON options file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "migrations-path",
+            "description": "set migrations directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "seeders-path",
+            "description": "set seeders directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "models-path",
+            "description": "set models directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "url",
+            "description": "set database connection string",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "show debug information"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "db:seed",
+        "description": "run specified seeder",
+        "options": [
+          {
+            "long": "seed",
+            "description": "seed file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "env",
+            "description": "set environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config",
+            "description": "set config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "options-path",
+            "description": "set JSON options file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "migrations-path",
+            "description": "set migrations directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "seeders-path",
+            "description": "set seeders directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "models-path",
+            "description": "set models directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "url",
+            "description": "set database connection string",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "show debug information"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "db:seed:undo",
+        "description": "undo specified seeder",
+        "options": [
+          {
+            "long": "seed",
+            "description": "seed file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "env",
+            "description": "set environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config",
+            "description": "set config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "options-path",
+            "description": "set JSON options file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "migrations-path",
+            "description": "set migrations directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "seeders-path",
+            "description": "set seeders directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "models-path",
+            "description": "set models directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "url",
+            "description": "set database connection string",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "show debug information"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "db:seed:all",
+        "description": "run every seeder",
+        "options": [
+          {
+            "long": "env",
+            "description": "set environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config",
+            "description": "set config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "options-path",
+            "description": "set JSON options file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "migrations-path",
+            "description": "set migrations directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "seeders-path",
+            "description": "set seeders directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "models-path",
+            "description": "set models directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "url",
+            "description": "set database connection string",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "show debug information"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "db:seed:undo:all",
+        "description": "undo all seeders",
+        "options": [
+          {
+            "long": "env",
+            "description": "set environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config",
+            "description": "set config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "options-path",
+            "description": "set JSON options file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "migrations-path",
+            "description": "set migrations directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "seeders-path",
+            "description": "set seeders directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "models-path",
+            "description": "set models directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "url",
+            "description": "set database connection string",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "show debug information"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "db:create",
+        "description": "create configured database",
+        "options": [
+          {
+            "long": "charset",
+            "description": "set MySQL charset",
+            "value": {
+              "name": "charset"
+            }
+          },
+          {
+            "long": "collate",
+            "description": "set collation",
+            "value": {
+              "name": "collate"
+            }
+          },
+          {
+            "long": "encoding",
+            "description": "set PostgreSQL encoding",
+            "value": {
+              "name": "encoding"
+            }
+          },
+          {
+            "long": "ctype",
+            "description": "set PostgreSQL ctype",
+            "value": {
+              "name": "ctype"
+            }
+          },
+          {
+            "long": "template",
+            "description": "set PostgreSQL template",
+            "value": {
+              "name": "template"
+            }
+          },
+          {
+            "long": "env",
+            "description": "set environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config",
+            "description": "set config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "options-path",
+            "description": "set JSON options file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "migrations-path",
+            "description": "set migrations directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "seeders-path",
+            "description": "set seeders directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "models-path",
+            "description": "set models directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "url",
+            "description": "set database connection string",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "show debug information"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "db:drop",
+        "description": "drop configured database",
+        "options": [
+          {
+            "long": "charset",
+            "description": "set MySQL charset",
+            "value": {
+              "name": "charset"
+            }
+          },
+          {
+            "long": "collate",
+            "description": "set collation",
+            "value": {
+              "name": "collate"
+            }
+          },
+          {
+            "long": "encoding",
+            "description": "set PostgreSQL encoding",
+            "value": {
+              "name": "encoding"
+            }
+          },
+          {
+            "long": "ctype",
+            "description": "set PostgreSQL ctype",
+            "value": {
+              "name": "ctype"
+            }
+          },
+          {
+            "long": "template",
+            "description": "set PostgreSQL template",
+            "value": {
+              "name": "template"
+            }
+          },
+          {
+            "long": "env",
+            "description": "set environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config",
+            "description": "set config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "options-path",
+            "description": "set JSON options file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "migrations-path",
+            "description": "set migrations directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "seeders-path",
+            "description": "set seeders directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "models-path",
+            "description": "set models directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "url",
+            "description": "set database connection string",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "show debug information"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "initialize project",
+        "options": [
+          {
+            "long": "force",
+            "description": "drop and recreate existing folders"
+          },
+          {
+            "long": "env",
+            "description": "set environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config",
+            "description": "set config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "options-path",
+            "description": "set JSON options file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "migrations-path",
+            "description": "set migrations directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "seeders-path",
+            "description": "set seeders directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "models-path",
+            "description": "set models directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "url",
+            "description": "set database connection string",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "show debug information"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "init:config",
+        "description": "initialize configuration",
+        "options": [
+          {
+            "long": "force",
+            "description": "drop and recreate existing folders"
+          },
+          {
+            "long": "env",
+            "description": "set environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config",
+            "description": "set config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "options-path",
+            "description": "set JSON options file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "migrations-path",
+            "description": "set migrations directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "seeders-path",
+            "description": "set seeders directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "models-path",
+            "description": "set models directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "url",
+            "description": "set database connection string",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "show debug information"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "init:migrations",
+        "description": "initialize migrations",
+        "options": [
+          {
+            "long": "force",
+            "description": "drop and recreate existing folders"
+          },
+          {
+            "long": "env",
+            "description": "set environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config",
+            "description": "set config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "options-path",
+            "description": "set JSON options file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "migrations-path",
+            "description": "set migrations directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "seeders-path",
+            "description": "set seeders directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "models-path",
+            "description": "set models directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "url",
+            "description": "set database connection string",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "show debug information"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "init:models",
+        "description": "initialize models",
+        "options": [
+          {
+            "long": "force",
+            "description": "drop and recreate existing folders"
+          },
+          {
+            "long": "env",
+            "description": "set environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config",
+            "description": "set config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "options-path",
+            "description": "set JSON options file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "migrations-path",
+            "description": "set migrations directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "seeders-path",
+            "description": "set seeders directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "models-path",
+            "description": "set models directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "url",
+            "description": "set database connection string",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "show debug information"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "init:seeders",
+        "description": "initialize seeders",
+        "options": [
+          {
+            "long": "force",
+            "description": "drop and recreate existing folders"
+          },
+          {
+            "long": "env",
+            "description": "set environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config",
+            "description": "set config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "options-path",
+            "description": "set JSON options file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "migrations-path",
+            "description": "set migrations directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "seeders-path",
+            "description": "set seeders directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "models-path",
+            "description": "set models directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "url",
+            "description": "set database connection string",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "show debug information"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "description": "show version"
+          }
+        ]
+      },
+      {
+        "name": "migration:generate",
+        "description": "generate a migration file",
+        "options": [
+          {
+            "long": "name",
+            "description": "migration name",
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "env",
+            "description": "set environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config",
+            "description": "set config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "options-path",
+            "description": "set JSON options file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "migrations-path",
+            "description": "set migrations directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "seeders-path",
+            "description": "set seeders directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "models-path",
+            "description": "set models directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "url",
+            "description": "set database connection string",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "show debug information"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "description": "show version"
+          }
+        ],
+        "aliases": [
+          "migration:create"
+        ]
+      },
+      {
+        "name": "model:generate",
+        "description": "generate a model and migration",
+        "options": [
+          {
+            "long": "name",
+            "description": "model name",
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "attributes",
+            "description": "model attributes",
+            "value": {
+              "name": "attributes"
+            }
+          },
+          {
+            "long": "force",
+            "description": "recreate model with same name"
+          },
+          {
+            "long": "underscored",
+            "description": "use snake case timestamp attributes"
+          },
+          {
+            "long": "env",
+            "description": "set environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config",
+            "description": "set config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "options-path",
+            "description": "set JSON options file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "migrations-path",
+            "description": "set migrations directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "seeders-path",
+            "description": "set seeders directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "models-path",
+            "description": "set models directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "url",
+            "description": "set database connection string",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "show debug information"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "description": "show version"
+          }
+        ],
+        "aliases": [
+          "model:create"
+        ]
+      },
+      {
+        "name": "seed:generate",
+        "description": "generate a seed file",
+        "options": [
+          {
+            "long": "name",
+            "description": "seed name",
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "env",
+            "description": "set environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config",
+            "description": "set config file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "options-path",
+            "description": "set JSON options file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "migrations-path",
+            "description": "set migrations directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "seeders-path",
+            "description": "set seeders directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "models-path",
+            "description": "set models directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "url",
+            "description": "set database connection string",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "show debug information"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "version",
+            "description": "show version"
+          }
+        ],
+        "aliases": [
+          "seed:create"
+        ]
+      }
+    ]
+  }
+}
