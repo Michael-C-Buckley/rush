@@ -1,0 +1,452 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "less",
+    "description": "view files one screen at a time",
+    "options": [
+      {
+        "short": "?",
+        "long": "help",
+        "description": "show command help",
+        "inherit": false
+      },
+      {
+        "short": "a",
+        "long": "search-skip-screen",
+        "inherit": false,
+        "description": "start searches after the displayed screen"
+      },
+      {
+        "short": "A",
+        "long": "SEARCH-SKIP-SCREEN",
+        "inherit": false,
+        "description": "start repeated searches after the target line"
+      },
+      {
+        "short": "b",
+        "long": "buffers",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        },
+        "description": "set buffer space per file"
+      },
+      {
+        "short": "B",
+        "long": "auto-buffers",
+        "inherit": false,
+        "description": "disable automatic pipe buffer allocation"
+      },
+      {
+        "short": "c",
+        "long": "clear-screen",
+        "inherit": false,
+        "description": "repaint from the top line"
+      },
+      {
+        "short": "C",
+        "long": "CLEAR-SCREEN",
+        "inherit": false,
+        "description": "repaint from the top line"
+      },
+      {
+        "short": "d",
+        "long": "dumb",
+        "inherit": false,
+        "description": "suppress dumb-terminal errors"
+      },
+      {
+        "short": "D",
+        "long": "color",
+        "inherit": false,
+        "value": {
+          "name": "xcolor"
+        },
+        "description": "set display colors"
+      },
+      {
+        "short": "e",
+        "long": "quit-at-eof",
+        "inherit": false,
+        "description": "quit after reaching end of file twice"
+      },
+      {
+        "short": "E",
+        "long": "QUIT-AT-EOF",
+        "inherit": false,
+        "description": "quit after reaching end of file once"
+      },
+      {
+        "short": "f",
+        "long": "force",
+        "inherit": false,
+        "description": "force opening special files"
+      },
+      {
+        "short": "F",
+        "long": "quit-if-one-screen",
+        "inherit": false,
+        "description": "quit if content fits on one screen"
+      },
+      {
+        "short": "g",
+        "long": "hilite-search",
+        "inherit": false,
+        "description": "highlight only the current search match"
+      },
+      {
+        "short": "G",
+        "long": "HILITE-SEARCH",
+        "inherit": false,
+        "description": "disable search highlighting"
+      },
+      {
+        "short": "h",
+        "long": "max-back-scroll",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        },
+        "description": "set maximum backward scroll lines"
+      },
+      {
+        "short": "i",
+        "long": "ignore-case",
+        "inherit": false,
+        "description": "ignore case in lowercase searches"
+      },
+      {
+        "short": "I",
+        "long": "IGNORE-CASE",
+        "inherit": false,
+        "description": "always ignore case in searches"
+      },
+      {
+        "short": "j",
+        "long": "jump-target",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        },
+        "description": "set target screen line"
+      },
+      {
+        "short": "J",
+        "long": "status-column",
+        "inherit": false,
+        "description": "display the status column"
+      },
+      {
+        "short": "k",
+        "long": "lesskey-file",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        },
+        "description": "use a lesskey file"
+      },
+      {
+        "short": "K",
+        "long": "quit-on-intr",
+        "inherit": false,
+        "description": "quit on interrupt"
+      },
+      {
+        "short": "L",
+        "long": "no-lessopen",
+        "inherit": false,
+        "description": "ignore LESSOPEN input preprocessors"
+      },
+      {
+        "short": "m",
+        "long": "long-prompt",
+        "inherit": false,
+        "description": "use a verbose prompt"
+      },
+      {
+        "short": "M",
+        "long": "LONG-PROMPT",
+        "inherit": false,
+        "description": "use a more verbose prompt"
+      },
+      {
+        "short": "n",
+        "long": "line-numbers",
+        "inherit": false,
+        "description": "suppress line numbers"
+      },
+      {
+        "short": "N",
+        "long": "LINE-NUMBERS",
+        "inherit": false,
+        "description": "show line numbers"
+      },
+      {
+        "short": "o",
+        "long": "log-file",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        },
+        "description": "copy pipe input to a log file"
+      },
+      {
+        "short": "O",
+        "long": "LOG-FILE",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        },
+        "description": "copy pipe input and overwrite log file"
+      },
+      {
+        "short": "p",
+        "long": "pattern",
+        "inherit": false,
+        "value": {
+          "name": "pattern"
+        },
+        "description": "start at first pattern match"
+      },
+      {
+        "short": "P",
+        "long": "prompt",
+        "inherit": false,
+        "value": {
+          "name": "prompt"
+        },
+        "description": "set prompt format"
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "aliases": [
+          "silent"
+        ],
+        "inherit": false,
+        "description": "use moderately quiet operation"
+      },
+      {
+        "short": "Q",
+        "long": "QUIET",
+        "aliases": [
+          "SILENT"
+        ],
+        "inherit": false,
+        "description": "use fully quiet operation"
+      },
+      {
+        "short": "r",
+        "long": "raw-control-chars",
+        "inherit": false,
+        "description": "display raw control characters"
+      },
+      {
+        "short": "R",
+        "long": "RAW-CONTROL-CHARS",
+        "inherit": false,
+        "description": "display ANSI color escapes raw"
+      },
+      {
+        "short": "s",
+        "long": "squeeze-blank-lines",
+        "inherit": false,
+        "description": "squeeze consecutive blank lines"
+      },
+      {
+        "short": "S",
+        "long": "chop-long-lines",
+        "inherit": false,
+        "description": "truncate long lines instead of wrapping"
+      },
+      {
+        "short": "t",
+        "long": "tag",
+        "inherit": false,
+        "value": {
+          "name": "tag"
+        },
+        "description": "open the file containing a tag"
+      },
+      {
+        "short": "T",
+        "long": "tag-file",
+        "inherit": false,
+        "value": {
+          "name": "tagsfile"
+        },
+        "description": "use an alternate tags file"
+      },
+      {
+        "short": "u",
+        "long": "underline-special",
+        "inherit": false,
+        "description": "display backspace and carriage returns"
+      },
+      {
+        "short": "U",
+        "long": "UNDERLINE-SPECIAL",
+        "inherit": false,
+        "description": "treat formatting characters as controls"
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "inherit": false,
+        "description": "show version number"
+      },
+      {
+        "short": "w",
+        "long": "hilite-unread",
+        "inherit": false,
+        "description": "highlight the first new line after paging"
+      },
+      {
+        "short": "W",
+        "long": "HILITE-UNREAD",
+        "inherit": false,
+        "description": "highlight the first new line after movement"
+      },
+      {
+        "short": "x",
+        "spellings": [
+          "--tabs="
+        ],
+        "inherit": false,
+        "value": {
+          "name": "n,..."
+        },
+        "description": "x"
+      },
+      {
+        "short": "X",
+        "long": "no-init",
+        "inherit": false,
+        "description": "disable terminal init and deinit strings"
+      },
+      {
+        "short": "y",
+        "long": "max-forw-scroll",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        },
+        "description": "set maximum forward scroll lines"
+      },
+      {
+        "short": "z",
+        "long": "window",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        },
+        "description": "set scrolling window size"
+      },
+      {
+        "long": "quotes",
+        "inherit": false,
+        "description": "set filename quote characters"
+      },
+      {
+        "short": "~",
+        "long": "tilde",
+        "inherit": false,
+        "description": "show blank lines after end of file"
+      },
+      {
+        "short": "#",
+        "long": "shift",
+        "inherit": false,
+        "description": "set horizontal scroll amount"
+      },
+      {
+        "long": "follow-name",
+        "inherit": false,
+        "description": "follow files by name"
+      },
+      {
+        "long": "incsearch",
+        "inherit": false,
+        "description": "enable incremental search"
+      },
+      {
+        "long": "line-num-width",
+        "inherit": false,
+        "description": "set line number field width"
+      },
+      {
+        "long": "mouse",
+        "inherit": false,
+        "description": "enable mouse input"
+      },
+      {
+        "long": "MOUSE",
+        "inherit": false,
+        "description": "enable reversed mouse input"
+      },
+      {
+        "long": "no-keypad",
+        "inherit": false,
+        "description": "disable keypad init and deinit strings"
+      },
+      {
+        "long": "no-histdups",
+        "inherit": false,
+        "description": "remove duplicate history entries"
+      },
+      {
+        "long": "rscroll",
+        "inherit": false,
+        "description": "set truncated-line marker"
+      },
+      {
+        "long": "save-marks",
+        "inherit": false,
+        "description": "save marks in history"
+      },
+      {
+        "long": "status-col-width",
+        "inherit": false,
+        "description": "set status column width"
+      },
+      {
+        "long": "use-backslash",
+        "inherit": false,
+        "description": "treat backslashes literally in options"
+      },
+      {
+        "long": "use-color",
+        "inherit": false,
+        "description": "enable colored text"
+      },
+      {
+        "long": "wheel-lines",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        },
+        "description": "set mouse wheel scroll lines"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "value",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true,
+          "description": "file to view"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
