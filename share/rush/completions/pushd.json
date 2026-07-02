@@ -1,0 +1,22 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pushd",
+    "description": "change directories and update the directory stack",
+    "arguments": {
+      "states": [
+        {
+          "name": "directory",
+          "provider": "builtin.directories",
+          "index": 0
+        }
+      ]
+    }
+  },
+  "providers": {
+    "builtin.directories": {
+      "builtin": "directories"
+    }
+  }
+}
