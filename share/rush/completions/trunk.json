@@ -1,0 +1,401 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "trunk",
+    "description": "scalable code checking and formatting tool",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "usage information",
+        "inherit": true
+      },
+      {
+        "long": "version",
+        "description": "the version",
+        "inherit": true
+      },
+      {
+        "short": "m",
+        "long": "monitor",
+        "description": "enable the trunk daemon to monitor file changes in your repo",
+        "inherit": true,
+        "value": {
+          "name": "value",
+          "provider": "trunk.booleans"
+        }
+      },
+      {
+        "long": "ci",
+        "description": "run in continuous integration mode",
+        "inherit": true
+      },
+      {
+        "short": "o",
+        "long": "output",
+        "description": "output format",
+        "inherit": true,
+        "value": {
+          "name": "format",
+          "provider": "trunk.outputs"
+        }
+      },
+      {
+        "long": "no-progress",
+        "description": "don't show progress updates",
+        "inherit": true
+      },
+      {
+        "long": "ci-progress",
+        "description": "show updates every 30 seconds without clearing terminal screen (implicit with --ci)",
+        "inherit": true
+      },
+      {
+        "long": "action_timeout",
+        "description": "how long actions (downloads, lint runs, etc.) have to time out, with units (s, ms, etc)",
+        "inherit": true,
+        "value": {
+          "name": "timeout"
+        }
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "output details about what's happening under the hood",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "setup trunk in this repo",
+        "options": [
+          {
+            "long": "lock",
+            "description": "add sha256s to trunk.yaml for additional verification",
+            "inherit": false
+          },
+          {
+            "long": "check-sample",
+            "description": "run `trunk check sample` without prompting",
+            "inherit": false
+          },
+          {
+            "long": "nocheck-sample",
+            "description": "do not run `trunk check sample` post-init",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "description": "overwrite existing trunk.yaml",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "check",
+        "description": "universal code checker",
+        "options": [
+          {
+            "short": "y",
+            "long": "fix",
+            "description": "automatically apply all fixes without prompting",
+            "inherit": false
+          },
+          {
+            "short": "a",
+            "long": "all",
+            "description": "run on all files instead of only changed files"
+          },
+          {
+            "short": "n",
+            "long": "no-fix",
+            "description": "don't automatically apply fixes"
+          },
+          {
+            "long": "include-existing-autofixes",
+            "description": "show autofixes for existing issues"
+          },
+          {
+            "long": "force",
+            "description": "run on all files, even if ignored"
+          },
+          {
+            "long": "diff",
+            "description": "diff printing mode",
+            "value": {
+              "name": "mode",
+              "provider": "trunk.diff-modes"
+            }
+          },
+          {
+            "long": "filter",
+            "description": "filter executed linters or returned codes",
+            "value": {
+              "name": "linter-or-code"
+            }
+          },
+          {
+            "long": "exclude",
+            "description": "inverse filter for linters or codes",
+            "value": {
+              "name": "linter-or-code"
+            }
+          },
+          {
+            "short": "j",
+            "long": "jobs",
+            "description": "number of concurrent jobs",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "long": "sample",
+            "description": "run each linter on a sample of files",
+            "value": {
+              "name": "count"
+            }
+          },
+          {
+            "long": "upstream",
+            "description": "upstream branch for changed-file detection",
+            "value": {
+              "name": "branch"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "paths",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        },
+        "subcommands": [
+          {
+            "name": "upgrade",
+            "description": "upgrade all linters to latest versions",
+            "arguments": {
+              "states": [
+                {
+                  "name": "linters",
+                  "description": "Linter(s) to upgrade (upgrades all if none specified)",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "download",
+            "description": "download all files needed for trunk to work offline",
+            "arguments": {
+              "states": [
+                {
+                  "name": "tools",
+                  "description": "Tool(s) to download (if omitted, downloads all configured tools)",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "enable",
+            "description": "enable linters",
+            "arguments": {
+              "states": [
+                {
+                  "name": "linters",
+                  "description": "Linter(s) to enable",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "disable",
+            "description": "disable linters",
+            "arguments": {
+              "states": [
+                {
+                  "name": "linters",
+                  "description": "Linter(s) to disable",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "fmt",
+        "description": "universal code formatter",
+        "arguments": {
+          "states": [
+            {
+              "name": "paths",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "a",
+            "long": "all",
+            "description": "run on all files instead of only changed files"
+          },
+          {
+            "short": "n",
+            "long": "no-fix",
+            "description": "don't automatically apply fixes"
+          },
+          {
+            "long": "include-existing-autofixes",
+            "description": "show autofixes for existing issues"
+          },
+          {
+            "long": "force",
+            "description": "run on all files, even if ignored"
+          },
+          {
+            "long": "diff",
+            "description": "diff printing mode",
+            "value": {
+              "name": "mode",
+              "provider": "trunk.diff-modes"
+            }
+          },
+          {
+            "long": "filter",
+            "description": "filter executed linters or returned codes",
+            "value": {
+              "name": "linter-or-code"
+            }
+          },
+          {
+            "long": "exclude",
+            "description": "inverse filter for linters or codes",
+            "value": {
+              "name": "linter-or-code"
+            }
+          },
+          {
+            "short": "j",
+            "long": "jobs",
+            "description": "number of concurrent jobs",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "long": "sample",
+            "description": "run each linter on a sample of files",
+            "value": {
+              "name": "count"
+            }
+          },
+          {
+            "long": "upstream",
+            "description": "upstream branch for changed-file detection",
+            "value": {
+              "name": "branch"
+            }
+          }
+        ]
+      },
+      {
+        "name": "upgrade",
+        "description": "upgrade trunk to the latest release"
+      },
+      {
+        "name": "git-hooks",
+        "description": "git hooks",
+        "subcommands": [
+          {
+            "name": "install",
+            "description": "install trunk git hooks"
+          }
+        ]
+      },
+      {
+        "name": "cache",
+        "description": "cache management",
+        "subcommands": [
+          {
+            "name": "clean",
+            "description": "clean the cache",
+            "options": [
+              {
+                "long": "all",
+                "description": "Delete all files (including results cache)",
+                "inherit": false
+              },
+              {
+                "short": "n",
+                "long": "dry-run",
+                "description": "Print all directories that would be cleaned out without running deletion",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "print-config",
+        "description": "print the resolved trunk config"
+      },
+      {
+        "name": "daemon",
+        "description": "daemon management",
+        "subcommands": [
+          {
+            "name": "launch",
+            "description": "start the trunk daemon if its not already running"
+          },
+          {
+            "name": "shutdown",
+            "description": "shutdown the trunk daemon if it is running"
+          },
+          {
+            "name": "status",
+            "description": "report daemon status"
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "trunk.booleans": {
+        "values": [
+          "true",
+          "false"
+        ]
+      },
+      "trunk.outputs": {
+        "values": [
+          "text",
+          "json"
+        ]
+      },
+      "trunk.diff-modes": {
+        "values": [
+          "none",
+          "compact",
+          "full"
+        ]
+      }
+    }
+  }
+}
