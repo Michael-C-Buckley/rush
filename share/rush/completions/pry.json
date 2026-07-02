@@ -1,0 +1,133 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pry",
+    "description": "start an interactive Ruby session",
+    "options": [
+      {
+        "short": "e",
+        "long": "exec",
+        "description": "execute Ruby code before startup",
+        "inherit": false,
+        "value": {
+          "name": "code"
+        }
+      },
+      {
+        "long": "no-pager",
+        "description": "disable pager",
+        "inherit": false
+      },
+      {
+        "long": "no-history",
+        "description": "disable history",
+        "inherit": false
+      },
+      {
+        "long": "no-color",
+        "description": "disable syntax highlighting",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "description": "skip pryrc loading",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "select-plugin",
+        "description": "load only one plugin",
+        "inherit": false,
+        "value": {
+          "name": "plugin"
+        }
+      },
+      {
+        "short": "d",
+        "long": "disable-plugin",
+        "description": "disable a plugin",
+        "inherit": false,
+        "value": {
+          "name": "plugin"
+        }
+      },
+      {
+        "long": "no-plugins",
+        "description": "disable plugins",
+        "inherit": false
+      },
+      {
+        "long": "plugins",
+        "description": "list installed plugins",
+        "inherit": false
+      },
+      {
+        "long": "simple-prompt",
+        "description": "use simple prompt",
+        "inherit": false
+      },
+      {
+        "long": "noprompt",
+        "description": "disable prompt",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "long": "require",
+        "description": "require Ruby script",
+        "inherit": false,
+        "value": {
+          "name": "script",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "I",
+        "description": "add path to load path",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "gem",
+        "description": "load gem shorthand",
+        "inherit": false,
+        "value": {
+          "name": "gemname"
+        }
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "long": "context",
+        "description": "start in context",
+        "inherit": false,
+        "value": {
+          "name": "context"
+        }
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
