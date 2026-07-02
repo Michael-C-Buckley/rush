@@ -1,0 +1,400 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "minectl",
+    "description": "create Minecraft servers on cloud providers",
+    "options": [
+      {
+        "long": "headless",
+        "description": "set this value to if mincetl is called by a CI system. Enables logging and disables human-readable output rendering (default: false)",
+        "inherit": true
+      },
+      {
+        "long": "log-encoding",
+        "description": "set the log encoding: console|json (default: console)",
+        "inherit": true,
+        "value": {
+          "name": "log-encoding",
+          "provider": {
+            "values": [
+              "console",
+              "json"
+            ]
+          }
+        }
+      },
+      {
+        "long": "verbose",
+        "description": "enable verbose logging: debug|info|warn|error|dpanic|panic|fatal",
+        "inherit": true,
+        "value": {
+          "name": "verbose",
+          "provider": {
+            "values": [
+              "debug",
+              "info",
+              "warn",
+              "error",
+              "dpanic",
+              "panic",
+              "fatal"
+            ]
+          }
+        }
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "display help",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "completion",
+        "description": "generate the autocompletion script for the specified shell",
+        "subcommands": [
+          {
+            "name": "bash",
+            "description": "generate the autocompletion script for bash",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "fish",
+            "description": "generate the autocompletion script for fish",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "powershell",
+            "description": "generate the autocompletion script for powershell",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "zsh",
+            "description": "generate the autocompletion script for zsh",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "create",
+        "description": "create an Minecraft Server",
+        "options": [
+          {
+            "long": "filename",
+            "short": "f",
+            "description": "location of the manifest file",
+            "inherit": false,
+            "value": {
+              "name": "filename",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "wait",
+            "short": "w",
+            "description": "wait for Minecraft Server is started",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "delete",
+        "description": "delete an Minecraft Server",
+        "options": [
+          {
+            "long": "filename",
+            "short": "f",
+            "description": "location of the manifest file",
+            "inherit": false,
+            "value": {
+              "name": "filename",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "id",
+            "description": "contains the server id",
+            "inherit": false,
+            "value": {
+              "name": "id"
+            }
+          },
+          {
+            "long": "yes",
+            "short": "y",
+            "description": "automatically delete the server",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "list",
+        "description": "list all Minecraft Server",
+        "options": [
+          {
+            "long": "provider",
+            "short": "p",
+            "description": "the cloud provider - civo|scaleway|do|hetzner|akamai|ovh|equinix|gce|vultr|azure|oci|ionos|aws|vexxhost|multipass|exoscale",
+            "inherit": false,
+            "value": {
+              "name": "provider",
+              "provider": {
+                "values": [
+                  "civo",
+                  "scaleway",
+                  "do",
+                  "hetzner",
+                  "linode",
+                  "ovh",
+                  "equinix",
+                  "gce",
+                  "vultr",
+                  "azure",
+                  "oci",
+                  "ionos",
+                  "aws",
+                  "vexxhost",
+                  "multipass",
+                  "exoscale"
+                ]
+              }
+            }
+          },
+          {
+            "long": "region",
+            "short": "r",
+            "description": "the region (gce: zone) for your cloud provider - civo|gce",
+            "inherit": false,
+            "value": {
+              "name": "region"
+            }
+          }
+        ]
+      },
+      {
+        "name": "plugins",
+        "description": "manage your plugins for a specific server",
+        "options": [
+          {
+            "long": "destination",
+            "short": "d",
+            "description": "plugin destination folder",
+            "inherit": false,
+            "value": {
+              "name": "destination",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "filename",
+            "short": "f",
+            "description": "location of the manifest file",
+            "inherit": false,
+            "value": {
+              "name": "filename",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "id",
+            "description": "contains the server id",
+            "inherit": false,
+            "value": {
+              "name": "id"
+            }
+          },
+          {
+            "long": "plugin",
+            "short": "p",
+            "description": "location of the plugin",
+            "inherit": false,
+            "value": {
+              "name": "plugin",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "ssh-key",
+            "short": "k",
+            "description": "specify a specific path for the SSH key",
+            "inherit": false,
+            "value": {
+              "name": "ssh-key"
+            }
+          }
+        ]
+      },
+      {
+        "name": "rcon",
+        "description": "rCON client to your Minecraft server",
+        "options": [
+          {
+            "long": "filename",
+            "short": "f",
+            "description": "location of the manifest file",
+            "inherit": false,
+            "value": {
+              "name": "filename",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "id",
+            "description": "contains the server id",
+            "inherit": false,
+            "value": {
+              "name": "id"
+            }
+          }
+        ]
+      },
+      {
+        "name": "update",
+        "description": "update an Minecraft Server",
+        "options": [
+          {
+            "long": "filename",
+            "short": "f",
+            "description": "location of the manifest file",
+            "inherit": false,
+            "value": {
+              "name": "filename",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "id",
+            "description": "contains the server id",
+            "inherit": false,
+            "value": {
+              "name": "id"
+            }
+          },
+          {
+            "long": "ssh-key",
+            "short": "k",
+            "description": "specify a specific path for the SSH key",
+            "inherit": false,
+            "value": {
+              "name": "ssh-key"
+            }
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "display the clients version information"
+      },
+      {
+        "name": "wizard",
+        "description": "calls the minectl wizard to create interactively a minectl \ud83d\uddfa config",
+        "options": [
+          {
+            "long": "output",
+            "short": "o",
+            "description": "output folder for the configuration file for minectl \ud83d\uddfa (default: ~/.minectl)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "builtin.directories"
+            }
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "help about any command",
+        "subcommands": [
+          {
+            "name": "completion",
+            "description": "generate the autocompletion script for the specified shell",
+            "subcommands": [
+              {
+                "name": "bash",
+                "description": "generate the autocompletion script for bash"
+              },
+              {
+                "name": "fish",
+                "description": "generate the autocompletion script for fish"
+              },
+              {
+                "name": "powershell",
+                "description": "generate the autocompletion script for powershell"
+              },
+              {
+                "name": "zsh",
+                "description": "generate the autocompletion script for zsh"
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "description": "create an Minecraft Server"
+          },
+          {
+            "name": "delete",
+            "description": "delete an Minecraft Server"
+          },
+          {
+            "name": "list",
+            "description": "list all Minecraft Server"
+          },
+          {
+            "name": "plugins",
+            "description": "manage your plugins for a specific server"
+          },
+          {
+            "name": "rcon",
+            "description": "rCON client to your Minecraft server"
+          },
+          {
+            "name": "update",
+            "description": "update an Minecraft Server"
+          },
+          {
+            "name": "version",
+            "description": "display the clients version information"
+          },
+          {
+            "name": "wizard",
+            "description": "calls the minectl wizard to create interactively a minectl \ud83d\uddfa config"
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
