@@ -1,0 +1,9 @@
+__rush_complete_networkQuality_interfaces() {
+  networksetup -listallhardwareports 2>/dev/null | awk '
+    /^Hardware Port:/ { desc = substr($0, 16) }
+    /^Device:/ { print substr($0, 9) "\t" desc }
+  ' | while IFS='	' read -r device desc; do
+    test -n "$device" || continue
+    rush_complete candidate "$device" --kind plain --description "$desc"
+  done
+}

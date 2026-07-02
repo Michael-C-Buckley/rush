@@ -1,0 +1,49 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "networkQuality",
+    "description": "measure network quality",
+    "options": [
+      {
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "description": "produce machine-readable output",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "Run tests sequentially instead of in parallel",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "description": "enable verbose output",
+        "inherit": false
+      },
+      {
+        "short": "C",
+        "description": "Use a custom configuration URL",
+        "inherit": false,
+        "value": {
+          "name": "url"
+        }
+      },
+      {
+        "short": "I",
+        "description": "Bind test to interface",
+        "inherit": false,
+        "value": {
+          "name": "interface",
+          "provider": {
+            "function": "__rush_complete_networkQuality_interfaces"
+          }
+        }
+      }
+    ]
+  }
+}
