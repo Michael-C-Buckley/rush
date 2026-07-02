@@ -1,0 +1,6 @@
+__rush_complete_gibo_boilerplates() {
+  gibo list 2>/dev/null | while IFS= read -r boilerplate; do
+    test -n "$boilerplate" || continue
+    rush_complete candidate "$boilerplate" --kind plain --description 'gitignore boilerplate'
+  done
+}
