@@ -1,0 +1,218 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "hardhat",
+    "description": "Ethereum development environment",
+    "options": [
+      {
+        "description": "a Hardhat config file",
+        "inherit": false,
+        "long": "config",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "emoji",
+        "description": "use emoji in messages",
+        "inherit": false
+      },
+      {
+        "long": "max-memory",
+        "description": "the maximum amount of memory that Hardhat can use",
+        "inherit": false,
+        "value": {
+          "name": "memory"
+        }
+      },
+      {
+        "long": "help",
+        "description": "shows the help text or task's help if name is provided",
+        "inherit": false,
+        "value": {
+          "name": "task",
+          "required": false,
+          "style": "optional",
+          "provider": "hardhat.tasks"
+        }
+      },
+      {
+        "long": "network",
+        "description": "the network to connect to",
+        "inherit": false,
+        "value": {
+          "name": "network"
+        }
+      },
+      {
+        "description": "show stack traces",
+        "inherit": false,
+        "long": "show-stack-traces"
+      },
+      {
+        "long": "verbose",
+        "description": "enables Hardhat verbose logging",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "shows hardhat's version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "accounts",
+        "description": "prints the list of accounts"
+      },
+      {
+        "name": "check",
+        "description": "check whatever you need"
+      },
+      {
+        "name": "clean",
+        "description": "clears the cache and deletes all artifacts",
+        "options": [
+          {
+            "long": "global",
+            "description": "clear the global cache",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "compile",
+        "description": "compiles the entire project, building all artifacts",
+        "options": [
+          {
+            "long": "force",
+            "description": "force compilation ignoring cache",
+            "inherit": false
+          },
+          {
+            "long": "quiet",
+            "description": "makes the compilation process less verbose",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "console",
+        "description": "opens a hardhat console",
+        "options": [
+          {
+            "long": "no-compile",
+            "description": "don't compile before running this task",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "flatten",
+        "description": "flattens and prints contracts and their dependencies"
+      },
+      {
+        "name": "help",
+        "description": "prints this message"
+      },
+      {
+        "name": "node",
+        "description": "starts a JSON-RPC server on top of Hardhat Network",
+        "options": [
+          {
+            "long": "fork",
+            "description": "the URL of the JSON-RPC server to fork from",
+            "inherit": false,
+            "value": {
+              "name": "fork"
+            }
+          },
+          {
+            "long": "fork-block-number",
+            "description": "the block number to fork from",
+            "inherit": false,
+            "value": {
+              "name": "fork-block-number"
+            }
+          },
+          {
+            "long": "hostname",
+            "description": "the host to which to bind to for new connections",
+            "inherit": false,
+            "value": {
+              "name": "hostname"
+            }
+          },
+          {
+            "long": "port",
+            "description": "the port on which to listen for new connections (default: 8545)",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "runs a user-defined script after compiling the project",
+        "options": [
+          {
+            "long": "no-compile",
+            "description": "don't compile before running this task",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "test",
+        "description": "runs mocha tests",
+        "options": [
+          {
+            "long": "no-compile",
+            "description": "don't compile before running this task",
+            "inherit": false
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "hardhat.tasks": {
+        "candidates": [
+          {
+            "value": "accounts"
+          },
+          {
+            "value": "check"
+          },
+          {
+            "value": "clean"
+          },
+          {
+            "value": "compile"
+          },
+          {
+            "value": "console"
+          },
+          {
+            "value": "flatten"
+          },
+          {
+            "value": "help"
+          },
+          {
+            "value": "node"
+          },
+          {
+            "value": "run"
+          },
+          {
+            "value": "test"
+          }
+        ]
+      }
+    }
+  }
+}
