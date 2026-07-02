@@ -1,0 +1,1209 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "meteor",
+    "description": "run the Meteor command-line tool",
+    "subcommands": [
+      {
+        "name": "npm"
+      },
+      {
+        "name": "help",
+        "description": "get help on meteor command line usage",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "description": "built-in command",
+              "index": 0
+            }
+          ]
+        },
+        "subcommands": [
+          {
+            "name": "admin",
+            "subcommands": [
+              {
+                "name": "maintainers"
+              },
+              {
+                "name": "recommend-release"
+              },
+              {
+                "name": "change-homepage"
+              },
+              {
+                "name": "list-organizations"
+              },
+              {
+                "name": "members"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "run a meteor development server in the current project. Searches upward from the current directory for the root directory of a Meteor project",
+        "options": [
+          {
+            "spellings": [
+              "target"
+            ],
+            "description": "if you have added a platform to your app with 'meteor add-platform', you can pass one of the following targets as an argument to this command",
+            "inherit": false
+          },
+          {
+            "long": "port",
+            "short": "p",
+            "description": "port to listen on (instead of the default 3000)",
+            "inherit": false,
+            "value": {
+              "name": "port",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "inspect",
+            "description": "enable server-side debugging via debugging clients like the Node.js command-line debugger, Chrome DevTools, or Visual Studio Code",
+            "inherit": false,
+            "value": {
+              "name": "port",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "inspect-brk",
+            "description": "enable server-side debugging via debugging clients like the Node.js command-line debugger, Chrome DevTools, or Visual Studio Code. The server will be paused at",
+            "inherit": false,
+            "value": {
+              "name": "port",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "mobile-server",
+            "description": "location where mobile builds connect to the Meteor server. Defaults to your local IP and the port that the Meteor server binds to. Can include a URL scheme (for",
+            "inherit": false
+          },
+          {
+            "long": "cordova-server-port",
+            "description": "local port where Cordova will serve the content. It's important when multiple Cordova apps are build from the same Meteor app source code as by default the port",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "production",
+            "description": "simulate production mode. Minify and bundle CSS and JS files",
+            "inherit": false
+          },
+          {
+            "long": "raw-logs",
+            "description": "run without parsing logs from stdout and stderr",
+            "inherit": false
+          },
+          {
+            "long": "settings",
+            "short": "s",
+            "description": "set optional data for Meteor.settings on the server",
+            "inherit": false,
+            "value": {
+              "name": "JSON-File",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "release",
+            "description": "specify the release of Meteor to use",
+            "inherit": false,
+            "value": {
+              "name": "release"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "print all output from builds logs",
+            "inherit": false
+          },
+          {
+            "long": "no-lint",
+            "description": "don't run linters used by the app on every rebuild",
+            "inherit": false
+          },
+          {
+            "long": "no-release-check",
+            "description": "don't run the release updater to check for new releases",
+            "inherit": false
+          },
+          {
+            "long": "allow-incompatible-update",
+            "description": "allow packages in your project to be upgraded or downgraded to versions that are potentially incompatible with the current versions, if required to satisfy all",
+            "inherit": false
+          },
+          {
+            "long": "extra-packages",
+            "description": "run with additional packages (comma separated, for example: --extra-packages \"package-name1, package-name2@1.2.3\")",
+            "inherit": false,
+            "value": {
+              "name": "packages"
+            }
+          },
+          {
+            "long": "exclude-archs",
+            "description": "don't create bundles for certain web architectures (comma separated, for example: --exclude-archs \"web.browser.legacy, web.cordova\")",
+            "inherit": false,
+            "value": {
+              "name": "architectures"
+            }
+          }
+        ]
+      },
+      {
+        "name": "debug",
+        "description": "dEPRECATED. The 'meteor debug' command is deprecated in favor of 'meteor --inspect-brk'",
+        "deprecated": true
+      },
+      {
+        "name": "create",
+        "description": "create a new Meteor project. By default, it uses React and makes a subdirectory named name and copies in the template app. You can pass an absolute or relative",
+        "options": [
+          {
+            "long": "release",
+            "description": "specify the release of Meteor to use",
+            "inherit": false,
+            "value": {
+              "name": "release"
+            }
+          },
+          {
+            "long": "package",
+            "description": "create a new meteor package instead of an app",
+            "inherit": false,
+            "value": {
+              "name": "package_name"
+            }
+          },
+          {
+            "long": "example",
+            "description": "example template to use",
+            "inherit": false,
+            "value": {
+              "name": "example_name"
+            }
+          },
+          {
+            "long": "list",
+            "description": "show list of available examples",
+            "inherit": false
+          },
+          {
+            "long": "bare",
+            "description": "create an empty app",
+            "inherit": false
+          },
+          {
+            "long": "minimal",
+            "description": "create an app with as few Meteor packages as possible",
+            "inherit": false
+          },
+          {
+            "long": "full",
+            "description": "create a fully scaffolded app",
+            "inherit": false
+          },
+          {
+            "long": "react",
+            "description": "create a basic react-based app, same as default",
+            "inherit": false
+          },
+          {
+            "long": "vue",
+            "description": "create a basic vue-based app",
+            "inherit": false
+          },
+          {
+            "long": "apollo",
+            "description": "create a basic apollo-based app",
+            "inherit": false
+          },
+          {
+            "long": "svelte",
+            "description": "create a basic svelte-based app",
+            "inherit": false
+          },
+          {
+            "long": "typescript",
+            "description": "create a basic Typescript React-based app",
+            "inherit": false
+          },
+          {
+            "long": "blaze",
+            "description": "create a basic blaze-based app",
+            "inherit": false
+          },
+          {
+            "long": "tailwind",
+            "description": "create a basic react-based app, with tailwind configured",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "update",
+        "description": "attempts to bring you to the latest version of Meteor, and then to upgrade your packages to their latest versions. By default, update will not break compatibili",
+        "options": [
+          {
+            "long": "packages-only",
+            "description": "update the package versions only. Do not update the release",
+            "inherit": false
+          },
+          {
+            "long": "patch",
+            "description": "update the release to a patch release only",
+            "inherit": false
+          },
+          {
+            "long": "release",
+            "description": "update to a specific release of meteor",
+            "inherit": false,
+            "value": {
+              "name": "release"
+            }
+          },
+          {
+            "long": "allow-incompatible-update",
+            "description": "allow packages in your project to be upgraded or downgraded to versions that are potentially incompatible with the current versions, if required to satisfy all",
+            "inherit": false
+          },
+          {
+            "long": "all-packages",
+            "description": "update all packages including indirect dependencies",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package_names",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "add",
+        "description": "add packages to your Meteor project. You can add multiple packages with one command",
+        "options": [
+          {
+            "long": "allow-incompatible-update",
+            "description": "allow packages in your project to be upgraded or downgraded to versions that are potentially incompatible with the current versions, if required to satisfy all",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "remove",
+        "description": "removes a package previously added to your Meteor project. You can remove multiple packages with one command. For a list of the packages that your application i",
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "lists the packages that you have explicitly added to your project",
+        "options": [
+          {
+            "long": "tree",
+            "description": "outputs a tree showing how packages are referenced",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "outputs the tree in JSON format",
+            "inherit": false
+          },
+          {
+            "long": "weak",
+            "description": "show weakly referenced dependencies in the tree",
+            "inherit": false
+          },
+          {
+            "long": "details",
+            "description": "adds more package details to the JSON output",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "add-platform",
+        "description": "adds platforms to your Meteor project. You can add multiple platforms with one command",
+        "arguments": {
+          "states": [
+            {
+              "name": "platform",
+              "provider": {
+                "values": [
+                  "server",
+                  "browser",
+                  "android",
+                  "ios"
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "remove-platform",
+        "description": "removes a platform previously added to your Meteor project",
+        "arguments": {
+          "states": [
+            {
+              "name": "platform",
+              "index": 0,
+              "provider": {
+                "values": [
+                  "web.browser",
+                  "web.browser.legacy",
+                  "web.cordova",
+                  "ios",
+                  "android",
+                  "server"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "list-platforms",
+        "description": "lists all of the platforms added to your project"
+      },
+      {
+        "name": "ensure-cordova-dependencies",
+        "description": "check if the dependencies are installed, otherwise install them"
+      },
+      {
+        "name": "build",
+        "description": "package this project up for deployment. The command outputs a directory with builds for all platforms in this project",
+        "options": [
+          {
+            "long": "debug",
+            "description": "build in debug mode (don't minify, etc)",
+            "inherit": false
+          },
+          {
+            "long": "directory",
+            "description": "output a directory (rather than a tarball) for the application server bundle. If the output location exists, it will be recursively deleted first",
+            "inherit": false
+          },
+          {
+            "long": "server-only",
+            "description": "skip building mobile apps even if mobile platforms have been added",
+            "inherit": false
+          },
+          {
+            "long": "mobile-settings",
+            "description": "set optional data for the initial value of Meteor.settings in your mobile application",
+            "inherit": false
+          },
+          {
+            "long": "server",
+            "description": "location where mobile builds connect to the Meteor server. Defaults to localhost:3000. Can include a URL scheme (for example, --server https://example.com:443)",
+            "inherit": false
+          },
+          {
+            "long": "architecture",
+            "description": "builds the server for a different architecture than your developer machine's architecture. Note: This option selects the architecture of the binary-dependent At",
+            "inherit": false,
+            "value": {
+              "name": "arch",
+              "provider": {
+                "values": [
+                  "os.osx.x86_64",
+                  "os.linux.x86_64",
+                  "os.linux.x86_32",
+                  "os.windows.x86_32",
+                  "os.windows.x86_64"
+                ]
+              }
+            }
+          },
+          {
+            "long": "allow-incompatible-update",
+            "description": "allow packages in your project to be upgraded or downgraded to versions that are potentially incompatible with the current versions, if required to satisfy all",
+            "inherit": false
+          },
+          {
+            "long": "platforms",
+            "description": "builds only the specified platforms (when available)",
+            "inherit": false,
+            "value": {
+              "name": "platforms",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "packageType",
+            "description": "choose between apk/bundle for android builds",
+            "inherit": false,
+            "value": {
+              "name": "package-type",
+              "required": false,
+              "style": "optional",
+              "provider": {
+                "values": [
+                  "apk",
+                  "bundle"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "output-path",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "lint",
+        "description": "run through the whole build process for the app and run all linters the app uses",
+        "options": [
+          {
+            "long": "allow-incompatible-update",
+            "description": "allow packages in your project to be upgraded or downgraded to versions that are potentially incompatible with the current versions, if required to satisfy all",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "shell",
+        "description": "when `meteor shell` is executed in an application directory where a server is already running, it connects to the server and starts an interactive shell for eva"
+      },
+      {
+        "name": "mongo",
+        "description": "opens a Mongo shell to view or manipulate collections. Can only be used when developing locally",
+        "options": [
+          {
+            "long": "url",
+            "short": "U",
+            "description": "mongo database URL",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          }
+        ]
+      },
+      {
+        "name": "reset",
+        "description": "reset the current project to a fresh state. Removes all local data"
+      },
+      {
+        "name": "deploy",
+        "description": "deploys the project in your current directory to Meteor's servers",
+        "options": [
+          {
+            "long": "delete",
+            "short": "D",
+            "description": "permanently delete this deployment",
+            "inherit": false
+          },
+          {
+            "long": "debug",
+            "description": "deploy in debug mode (don't minify, etc)",
+            "inherit": false
+          },
+          {
+            "long": "settings",
+            "short": "s",
+            "description": "set optional data for Meteor.settings",
+            "inherit": false,
+            "value": {
+              "name": "JSON-File",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "allow-incompatible-update",
+            "description": "allow packages in your project to be upgraded or downgraded to versions that are potentially incompatible with the current versions, if required to satisfy all",
+            "inherit": false
+          },
+          {
+            "long": "deploy-polling-timeout",
+            "description": "the number of milliseconds to wait for build/deploy success or failure after a successful upload of your app's minified code; defaults to 15 minutes",
+            "inherit": false,
+            "value": {
+              "name": "milliseconds",
+              "description": "milliseconds to wait"
+            }
+          },
+          {
+            "long": "no-wait",
+            "description": "exits when Meteor has uploaded the app's code instead of waiting for the deploy to conclude",
+            "inherit": false
+          },
+          {
+            "long": "cache-build",
+            "description": "reuses the build already created if the git commit hash is the same",
+            "inherit": false
+          },
+          {
+            "long": "free",
+            "description": "when deploying an app for the first time, you can pass this option to deploy your app in the Galaxy's free mode",
+            "inherit": false
+          },
+          {
+            "long": "plan",
+            "description": "you can change the app plan by providing this argument with one of the following values: professional, essentials, or free. Be aware that this argument overwrit",
+            "inherit": false
+          },
+          {
+            "long": "mongo",
+            "description": "if this flag is true and it's not provided a mongo url in the settings ('galaxy.meteor.com'.env.MONGO_URL), when deploying, Galaxy will create a database to you",
+            "inherit": false,
+            "value": {
+              "name": "true/false",
+              "provider": {
+                "values": [
+                  "true",
+                  "false"
+                ]
+              }
+            }
+          },
+          {
+            "long": "container-size",
+            "description": "change your app's container size using the deploy command",
+            "inherit": false,
+            "value": {
+              "name": "size",
+              "provider": {
+                "values": [
+                  "tiny",
+                  "compact",
+                  "standard",
+                  "double",
+                  "quad",
+                  "octa",
+                  "dozen"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "site",
+              "description": "you can deploy to any available name under \"meteorapp.com\" without any additional configuration, for example, \"myapp.meteorapp.com\". If you deploy to a custom d",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "authorized",
+        "description": "manage authorized users and organizations",
+        "options": [
+          {
+            "long": "add",
+            "description": "add an authorized user or organization",
+            "inherit": false
+          },
+          {
+            "long": "remove",
+            "description": "remove an authorized user or organization",
+            "inherit": false
+          },
+          {
+            "long": "transfer",
+            "description": "transfer the (Galaxy) app to a new user or organization",
+            "inherit": false
+          },
+          {
+            "long": "list",
+            "description": "list authorized users and organizations",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "site",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "login",
+        "description": "prompts for your username and password and logs you in to your Meteor developer account",
+        "options": [
+          {
+            "long": "email",
+            "description": "add an authorized user or organization",
+            "inherit": false,
+            "value": {
+              "name": "email"
+            }
+          }
+        ]
+      },
+      {
+        "name": "logout",
+        "description": "log out of your Meteor developer account"
+      },
+      {
+        "name": "whoami",
+        "description": "prints the username of the currently logged-in Meteor developer"
+      },
+      {
+        "name": "test-packages",
+        "description": "runs unit tests for one or more packages. The results are shown in a browser dashboard that updates whenever a relevant source file is modified",
+        "options": [
+          {
+            "long": "release",
+            "description": "specify the release of Meteor to use",
+            "inherit": false,
+            "value": {
+              "name": "release"
+            }
+          },
+          {
+            "long": "port",
+            "short": "p",
+            "description": "port to listen on (instead of the default 3000). Also uses port N+1 and N+2",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "inspect",
+            "description": "enable server-side debugging via debugging clients like the Node.js command-line debugger, Chrome DevTools, or Visual Studio Code",
+            "inherit": false,
+            "value": {
+              "name": "port",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "inspect-brk",
+            "description": "enable server-side debugging via debugging clients like the Node.js command-line debugger, Chrome DevTools, or Visual Studio Code. The server will be paused at",
+            "inherit": false,
+            "value": {
+              "name": "port",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "mobile-server",
+            "description": "location where mobile builds connect to the Meteor server. Defaults to your local IP and the port that the Meteor server binds to. Can include a URL scheme (for",
+            "inherit": false
+          },
+          {
+            "long": "cordova-server-port",
+            "description": "local port where Cordova will serve the content. It's important when multiple Cordova apps are build from the same Meteor app source code as by default the port",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "production",
+            "description": "simulate production mode. Minify and bundle CSS and JS files",
+            "inherit": false
+          },
+          {
+            "long": "settings",
+            "short": "s",
+            "description": "set optional data for Meteor.settings on the server",
+            "inherit": false,
+            "value": {
+              "name": "JSON-File",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "ios",
+            "description": "run tests in an iOS emulator. All of the tests for client and server will run in addition to mobile-specific tests",
+            "inherit": false
+          },
+          {
+            "long": "android",
+            "description": "run tests in an Android emulator. All of the tests for client and server will run in addition to mobile-specific tests",
+            "inherit": false
+          },
+          {
+            "long": "ios-device",
+            "description": "run tests on iOS mobile device. All of the tests for client and server will run in addition to mobile-specific tests",
+            "inherit": false
+          },
+          {
+            "long": "android-device",
+            "description": "run tests on Android emulator or on a mobile device. All of the tests for client and server will run in addition to mobile-specific tests",
+            "inherit": false
+          },
+          {
+            "long": "test-app-path",
+            "description": "set the directory in which to create a temporary app used for tests. Defaults to the system's temporary directory, usually /tmp",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "print all output from builds logs",
+            "inherit": false
+          },
+          {
+            "long": "no-lint",
+            "description": "don't run linters used by the app on every rebuild",
+            "inherit": false
+          },
+          {
+            "long": "extra-packages",
+            "description": "run with additional packages (comma separated, for example: --extra-packages \"package-name1, package-name2@1.2.3\")",
+            "inherit": false,
+            "value": {
+              "name": "packages"
+            }
+          },
+          {
+            "long": "driver-package",
+            "description": "test driver package to use to run tests and display results. For example: --driver-package meteortesting:mocha",
+            "inherit": false,
+            "value": {
+              "name": "driver-package"
+            }
+          },
+          {
+            "spellings": [
+              "package"
+            ],
+            "description": "package name",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "test",
+        "description": "runs tests against the application",
+        "options": [
+          {
+            "long": "full-app",
+            "description": "your app is loaded as usual, then hidden, so that your tests can inspect and interact with the full running application",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "port",
+            "short": "p",
+            "description": "port to listen on (instead of the default 3000). Also uses port N+1 and N+2",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "inspect",
+            "description": "enable server-side debugging via debugging clients like the Node.js command-line debugger, Chrome DevTools, or Visual Studio Code",
+            "inherit": false,
+            "value": {
+              "name": "port",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "inspect-brk",
+            "description": "enable server-side debugging via debugging clients like the Node.js command-line debugger, Chrome DevTools, or Visual Studio Code. The server will be paused at",
+            "inherit": false,
+            "value": {
+              "name": "port",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "mobile-server",
+            "description": "location where mobile builds connect to the Meteor server. Defaults to your local IP and the port that the Meteor server binds to. Can include a URL scheme (for",
+            "inherit": false
+          },
+          {
+            "long": "cordova-server-port",
+            "description": "local port where Cordova will serve the content. It's important when multiple Cordova apps are build from the same Meteor app source code as by default the port",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "raw-logs",
+            "description": "run without parsing logs from stdout and stderr",
+            "inherit": false
+          },
+          {
+            "long": "settings",
+            "short": "s",
+            "description": "set optional data for Meteor.settings on the server",
+            "inherit": false,
+            "value": {
+              "name": "JSON-File",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "ios",
+            "description": "run tests in an iOS emulator. All of the tests for client and server will run in addition to mobile-specific tests",
+            "inherit": false
+          },
+          {
+            "long": "android",
+            "description": "run tests in an Android emulator. All of the tests for client and server will run in addition to mobile-specific tests",
+            "inherit": false
+          },
+          {
+            "long": "ios-device",
+            "description": "run tests on iOS mobile device. All of the tests for client and server will run in addition to mobile-specific tests",
+            "inherit": false
+          },
+          {
+            "long": "android-device",
+            "description": "run tests on Android emulator or on a mobile device. All of the tests for client and server will run in addition to mobile-specific tests",
+            "inherit": false
+          },
+          {
+            "long": "test-app-path",
+            "description": "set the directory in which to create a temporary app used for tests. Defaults to the system's temporary directory, usually /tmp",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "print all output from builds logs",
+            "inherit": false
+          },
+          {
+            "long": "extra-packages",
+            "description": "run with additional packages (comma separated, for example: --extra-packages \"package-name1, package-name2@1.2.3\")",
+            "inherit": false,
+            "value": {
+              "name": "packages"
+            }
+          },
+          {
+            "long": "driver-package",
+            "description": "test driver package to use to run tests and display results. For example: --driver-package meteortesting:mocha",
+            "inherit": false,
+            "value": {
+              "name": "driver-package"
+            }
+          },
+          {
+            "long": "exclude-archs",
+            "description": "don't create bundles for certain web architectures (comma separated, for example: --exclude-archs \"web.browser.legacy, web.cordova\")",
+            "inherit": false,
+            "value": {
+              "name": "architectures"
+            }
+          }
+        ]
+      },
+      {
+        "name": "admin",
+        "description": "rarely used commands for administering official Meteor services",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "provider": "builtin.executables",
+              "index": 0
+            }
+          ]
+        },
+        "subcommands": [
+          {
+            "name": "maintainers",
+            "description": "manage users and organizations that are maintainers for a particular package",
+            "options": [
+              {
+                "long": "add",
+                "description": "add an authorized maintainer to a package",
+                "inherit": false,
+                "value": {
+                  "name": "username"
+                }
+              },
+              {
+                "long": "remove",
+                "description": "remove an authorized maintainer from a package. You cannot remove yourself if you are the last maintainer on a package",
+                "inherit": false,
+                "value": {
+                  "name": "username"
+                }
+              },
+              {
+                "long": "list",
+                "description": "list authorized maintainers",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "package_name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "recommend-release",
+            "description": "recommend a version of a meteor release",
+            "arguments": {
+              "states": [
+                {
+                  "name": "package_name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "change-homepage",
+            "description": "change the homepage containing package information",
+            "arguments": {
+              "states": [
+                {
+                  "name": "package_name",
+                  "index": 0
+                },
+                {
+                  "name": "new_url",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "list-organizations",
+            "description": "list the organizations of which you are a member"
+          },
+          {
+            "name": "members",
+            "description": "manage members of an organization",
+            "options": [
+              {
+                "long": "add",
+                "description": "add a member to the organization",
+                "inherit": false,
+                "value": {
+                  "name": "username"
+                }
+              },
+              {
+                "long": "remove",
+                "description": "remove a member to the organization",
+                "inherit": false,
+                "value": {
+                  "name": "username"
+                }
+              },
+              {
+                "long": "list",
+                "description": "list members of the organization",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "organization_name",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "list-sites",
+        "description": "list the sites that you have deployed with `meteor deploy`, and sites for which other users have authorized you with the `meteor authorized` command. To see sit"
+      },
+      {
+        "name": "publish-release",
+        "description": "publishes a new release to the package server, as determined by a JSON configuration file",
+        "options": [
+          {
+            "long": "create-track",
+            "description": "publish a new release track",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "JSON-File",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "publish",
+        "description": "publishes a new version of a local package to the package server. Must be runfrom the directory containing the package",
+        "options": [
+          {
+            "long": "create",
+            "description": "publish a new package",
+            "inherit": false
+          },
+          {
+            "long": "update",
+            "description": "publish a new package",
+            "inherit": false
+          },
+          {
+            "long": "allow-incompatible-update",
+            "description": "allow packages in your project to be upgraded or downgraded to versions that are potentially incompatible with the current versions, if required to satisfy all",
+            "inherit": false
+          },
+          {
+            "long": "no-lint",
+            "description": "don't run linters used by the app on every rebuild",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "publish-for-arch",
+        "description": "publish a package for the same architecture that you are currently on",
+        "arguments": {
+          "states": [
+            {
+              "name": "packageName@version",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "search",
+        "description": "searches through the Meteor package and release database for items whose names match the regular expression",
+        "options": [
+          {
+            "long": "maintainer",
+            "description": "filter by authorized maintainer",
+            "inherit": false,
+            "value": {
+              "name": "maintainer_name"
+            }
+          },
+          {
+            "long": "show-all",
+            "description": "show all matches, even prereleases",
+            "inherit": false
+          },
+          {
+            "long": "ejson",
+            "description": "show more detailed output in EJSON format",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "regex",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "show",
+        "description": "searches through the Meteor package and release database for items whose names match the regular expression",
+        "options": [
+          {
+            "long": "show-all",
+            "description": "show all matches, even prereleases",
+            "inherit": false
+          },
+          {
+            "long": "ejson",
+            "description": "show more detailed output in EJSON format",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name-or-name@version",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
