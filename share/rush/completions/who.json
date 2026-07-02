@@ -1,0 +1,82 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "who",
+    "description": "show logged-in users",
+    "options": [
+      {
+        "short": "a",
+        "description": "same as -bdlprTtu"
+      },
+      {
+        "short": "b",
+        "description": "time of last system boot"
+      },
+      {
+        "short": "d",
+        "description": "print dead processes"
+      },
+      {
+        "short": "H",
+        "description": "write column headings above the regular output"
+      },
+      {
+        "short": "l",
+        "description": "print system login processes (unsupported)"
+      },
+      {
+        "short": "m",
+        "description": "only print information about the current terminal"
+      },
+      {
+        "short": "p",
+        "description": "print active processes spawned by launchd(8) (unsupported)"
+      },
+      {
+        "short": "q",
+        "description": "'Quick mode': List only names and number of users currently logged on"
+      },
+      {
+        "short": "r",
+        "description": "print the current runlevel"
+      },
+      {
+        "short": "s",
+        "description": "list only the name, line and time fields (this is the default)"
+      },
+      {
+        "short": "T",
+        "description": "print a character after the user name indicating the state of the terminal line: '+' writable, '-' not writable, '?' bad"
+      },
+      {
+        "short": "t",
+        "description": "print last system clock change (unsupported)"
+      },
+      {
+        "short": "u",
+        "description": "print the idle time for each user and the associated process ID"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "description": "By default, who gathers information from the file /var/run/utmpx; an alternative file may be specified",
+          "provider": "files"
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "am",
+        "description": "returns the invoker's real user name"
+      }
+    ],
+    "providers": {
+      "files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
