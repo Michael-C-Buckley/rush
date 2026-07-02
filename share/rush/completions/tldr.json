@@ -1,0 +1,113 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "tldr",
+    "description": "simplified community-driven man pages",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "display help for command",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "search",
+        "description": "search all pages for the query",
+        "inherit": false,
+        "value": {
+          "name": "query"
+        }
+      },
+      {
+        "long": "linux",
+        "description": "show command page for Linux",
+        "inherit": false,
+        "value": {
+          "name": "page",
+          "provider": "tldr.linux-pages"
+        }
+      },
+      {
+        "long": "osx",
+        "description": "show command page for OSX",
+        "inherit": false,
+        "value": {
+          "name": "page",
+          "provider": "tldr.osx-pages"
+        }
+      },
+      {
+        "long": "sunos",
+        "description": "show command page for SunOS",
+        "inherit": false,
+        "value": {
+          "name": "page",
+          "provider": "tldr.sunos-pages"
+        }
+      },
+      {
+        "short": "l",
+        "long": "list",
+        "description": "show all pages for current platform",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "long": "update",
+        "description": "download the latest pages and generate search index",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "long": "clear-cache",
+        "description": "delete the entire local cache",
+        "inherit": false
+      },
+      {
+        "long": "platform",
+        "short": "p",
+        "description": "select platform",
+        "inherit": false,
+        "value": {
+          "name": "platform",
+          "provider": "tldr.platforms"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "page",
+          "index": 0,
+          "provider": "tldr.pages",
+          "description": "tldr page"
+        }
+      ]
+    },
+    "providers": {
+      "tldr.pages": {
+        "function": "__rush_complete_tldr_pages"
+      },
+      "tldr.linux-pages": {
+        "function": "__rush_complete_tldr_linux_pages"
+      },
+      "tldr.osx-pages": {
+        "function": "__rush_complete_tldr_osx_pages"
+      },
+      "tldr.sunos-pages": {
+        "function": "__rush_complete_tldr_sunos_pages"
+      },
+      "tldr.platforms": {
+        "values": [
+          "linux",
+          "osx",
+          "sunos",
+          "windows",
+          "common"
+        ]
+      }
+    }
+  }
+}

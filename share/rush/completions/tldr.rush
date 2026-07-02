@@ -1,0 +1,37 @@
+__rush_complete_tldr_page_dir() {
+  platform="$1"
+  case "$platform" in
+    android|common|linux|osx|sunos|windows) ;;
+    *) return ;;
+  esac
+  printf '%s/.tldrc/tldr/pages/%s\n' "$HOME" "$platform"
+}
+
+__rush_complete_tldr_emit_pages_for_platform() {
+  dir="$(__rush_complete_tldr_page_dir "$1")"
+  test -d "$dir" || return
+  for page in "$dir"/*.md; do
+    test -f "$page" || continue
+    name=${page##*/}
+    name=${name%.md}
+    rush_complete candidate "$name" --kind plain --description 'tldr page'
+  done
+}
+
+__rush_complete_tldr_pages() {
+  for platform in android common linux osx sunos windows; do
+    __rush_complete_tldr_emit_pages_for_platform "$platform"
+  done
+}
+
+__rush_complete_tldr_linux_pages() {
+  __rush_complete_tldr_emit_pages_for_platform linux
+}
+
+__rush_complete_tldr_osx_pages() {
+  __rush_complete_tldr_emit_pages_for_platform osx
+}
+
+__rush_complete_tldr_sunos_pages() {
+  __rush_complete_tldr_emit_pages_for_platform sunos
+}
