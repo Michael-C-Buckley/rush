@@ -82,6 +82,7 @@ pub fn run(
         .command_history = &command_history,
         .history_service = &history_service,
         .events = .{ .sh = &sh },
+        .last_command_status = sh.state.last_status,
     };
     return session.runTerminal();
 }
@@ -143,6 +144,7 @@ const InteractiveSession = struct {
     terminal: ?*editor.driver.TerminalSession = null,
     dispatching_directory_change: bool = false,
     restore_terminal_pgrp: ?host.Pid = null,
+    last_command_status: shell.result.ExitStatus = 0,
     last_command_duration_ms: ?i64 = null,
     pending_event_exit_status: ?u8 = null,
     command_cache: PathCommandCache = .{},
@@ -284,6 +286,9 @@ const InteractiveSession = struct {
     }
 
     fn renderPrompt(self: *InteractiveSession) ![]const u8 {
+        const prompt_status = self.last_command_status;
+        defer self.sh.state.last_status = prompt_status;
+
         var prepared = try self.events.runEvent(self.allocator, self.io, "prompt.prepare", &.{});
         defer prepared.deinit(self.allocator);
         if (prepared.exit_status) |status| {
@@ -293,7 +298,7 @@ const InteractiveSession = struct {
         return extensions.rush.renderPrompt(
             self.allocator,
             self.sh,
-            self.sh.state.last_status,
+            prompt_status,
             self.last_command_duration_ms,
         );
     }
@@ -320,6 +325,7 @@ const InteractiveSession = struct {
         terminal: *editor.driver.TerminalSession,
         line: []const u8,
     ) !?u8 {
+        self.sh.state.last_status = self.last_command_status;
         try terminal.leaveEditorMode();
 
         const src: shell.source.Source = .{
@@ -334,6 +340,7 @@ const InteractiveSession = struct {
         const started_at = unixTimestamp(self.io);
         const evaluated = self.sh.evalSource(src) catch |err| {
             self.sh.state.last_status = 2;
+            self.last_command_status = 2;
             // Parse errors already produced a positioned syntax diagnostic.
             if (!shell.parser.isParseError(err)) try self.sh.host.writeAll(.stderr, "rush: shell error\n");
             // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
@@ -347,6 +354,7 @@ const InteractiveSession = struct {
             // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
             self.history_service.addCommand(self.io, line, evaluated.status, started_at, duration_ms) catch {};
         }
+        self.last_command_status = evaluated.status;
         // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
         terminal.finishSemanticCommand(evaluated.status) catch {};
         const job_event_output = try self.dispatchJobLifecycleEvents(
@@ -443,7 +451,7 @@ const InteractiveSession = struct {
     }
 
     fn exitWithLastStatus(self: *InteractiveSession) u8 {
-        return self.exit(self.sh.state.last_status);
+        return self.exit(self.last_command_status);
     }
 
     fn exit(self: *InteractiveSession, status: u8) u8 {
@@ -1203,6 +1211,50 @@ test "interactive history cwd remains valid after prompt read" {
     )) orelse return error.TestExpectedEqual;
     defer entry.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("echo previous", entry.text);
+}
+
+test "interactive prompt render uses last command status when shell status drifted" {
+    var sh = RushShell.init(std.testing.allocator, .{}, .{});
+    defer sh.deinit();
+
+    const src: shell.source.Source = .{
+        .id = 1,
+        .kind = .command_string,
+        .name = "test",
+        .text =
+        \\rush_prompt(){
+        \\  if test "$?" = 0; then
+        \\    prompt text OK
+        \\  else
+        \\    prompt text BAD
+        \\  fi
+        \\}
+        ,
+    };
+    const defined = try sh.evalSource(src);
+    try std.testing.expectEqual(@as(shell.result.ExitStatus, 0), defined.status);
+
+    var command_history = history.History.init(std.testing.allocator);
+    defer command_history.deinit();
+    var history_service = history.InteractiveHistoryService.init(&command_history);
+    var source_id: shell.source.SourceId = 2;
+    var session: InteractiveSession = .{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .sh = &sh,
+        .source_id = &source_id,
+        .command_history = &command_history,
+        .history_service = &history_service,
+        .events = .{ .sh = &sh },
+        .last_command_status = 1,
+    };
+
+    sh.state.last_status = 0;
+    const rendered = try session.renderPrompt();
+    defer std.testing.allocator.free(rendered);
+
+    try std.testing.expectEqualStrings("BAD", rendered);
+    try std.testing.expectEqual(@as(shell.result.ExitStatus, 1), sh.state.last_status);
 }
 
 test "interactive input analysis marks unresolved command tokens only" {
