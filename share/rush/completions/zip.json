@@ -1,0 +1,61 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "zip",
+    "description": "package and compress files into a zip archive",
+    "options": [
+      {
+        "short": "r",
+        "description": "package and compress a directory and its contents, recursively"
+      },
+      {
+        "short": "e",
+        "description": "encrypt archive contents"
+      },
+      {
+        "short": "s",
+        "value": {
+          "name": "split-size"
+        },
+        "description": "create a split archive"
+      },
+      {
+        "short": "d",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        },
+        "description": "delete entries from an archive"
+      },
+      {
+        "short": "9",
+        "description": "archive a directory and its contents with the highest level [9] of compression"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "archive",
+          "description": "Name of archive",
+          "index": 0,
+          "provider": "builtin.files"
+        },
+        {
+          "name": "path",
+          "provider": "builtin.directories",
+          "index": 1,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
