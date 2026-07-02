@@ -1,0 +1,2258 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pulumi",
+    "description": "manage infrastructure as code resources with Pulumi",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": true
+      },
+      {
+        "long": "color",
+        "description": "colorize output",
+        "inherit": true,
+        "value": {
+          "name": "mode",
+          "provider": "pulumi.colors"
+        }
+      },
+      {
+        "short": "C",
+        "long": "cwd",
+        "description": "run pulumi as if it had been started in another directory",
+        "inherit": true,
+        "value": {
+          "name": "path",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "disable-integrity-checking",
+        "description": "disable integrity checking of checkpoint files",
+        "inherit": true
+      },
+      {
+        "short": "e",
+        "long": "emoji",
+        "description": "enable emojis in the output",
+        "inherit": true
+      },
+      {
+        "long": "logflow",
+        "description": "flow log settings to child processes",
+        "inherit": true
+      },
+      {
+        "long": "logtostderr",
+        "description": "log to stderr instead of files",
+        "inherit": true
+      },
+      {
+        "long": "non-interactive",
+        "description": "disable interactive mode for all commands",
+        "inherit": true
+      },
+      {
+        "long": "profiling",
+        "description": "emit CPU and memory profiles and an execution trace",
+        "inherit": true
+      },
+      {
+        "long": "tracing",
+        "description": "emit tracing to the specified endpoint",
+        "inherit": true,
+        "value": {
+          "name": "file"
+        }
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "enable verbose logging",
+        "inherit": true,
+        "value": {
+          "name": "int",
+          "provider": "pulumi.verbose-levels"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "about",
+        "description": "print information about the Pulumi environment",
+        "options": [
+          {
+            "short": "j",
+            "long": "json",
+            "description": "emit output as json",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "transitive",
+            "description": "include transitive dependencies",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "cancel",
+        "description": "cancel a stack’s currently running update, if any",
+        "options": [
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "skip confirmation prompts",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "stack",
+            "description": "stack name to operate on",
+            "inherit": false,
+            "value": {
+              "name": "stack-name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "config",
+        "description": "manage configuration",
+        "options": [
+          {
+            "short": "j",
+            "long": "json",
+            "description": "emit output as json",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "stack",
+            "description": "stack name to operate on",
+            "inherit": false,
+            "value": {
+              "name": "stack-name"
+            }
+          },
+          {
+            "long": "config-file",
+            "description": "use configuration values from the specified file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "show-secrets",
+            "description": "show secret values when listing config instead of displaying blinded values",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "cp",
+            "description": "copy config to another stack",
+            "options": [
+              {
+                "short": "d",
+                "long": "dest",
+                "description": "the name of the new stack to copy the config to",
+                "inherit": false,
+                "value": {
+                  "name": "stack-name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get a single configuration value",
+            "options": [
+              {
+                "long": "path",
+                "description": "the key contains a path to a property in a map or list to get",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "refresh",
+            "description": "update the local configuration based on the most recent deployment of the stack",
+            "options": [
+              {
+                "short": "f",
+                "long": "force",
+                "description": "overwrite configuration file, if it exists, without creating a backup",
+                "priority": -10,
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "rm",
+            "description": "remove configuration value",
+            "options": [
+              {
+                "long": "path",
+                "description": "the key contains a path to a property in a map or list to remove",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "rm-all",
+            "description": "remove multiple configuration values",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "set",
+            "description": "set configuration value",
+            "options": [
+              {
+                "long": "plaintext",
+                "description": "save the value as plaintext (unencrypted)",
+                "inherit": false
+              },
+              {
+                "long": "secret",
+                "description": "encrypt the value instead of storing it in plaintext",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "index": 0
+                },
+                {
+                  "name": "value",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "set-all",
+            "description": "set multiple configuration values",
+            "options": [
+              {
+                "long": "plaintext",
+                "description": "marks a value as plaintext (unencrypted)",
+                "inherit": false,
+                "value": {
+                  "name": "stringArray"
+                }
+              },
+              {
+                "long": "secret",
+                "description": "marks a value as secret to be encrypted",
+                "inherit": false,
+                "value": {
+                  "name": "stringArray"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "key-value",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "console",
+        "description": "opens the current stack in the Pulumi Console",
+        "options": [
+          {
+            "short": "s",
+            "long": "stack",
+            "description": "stack name to operate on",
+            "inherit": false,
+            "value": {
+              "name": "stack-name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "destroy",
+        "description": "destroy an existing stack and its resources",
+        "options": [
+          {
+            "short": "s",
+            "long": "stack",
+            "description": "stack name to operate on",
+            "inherit": false,
+            "value": {
+              "name": "stack-name"
+            }
+          },
+          {
+            "short": "p",
+            "long": "parallel",
+            "description": "number of resource operations to run in parallel",
+            "inherit": false,
+            "value": {
+              "name": "int",
+              "provider": "pulumi.parallelism"
+            }
+          },
+          {
+            "short": "m",
+            "long": "message",
+            "description": "message to associate with the operation",
+            "inherit": false,
+            "value": {
+              "name": "message"
+            }
+          },
+          {
+            "long": "diff",
+            "description": "display operation as a rich diff",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "print detailed debugging output during resource operations",
+            "inherit": false
+          },
+          {
+            "long": "config-file",
+            "description": "use configuration values from the specified file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "suppress-permalink",
+            "description": "suppress display of the state permalink",
+            "inherit": false,
+            "value": {
+              "name": "bool",
+              "provider": "pulumi.booleans"
+            }
+          },
+          {
+            "short": "t",
+            "long": "target",
+            "description": "resource URN to target",
+            "inherit": false,
+            "value": {
+              "name": "urn"
+            },
+            "repeatable": true
+          },
+          {
+            "short": "j",
+            "long": "json",
+            "description": "emit output as json",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "long": "refresh",
+            "description": "refresh resource state before the update",
+            "inherit": false,
+            "value": {
+              "name": "bool",
+              "provider": "pulumi.booleans"
+            }
+          },
+          {
+            "long": "show-config",
+            "description": "show configuration keys and variables",
+            "inherit": false
+          },
+          {
+            "long": "show-replacement-steps",
+            "description": "show detailed resource replacement creates and deletes",
+            "inherit": false
+          },
+          {
+            "long": "show-sames",
+            "description": "show unchanged resources",
+            "inherit": false
+          },
+          {
+            "long": "suppress-outputs",
+            "description": "suppress display of stack outputs",
+            "inherit": false
+          },
+          {
+            "long": "target-dependents",
+            "description": "allow destroying discovered dependent targets",
+            "inherit": false
+          },
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "skip confirmation prompts",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "skip-preview",
+            "description": "do not perform a preview before the operation",
+            "inherit": false
+          },
+          {
+            "long": "exclude-protected",
+            "description": "do not destroy protected resources. Destroy all other resources",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "import",
+        "description": "import resources into an existing stack",
+        "options": [
+          {
+            "long": "config-file",
+            "description": "use configuration values from the specified file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "print detailed debugging output during resource operations",
+            "inherit": false
+          },
+          {
+            "long": "diff",
+            "description": "display operation as a rich diff",
+            "inherit": false
+          },
+          {
+            "short": "m",
+            "long": "message",
+            "description": "message to associate with the operation",
+            "inherit": false,
+            "value": {
+              "name": "message"
+            }
+          },
+          {
+            "short": "p",
+            "long": "parallel",
+            "description": "number of resource operations to run in parallel",
+            "inherit": false,
+            "value": {
+              "name": "int",
+              "provider": "pulumi.parallelism"
+            }
+          },
+          {
+            "short": "s",
+            "long": "stack",
+            "description": "stack name to operate on",
+            "inherit": false,
+            "value": {
+              "name": "stack-name"
+            }
+          },
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "skip confirmation prompts",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "skip-preview",
+            "description": "do not perform a preview before the operation",
+            "inherit": false
+          },
+          {
+            "long": "suppress-permalink",
+            "description": "suppress display of the state permalink",
+            "inherit": false,
+            "value": {
+              "name": "bool",
+              "provider": "pulumi.booleans"
+            }
+          },
+          {
+            "short": "f",
+            "long": "file",
+            "description": "the path to a JSON-encoded file containing a list of resources to import",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "o",
+            "long": "out",
+            "description": "the path to the file that will contain the generated resource declarations",
+            "inherit": false,
+            "value": {
+              "name": "file"
+            }
+          },
+          {
+            "long": "parent",
+            "description": "the name and URN of the parent resource in the format name=urn, where name is the variable name of the parent resource",
+            "inherit": false,
+            "value": {
+              "name": "[name=urn]"
+            }
+          },
+          {
+            "long": "protect",
+            "description": "allow resources to be imported with protection from deletion enabled (default true)",
+            "inherit": false
+          },
+          {
+            "long": "provider",
+            "description": "the name and URN of the provider to use for the import in the format name=urn, where name is the variable name for the provider resourceƒ",
+            "inherit": false,
+            "value": {
+              "name": "[name=urn]"
+            }
+          },
+          {
+            "long": "suppress-outputs",
+            "description": "suppress display of stack outputs (in case they contain sensitive values)",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "type",
+              "index": 0
+            },
+            {
+              "name": "name",
+              "index": 1
+            },
+            {
+              "name": "id",
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "login",
+        "description": "log in to the Pulumi service",
+        "options": [
+          {
+            "short": "l",
+            "long": "local",
+            "description": "use Pulumi in local-only mode",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "cloud-url",
+            "description": "a cloud URL to log in to",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "default-org",
+            "description": "a default org to associate with the login. Please note, currently, only the managed and self-hosted backends support organizations",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "url",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "logout",
+        "description": "log out of the Pulumi service",
+        "options": [
+          {
+            "short": "l",
+            "long": "local",
+            "description": "use Pulumi in local-only mode",
+            "inherit": false
+          },
+          {
+            "long": "all",
+            "description": "logout of all backends",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "cloud-url",
+            "description": "a cloud URL to log out of (defaults to current cloud)",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "url",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "logs",
+        "description": "show aggregated resource logs for a stack",
+        "options": [
+          {
+            "long": "config-file",
+            "description": "use configuration values from the specified file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "s",
+            "long": "stack",
+            "description": "stack name to operate on",
+            "inherit": false,
+            "value": {
+              "name": "stack-name"
+            }
+          },
+          {
+            "short": "j",
+            "long": "json",
+            "description": "emit output as json",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "follow",
+            "description": "follow the log stream in real time (like tail -f)",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "long": "resource",
+            "description": "only return logs for the requested resource ('name', 'type::name' or full URN). Defaults to returning all logs",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "since",
+            "description": "only return logs newer than a relative duration ('5s', '2m', '3h') or absolute timestamp. Defaults to returning the last 1 hour of logs. (default \"1h\")",
+            "inherit": false,
+            "value": {
+              "name": "duration",
+              "provider": {
+                "values": [
+                  "5s",
+                  "2m",
+                  "3h"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "new",
+        "description": "create a new Pulumi project",
+        "options": [
+          {
+            "short": "s",
+            "long": "stack",
+            "description": "stack name to operate on",
+            "inherit": false,
+            "value": {
+              "name": "stack-name"
+            }
+          },
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "skip confirmation prompts",
+            "inherit": false
+          },
+          {
+            "long": "secrets-provider",
+            "description": "provider used to encrypt and decrypt secrets",
+            "inherit": false,
+            "value": {
+              "name": "provider",
+              "provider": "pulumi.secrets-providers"
+            }
+          },
+          {
+            "short": "c",
+            "long": "config",
+            "description": "config to save",
+            "inherit": false,
+            "value": {
+              "name": "stringArray"
+            }
+          },
+          {
+            "long": "config-path",
+            "description": "config keys contain a path to a property in a map or list to set",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "description",
+            "description": "the project description; if not specified, a prompt will request it",
+            "inherit": false,
+            "value": {
+              "name": "desc"
+            }
+          },
+          {
+            "long": "dir",
+            "description": "the location to place the generated project; if not specified, the current directory is used",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "f",
+            "long": "force",
+            "description": "forces content to be generated even if it would change existing files",
+            "priority": -10,
+            "inherit": false
+          },
+          {
+            "short": "g",
+            "long": "generate-only",
+            "description": "generate the project only; do not create a stack, save config, or install dependencies",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "name",
+            "description": "the project name; if not specified, a prompt will request it",
+            "inherit": false,
+            "value": {
+              "name": "projectName"
+            }
+          },
+          {
+            "short": "o",
+            "long": "offline",
+            "description": "use locally cached templates without making any network requests",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "org",
+        "description": "manage Organization configuration",
+        "subcommands": [
+          {
+            "name": "get-default",
+            "description": "get the default org for the current backend"
+          },
+          {
+            "name": "set-default",
+            "description": "set the default organization for the current backend",
+            "arguments": {
+              "states": [
+                {
+                  "name": "NAME",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "plugin",
+        "description": "manage language and resource provider plugins",
+        "subcommands": [
+          {
+            "name": "install",
+            "description": "install one or more plugins",
+            "options": [
+              {
+                "long": "exact",
+                "description": "force installation of an exact version match (usually >= is accepted)",
+                "inherit": false
+              },
+              {
+                "short": "f",
+                "long": "file",
+                "description": "install a plugin from a tarball file, instead of downloading it",
+                "inherit": false,
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "reinstall",
+                "description": "reinstall a plugin even if it already exists",
+                "inherit": false
+              },
+              {
+                "long": "server",
+                "description": "a URL to download plugins from",
+                "inherit": false,
+                "value": {
+                  "name": "url"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ls",
+            "description": "list plugins",
+            "options": [
+              {
+                "short": "j",
+                "long": "json",
+                "description": "emit output as json",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "list only the plugins used by the current project",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "rm",
+            "description": "remove one or more plugins from the download cache",
+            "options": [
+              {
+                "short": "a",
+                "long": "all",
+                "description": "remove all plugins",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "policy",
+        "description": "manage resource policies",
+        "subcommands": [
+          {
+            "name": "disable",
+            "description": "disable a Policy Pack for a Pulumi organization",
+            "options": [
+              {
+                "long": "policy-group",
+                "description": "the Policy Group for which the Policy Pack will be disabled; if not specified, the default Policy Group is used",
+                "inherit": false,
+                "value": {
+                  "name": "policyGroup"
+                }
+              },
+              {
+                "long": "version",
+                "description": "the version of the Policy Pack that will be disabled; if not specified, any enabled version of the Policy Pack will be disabled",
+                "inherit": false,
+                "value": {
+                  "name": "policyPackVersion"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "org-name/policy-pack-name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "enable",
+            "description": "enable a Policy Pack for a Pulumi organization",
+            "options": [
+              {
+                "long": "policy-group",
+                "description": "the Policy Group for which the Policy Pack will be enabled; if not specified, the default Policy Group is used",
+                "inherit": false,
+                "value": {
+                  "name": "policyGroup"
+                }
+              },
+              {
+                "long": "config",
+                "description": "the file path for the Policy Pack configuration file",
+                "inherit": false,
+                "value": {
+                  "name": "file"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "org-name/policy-pack-name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "group",
+            "description": "manage policy groups"
+          },
+          {
+            "name": "ls",
+            "description": "list all Policy Packs for a Pulumi organization",
+            "arguments": {
+              "states": [
+                {
+                  "name": "org-name",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "j",
+                "long": "json",
+                "description": "emit output as json",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "new",
+            "description": "create a new Pulumi Policy Pack",
+            "options": [
+              {
+                "short": "j",
+                "long": "json",
+                "description": "emit output as json",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "offline",
+                "description": "use locally cached templates without making any network requests",
+                "inherit": false
+              },
+              {
+                "short": "g",
+                "long": "generate-only",
+                "description": "generate the Policy Pack only; do not install dependencies",
+                "inherit": false
+              },
+              {
+                "short": "f",
+                "long": "force",
+                "description": "forces content to be generated even if it would change existing files",
+                "priority": -10,
+                "inherit": false
+              },
+              {
+                "long": "dir",
+                "description": "the location to place the generated Policy Pack; if not specified, the current directory is used",
+                "inherit": false,
+                "value": {
+                  "name": "location",
+                  "provider": "builtin.directories"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "template|url",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "publish",
+            "description": "publish a Policy Pack to the Pulumi service",
+            "arguments": {
+              "states": [
+                {
+                  "name": "org-name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "rm",
+            "description": "removes a Policy Pack from a Pulumi organization",
+            "arguments": {
+              "states": [
+                {
+                  "name": "org-name/policy-pack-name",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "y",
+                "long": "yes",
+                "description": "skip confirmation prompts",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "validate-config",
+            "description": "validate a Policy Pack configuration",
+            "options": [
+              {
+                "long": "config",
+                "description": "the file path for the Policy Pack configuration file",
+                "inherit": false,
+                "value": {
+                  "name": "file"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "org-name/policy-pack-name",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "preview",
+        "description": "show a preview of updates to a stack’s resources",
+        "options": [
+          {
+            "short": "s",
+            "long": "stack",
+            "description": "stack name to operate on",
+            "inherit": false,
+            "value": {
+              "name": "stack-name"
+            }
+          },
+          {
+            "short": "p",
+            "long": "parallel",
+            "description": "number of resource operations to run in parallel",
+            "inherit": false,
+            "value": {
+              "name": "int",
+              "provider": "pulumi.parallelism"
+            }
+          },
+          {
+            "short": "m",
+            "long": "message",
+            "description": "message to associate with the operation",
+            "inherit": false,
+            "value": {
+              "name": "message"
+            }
+          },
+          {
+            "long": "diff",
+            "description": "display operation as a rich diff",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "print detailed debugging output during resource operations",
+            "inherit": false
+          },
+          {
+            "long": "config-file",
+            "description": "use configuration values from the specified file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "suppress-permalink",
+            "description": "suppress display of the state permalink",
+            "inherit": false,
+            "value": {
+              "name": "bool",
+              "provider": "pulumi.booleans"
+            }
+          },
+          {
+            "short": "t",
+            "long": "target",
+            "description": "resource URN to target",
+            "inherit": false,
+            "value": {
+              "name": "urn"
+            },
+            "repeatable": true
+          },
+          {
+            "short": "j",
+            "long": "json",
+            "description": "emit output as json",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "long": "refresh",
+            "description": "refresh resource state before the update",
+            "inherit": false,
+            "value": {
+              "name": "bool",
+              "provider": "pulumi.booleans"
+            }
+          },
+          {
+            "long": "show-config",
+            "description": "show configuration keys and variables",
+            "inherit": false
+          },
+          {
+            "long": "show-replacement-steps",
+            "description": "show detailed resource replacement creates and deletes",
+            "inherit": false
+          },
+          {
+            "long": "show-sames",
+            "description": "show unchanged resources",
+            "inherit": false
+          },
+          {
+            "long": "suppress-outputs",
+            "description": "suppress display of stack outputs",
+            "inherit": false
+          },
+          {
+            "long": "target-dependents",
+            "description": "allow destroying discovered dependent targets",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "config",
+            "description": "config to use during the preview",
+            "inherit": false,
+            "value": {
+              "name": "stringArray"
+            }
+          },
+          {
+            "long": "config-path",
+            "description": "config keys contain a path to a property in a map or list to set",
+            "inherit": false
+          },
+          {
+            "long": "expect-no-changes",
+            "description": "return an error if any changes are proposed by this preview",
+            "inherit": false
+          },
+          {
+            "long": "policy-pack",
+            "description": "run one or more policy packs as part of this update",
+            "inherit": false,
+            "value": {
+              "name": "strings"
+            }
+          },
+          {
+            "long": "policy-pack-config",
+            "description": "path to JSON file containing the config for the policy pack of the corresponding\"--policy-pack\" flag",
+            "inherit": false,
+            "value": {
+              "name": "strings"
+            }
+          },
+          {
+            "long": "replace",
+            "description": "specify resources to replace. Multiple resources can be specified using --replace urn1 --replace urn2",
+            "inherit": false,
+            "value": {
+              "name": "stringArray"
+            }
+          },
+          {
+            "long": "show-reads",
+            "description": "show resources that are being read in, alongside those being managed directly in the stack",
+            "inherit": false
+          },
+          {
+            "long": "target-replace",
+            "description": "specify a single resource URN to replace. Other resources will not be updated. Shorthand for --target urn --replace urn",
+            "inherit": false,
+            "value": {
+              "name": "stringArray"
+            }
+          }
+        ]
+      },
+      {
+        "name": "refresh",
+        "description": "refresh the resources in a stack",
+        "options": [
+          {
+            "long": "config-file",
+            "description": "use configuration values from the specified file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "print detailed debugging output during resource operations",
+            "inherit": false
+          },
+          {
+            "long": "diff",
+            "description": "display operation as a rich diff",
+            "inherit": false
+          },
+          {
+            "short": "m",
+            "long": "message",
+            "description": "message to associate with the operation",
+            "inherit": false,
+            "value": {
+              "name": "message"
+            }
+          },
+          {
+            "short": "p",
+            "long": "parallel",
+            "description": "number of resource operations to run in parallel",
+            "inherit": false,
+            "value": {
+              "name": "int",
+              "provider": "pulumi.parallelism"
+            }
+          },
+          {
+            "short": "f",
+            "long": "skip-preview",
+            "description": "do not perform a preview before the operation",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "stack",
+            "description": "stack name to operate on",
+            "inherit": false,
+            "value": {
+              "name": "stack-name"
+            }
+          },
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "skip confirmation prompts",
+            "inherit": false
+          },
+          {
+            "long": "suppress-permalink",
+            "description": "suppress display of the state permalink",
+            "inherit": false,
+            "value": {
+              "name": "bool",
+              "provider": "pulumi.booleans"
+            }
+          },
+          {
+            "short": "t",
+            "long": "target",
+            "description": "resource URN to target",
+            "inherit": false,
+            "value": {
+              "name": "urn"
+            },
+            "repeatable": true
+          },
+          {
+            "short": "j",
+            "long": "json",
+            "description": "serialize the refresh diffs, operations, and overall output as JSON",
+            "inherit": false
+          },
+          {
+            "long": "expect-no-changes",
+            "description": "return an error if any changes occur during this update",
+            "inherit": false
+          },
+          {
+            "long": "show-replacement-steps",
+            "description": "show detailed resource replacement creates and deletes instead of a single step",
+            "inherit": false
+          },
+          {
+            "long": "show-sames",
+            "description": "show resources that needn't be updated because they haven't changed, alongside those that do",
+            "inherit": false
+          },
+          {
+            "long": "suppress-outputs",
+            "description": "suppress display of stack outputs (in case they contain sensitive values)",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "schema",
+        "description": "analyze package schemas",
+        "subcommands": [
+          {
+            "name": "check",
+            "description": "check a Pulumi package schema for errors"
+          }
+        ]
+      },
+      {
+        "name": "stack",
+        "description": "manage stacks",
+        "options": [
+          {
+            "short": "s",
+            "long": "stack",
+            "description": "stack name to operate on",
+            "inherit": false,
+            "value": {
+              "name": "stack-name"
+            }
+          },
+          {
+            "short": "j",
+            "long": "json",
+            "description": "emit output as json",
+            "inherit": false
+          },
+          {
+            "long": "show-name",
+            "description": "display only the stack name",
+            "inherit": false
+          },
+          {
+            "long": "show-secrets",
+            "description": "display stack outputs which are marked as secret in plaintext",
+            "inherit": false
+          },
+          {
+            "short": "i",
+            "long": "show-ids",
+            "description": "display each resource's provider-assigned unique ID",
+            "inherit": false
+          },
+          {
+            "short": "u",
+            "long": "show-urns",
+            "description": "display each resource's Pulumi-assigned globally unique URN",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "change-secrets-provider",
+            "description": "change the secrets provider for the current stack",
+            "arguments": {
+              "states": [
+                {
+                  "name": "new-secrets-provider",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "export",
+            "description": "export a stack’s deployment to standard out",
+            "options": [
+              {
+                "long": "file",
+                "description": "a filename to write stack output to",
+                "inherit": false,
+                "value": {
+                  "name": "file"
+                }
+              },
+              {
+                "long": "show-secrets",
+                "description": "emit secrets in plaintext in exported stack. Defaults to false",
+                "inherit": false,
+                "value": {
+                  "name": "bool",
+                  "provider": {
+                    "values": [
+                      "false",
+                      "true"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "version",
+                "description": "previous stack version to export. (If unset, will export the latest)",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "graph",
+            "description": "export a stack’s dependency graph to a file",
+            "options": [
+              {
+                "long": "dependency-edge-color",
+                "description": "sets the color of dependency edges in the graph (default \"#246C60\")",
+                "inherit": false,
+                "value": {
+                  "name": "color"
+                }
+              },
+              {
+                "long": "ignore-dependency-edges",
+                "description": "ignores edges introduced by dependency resource relationships",
+                "inherit": false
+              },
+              {
+                "long": "ignore-parent-edges",
+                "description": "ignores edges introduced by parent/child resource relationships",
+                "inherit": false
+              },
+              {
+                "long": "parent-edge-color",
+                "description": "sets the color of parent edges in the graph (default #AA6639\")",
+                "inherit": false,
+                "value": {
+                  "name": "color"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "filename",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "history",
+            "description": "[PREVIEW] Display history for a stack",
+            "options": [
+              {
+                "short": "j",
+                "long": "json",
+                "description": "emit output as json",
+                "inherit": false
+              },
+              {
+                "long": "full-dates",
+                "description": "show full dates, instead of relative dates",
+                "inherit": false
+              },
+              {
+                "long": "page",
+                "description": "used with 'page-size' to paginate results (default 1)",
+                "inherit": false,
+                "value": {
+                  "name": "int"
+                }
+              },
+              {
+                "long": "page-size",
+                "description": "used with 'page' to control number of results returned (default 10)",
+                "inherit": false,
+                "value": {
+                  "name": "int"
+                }
+              },
+              {
+                "long": "show-secrets",
+                "description": "show secret values when listing config instead of displaying blinded values",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "import",
+            "description": "import a deployment from standard in into an existing stack",
+            "options": [
+              {
+                "short": "f",
+                "long": "force",
+                "description": "force the import to occur, even if apparent errors are discovered beforehand (not recommended)",
+                "priority": -10,
+                "inherit": false
+              },
+              {
+                "long": "file",
+                "description": "a filename to read stack input from",
+                "inherit": false,
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "init",
+            "description": "create an empty stack with the given name, ready for updates",
+            "options": [
+              {
+                "long": "secrets-provider",
+                "description": "provider used to encrypt and decrypt secrets",
+                "inherit": false,
+                "value": {
+                  "name": "provider",
+                  "provider": "pulumi.secrets-providers"
+                }
+              },
+              {
+                "long": "copy-config-from",
+                "description": "the name of the stack to copy existing config from",
+                "inherit": false,
+                "value": {
+                  "name": "stackName"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "org-name/stack-name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "ls",
+            "description": "list stacks",
+            "options": [
+              {
+                "short": "j",
+                "long": "json",
+                "description": "emit output as json",
+                "inherit": false
+              },
+              {
+                "short": "a",
+                "long": "all",
+                "description": "list all stacks instead of just stacks for the current project",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "organization",
+                "description": "filter returned stacks to those in a specific organization",
+                "inherit": false,
+                "value": {
+                  "name": "orgName"
+                }
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "filter returned stacks to those with a specific project name",
+                "inherit": false,
+                "value": {
+                  "name": "projectName"
+                }
+              },
+              {
+                "short": "t",
+                "long": "tag",
+                "description": "filter returned stacks to those in a specific tag (tag-name or tag-name=tag-value)",
+                "inherit": false,
+                "value": {
+                  "name": "tagName"
+                }
+              }
+            ]
+          },
+          {
+            "name": "output",
+            "description": "show a stack’s output properties",
+            "options": [
+              {
+                "short": "j",
+                "long": "json",
+                "description": "emit output as json",
+                "inherit": false
+              },
+              {
+                "long": "show-secrets",
+                "description": "display outputs which are marked as secret in plaintext",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "property-name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "rename",
+            "description": "rename an existing stack",
+            "arguments": {
+              "states": [
+                {
+                  "name": "new-stack-name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "rm",
+            "description": "remove a stack and its configuration",
+            "options": [
+              {
+                "short": "y",
+                "long": "yes",
+                "description": "skip confirmation prompts",
+                "inherit": false
+              },
+              {
+                "short": "f",
+                "long": "force",
+                "description": "forces deletion of the stack, leaving behind any resources managed by the stack",
+                "priority": -10,
+                "inherit": false
+              },
+              {
+                "long": "preserve-config",
+                "description": "do not delete the corresponding Pulumi.<stack-name>.yaml configuration file for the stack",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "stack-name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "select",
+            "description": "switch the current workspace to the given stack",
+            "options": [
+              {
+                "long": "secrets-provider",
+                "description": "use with --create flag, The type of the provider that should be used to encrypt and decrypt secrets (possible choices: default, passphrase, awskms, azurekeyvaul",
+                "inherit": false,
+                "value": {
+                  "name": "providerType",
+                  "provider": {
+                    "values": [
+                      "default",
+                      "passphrase",
+                      "awskms",
+                      "azurekeyvault",
+                      "gcpkms",
+                      "hashivault"
+                    ]
+                  }
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "stack",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "tag",
+            "description": "manage stack tags",
+            "subcommands": [
+              {
+                "name": "get",
+                "description": "get a single stack tag value",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "name",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "ls",
+                "description": "list all stack tags"
+              },
+              {
+                "name": "rm",
+                "description": "remove a stack tag",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "name",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "set",
+                "description": "set a stack tag",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "name-value",
+                      "index": 0
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "state",
+        "description": "edit the current stack’s state",
+        "subcommands": [
+          {
+            "name": "delete",
+            "description": "deletes a resource from a stack’s state",
+            "options": [
+              {
+                "short": "s",
+                "long": "stack",
+                "description": "stack name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "stack-name"
+                }
+              },
+              {
+                "short": "y",
+                "long": "yes",
+                "description": "skip confirmation prompts",
+                "inherit": false
+              },
+              {
+                "long": "force",
+                "description": "force deletion of protected resources",
+                "inherit": false,
+                "value": {
+                  "name": "stack-name"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "resource-URN",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "unprotect",
+            "description": "unprotect resources in a stack’s state",
+            "options": [
+              {
+                "short": "s",
+                "long": "stack",
+                "description": "stack name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "stack-name"
+                }
+              },
+              {
+                "short": "y",
+                "long": "yes",
+                "description": "skip confirmation prompts",
+                "inherit": false
+              },
+              {
+                "long": "all",
+                "description": "unprotect all resources in the checkpoint",
+                "inherit": false,
+                "value": {
+                  "name": "stack-name"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "resource-URN",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "up",
+        "description": "deploy code and/or resource changes",
+        "options": [
+          {
+            "short": "s",
+            "long": "stack",
+            "description": "stack name to operate on",
+            "inherit": false,
+            "value": {
+              "name": "stack-name"
+            }
+          },
+          {
+            "short": "p",
+            "long": "parallel",
+            "description": "number of resource operations to run in parallel",
+            "inherit": false,
+            "value": {
+              "name": "int",
+              "provider": "pulumi.parallelism"
+            }
+          },
+          {
+            "short": "m",
+            "long": "message",
+            "description": "message to associate with the operation",
+            "inherit": false,
+            "value": {
+              "name": "message"
+            }
+          },
+          {
+            "long": "diff",
+            "description": "display operation as a rich diff",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "print detailed debugging output during resource operations",
+            "inherit": false
+          },
+          {
+            "long": "config-file",
+            "description": "use configuration values from the specified file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "suppress-permalink",
+            "description": "suppress display of the state permalink",
+            "inherit": false,
+            "value": {
+              "name": "bool",
+              "provider": "pulumi.booleans"
+            }
+          },
+          {
+            "short": "t",
+            "long": "target",
+            "description": "resource URN to target",
+            "inherit": false,
+            "value": {
+              "name": "urn"
+            },
+            "repeatable": true
+          },
+          {
+            "short": "j",
+            "long": "json",
+            "description": "emit output as json",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "long": "refresh",
+            "description": "refresh resource state before the update",
+            "inherit": false,
+            "value": {
+              "name": "bool",
+              "provider": "pulumi.booleans"
+            }
+          },
+          {
+            "long": "show-config",
+            "description": "show configuration keys and variables",
+            "inherit": false
+          },
+          {
+            "long": "show-replacement-steps",
+            "description": "show detailed resource replacement creates and deletes",
+            "inherit": false
+          },
+          {
+            "long": "show-sames",
+            "description": "show unchanged resources",
+            "inherit": false
+          },
+          {
+            "long": "suppress-outputs",
+            "description": "suppress display of stack outputs",
+            "inherit": false
+          },
+          {
+            "long": "target-dependents",
+            "description": "allow destroying discovered dependent targets",
+            "inherit": false
+          },
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "skip confirmation prompts",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "skip-preview",
+            "description": "do not perform a preview before the operation",
+            "inherit": false
+          },
+          {
+            "long": "secrets-provider",
+            "description": "provider used to encrypt and decrypt secrets",
+            "inherit": false,
+            "value": {
+              "name": "provider",
+              "provider": "pulumi.secrets-providers"
+            }
+          },
+          {
+            "short": "c",
+            "long": "config",
+            "description": "config to use during the update",
+            "inherit": false,
+            "value": {
+              "name": "stringArray"
+            }
+          },
+          {
+            "long": "config-path",
+            "description": "config keys contain a path to a property in a map or list to set",
+            "inherit": false
+          },
+          {
+            "long": "expect-no-changes",
+            "description": "return an error if any changes occur during this update",
+            "inherit": false
+          },
+          {
+            "long": "policy-pack",
+            "description": "run one or more policy packs as part of this update",
+            "inherit": false,
+            "value": {
+              "name": "strings"
+            }
+          },
+          {
+            "long": "policy-pack-config",
+            "description": "path to JSON file containing the config for the policy pack of the corresponding \"--policy-pack\" flag",
+            "inherit": false,
+            "value": {
+              "name": "strings"
+            }
+          },
+          {
+            "long": "replace",
+            "description": "specify resources to replace. Multiple resources can be specified using --replace urn1 --replace urn2",
+            "inherit": false,
+            "value": {
+              "name": "stringArray"
+            }
+          },
+          {
+            "long": "show-reads",
+            "description": "show resources that are being read in, alongside those being managed directly in the stack",
+            "inherit": false
+          },
+          {
+            "long": "target-replace",
+            "description": "specify a single resource URN to replace. Other resources will not be updated. Shorthand for --target urn --replace urn",
+            "inherit": false,
+            "value": {
+              "name": "stringArray"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "template|url",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "version",
+        "description": "print Pulumi’s version number",
+        "options": []
+      },
+      {
+        "name": "watch",
+        "description": "continuously update the resources in a stack",
+        "options": [
+          {
+            "long": "config-file",
+            "description": "use configuration values from the specified file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "print detailed debugging output during resource operations",
+            "inherit": false
+          },
+          {
+            "short": "m",
+            "long": "message",
+            "description": "message to associate with the operation",
+            "inherit": false,
+            "value": {
+              "name": "message"
+            }
+          },
+          {
+            "short": "p",
+            "long": "parallel",
+            "description": "number of resource operations to run in parallel",
+            "inherit": false,
+            "value": {
+              "name": "int",
+              "provider": "pulumi.parallelism"
+            }
+          },
+          {
+            "short": "s",
+            "long": "stack",
+            "description": "stack name to operate on",
+            "inherit": false,
+            "value": {
+              "name": "stack-name"
+            }
+          },
+          {
+            "long": "secrets-provider",
+            "description": "provider used to encrypt and decrypt secrets",
+            "inherit": false,
+            "value": {
+              "name": "provider",
+              "provider": "pulumi.secrets-providers"
+            }
+          },
+          {
+            "short": "c",
+            "long": "config",
+            "description": "config to use during the update",
+            "inherit": false,
+            "value": {
+              "name": "stringArray"
+            }
+          },
+          {
+            "long": "config-path",
+            "description": "config keys contain a path to a property in a map or list to set",
+            "inherit": false
+          },
+          {
+            "long": "path",
+            "description": "specify one or more relative or absolute paths that need to be watched. A path can point to a folder or a file. Defaults to working directory",
+            "inherit": false,
+            "value": {
+              "name": "stringArray"
+            }
+          },
+          {
+            "long": "policy-pack",
+            "description": "run one or more policy packs as part of each update",
+            "inherit": false,
+            "value": {
+              "name": "strings"
+            }
+          },
+          {
+            "long": "policy-pack-config",
+            "description": "path to JSON file containing the config for the policy pack of the corresponding \"--policy-pack\" flag",
+            "inherit": false,
+            "value": {
+              "name": "strings"
+            }
+          },
+          {
+            "short": "r",
+            "long": "refresh",
+            "description": "refresh the state of the stack's resources before each update",
+            "inherit": false
+          },
+          {
+            "long": "show-config",
+            "description": "show configuration keys and variables",
+            "inherit": false
+          },
+          {
+            "long": "show-replacement-steps",
+            "description": "show detailed resource replacement creates and deletes instead of a single step",
+            "inherit": false
+          },
+          {
+            "long": "show-sames",
+            "description": "show resources that don't need be updated because they haven't changed, alongside those that do",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "whoami",
+        "description": "displays the username of the currently logged in user"
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  },
+  "providers": {
+    "builtin.files": {
+      "builtin": "files"
+    },
+    "builtin.directories": {
+      "builtin": "directories"
+    },
+    "pulumi.colors": {
+      "values": [
+        "always",
+        "never",
+        "raw",
+        "auto"
+      ]
+    },
+    "pulumi.booleans": {
+      "values": [
+        "false",
+        "true"
+      ]
+    },
+    "pulumi.secrets-providers": {
+      "values": [
+        "default",
+        "passphrase",
+        "awskms",
+        "azurekeyvault",
+        "gcpkms",
+        "hashivault"
+      ]
+    },
+    "pulumi.parallelism": {
+      "values": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5",
+        "6",
+        "7",
+        "8",
+        "9",
+        "10"
+      ]
+    },
+    "pulumi.verbose-levels": {
+      "values": [
+        "1",
+        "2",
+        "3",
+        "4",
+        "5"
+      ]
+    }
+  }
+}
