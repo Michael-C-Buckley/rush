@@ -584,6 +584,7 @@ fn staticLiteralWord(word: ast.Word) ?[]const u8 {
     return switch (word.data) {
         .literal => |literal| literal,
         .parts => |parts| staticLiteralParts(parts),
+        .declaration_array_assignment => null,
     };
 }
 
@@ -1204,6 +1205,7 @@ fn appendEmbeddedQuotedAtFields(shell: anytype, fields: *std.ArrayList([]const u
             .double_quoted => |nested| nested,
             else => return false,
         } else return false,
+        .declaration_array_assignment => return false,
     };
     if (!wordPartsContainAtParameter(quoted)) return false;
 
@@ -1218,6 +1220,7 @@ fn appendEmbeddedQuotedArrayAtFields(shell: anytype, fields: *std.ArrayList([]co
             .double_quoted => |nested| nested,
             else => return false,
         } else return false,
+        .declaration_array_assignment => return false,
     };
     if (!wordPartsContainArrayAtParameter(quoted)) return false;
 
@@ -1343,6 +1346,7 @@ fn singleDoubleQuotedParameter(word: ast.Word) ?ast.ParameterExpansion {
             } else null,
             else => null,
         } else null,
+        .declaration_array_assignment => null,
     };
 }
 
@@ -1357,6 +1361,7 @@ fn singleParameterWord(word: ast.Word) ?ast.ParameterExpansion {
             } else null,
             else => null,
         } else null,
+        .declaration_array_assignment => null,
     };
 }
 
@@ -1367,6 +1372,7 @@ fn singleUnquotedParameter(word: ast.Word) ?ast.ParameterExpansion {
             .parameter => |parameter| parameter,
             else => null,
         } else null,
+        .declaration_array_assignment => null,
     };
 }
 
@@ -1405,6 +1411,7 @@ fn appendEmbeddedUnquotedPositionalFields(shell: anytype, fields: *std.ArrayList
     const parts = switch (word.data) {
         .literal => return false,
         .parts => |parts| parts,
+        .declaration_array_assignment => return false,
     };
     if (parts.len < 2) return false;
 
@@ -1463,6 +1470,7 @@ fn wordIsUnquotedAt(word: ast.Word) bool {
                 parameter.parameter.special == .at,
             else => false,
         },
+        .declaration_array_assignment => false,
     };
 }
 
@@ -1474,6 +1482,7 @@ fn wordIsUnquotedStar(word: ast.Word) bool {
                 parameter.parameter.special == .star,
             else => false,
         },
+        .declaration_array_assignment => false,
     };
 }
 
@@ -1489,6 +1498,7 @@ fn wordIsQuotedAt(word: ast.Word) bool {
             },
             else => false,
         },
+        .declaration_array_assignment => false,
     };
 }
 
@@ -1504,6 +1514,7 @@ fn wordIsQuotedStar(word: ast.Word) bool {
             },
             else => false,
         },
+        .declaration_array_assignment => false,
     };
 }
 
@@ -1521,6 +1532,7 @@ fn wordIsAtParameter(word: ast.Word) bool {
             },
             else => false,
         },
+        .declaration_array_assignment => false,
     };
 }
 
@@ -1533,6 +1545,7 @@ fn atExpansionParts(word: ast.Word) ?[]const ast.WordPart {
             .double_quoted => |quoted| if (wordPartsContainAtParameter(quoted)) quoted else null,
             else => null,
         } else null,
+        .declaration_array_assignment => null,
     };
 }
 
@@ -1646,7 +1659,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
     }
 
     if (try staticDeclarationBuiltinName(shell, command.words[0])) |id| {
-        if (id == .declare or id == .export_ or id == .readonly or id == .typeset) {
+        if (id == .declare or id == .export_ or id == .readonly or id == .typeset or id == .local) {
             try applyAssignments(shell, command.assignments);
             return evalDeclarationBuiltin(shell, id, command.words[1..]);
         }
@@ -1679,7 +1692,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
                 try applyAssignments(shell, command.assignments);
             }
             if (definition.id == .declare or definition.id == .export_ or
-                definition.id == .readonly or definition.id == .typeset)
+                definition.id == .readonly or definition.id == .typeset or definition.id == .local)
             {
                 return evalDeclarationBuiltin(shell, definition.id, command.words[1..]);
             }
@@ -3442,10 +3455,12 @@ fn staticDeclarationBuiltinName(shell: anytype, word: ast.Word) !?builtin.Id {
         else
             try expandWordTracking(shell, word, null),
         .parts => try expandWordTracking(shell, word, null),
+        .declaration_array_assignment => return null,
     };
     if (shell.state.options.mode == .bash) {
         if (std.mem.eql(u8, name, "declare")) return .declare;
         if (std.mem.eql(u8, name, "typeset")) return .typeset;
+        if (std.mem.eql(u8, name, "local")) return .local;
     }
     if (std.mem.eql(u8, name, "export")) return .export_;
     if (std.mem.eql(u8, name, "readonly")) return .readonly;
@@ -3468,16 +3483,21 @@ const DeclarationAssignment = struct {
 };
 
 fn evalDeclarationBuiltin(shell: anytype, id: builtin.Id, words: []const ast.Word) EvalError!result.EvalResult {
-    std.debug.assert(id == .declare or id == .export_ or id == .readonly or id == .typeset);
+    std.debug.assert(id == .declare or id == .export_ or id == .readonly or id == .typeset or id == .local);
+    if (id == .local and !shell.state.hasLocalFrame()) {
+        try shell.host.writeAll(.stderr, "local: can only be used in a function\n");
+        return .{ .status = 1 };
+    }
     const options = parseDeclarationOptions(shell, id, words) catch |err| switch (err) {
         error.DeclarationUsage => return .{ .status = 2 },
         else => return err,
     };
     const operands = words[options.first_operand..];
+    if (id == .local and operands.len == 0) return .{};
     if (options.print) return evalDeclarationPrint(shell, id, operands);
     if (operands.len == 0) return evalDeclarationList(shell, id);
 
-    if (id == .declare or id == .typeset) {
+    if (id == .declare or id == .typeset or id == .local) {
         return evalDeclareOperands(shell, id, options, operands);
     }
 
@@ -3509,6 +3529,7 @@ fn evalDeclarationBuiltin(shell: anytype, id: builtin.Id, words: []const ast.Wor
                 const expanded_value = switch (assignment.value.data) {
                     .literal => |literal| literal,
                     .parts => unreachable,
+                    .declaration_array_assignment => unreachable,
                 };
                 const value = try assignmentValueForStorage(shell, assignment.name, expanded_value);
                 const existing = shell.state.getVariable(assignment.name);
@@ -3564,7 +3585,7 @@ fn parseDeclarationOptions(shell: anytype, id: builtin.Id, words: []const ast.Wo
     var options: DeclarationOptions = switch (id) {
         .export_ => .{ .exported = true },
         .readonly => .{ .readonly = true },
-        .declare, .typeset => .{},
+        .declare, .typeset, .local => .{},
         else => unreachable,
     };
     while (options.first_operand < words.len) : (options.first_operand += 1) {
@@ -3576,14 +3597,17 @@ fn parseDeclarationOptions(shell: anytype, id: builtin.Id, words: []const ast.Wo
         if (literal.len < 2 or literal[0] != '-') break;
         for (literal[1..]) |option| switch (option) {
             'a' => {
-                if (id != .declare and id != .typeset) return declarationUsageError(shell, id);
+                if (id != .declare and id != .typeset and id != .local) return declarationUsageError(shell, id);
                 options.array = true;
             },
-            'p' => options.print = true,
+            'p' => {
+                if (id == .local) return declarationUsageError(shell, id);
+                options.print = true;
+            },
             'r' => options.readonly = true,
             'x' => options.exported = true,
             'i' => {
-                if (id != .declare and id != .typeset) return declarationUsageError(shell, id);
+                if (id != .declare and id != .typeset and id != .local) return declarationUsageError(shell, id);
                 options.integer = true;
             },
             'g' => {
@@ -3612,6 +3636,10 @@ fn evalDeclareOperands(
 ) EvalError!result.EvalResult {
     var status: result.ExitStatus = 0;
     for (operands) |word| {
+        if (word.data == .declaration_array_assignment) {
+            try applyDeclaredArrayAssignment(shell, word.data.declaration_array_assignment, options, &status);
+            continue;
+        }
         if (try declarationAssignment(shell, word)) |assignment| {
             const value = try expandAssignmentWordTracking(shell, assignment.value, null);
             try applyDeclaredVariable(shell, assignment.name, value, options, &status);
@@ -3624,6 +3652,7 @@ fn evalDeclareOperands(
                 const value = switch (assignment.value.data) {
                     .literal => |literal| literal,
                     .parts => unreachable,
+                    .declaration_array_assignment => unreachable,
                 };
                 try applyDeclaredVariable(shell, assignment.name, value, options, &status);
                 continue;
@@ -3639,6 +3668,16 @@ fn evalDeclareOperands(
     return .{ .status = status };
 }
 
+fn applyDeclaredArrayAssignment(
+    shell: anytype,
+    assignment: ast.DeclarationArrayAssignment,
+    options: DeclarationOptions,
+    status: *result.ExitStatus,
+) !void {
+    const expanded = try expandArrayAssignmentValues(shell, assignment.values, null);
+    try applyDeclaredArrayValues(shell, assignment.name, expanded, options, status);
+}
+
 fn declareUsesLocalScope(shell: anytype, options: DeclarationOptions) bool {
     return shell.state.hasLocalFrame() and !options.global;
 }
@@ -3651,7 +3690,7 @@ fn applyDeclaredVariable(
     status: *result.ExitStatus,
 ) !void {
     if (options.array) {
-        try applyDeclaredArrayVariable(shell, name, value, status);
+        try applyDeclaredArrayVariable(shell, name, value, options, status);
         return;
     }
     const declared_value = try integerDeclarationValue(shell, name, value, options.integer);
@@ -3695,7 +3734,7 @@ fn applyDeclaredName(
     status: *result.ExitStatus,
 ) !void {
     if (options.array) {
-        try applyDeclaredArrayName(shell, name, status);
+        try applyDeclaredArrayName(shell, name, options, status);
         return;
     }
     const existing = shell.state.getVariable(name);
@@ -3753,9 +3792,25 @@ fn applyDeclaredArrayVariable(
     shell: anytype,
     name: []const u8,
     value: []const u8,
+    options: DeclarationOptions,
     status: *result.ExitStatus,
 ) !void {
-    shell.state.putArray(name, &.{value}) catch |err| switch (err) {
+    try applyDeclaredArrayValues(shell, name, &.{value}, options, status);
+}
+
+fn applyDeclaredArrayValues(
+    shell: anytype,
+    name: []const u8,
+    values: []const []const u8,
+    options: DeclarationOptions,
+    status: *result.ExitStatus,
+) !void {
+    const uses_local_scope = declareUsesLocalScope(shell, options);
+    const applied = if (uses_local_scope)
+        shell.state.declareLocalArray(name, values)
+    else
+        shell.state.putArray(name, values);
+    applied catch |err| switch (err) {
         error.ReadonlyVariable => {
             try writeReadonlyDiagnostic(shell, name);
             status.* = 1;
@@ -3764,19 +3819,18 @@ fn applyDeclaredArrayVariable(
     };
 }
 
-fn applyDeclaredArrayName(shell: anytype, name: []const u8, status: *result.ExitStatus) !void {
+fn applyDeclaredArrayName(
+    shell: anytype,
+    name: []const u8,
+    options: DeclarationOptions,
+    status: *result.ExitStatus,
+) !void {
     if (shell.state.getArray(name) != null) return;
     if (shell.state.getVariable(name)) |variable| {
-        try applyDeclaredArrayVariable(shell, name, variable.value, status);
+        try applyDeclaredArrayVariable(shell, name, variable.value, options, status);
         return;
     }
-    shell.state.putArray(name, &.{}) catch |err| switch (err) {
-        error.ReadonlyVariable => {
-            try writeReadonlyDiagnostic(shell, name);
-            status.* = 1;
-        },
-        else => return err,
-    };
+    try applyDeclaredArrayValues(shell, name, &.{}, options, status);
 }
 
 fn writeInvalidIdentifierDiagnostic(shell: anytype, id: builtin.Id, name: []const u8) !void {
@@ -4010,6 +4064,7 @@ fn declarationAssignment(shell: anytype, word: ast.Word) !?DeclarationAssignment
     return switch (word.data) {
         .literal => |literal| literalDeclarationAssignment(literal),
         .parts => |parts| partsDeclarationAssignment(shell, parts),
+        .declaration_array_assignment => null,
     };
 }
 
@@ -4307,6 +4362,13 @@ fn copyWord(allocator: std.mem.Allocator, word: ast.Word) CopyError!ast.Word {
         .data = switch (word.data) {
             .literal => |literal| .{ .literal = try allocator.dupe(u8, literal) },
             .parts => |parts| .{ .parts = try copyWordParts(allocator, parts) },
+            .declaration_array_assignment => |assignment| .{
+                .declaration_array_assignment = .{
+                    .name = try allocator.dupe(u8, assignment.name),
+                    .values = try copyWords(allocator, assignment.values),
+                    .span = assignment.span,
+                },
+            },
         },
         .span = word.span,
         .quoted = word.quoted,
@@ -5083,6 +5145,7 @@ fn wordLiteralsContainBrace(word: ast.Word) bool {
             .literal => |literal| if (std.mem.indexOfScalar(u8, literal, '{') != null) break true,
             else => {},
         } else false,
+        .declaration_array_assignment => false,
     };
 }
 
@@ -5097,6 +5160,7 @@ fn braceAtomsFromWord(shell: anytype, word: ast.Word) ![]const BraceAtom {
             },
             else => try atoms.append(shell.scratchAllocator(), .{ .part = part }),
         },
+        .declaration_array_assignment => unreachable,
     }
     return atoms.toOwnedSlice(shell.scratchAllocator());
 }
@@ -5440,6 +5504,7 @@ fn wordHasDynamicExpansion(word: ast.Word) bool {
     return switch (word.data) {
         .literal => false,
         .parts => |parts| partsHaveDynamicExpansion(parts),
+        .declaration_array_assignment => false,
     };
 }
 
@@ -5456,6 +5521,7 @@ fn wordHasFieldSplittingExpansion(word: ast.Word) bool {
     return switch (word.data) {
         .literal => false,
         .parts => |parts| partsHaveFieldSplittingExpansion(parts),
+        .declaration_array_assignment => false,
     };
 }
 
@@ -5472,6 +5538,7 @@ fn wordDynamicExpansionsAreQuoted(word: ast.Word) bool {
     return switch (word.data) {
         .literal => true,
         .parts => |parts| partsDynamicExpansionsAreQuoted(parts, false),
+        .declaration_array_assignment => false,
     };
 }
 
@@ -5491,6 +5558,7 @@ fn staticWordPathnamePattern(shell: anytype, word: ast.Word) !PathnamePattern {
     switch (word.data) {
         .literal => |literal| try appendPathnamePatternBytes(allocator, &text, &special, literal, true),
         .parts => |parts| try appendStaticWordPathnameParts(allocator, &text, &special, parts, false),
+        .declaration_array_assignment => unreachable,
     }
     return .{ .text = try text.toOwnedSlice(allocator), .special = try special.toOwnedSlice(allocator) };
 }
@@ -5528,6 +5596,7 @@ fn expandQuotedDynamicWordPathnamePattern(
             false,
             substitution_status,
         ),
+        .declaration_array_assignment => unreachable,
     }
     return .{ .text = try text.toOwnedSlice(allocator), .special = try special.toOwnedSlice(allocator) };
 }
@@ -6248,6 +6317,7 @@ fn wordContainsQuotes(word: ast.Word) bool {
     return switch (word.data) {
         .literal => false,
         .parts => |parts| partsContainQuotes(parts),
+        .declaration_array_assignment => false,
     };
 }
 
@@ -6267,6 +6337,7 @@ fn expandWordTracking(shell: anytype, word: ast.Word, substitution_status: ?*?re
     const expanded = switch (word.data) {
         .literal => |literal| literal,
         .parts => |parts| try expandWordParts(shell, parts, substitution_status),
+        .declaration_array_assignment => unreachable,
     };
     return expandLeadingTilde(shell, word, expanded);
 }
@@ -6276,6 +6347,7 @@ fn expandAssignmentWordTracking(shell: anytype, word: ast.Word, substitution_sta
     return switch (word.data) {
         .literal => |literal| expandAssignmentLiteralTildes(shell, literal),
         .parts => expandWordTracking(shell, word, substitution_status),
+        .declaration_array_assignment => unreachable,
     };
 }
 
@@ -6304,6 +6376,7 @@ fn expandLeadingTilde(shell: anytype, word: ast.Word, expanded: []const u8) ![]c
             .literal => |literal| literal,
             else => return expanded,
         } else return expanded,
+        .declaration_array_assignment => return expanded,
     };
     const prefix_len = tildePrefixLen(literal) orelse return expanded;
     const home = homeValue(shell) orelse return expanded;
@@ -6318,6 +6391,7 @@ fn wordExpandsLeadingTilde(shell: anytype, word: ast.Word) bool {
             .literal => |literal| literal,
             else => return false,
         } else return false,
+        .declaration_array_assignment => return false,
     };
     return tildePrefixLen(literal) != null and homeValue(shell) != null;
 }
@@ -7204,6 +7278,7 @@ fn wordIsSafeForSpeculativeExpansion(word: ast.Word) bool {
     return switch (word.data) {
         .literal => true,
         .parts => |parts| partsAreSafeForSpeculativeExpansion(parts),
+        .declaration_array_assignment => false,
     };
 }
 
@@ -7752,6 +7827,7 @@ fn expandPatternWord(shell: anytype, word: ast.Word) ![]const u8 {
     const pattern = switch (word.data) {
         .literal => |literal| literal,
         .parts => |parts| try expandPatternParts(shell, parts),
+        .declaration_array_assignment => unreachable,
     };
     return expandLeadingTilde(shell, word, pattern);
 }

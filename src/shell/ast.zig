@@ -133,12 +133,26 @@ pub const Word = struct {
 pub const WordData = union(enum) {
     literal: []const u8,
     parts: []const WordPart,
+    declaration_array_assignment: DeclarationArrayAssignment,
 
     pub fn validate(self: WordData) void {
         switch (self) {
             .literal => {},
             .parts => |parts| for (parts) |part| part.validate(),
+            .declaration_array_assignment => |assignment| assignment.validate(),
         }
+    }
+};
+
+pub const DeclarationArrayAssignment = struct {
+    name: []const u8,
+    values: []const Word,
+    span: source.Span = .{},
+
+    pub fn validate(self: DeclarationArrayAssignment) void {
+        std.debug.assert(self.name.len != 0);
+        for (self.values) |value| value.validate();
+        self.span.validate();
     }
 };
 

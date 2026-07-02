@@ -99,6 +99,7 @@ const SavedLocalBinding = struct {
     name: []const u8,
     variable: ?Variable = null,
     attributes: ?VariableAttributes = null,
+    array: ?ArrayVariable = null,
 
     fn deinit(self: SavedLocalBinding, allocator: std.mem.Allocator) void {
         allocator.free(self.name);
@@ -107,6 +108,7 @@ const SavedLocalBinding = struct {
             allocator.free(variable.value);
         }
         if (self.attributes) |attributes| allocator.free(attributes.name);
+        if (self.array) |array| array.deinit(allocator);
     }
 };
 
@@ -426,6 +428,7 @@ pub const State = struct {
         errdefer freeArrayElements(self.allocator, owned_elements);
 
         self.removeVariable(name);
+        self.removeArray(name);
         try self.arrays.put(self.allocator, owned_name, .{ .name = owned_name, .elements = owned_elements });
         self.removeVariableAttributes(name);
         self.clearFunctionAutoloadMissesIfSearchVariable(name);
@@ -497,6 +500,20 @@ pub const State = struct {
         return owned;
     }
 
+    fn dupeArrayElements(self: *State, elements: []const ArrayElement) ![]ArrayElement {
+        const owned = try self.allocator.alloc(ArrayElement, elements.len);
+        var initialized: usize = 0;
+        errdefer {
+            for (owned[0..initialized]) |element| self.allocator.free(element.value);
+            self.allocator.free(owned);
+        }
+        for (elements, 0..) |element, index| {
+            owned[index] = .{ .index = element.index, .value = try self.allocator.dupe(u8, element.value) };
+            initialized += 1;
+        }
+        return owned;
+    }
+
     fn freeArrayElements(allocator: std.mem.Allocator, elements: []const ArrayElement) void {
         for (elements) |element| allocator.free(element.value);
         allocator.free(elements);
@@ -559,6 +576,7 @@ pub const State = struct {
         const saved_count = self.local_frames.items[self.local_frames.items.len - 1].saved.count();
         try self.variables.ensureUnusedCapacity(self.allocator, saved_count);
         try self.variable_attributes.ensureUnusedCapacity(self.allocator, saved_count);
+        try self.arrays.ensureUnusedCapacity(self.allocator, saved_count);
 
         var frame = self.local_frames.pop().?;
         defer frame.deinit(self.allocator);
@@ -568,11 +586,14 @@ pub const State = struct {
     }
 
     fn restoreSavedBinding(self: *State, binding: *SavedLocalBinding) void {
-        // A name lives in at most one of the two maps: putVariable removes
-        // the attributes entry and putVariableAttributes only inserts when
-        // no variable exists.
+        // A name lives in at most one value map: putVariable and putArray
+        // remove each other, and putVariableAttributes only inserts when no
+        // scalar variable exists.
         std.debug.assert(binding.variable == null or binding.attributes == null);
+        std.debug.assert(binding.variable == null or binding.array == null);
+        std.debug.assert(binding.attributes == null or binding.array == null);
         self.removeVariable(binding.name);
+        self.removeArray(binding.name);
         if (binding.variable) |variable| {
             self.variables.putAssumeCapacity(variable.name, variable);
             binding.variable = null;
@@ -580,6 +601,10 @@ pub const State = struct {
         } else if (binding.attributes) |attributes| {
             self.variable_attributes.putAssumeCapacity(attributes.name, attributes);
             binding.attributes = null;
+        } else if (binding.array) |array| {
+            self.arrays.putAssumeCapacity(array.name, array);
+            binding.array = null;
+            self.clearFunctionAutoloadMissesIfSearchVariable(array.name);
         }
     }
 
@@ -635,6 +660,15 @@ pub const State = struct {
         }
     }
 
+    pub fn declareLocalArray(self: *State, name: []const u8, values: []const []const u8) !void {
+        std.debug.assert(name.len != 0);
+        if (self.getVariable(name)) |variable| if (variable.readonly) return error.ReadonlyVariable;
+        if (self.getVariableAttributes(name)) |attributes| if (attributes.readonly) return error.ReadonlyVariable;
+        const frame = self.currentLocalFrame();
+        try self.saveLocalBinding(frame, name);
+        try self.putArray(name, values);
+    }
+
     fn currentLocalFrame(self: *State) *LocalFrame {
         std.debug.assert(self.local_frames.items.len != 0);
         return &self.local_frames.items[self.local_frames.items.len - 1];
@@ -675,10 +709,19 @@ pub const State = struct {
         } else null;
         errdefer if (attributes) |saved_attributes| self.allocator.free(saved_attributes.name);
 
+        const array = if (self.getArray(name)) |existing| array: {
+            break :array ArrayVariable{
+                .name = try self.allocator.dupe(u8, existing.name),
+                .elements = try self.dupeArrayElements(existing.elements),
+            };
+        } else null;
+        errdefer if (array) |saved_array| saved_array.deinit(self.allocator);
+
         try frame.saved.put(self.allocator, owned_name, .{
             .name = owned_name,
             .variable = variable,
             .attributes = attributes,
+            .array = array,
         });
     }
 

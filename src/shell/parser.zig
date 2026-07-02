@@ -798,6 +798,20 @@ const Parser = struct {
                     command_span = extendCommandSpan(command_span, word_token.span);
                     continue;
                 }
+            } else if (self.simpleCommandStartsDeclarationBuiltin(words.items) and self.at(.left_paren)) {
+                if (try self.parseAssignment(word_token)) |assignment| {
+                    std.debug.assert(assignment.array_values != null);
+                    try words.append(self.allocator, .{
+                        .data = .{ .declaration_array_assignment = .{
+                            .name = assignment.name,
+                            .values = assignment.array_values.?,
+                            .span = assignment.span,
+                        } },
+                        .span = assignment.span,
+                    });
+                    command_span = extendCommandSpan(command_span, assignment.span);
+                    continue;
+                }
             }
 
             const word = try self.parseWordToken(word_token);
@@ -822,6 +836,17 @@ const Parser = struct {
 
     fn canValidateHereDocs(self: Parser) bool {
         return self.pending_here_docs.items.len == 0;
+    }
+
+    fn simpleCommandStartsDeclarationBuiltin(self: Parser, words: []const ast.Word) bool {
+        if (self.mode() == .posix or words.len == 0) return false;
+        const literal = switch (words[0].data) {
+            .literal => |literal| literal,
+            else => return false,
+        };
+        return std.mem.eql(u8, literal, "declare") or
+            std.mem.eql(u8, literal, "typeset") or
+            std.mem.eql(u8, literal, "local");
     }
 
     fn parseRedirectionList(self: *Parser) ParserError![]const ast.Redirection {

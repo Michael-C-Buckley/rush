@@ -311,6 +311,28 @@
             .status = 0,
         },
         .{
+            .name = "local array declarations create function-local arrays",
+            .script =
+            \\pids=(outer)
+            \\f() {
+            \\    local pids=()
+            \\    printf 'empty=<%s>\n' "${#pids[@]}"
+            \\    local -a pids=(a b)
+            \\    printf 'filled=<%s>:<%s>:<%s>\n' "${#pids[@]}" "${pids[0]}" "${pids[1]}"
+            \\}
+            \\f
+            \\printf 'after=<%s>:<%s>\n' "${#pids[@]}" "${pids[0]}"
+            ,
+            .stdout =
+            \\empty=<0>
+            \\filled=<2>:<a>:<b>
+            \\after=<1>:<outer>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "local outside functions fails",
             .script =
             \\local x=bad
@@ -404,6 +426,28 @@
             .stdout =
             \\inside=<local>:<new>
             \\after=<global>:<new>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "declare array assignments use function local scope",
+            .script =
+            \\arr=(global)
+            \\f() {
+            \\    declare arr=()
+            \\    printf 'empty=<%s>\n' "${#arr[@]}"
+            \\    declare arr=(local value)
+            \\    printf 'inside=<%s>:<%s>:<%s>\n' "${#arr[@]}" "${arr[0]}" "${arr[1]}"
+            \\}
+            \\f
+            \\printf 'after=<%s>:<%s>\n' "${#arr[@]}" "${arr[0]}"
+            ,
+            .stdout =
+            \\empty=<0>
+            \\inside=<2>:<local>:<value>
+            \\after=<1>:<global>
             \\
             ,
             .stderr = "",
