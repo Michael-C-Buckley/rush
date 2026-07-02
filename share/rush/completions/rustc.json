@@ -1,0 +1,462 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "rustc",
+    "description": "compile Rust source files",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "cfg",
+        "description": "configures compilation settings",
+        "inherit": false,
+        "value": {
+          "name": "Spec",
+          "description": "configuration flag, such as verbose or feature=\"serde\""
+        }
+      },
+      {
+        "short": "L",
+        "description": "adds a directory to the library search path",
+        "inherit": false,
+        "value": [
+          {
+            "name": "kind",
+            "description": "the kind of search path",
+            "required": false,
+            "style": "optional",
+            "provider": {
+              "values": [
+                {
+                  "value": "dependency",
+                  "description": "only search for transitive dependencies in this directory"
+                },
+                {
+                  "value": "crate",
+                  "description": "only search for this crate's direct dependencies in this directory"
+                },
+                {
+                  "value": "native",
+                  "description": "only search for native libraries in this directory"
+                },
+                {
+                  "value": "framework",
+                  "description": "only search for macOS frameworks in this directory"
+                },
+                {
+                  "value": "all",
+                  "description": "search for all library kinds in this directory"
+                }
+              ]
+            }
+          },
+          {
+            "name": "path",
+            "description": "path to search for external crates and libraries",
+            "provider": "builtin.directories"
+          }
+        ]
+      },
+      {
+        "description": "links the generated crate to a native library",
+        "inherit": false,
+        "value": [
+          {
+            "name": "kind",
+            "description": "kind of library",
+            "required": false,
+            "style": "optional",
+            "provider": {
+              "values": [
+                {
+                  "value": "dylib",
+                  "description": "a native dynamic library"
+                },
+                {
+                  "value": "static",
+                  "description": "a native static library"
+                },
+                {
+                  "value": "framework",
+                  "description": "a macOS framework"
+                }
+              ]
+            }
+          },
+          {
+            "name": "Name",
+            "description": "native library name"
+          }
+        ],
+        "short": "l"
+      },
+      {
+        "long": "crate-type",
+        "description": "specify types of crates for the compiler to emit",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "description": "type of crates",
+          "provider": {
+            "values": [
+              {
+                "value": "bin",
+                "description": "a runnable executable program"
+              },
+              {
+                "value": "lib",
+                "description": "generates a library kind preferred by the compiler"
+              },
+              {
+                "value": "rlib",
+                "description": "a Rust static library"
+              },
+              {
+                "value": "dylib",
+                "description": "a native dynamic library"
+              },
+              {
+                "value": "cdylib",
+                "description": "a native static library"
+              },
+              {
+                "value": "staticlib",
+                "description": "a macOS framework"
+              },
+              {
+                "value": "proc-macro",
+                "description": "generates a format suitable for a procedural macro library that may be loaded by the compiler"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "crate-name",
+        "description": "specify the name of the crate being built",
+        "inherit": false,
+        "value": {
+          "name": "Name"
+        }
+      },
+      {
+        "long": "edition",
+        "description": "specify the edition to use",
+        "inherit": false,
+        "value": {
+          "name": "edition",
+          "provider": {
+            "values": [
+              "2015",
+              "2018",
+              "2021"
+            ]
+          }
+        }
+      },
+      {
+        "long": "emit",
+        "description": "specify the types of output files to generate",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              {
+                "value": "asm",
+                "description": "generates a file with the crate's assembly code"
+              },
+              {
+                "value": "llvm-bc",
+                "description": "generates a binary file containing the LLVM bitcode"
+              },
+              {
+                "value": "llvm-ir",
+                "description": "generates a file containing LLVM IR"
+              },
+              {
+                "value": "obj",
+                "description": "generates a native object file"
+              },
+              {
+                "value": "metadata",
+                "description": "generates a file containing metadata about the crate"
+              },
+              {
+                "value": "link",
+                "description": "generates the crates specified by --crate-type"
+              },
+              {
+                "value": "dep-info",
+                "description": "generates a file with Makefile syntax that indicates all the source files that were loaded to generate the crate"
+              },
+              {
+                "value": "mir",
+                "description": "generates a file containing rustc's mid-level intermediate representation"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "print",
+        "description": "prints compiler info",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              {
+                "value": "crate-name",
+                "description": "the name of the crate"
+              },
+              {
+                "value": "file-names",
+                "description": "the names of the files created by the link emit kind"
+              },
+              {
+                "value": "sysroot",
+                "description": "path to the sysroot"
+              },
+              {
+                "value": "target-libdir",
+                "description": "path to the target libdir"
+              },
+              {
+                "value": "cfg",
+                "description": "list of cfg values"
+              },
+              {
+                "value": "target-list",
+                "description": "list of known targets. The target may be selected with the --target flag"
+              },
+              {
+                "value": "target-cpus",
+                "description": "list of available CPU values for the current target"
+              },
+              {
+                "value": "target-features",
+                "description": "list of available target features for the current target"
+              },
+              {
+                "value": "relocation-models",
+                "description": "list of relocation models. Relocation models may be selected with the -C relocation-model=val flag"
+              },
+              {
+                "value": "code-models",
+                "description": "list of code models"
+              },
+              {
+                "value": "tls-models",
+                "description": "list of Thread Local Storage models supported"
+              },
+              {
+                "value": "target-spec-json"
+              },
+              {
+                "value": "native-static-libs",
+                "description": "this may be used when creating a staticlib crate type"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "g",
+        "description": "synonym for -C debuginfo=2",
+        "inherit": false
+      },
+      {
+        "short": "O",
+        "description": "synonym for -C opt-level=2",
+        "inherit": false
+      },
+      {
+        "short": "o",
+        "description": "specify the filename to write output",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "out-dir",
+        "description": "specify directory to write output",
+        "inherit": false,
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "explain",
+        "description": "provides a detailed explanation of an error message",
+        "inherit": false,
+        "value": {
+          "name": "Error-Code"
+        }
+      },
+      {
+        "long": "test",
+        "description": "builds a test harness",
+        "inherit": false
+      },
+      {
+        "long": "target",
+        "description": "selects a target triple to build",
+        "inherit": false,
+        "value": {
+          "name": "Target"
+        }
+      },
+      {
+        "short": "W",
+        "long": "warn",
+        "description": "sets lint warnings",
+        "inherit": false,
+        "value": {
+          "name": "OPT"
+        }
+      },
+      {
+        "short": "A",
+        "long": "allow",
+        "description": "set lint allowed",
+        "inherit": false,
+        "value": {
+          "name": "OPT"
+        }
+      },
+      {
+        "short": "D",
+        "long": "deny",
+        "description": "set lint denied",
+        "inherit": false,
+        "value": {
+          "name": "OPT"
+        }
+      },
+      {
+        "short": "F",
+        "long": "forbid",
+        "description": "set lint forbid",
+        "inherit": false,
+        "value": {
+          "name": "Opt"
+        }
+      },
+      {
+        "long": "cap-lints",
+        "description": "set the most restrictive lint level",
+        "inherit": false,
+        "value": {
+          "name": "Level"
+        }
+      },
+      {
+        "short": "C",
+        "long": "codegen",
+        "description": "set a codegen option",
+        "inherit": false,
+        "value": {
+          "name": "option"
+        }
+      },
+      {
+        "short": "Z",
+        "description": "set unstable options",
+        "inherit": false,
+        "value": {
+          "name": "option",
+          "description": "unstable options to pass to rustc"
+        }
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "use verbose output",
+        "inherit": false
+      },
+      {
+        "long": "extern",
+        "description": "specify where an external library is located",
+        "inherit": false,
+        "value": {
+          "name": "Path",
+          "description": "path where crate(s) can be found",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "sysroot",
+        "description": "overrides the system root",
+        "priority": -10,
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "error-format",
+        "description": "controls how errors are produced",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "provider": {
+            "values": [
+              "human",
+              "json",
+              "short"
+            ]
+          }
+        }
+      },
+      {
+        "long": "color",
+        "description": "configures coloring of output",
+        "inherit": false,
+        "value": {
+          "name": "color",
+          "provider": {
+            "values": [
+              "auto",
+              "always",
+              "never"
+            ]
+          }
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "provider": "builtin.files",
+          "index": 0,
+          "description": "Rust source file"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
