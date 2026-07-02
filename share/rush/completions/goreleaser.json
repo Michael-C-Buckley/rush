@@ -1,0 +1,603 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "goreleaser",
+    "description": "deliver Go binaries quickly",
+    "options": [
+      {
+        "long": "debug",
+        "description": "enable verbose mode",
+        "inherit": true
+      },
+      {
+        "long": "verbose",
+        "description": "enable verbose mode",
+        "inherit": true
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "display help",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "b",
+        "aliases": [
+          "build"
+        ],
+        "description": "builds the current project",
+        "options": [
+          {
+            "long": "clean",
+            "description": "remove the dist folder before building",
+            "inherit": false
+          },
+          {
+            "long": "config",
+            "short": "f",
+            "description": "load configuration from file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "deprecated",
+            "description": "force print the deprecation message - tests only",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "id",
+            "description": "builds only the specified build ids",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "id"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "copy the binary to the path after the build. Only taken into account when using --single-target and a single id (either with --id or if configuration only has o",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "parallelism",
+            "short": "p",
+            "description": "amount tasks to run concurrently (default: number of CPUs)",
+            "inherit": false,
+            "value": {
+              "name": "parallelism"
+            }
+          },
+          {
+            "long": "rm-dist",
+            "description": "remove the dist folder before building",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "single-target",
+            "description": "builds only for current GOOS and GOARCH, regardless of what's set in the configuration file",
+            "inherit": false
+          },
+          {
+            "long": "skip",
+            "description": "skip the given options (valid options are: before, post-hooks, pre-hooks, validate)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "skip",
+              "provider": "goreleaser.build-skips"
+            }
+          },
+          {
+            "long": "skip-before",
+            "description": "skips global before hooks",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "skip-post-hooks",
+            "description": "skips all post-build hooks",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "skip-validate",
+            "description": "skips several sanity checks",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "snapshot",
+            "description": "generate an unversioned snapshot build, skipping all validations",
+            "inherit": false
+          },
+          {
+            "long": "timeout",
+            "description": "timeout to the entire build process",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          }
+        ]
+      },
+      {
+        "name": "c",
+        "aliases": [
+          "check"
+        ],
+        "description": "checks if configuration is valid",
+        "options": [
+          {
+            "long": "config",
+            "short": "f",
+            "description": "configuration file(s) to check",
+            "inherit": false,
+            "hidden": true,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "deprecated",
+            "description": "force print the deprecation message - tests only",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "quiet",
+            "short": "q",
+            "description": "quiet mode: no output",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "completion",
+        "description": "generate the autocompletion script for the specified shell",
+        "subcommands": [
+          {
+            "name": "bash",
+            "description": "generate the autocompletion script for bash",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "fish",
+            "description": "generate the autocompletion script for fish",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "powershell",
+            "description": "generate the autocompletion script for powershell",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "zsh",
+            "description": "generate the autocompletion script for zsh",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "hc",
+        "aliases": [
+          "healthcheck"
+        ],
+        "description": "checks if needed tools are installed",
+        "options": [
+          {
+            "long": "config",
+            "short": "f",
+            "description": "configuration file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "quiet",
+            "short": "q",
+            "description": "quiet mode: no output",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "i",
+        "aliases": [
+          "init"
+        ],
+        "description": "generates a .goreleaser.yaml file",
+        "options": [
+          {
+            "long": "config",
+            "short": "f",
+            "description": "load configuration from file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "schema",
+        "aliases": [
+          "jsonschema"
+        ],
+        "description": "outputs goreleaser's JSON schema",
+        "options": [
+          {
+            "long": "output",
+            "short": "o",
+            "description": "where to save the JSONSchema file",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "r",
+        "aliases": [
+          "release"
+        ],
+        "description": "releases the current project",
+        "options": [
+          {
+            "long": "auto-snapshot",
+            "description": "automatically sets --snapshot if the repository is dirty",
+            "inherit": false
+          },
+          {
+            "long": "clean",
+            "description": "removes the dist folder",
+            "inherit": false
+          },
+          {
+            "long": "config",
+            "short": "f",
+            "description": "load configuration from file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "deprecated",
+            "description": "force print the deprecation message - tests only",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "fail-fast",
+            "description": "whether to abort the release publishing on the first error",
+            "inherit": false
+          },
+          {
+            "long": "parallelism",
+            "short": "p",
+            "description": "amount tasks to run concurrently (default: number of CPUs)",
+            "inherit": false,
+            "value": {
+              "name": "parallelism"
+            }
+          },
+          {
+            "long": "release-footer",
+            "description": "load custom release notes footer from a markdown file",
+            "inherit": false,
+            "value": {
+              "name": "release-footer",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "release-footer-tmpl",
+            "description": "load custom release notes footer from a templated markdown file (overrides --release-footer)",
+            "inherit": false,
+            "value": {
+              "name": "release-footer-tmpl",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "release-header",
+            "description": "load custom release notes header from a markdown file",
+            "inherit": false,
+            "value": {
+              "name": "release-header",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "release-header-tmpl",
+            "description": "load custom release notes header from a templated markdown file (overrides --release-header)",
+            "inherit": false,
+            "value": {
+              "name": "release-header-tmpl",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "release-notes",
+            "description": "load custom release notes from a markdown file (will skip GoReleaser changelog generation)",
+            "inherit": false,
+            "value": {
+              "name": "release-notes",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "release-notes-tmpl",
+            "description": "load custom release notes from a templated markdown file (overrides --release-notes)",
+            "inherit": false,
+            "value": {
+              "name": "release-notes-tmpl",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "rm-dist",
+            "description": "removes the dist folder",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "skip",
+            "description": "skip the given options (valid options are announce, aur, before, chocolatey, docker, homebrew, ko, nfpm, nix, publish, sbom, scoop, sign, snapcraft, validate, w",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "skip",
+              "provider": "goreleaser.release-skips"
+            }
+          },
+          {
+            "long": "skip-announce",
+            "description": "skips announcing releases (implies --skip=validate)",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "skip-before",
+            "description": "skips global before hooks",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "skip-docker",
+            "description": "skips Docker Images/Manifests builds",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "skip-ko",
+            "description": "skips Ko builds",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "skip-publish",
+            "description": "skips publishing artifacts (implies --skip=announce)",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "skip-sbom",
+            "description": "skips cataloging artifacts",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "skip-sign",
+            "description": "skips signing artifacts",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "skip-validate",
+            "description": "skips git checks",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "snapshot",
+            "description": "generate an unversioned snapshot release, skipping all validations and without publishing any artifacts (implies --skip=announce,publish,validate)",
+            "inherit": false
+          },
+          {
+            "long": "timeout",
+            "description": "timeout to the entire release process",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "help about any command",
+        "subcommands": [
+          {
+            "name": "b",
+            "aliases": [
+              "build"
+            ],
+            "description": "builds the current project"
+          },
+          {
+            "name": "c",
+            "aliases": [
+              "check"
+            ],
+            "description": "checks if configuration is valid"
+          },
+          {
+            "name": "completion",
+            "description": "generate the autocompletion script for the specified shell",
+            "subcommands": [
+              {
+                "name": "bash",
+                "description": "generate the autocompletion script for bash"
+              },
+              {
+                "name": "fish",
+                "description": "generate the autocompletion script for fish"
+              },
+              {
+                "name": "powershell",
+                "description": "generate the autocompletion script for powershell"
+              },
+              {
+                "name": "zsh",
+                "description": "generate the autocompletion script for zsh"
+              }
+            ]
+          },
+          {
+            "name": "hc",
+            "aliases": [
+              "healthcheck"
+            ],
+            "description": "checks if needed tools are installed"
+          },
+          {
+            "name": "i",
+            "aliases": [
+              "init"
+            ],
+            "description": "generates a .goreleaser.yaml file"
+          },
+          {
+            "name": "schema",
+            "aliases": [
+              "jsonschema"
+            ],
+            "description": "outputs goreleaser's JSON schema"
+          },
+          {
+            "name": "r",
+            "aliases": [
+              "release"
+            ],
+            "description": "releases the current project"
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "goreleaser.build-skips": {
+        "candidates": [
+          {
+            "value": "before"
+          },
+          {
+            "value": "post-hooks"
+          },
+          {
+            "value": "pre-hooks"
+          },
+          {
+            "value": "validate"
+          }
+        ]
+      },
+      "goreleaser.release-skips": {
+        "candidates": [
+          {
+            "value": "announce"
+          },
+          {
+            "value": "aur"
+          },
+          {
+            "value": "before"
+          },
+          {
+            "value": "chocolatey"
+          },
+          {
+            "value": "docker"
+          },
+          {
+            "value": "homebrew"
+          },
+          {
+            "value": "ko"
+          },
+          {
+            "value": "nfpm"
+          },
+          {
+            "value": "nix"
+          },
+          {
+            "value": "publish"
+          },
+          {
+            "value": "sbom"
+          },
+          {
+            "value": "scoop"
+          },
+          {
+            "value": "sign"
+          },
+          {
+            "value": "snapcraft"
+          },
+          {
+            "value": "validate"
+          },
+          {
+            "value": "winget"
+          }
+        ]
+      }
+    }
+  }
+}
