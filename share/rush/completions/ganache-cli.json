@@ -1,0 +1,270 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ganache-cli",
+    "description": "fast Ethereum RPC client",
+    "options": [
+      {
+        "short": "a",
+        "long": "accounts",
+        "description": "specify the number of accounts to generate at startup",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "short": "e",
+        "long": "defaultBalanceEther",
+        "description": "amount of ether to assign each test account. Default is 100",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "short": "b",
+        "long": "blockTime",
+        "description": "specify blockTime in seconds for automatic mining. If you don't specify this flag, ganache will instantly mine a new block for every transaction",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "short": "d",
+        "long": "deterministic",
+        "description": "generate deterministic addresses based on a pre-defined mnemonic",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "long": "secure",
+        "description": "lock available accounts by default (good for third party transaction signing)",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "long": "mnemonic",
+        "description": "use a bip39 mnemonic phrase for generating a PRNG seed, which is in turn used for hierarchical deterministic (HD) account generation",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "long": "port",
+        "description": "port number to listen on. Defaults to 8545",
+        "inherit": false,
+        "value": {
+          "name": "port-number"
+        }
+      },
+      {
+        "short": "h",
+        "long": "host",
+        "description": "hostname to listen on. Defaults to 127.0.0.1 (defaults to 0.0.0.0 for Docker instances of ganache-cli)",
+        "inherit": false,
+        "value": {
+          "name": "hostname"
+        }
+      },
+      {
+        "short": "s",
+        "long": "seed",
+        "description": "use arbitrary data to generate the HD wallet mnemonic to be used",
+        "inherit": false
+      },
+      {
+        "short": "g",
+        "long": "gasPrice",
+        "description": "the price of gas in wei (defaults to 20000000000)",
+        "inherit": false,
+        "value": {
+          "name": "price"
+        }
+      },
+      {
+        "short": "l",
+        "long": "gasLimit",
+        "description": "the block gas limit (defaults to 0x6691b7)",
+        "inherit": false,
+        "value": {
+          "name": "limit"
+        }
+      },
+      {
+        "long": "callGasLimit",
+        "description": "sets the transaction gas limit for eth_call and eth_estimateGas calls",
+        "inherit": false,
+        "value": {
+          "name": "limit"
+        }
+      },
+      {
+        "short": "k",
+        "long": "hardfork",
+        "description": "allows users to specify which hardfork should be used",
+        "inherit": false,
+        "value": {
+          "name": "hardfork",
+          "provider": "ganache-cli.hardforks"
+        }
+      },
+      {
+        "short": "f",
+        "long": "fork",
+        "description": "fork from another currently running Ethereum client at a given block. Input should be the HTTP location and port of the other client",
+        "inherit": false,
+        "value": {
+          "name": "HTTP-location-&-port"
+        }
+      },
+      {
+        "short": "i",
+        "long": "networkId",
+        "description": "specify the network id ganache-cli will use to identify itself (defaults to the current time or the network id of the forked blockchain if configured)",
+        "inherit": false,
+        "value": {
+          "name": "network-id"
+        }
+      },
+      {
+        "long": "chainId",
+        "description": "specify the Chain ID ganache-cli will use for eth_chainId RPC and the CHAINID opcode",
+        "inherit": false,
+        "value": {
+          "name": "chain-id"
+        }
+      },
+      {
+        "long": "db",
+        "description": "specify a path to a directory to save the chain database. If a database already exists, ganache-cli will initialize that chain instead of creating a new one",
+        "inherit": false,
+        "value": {
+          "name": "folder",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "debug",
+        "description": "output VM opcodes for debugging",
+        "inherit": false
+      },
+      {
+        "long": "mem",
+        "description": "output ganache-cli memory usage statistics. This replaces normal output",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "run ganache-cli without any logs",
+        "inherit": false
+      },
+      {
+        "short": "?",
+        "long": "help",
+        "description": "display help information",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "display the version of ganache-cli",
+        "inherit": false
+      },
+      {
+        "long": "account_keys_path",
+        "aliases": [
+          "acctKeys"
+        ],
+        "description": "specifies a file to save accounts and private keys to, for testing",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "noVMErrorsOnRPCResponse",
+        "description": "do not transmit transaction failures as RPC errors",
+        "inherit": false
+      },
+      {
+        "long": "allowUnlimitedContractSize",
+        "description": "allows unlimited contract sizes while debugging",
+        "inherit": false
+      },
+      {
+        "long": "keepAliveTimeout",
+        "description": "sets the HTTP server's keepAliveTimeout in milliseconds",
+        "inherit": false,
+        "value": {
+          "name": "timeout"
+        }
+      },
+      {
+        "short": "t",
+        "long": "time",
+        "description": "date (ISO 8601) that the first block should start",
+        "inherit": false,
+        "value": {
+          "name": "date"
+        }
+      },
+      {
+        "long": "account",
+        "description": "specify any number of times passing arbitrary private keys and their associated balances to generate initial addresses",
+        "inherit": false,
+        "value": {
+          "name": "<privatekey>,-balance"
+        },
+        "repeatable": true
+      },
+      {
+        "short": "u",
+        "long": "unlock",
+        "description": "specify any number of times passing either an address or an account index to unlock specific accounts",
+        "inherit": false,
+        "value": {
+          "name": "address-or-account-index"
+        },
+        "repeatable": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "forkCacheSize",
+        "description": "the maximum size, in bytes, of the in-memory cache for queries on a chain fork. Defaults to 1_073_741_824 bytes (1 gigabyte)",
+        "arguments": {
+          "states": [
+            {
+              "name": "number",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "ganache-cli.hardforks": {
+        "candidates": [
+          {
+            "value": "byzantium"
+          },
+          {
+            "value": "constantinople"
+          },
+          {
+            "value": "petersburg"
+          },
+          {
+            "value": "istanbul"
+          },
+          {
+            "value": "muirGlacier"
+          }
+        ]
+      }
+    }
+  }
+}
