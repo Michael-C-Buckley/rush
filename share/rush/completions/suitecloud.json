@@ -1,0 +1,619 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "suitecloud",
+    "description": "manage SuiteCloud projects",
+    "options": [
+      {
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "account:manageauth",
+        "description": "manage authentication IDs",
+        "options": [
+          {
+            "short": "i",
+            "long": "interactive",
+            "description": "run interactively",
+            "inherit": false
+          },
+          {
+            "long": "info",
+            "description": "show authentication ID info",
+            "inherit": false,
+            "value": {
+              "name": "authID"
+            }
+          },
+          {
+            "long": "list",
+            "description": "list entries",
+            "inherit": false
+          },
+          {
+            "long": "remove",
+            "description": "remove an authentication ID",
+            "inherit": false,
+            "value": {
+              "name": "authID"
+            }
+          },
+          {
+            "long": "rename",
+            "description": "rename an authentication ID",
+            "inherit": false,
+            "value": {
+              "name": "authID"
+            }
+          },
+          {
+            "long": "renameto",
+            "description": "set the new authentication ID",
+            "inherit": false,
+            "value": {
+              "name": "authID"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "account:savetoken",
+        "description": "save a TBA token",
+        "options": [
+          {
+            "long": "account",
+            "description": "set the account ID",
+            "inherit": false,
+            "value": {
+              "name": "id"
+            }
+          },
+          {
+            "long": "authid",
+            "description": "set the authentication ID",
+            "inherit": false,
+            "value": {
+              "name": "auth-id"
+            }
+          },
+          {
+            "long": "tokenid",
+            "description": "set the token ID",
+            "inherit": false,
+            "value": {
+              "name": "token-id"
+            }
+          },
+          {
+            "long": "tokensecret",
+            "description": "set the token secret",
+            "inherit": false,
+            "value": {
+              "name": "secret"
+            }
+          },
+          {
+            "long": "url",
+            "description": "set the NetSuite domain",
+            "inherit": false,
+            "value": {
+              "name": "domain"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "account:setup",
+        "description": "set up an account",
+        "options": [
+          {
+            "short": "i",
+            "long": "interactive",
+            "description": "run interactively",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "dev",
+            "description": "use a non-production domain",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "file:create",
+        "description": "create a SuiteScript file",
+        "options": [
+          {
+            "short": "i",
+            "long": "interactive",
+            "description": "run interactively",
+            "inherit": false
+          },
+          {
+            "long": "module",
+            "description": "set SuiteScript modules",
+            "inherit": false,
+            "value": {
+              "name": "module"
+            }
+          },
+          {
+            "long": "path",
+            "description": "set the File Cabinet path",
+            "inherit": false,
+            "value": {
+              "name": "path"
+            }
+          },
+          {
+            "long": "type",
+            "description": "set the type",
+            "inherit": false,
+            "value": {
+              "name": "type"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "file:import",
+        "description": "import account files",
+        "options": [
+          {
+            "short": "i",
+            "long": "interactive",
+            "description": "run interactively",
+            "inherit": false
+          },
+          {
+            "long": "path",
+            "description": "set the File Cabinet path",
+            "inherit": false,
+            "value": {
+              "name": "path"
+            }
+          },
+          {
+            "long": "calledfromcomparefiles",
+            "description": "use compare-files messaging",
+            "inherit": false
+          },
+          {
+            "long": "excludeproperties",
+            "description": "exclude file properties",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "file:list",
+        "description": "list File Cabinet files",
+        "options": [
+          {
+            "short": "i",
+            "long": "interactive",
+            "description": "run interactively",
+            "inherit": false
+          },
+          {
+            "long": "folder",
+            "description": "set the File Cabinet folder",
+            "inherit": false,
+            "value": {
+              "name": "cabinet",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "file:upload",
+        "description": "upload project files",
+        "options": [
+          {
+            "short": "i",
+            "long": "interactive",
+            "description": "run interactively",
+            "inherit": false
+          },
+          {
+            "long": "paths",
+            "description": "set file paths",
+            "inherit": false,
+            "value": {
+              "name": "files",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "object:import",
+        "description": "import custom objects",
+        "options": [
+          {
+            "short": "i",
+            "long": "interactive",
+            "description": "run interactively",
+            "inherit": false
+          },
+          {
+            "long": "appid",
+            "description": "set the application ID",
+            "inherit": false,
+            "value": {
+              "name": "app-id"
+            }
+          },
+          {
+            "long": "destinationfolder",
+            "description": "set the destination folder",
+            "inherit": false
+          },
+          {
+            "long": "excludefiles",
+            "description": "exclude referenced files",
+            "inherit": false
+          },
+          {
+            "long": "scriptid",
+            "description": "set the script ID",
+            "inherit": false
+          },
+          {
+            "long": "type",
+            "description": "set the type",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "object:list",
+        "description": "list custom objects",
+        "options": [
+          {
+            "short": "i",
+            "long": "interactive",
+            "description": "run interactively",
+            "inherit": false
+          },
+          {
+            "long": "appid",
+            "description": "set the application ID",
+            "inherit": false,
+            "value": {
+              "name": "app-id"
+            }
+          },
+          {
+            "long": "scriptid",
+            "description": "set the script ID",
+            "inherit": false,
+            "value": {
+              "name": "script-id"
+            }
+          },
+          {
+            "long": "type",
+            "description": "set the type",
+            "inherit": false,
+            "value": {
+              "name": "types"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "object:update",
+        "description": "update project objects",
+        "options": [
+          {
+            "short": "i",
+            "long": "interactive",
+            "description": "run interactively",
+            "inherit": false
+          },
+          {
+            "long": "includeinstances",
+            "description": "include instances",
+            "inherit": false
+          },
+          {
+            "long": "scriptid",
+            "description": "set the script ID",
+            "inherit": false,
+            "value": {
+              "name": "script-id"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "project:adddependencies",
+        "description": "add missing manifest dependencies"
+      },
+      {
+        "name": "project:create",
+        "description": "create a SuiteCloud project",
+        "options": [
+          {
+            "short": "i",
+            "long": "interactive",
+            "description": "run interactively",
+            "inherit": false
+          },
+          {
+            "long": "overwrite",
+            "description": "overwrite existing project",
+            "inherit": false
+          },
+          {
+            "long": "projectid",
+            "description": "set the project ID",
+            "inherit": false,
+            "value": {
+              "name": "project-id"
+            }
+          },
+          {
+            "long": "projectname",
+            "description": "set the project name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "projectversion",
+            "description": "set the project version",
+            "inherit": false,
+            "value": {
+              "name": "project-version"
+            }
+          },
+          {
+            "long": "publisherid",
+            "description": "set the publisher ID",
+            "inherit": false,
+            "value": {
+              "name": "publisher-id"
+            }
+          },
+          {
+            "long": "type",
+            "description": "set the type",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  "ACCOUNTCUSTOMIZATION",
+                  "SUITEAPP"
+                ]
+              }
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "project:deploy",
+        "description": "deploy a project",
+        "options": [
+          {
+            "short": "i",
+            "long": "interactive",
+            "description": "run interactively",
+            "inherit": false
+          },
+          {
+            "long": "dryrun",
+            "description": "preview deployment",
+            "inherit": false
+          },
+          {
+            "long": "log",
+            "description": "set the log location",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": [
+                "builtin.directories",
+                "builtin.files"
+              ]
+            }
+          },
+          {
+            "long": "validate",
+            "description": "validate before deployment",
+            "inherit": false
+          },
+          {
+            "long": "accountspecificvalues",
+            "description": "handle account-specific values",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  "ERROR",
+                  "WARNING"
+                ]
+              }
+            }
+          },
+          {
+            "short": "a",
+            "long": "applyinstallprefs",
+            "description": "apply install preferences",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "project:package",
+        "description": "package a project",
+        "options": [
+          {
+            "short": "i",
+            "long": "interactive",
+            "description": "run interactively",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "project:validate",
+        "description": "validate a project",
+        "options": [
+          {
+            "short": "i",
+            "long": "interactive",
+            "description": "run interactively",
+            "inherit": false
+          },
+          {
+            "long": "log",
+            "description": "set the log location",
+            "inherit": false,
+            "value": {
+              "name": "location",
+              "provider": [
+                "builtin.directories",
+                "builtin.files"
+              ]
+            }
+          },
+          {
+            "long": "server",
+            "description": "validate on the server",
+            "inherit": false
+          },
+          {
+            "long": "accountspecificvalues",
+            "description": "handle account-specific values",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  "ERROR",
+                  "WARNING"
+                ]
+              }
+            }
+          },
+          {
+            "short": "a",
+            "long": "applyinstallprefs",
+            "description": "apply install preferences",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
