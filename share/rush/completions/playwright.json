@@ -1,0 +1,135 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "playwright",
+    "description": "run Playwright tests and browser tools",
+    "options": [
+      {
+        "long": "version",
+        "short": "V",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "test",
+        "description": "run Playwright tests",
+        "options": [
+          {
+            "short": "g",
+            "description": "run tests matching title",
+            "inherit": false,
+            "value": {
+              "name": "title"
+            }
+          },
+          {
+            "long": "headed",
+            "description": "run tests in headed browsers",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "test",
+              "description": "test file or directory",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ],
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "install",
+        "description": "install browser binaries",
+        "options": [
+          {
+            "long": "with-deps",
+            "description": "install system dependencies",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "browser",
+              "description": "browser to install",
+              "index": 0,
+              "repeatable": true,
+              "provider": "playwright.browsers"
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "playwright.browsers": {
+        "values": [
+          {
+            "value": "chromium",
+            "description": "Chromium"
+          },
+          {
+            "value": "chrome",
+            "description": "Chrome"
+          },
+          {
+            "value": "chrome-beta",
+            "description": "Chrome Beta"
+          },
+          {
+            "value": "msedge",
+            "description": "Microsoft Edge"
+          },
+          {
+            "value": "msedge-beta",
+            "description": "Microsoft Edge Beta"
+          },
+          {
+            "value": "msedge-dev",
+            "description": "Microsoft Edge Dev"
+          },
+          {
+            "value": "firefox",
+            "description": "Firefox"
+          },
+          {
+            "value": "webkit",
+            "description": "WebKit"
+          }
+        ]
+      }
+    }
+  }
+}
