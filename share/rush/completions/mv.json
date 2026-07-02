@@ -1,0 +1,71 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "mv",
+    "description": "move or rename files and directories",
+    "options": [
+      {
+        "short": "f",
+        "description": "overwrite destinations without prompting",
+        "inherit": false,
+        "excludes": [
+          "i",
+          "n"
+        ]
+      },
+      {
+        "short": "i",
+        "description": "prompt before overwriting destinations",
+        "inherit": false,
+        "excludes": [
+          "f",
+          "n"
+        ]
+      },
+      {
+        "short": "n",
+        "description": "do not overwrite existing files",
+        "inherit": false,
+        "excludes": [
+          "f",
+          "i"
+        ]
+      },
+      {
+        "short": "v",
+        "description": "show files after they are moved",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "source",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 0,
+          "repeatable": true
+        },
+        {
+          "name": "target",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 1
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
