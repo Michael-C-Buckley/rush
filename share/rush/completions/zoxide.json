@@ -1,0 +1,74 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "zoxide",
+    "description": "smarter cd command",
+    "options": [
+      { "short": "h", "long": "help", "description": "print help information" },
+      { "short": "V", "long": "version", "description": "print version information" }
+    ],
+    "subcommands": [
+      {
+        "name": "add",
+        "description": "add a directory or increment its rank",
+        "options": [
+          { "short": "h", "long": "help", "description": "print help information" },
+          { "short": "V", "long": "version", "description": "print version information" }
+        ],
+        "arguments": { "states": [{ "name": "path", "index": 0, "repeatable": true, "provider": "builtin.directories" }] }
+      },
+      {
+        "name": "import",
+        "description": "import entries from another application",
+        "options": [
+          { "long": "from", "description": "application to import from", "value": { "name": "application", "provider": { "values": ["autojump", "z"] } } },
+          { "long": "merge", "description": "merge into existing database" },
+          { "short": "h", "long": "help", "description": "print help information" },
+          { "short": "V", "long": "version", "description": "print version information" }
+        ],
+        "arguments": { "states": [{ "name": "path", "index": 0, "provider": "builtin.files" }] }
+      },
+      {
+        "name": "init",
+        "description": "generate shell configuration",
+        "options": [
+          { "long": "cmd", "description": "change the z and zi command prefix", "value": { "name": "cmd", "required": false, "style": "optional" } },
+          { "long": "hook", "description": "change how often zoxide increments scores", "value": { "name": "hook", "required": false, "style": "optional", "provider": { "values": ["none", "prompt", "pwd"] } } },
+          { "long": "no-cmd", "description": "do not define z and zi commands" },
+          { "short": "h", "long": "help", "description": "print help information" },
+          { "short": "V", "long": "version", "description": "print version information" }
+        ],
+        "arguments": { "states": [{ "name": "shell", "index": 0, "provider": { "values": ["bash", "elvish", "fish", "nushell", "posix", "powershell", "xonsh", "zsh"] } }] }
+      },
+      {
+        "name": "query",
+        "description": "search for a directory in the database",
+        "options": [
+          { "long": "exclude", "description": "exclude a path from results", "value": { "name": "path", "required": false, "style": "optional", "provider": "builtin.directories" } },
+          { "long": "all", "description": "show deleted directories" },
+          { "short": "i", "long": "interactive", "description": "use interactive selection" },
+          { "short": "l", "long": "list", "description": "list all matching directories" },
+          { "short": "s", "long": "score", "description": "print score with results" },
+          { "short": "h", "long": "help", "description": "print help information" },
+          { "short": "V", "long": "version", "description": "print version information" }
+        ],
+        "arguments": { "states": [{ "name": "keywords", "index": 0 }] }
+      },
+      {
+        "name": "remove",
+        "description": "remove a directory from the database",
+        "options": [
+          { "short": "i", "long": "interactive", "description": "use interactive selection" },
+          { "short": "h", "long": "help", "description": "print help information" },
+          { "short": "V", "long": "version", "description": "print version information" }
+        ],
+        "arguments": { "states": [{ "name": "path", "index": 0, "provider": "builtin.directories" }] }
+      }
+    ],
+    "providers": {
+      "builtin.files": { "builtin": "files" },
+      "builtin.directories": { "builtin": "directories" }
+    }
+  }
+}
