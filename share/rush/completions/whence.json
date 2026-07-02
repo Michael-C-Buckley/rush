@@ -1,0 +1,61 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "whence",
+    "description": "describe how command names are interpreted",
+    "options": [
+      {
+        "short": "v",
+        "description": "produce verbose output"
+      },
+      {
+        "short": "c",
+        "description": "print results in a csh-like format"
+      },
+      {
+        "short": "w",
+        "description": "for each name, print 'name: word', where 'word' is the kind of command"
+      },
+      {
+        "short": "f",
+        "description": "display contents of shell functions"
+      },
+      {
+        "short": "p",
+        "description": "do a path search for the name, even if it's an alias/function/builtin"
+      },
+      {
+        "short": "a",
+        "description": "don't stop at the first match on the path"
+      },
+      {
+        "short": "m",
+        "description": "the arguments are taken as patterns (pattern characters must be quoted)"
+      },
+      {
+        "short": "s",
+        "description": "if the pathname contains symlinks, print the symlink-free name as well"
+      },
+      {
+        "short": "S",
+        "description": "print intermediate symlinks and the resolved name"
+      },
+      {
+        "short": "x",
+        "description": "expand tabs when outputting shell function",
+        "value": {
+          "name": "num"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "names",
+          "repeatable": true
+        }
+      ]
+    }
+  }
+}
