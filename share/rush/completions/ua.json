@@ -1,0 +1,32 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ua",
+    "description": "manage Ubuntu Pro services",
+    "providers": {
+      "builtin.files": { "builtin": "files" },
+      "ua.services": { "values": ["cc-eal", "cis", "esm", "fips", "fips-updates", "livepatch", "ros", "ros-updates"] },
+      "ua.formats": { "values": ["tabular", "json", "yaml"] }
+    },
+    "subcommands": [
+      {
+        "name": "attach",
+        "description": "connect an Ubuntu Pro support contract",
+        "options": [
+          { "long": "no-auto-enable", "description": "disable automatic recommended entitlements" },
+          { "long": "attach-config", "description": "configuration file", "value": { "name": "file", "provider": "builtin.files" } }
+        ],
+        "arguments": { "states": [{ "name": "token", "index": 0, "description": "auth token" }] }
+      },
+      { "name": "collect-logs", "description": "create log/debug tarball", "options": [{ "short": "o", "long": "output", "description": "output tarball path", "value": { "name": "file", "provider": "builtin.files" } }] },
+      { "name": "detach", "description": "remove Ubuntu Pro from this machine" },
+      { "name": "disable", "description": "disable Ubuntu Pro service", "arguments": { "states": [{ "name": "service", "index": 0, "provider": "ua.services" }] } },
+      { "name": "enable", "description": "enable Ubuntu Pro service", "arguments": { "states": [{ "name": "service", "index": 0, "provider": "ua.services" }] } },
+      { "name": "fix", "description": "fix a CVE or USN", "arguments": { "states": [{ "name": "security-issue", "index": 0 }] } },
+      { "name": "refresh", "description": "refresh contract and service details" },
+      { "name": "security-status", "description": "show package security update status" },
+      { "name": "status", "description": "report Ubuntu Pro service status", "options": [{ "long": "format", "description": "output format", "value": { "name": "format", "provider": "ua.formats" } }, { "long": "simulate-with-token", "description": "simulate using token", "value": { "name": "token" } }, { "long": "all", "description": "include beta and unavailable services" }] }
+    ]
+  }
+}
