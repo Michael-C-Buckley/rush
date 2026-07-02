@@ -1,0 +1,89 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "xc",
+    "description": "markdown-based task runner",
+    "options": [
+      {
+        "short": "s",
+        "spellings": [
+          "-short"
+        ],
+        "description": "list task names in a short format"
+      },
+      {
+        "short": "h",
+        "spellings": [
+          "-help"
+        ],
+        "description": "print this help text"
+      },
+      {
+        "short": "f",
+        "spellings": [
+          "-file"
+        ],
+        "description": "specify a markdown file that contains tasks (default: \"README.md\")",
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "H",
+        "spellings": [
+          "-heading"
+        ],
+        "description": "specify the heading for xc tasks (default: \"Tasks\")",
+        "value": {
+          "name": "heading",
+          "provider": {
+            "values": [
+              "Tasks",
+              "Usage",
+              "Examples"
+            ]
+          }
+        }
+      },
+      {
+        "short": "V",
+        "spellings": [
+          "-version"
+        ],
+        "description": "show xc version"
+      },
+      {
+        "spellings": [
+          "-complete"
+        ],
+        "description": "install shell completion for xc"
+      },
+      {
+        "spellings": [
+          "-uncomplete"
+        ],
+        "description": "uninstall shell completion for xc"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "xc.tasks": {
+        "function": "__rush_complete_xc_tasks"
+      }
+    },
+    "arguments": {
+      "states": [
+        {
+          "name": "task",
+          "description": "task to run",
+          "index": 0,
+          "provider": "xc.tasks"
+        }
+      ]
+    }
+  }
+}

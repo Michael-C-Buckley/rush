@@ -1,0 +1,10 @@
+__rush_complete_xc_tasks() {
+    if ! command -v xc >/dev/null 2>&1; then
+        return 0
+    fi
+
+    xc -s 2>/dev/null | while IFS= read -r task; do
+        [ -n "$task" ] || continue
+        rush_complete candidate "$task" --kind command
+    done
+}
