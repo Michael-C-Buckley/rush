@@ -1,0 +1,139 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "wd",
+    "description": "warp to saved directories",
+    "options": [
+      {
+        "short": "v",
+        "long": "version",
+        "description": "print version"
+      },
+      {
+        "short": "d",
+        "long": "debug",
+        "description": "exit after execution with exit codes (for testing)"
+      },
+      {
+        "short": "c",
+        "long": "config",
+        "description": "specify config file (default ~/.warprc)",
+        "value": {
+          "name": "file",
+          "provider": "files"
+        }
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "suppress all output"
+      },
+      {
+        "short": "f",
+        "long": "force",
+        "description": "allows overwriting without warning (for add & clean)"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "point",
+          "description": "Warp point to the specified directory",
+          "provider": "warpPoints"
+        },
+        {
+          "name": "path",
+          "description": "Appended path"
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "add",
+        "description": "adds the current working directory to your warp points",
+        "arguments": {
+          "states": [
+            {
+              "name": "point",
+              "description": "Name of the warp point to be created",
+              "provider": "warpPoints"
+            }
+          ]
+        }
+      },
+      {
+        "name": "rm",
+        "description": "removes the given warp point",
+        "arguments": {
+          "states": [
+            {
+              "name": "point",
+              "description": "Name of the warp point to be removed",
+              "provider": "warpPoints"
+            }
+          ]
+        }
+      },
+      {
+        "name": "show",
+        "description": "print path to given warp point",
+        "arguments": {
+          "states": [
+            {
+              "name": "point",
+              "description": "Name of the warp point",
+              "provider": "warpPoints"
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "print all stored warp points"
+      },
+      {
+        "name": "ls",
+        "description": "show files from given warp point (ls)",
+        "arguments": {
+          "states": [
+            {
+              "name": "point",
+              "description": "Name of the warp point",
+              "provider": "warpPoints"
+            }
+          ]
+        }
+      },
+      {
+        "name": "path",
+        "description": "show the path to given warp point (pwd)",
+        "arguments": {
+          "states": [
+            {
+              "name": "point",
+              "description": "Name of the warp point",
+              "provider": "warpPoints"
+            }
+          ]
+        }
+      },
+      {
+        "name": "clean",
+        "description": "remove points warping to nonexistent directories (will prompt unless --force is used)"
+      },
+      {
+        "name": "help",
+        "description": "shows help for wd"
+      }
+    ],
+    "providers": {
+      "files": {
+        "builtin": "files"
+      },
+      "warpPoints": {
+        "function": "__rush_complete_wd_warp_points"
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+__rush_complete_wd_warp_points() {
+    file=${WARPRC:-"$HOME/.warprc"}
+    [ -r "$file" ] || return 0
+
+    while IFS= read -r line; do
+        case $line in
+            [A-Za-z0-9_]*) ;;
+            *) continue ;;
+        esac
+        point=${line%%[!A-Za-z0-9_]*}
+        [ -n "$point" ] || continue
+        rush_complete candidate "$point" --kind value --description "warp point"
+    done < "$file"
+}
