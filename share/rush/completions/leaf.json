@@ -1,0 +1,157 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "leaf",
+    "description": "create and interact with Leaf projects",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "display help for the given command. When no command is given display help for the list command",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "do not output any message",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "display this application version",
+        "inherit": false
+      },
+      {
+        "long": "ansi",
+        "description": "force ANSI output",
+        "inherit": false
+      },
+      {
+        "long": "no-ansi",
+        "description": "disable ANSI output",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "long": "no-interaction",
+        "description": "do not ask any interactive question",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "increase the verbosity of messages: 1 for normal output, 2 for more verbose output and 3 for debug",
+        "inherit": false,
+        "repeatable": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "completion",
+        "description": "dump the shell completion script"
+      },
+      {
+        "name": "create",
+        "description": "create a new Leaf PHP project",
+        "arguments": {
+          "states": [
+            {
+              "name": "project-name",
+              "description": "name of the project",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "deploy",
+        "description": "deploy your Leaf project"
+      },
+      {
+        "name": "help",
+        "description": "display help for a command"
+      },
+      {
+        "name": "install",
+        "description": "add a new package to your leaf app",
+        "arguments": {
+          "states": [
+            {
+              "name": "package-name",
+              "description": "name of the package",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "interact",
+        "description": "interact with your application"
+      },
+      {
+        "name": "list",
+        "description": "list commands"
+      },
+      {
+        "name": "run",
+        "description": "run a script in your composer.json",
+        "arguments": {
+          "states": [
+            {
+              "name": "command-name",
+              "description": "name of the command",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "serve",
+        "description": "run your Leaf app",
+        "options": [
+          {
+            "long": "port",
+            "description": "the port number to run the server on",
+            "inherit": false,
+            "value": {
+              "name": "port-number",
+              "description": "the port number to run the server on"
+            }
+          },
+          {
+            "long": "watch",
+            "description": "watch for changes and restart the server",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "test",
+        "description": "test your leaf application through leaf alchemy"
+      },
+      {
+        "name": "test:setup",
+        "description": "add tests to your application"
+      },
+      {
+        "name": "uninstall",
+        "description": "uninstall a package",
+        "arguments": {
+          "states": [
+            {
+              "name": "package-name",
+              "description": "name of the package",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "update",
+        "description": "update leaf cli to the latest version"
+      }
+    ]
+  }
+}
