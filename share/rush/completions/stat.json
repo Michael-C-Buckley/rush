@@ -1,0 +1,82 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "stat",
+    "description": "display file status",
+    "options": [
+      {
+        "short": "F",
+        "description": "as in ls(1), display a slash ('/') immediately after each pathname that is a directory, an asterisk ('*') after each that is executable, an at sign ('@') after",
+        "inherit": false
+      },
+      {
+        "short": "L",
+        "description": "use stat(2) instead of lstat(2). The information reported by stat will refer to the target of file, if file is a symbolic link, and not to file itself. If the l",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "description": "display information using the specified format; similar to printf(3) formats in that they start with %, are then followed by a sequence of formatting characters",
+        "inherit": false,
+        "value": {
+          "name": "format"
+        }
+      },
+      {
+        "short": "l",
+        "description": "display output in 'ls -lT' format",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "description": "do not force a newline to appear at the end of each piece of output",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "description": "suppress failure messages if calls to stat(2) or lstat(2) fail. When run as 'readlink', error messages are automatically suppressed",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "description": "display raw information. That is, for all the fields in the stat structure, display the raw, numerical value (for example, times in seconds since the epoch, etc",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "display information in 'shell output' format, suitable for initializing variables",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "description": "display timestamps using the specified format. This format is passed directly to strftime(3)",
+        "inherit": false,
+        "value": {
+          "name": "timefmt"
+        }
+      },
+      {
+        "short": "x",
+        "description": "display information in a more verbose way as known from some Linux distributions",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "description": "file to inspect",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
