@@ -1,0 +1,10 @@
+__rush_complete_mdfind_smart_folders() {
+  dir=$HOME/Library/Saved\ Searches
+  test -d "$dir" || return 0
+  for path in "$dir"/*.savedSearch; do
+    test -e "$path" || continue
+    name=${path##*/}
+    name=${name%.savedSearch}
+    rush_complete candidate "$name" --kind plain --description "smart folder"
+  done
+}

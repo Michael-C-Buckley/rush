@@ -1,0 +1,104 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "mdfind",
+    "description": "find files matching a Spotlight query",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for mdfind",
+        "inherit": false
+      },
+      {
+        "short": "0",
+        "description": "prints an ASCII NUL character after each result path",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-live"
+        ],
+        "description": "provide live-updates to the number of files matching the query",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-count"
+        ],
+        "description": "output the total number of matches, instead of the path to the matching items",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-onlyin"
+        ],
+        "description": "limit the scope of the search to <dir>",
+        "inherit": false,
+        "value": {
+          "name": "dir",
+          "description": "Directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "spellings": [
+          "-name"
+        ],
+        "description": "search for matching file names to <filename> only",
+        "inherit": false,
+        "value": {
+          "name": "filename"
+        }
+      },
+      {
+        "spellings": [
+          "-reprint"
+        ],
+        "description": "reprint results on live update",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "show contents of smart folder ~/Library/Saved Searches/<folder>.savedSearch",
+        "inherit": false,
+        "value": {
+          "name": "folder",
+          "description": "Smart folder in ~/Library/Saved Searches",
+          "provider": {
+            "function": "__rush_complete_mdfind_smart_folders"
+          }
+        }
+      },
+      {
+        "spellings": [
+          "-literal"
+        ],
+        "description": "force the provided query string to be taken as a literal query string, without interpretation",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-interpret"
+        ],
+        "description": "force the provided query string to be interpreted as if it had been typed into the Spotlight menu",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "query",
+          "index": 0,
+          "description": "Spotlight query"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
