@@ -1,0 +1,14 @@
+__rush_complete_mix_tasks() {
+  mix help 2>/dev/null | while IFS= read -r line; do
+    case "$line" in
+      "mix "*"#"*)
+        name=${line%%#*}
+        description=${line#*#}
+        name=${name#mix }
+        name=${name%%[[:space:]]}
+        case "$name" in ""|mix|help|new|run|iex) continue ;; esac
+        rush_complete candidate "$name" --kind plain --description "$description"
+        ;;
+    esac
+  done
+}

@@ -1,0 +1,217 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "mix",
+    "description": "build Elixir projects",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "shows usage information",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "shows versioning information",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "task",
+          "description": "invokes the task (mix run) in a project",
+          "index": 0,
+          "required": false,
+          "provider": {
+            "function": "__rush_complete_mix_tasks"
+          }
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "new",
+        "description": "creates a new Elixir project at the given path",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          },
+          {
+            "long": "app",
+            "description": "name the OTP application for the project",
+            "inherit": false,
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "modules",
+            "description": "name the modules in the generated code skeleton",
+            "inherit": false,
+            "value": {
+              "name": "module"
+            }
+          },
+          {
+            "long": "sup",
+            "description": "generate an OTP application skeleton including a supervision tree. Normally an app is generated without a supervisor and without the app callback",
+            "inherit": false
+          },
+          {
+            "long": "umbrella",
+            "description": "generate an umbrella project",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "run",
+        "description": "starts the current application and runs code",
+        "options": [
+          {
+            "long": "config",
+            "description": "loads the given configuration files",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "e",
+            "long": "eval",
+            "description": "evaluates the given code",
+            "inherit": false,
+            "value": {
+              "name": "code",
+              "description": "string containing code to execute"
+            }
+          },
+          {
+            "short": "r",
+            "long": "require",
+            "description": "executes the given pattern/file",
+            "inherit": false,
+            "value": {
+              "name": "file|pattern",
+              "description": "the file|pattern to execute",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "p",
+            "long": "parallel",
+            "description": "executes the given pattern/file",
+            "inherit": false,
+            "value": {
+              "name": "file|pattern",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "preload-modules",
+            "description": "preloads all modules defined in applications",
+            "inherit": false
+          },
+          {
+            "long": "no-compile",
+            "description": "does not compile even if files require compilation",
+            "inherit": false
+          },
+          {
+            "long": "no-deps-check",
+            "description": "does not check dependencies",
+            "inherit": false
+          },
+          {
+            "long": "no-archives-check",
+            "description": "does not check archives",
+            "inherit": false
+          },
+          {
+            "long": "no-halt",
+            "description": "does not halt the system after running the command",
+            "inherit": false
+          },
+          {
+            "long": "no-mix-exs",
+            "description": "allows the command to run even if there is no mix.exs",
+            "inherit": false
+          },
+          {
+            "long": "no-start",
+            "description": "does not start applications after compilation",
+            "inherit": false
+          },
+          {
+            "long": "no-elixir-version-check",
+            "description": "does not check the Elixir version from mix.exs",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "index": 0,
+              "description": "elixir script file",
+              "required": false,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "prints documentation for a given task (Lists all the tasks if no task is specified)",
+        "options": [
+          {
+            "long": "search",
+            "description": "prints all tasks and aliases that contain 'pattern' in the name",
+            "inherit": false,
+            "value": {
+              "name": "pattern"
+            }
+          },
+          {
+            "long": "names",
+            "description": "prints all task names and aliases",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "task",
+              "description": "prints documentation for a given task",
+              "index": 0,
+              "required": false,
+              "provider": {
+                "function": "__rush_complete_mix_tasks"
+              }
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
