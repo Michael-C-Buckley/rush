@@ -1,0 +1,374 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pmset",
+    "description": "manage macOS power settings",
+    "options": [
+      {
+        "short": "a",
+        "description": "set all power source settings",
+        "inherit": false,
+        "value": [
+          {
+            "name": "setting",
+            "provider": "pmset.settings",
+            "description": "setting name"
+          },
+          {
+            "name": "value",
+            "description": "setting value"
+          }
+        ]
+      },
+      {
+        "short": "b",
+        "description": "set battery settings",
+        "inherit": false,
+        "value": [
+          {
+            "name": "setting",
+            "provider": "pmset.settings",
+            "description": "setting name"
+          },
+          {
+            "name": "value",
+            "description": "setting value"
+          }
+        ]
+      },
+      {
+        "short": "c",
+        "description": "set charger settings",
+        "inherit": false,
+        "value": [
+          {
+            "name": "setting",
+            "provider": "pmset.settings",
+            "description": "setting name"
+          },
+          {
+            "name": "value",
+            "description": "setting value"
+          }
+        ]
+      },
+      {
+        "short": "u",
+        "description": "set UPS settings",
+        "inherit": false,
+        "value": [
+          {
+            "name": "setting",
+            "provider": "pmset.settings",
+            "description": "setting name"
+          },
+          {
+            "name": "value",
+            "description": "setting value"
+          }
+        ]
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "action",
+          "description": "power action",
+          "provider": "pmset.actions",
+          "index": 0
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "-g",
+        "description": "show power settings",
+        "arguments": {
+          "states": [
+            {
+              "name": "mode",
+              "provider": "pmset.get-modes",
+              "index": 0,
+              "description": "information to show"
+            },
+            {
+              "name": "uuid",
+              "description": "sleep/wake UUID",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "schedule",
+        "description": "schedule one-time power event",
+        "options": [
+          {
+            "spellings": [
+              "cancel"
+            ],
+            "inherit": false,
+            "description": "cancel scheduled event"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "type",
+              "index": 0,
+              "provider": "pmset.events",
+              "description": "event type"
+            },
+            {
+              "name": "datetime",
+              "description": "date and time",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "repeat",
+        "description": "schedule repeating power event",
+        "arguments": {
+          "states": [
+            {
+              "name": "type",
+              "index": 0,
+              "provider": "pmset.events",
+              "description": "event type"
+            },
+            {
+              "name": "weekdays",
+              "description": "weekday letters",
+              "index": 1
+            },
+            {
+              "name": "datetime",
+              "description": "time",
+              "index": 2
+            }
+          ]
+        },
+        "subcommands": [
+          {
+            "name": "cancel",
+            "description": "cancel repeating event"
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "pmset.settings": {
+        "values": [
+          {
+            "value": "displaysleep",
+            "description": "display sleep timer"
+          },
+          {
+            "value": "dim",
+            "description": "display sleep timer"
+          },
+          {
+            "value": "disksleep",
+            "description": "disk sleep timer"
+          },
+          {
+            "value": "spindown",
+            "description": "disk sleep timer"
+          },
+          {
+            "value": "sleep",
+            "description": "system sleep timer"
+          },
+          {
+            "value": "womp",
+            "description": "wake on ethernet packet"
+          },
+          {
+            "value": "ring",
+            "description": "wake on modem ring"
+          },
+          {
+            "value": "autorestart",
+            "description": "restart after power loss"
+          },
+          {
+            "value": "dps",
+            "description": "dynamic processor speed"
+          },
+          {
+            "value": "reduce",
+            "description": "reduce processor speed"
+          },
+          {
+            "value": "powerbutton",
+            "description": "sleep on power button"
+          },
+          {
+            "value": "lidwake",
+            "description": "wake when lid opens"
+          },
+          {
+            "value": "acwake",
+            "description": "wake when power source changes"
+          },
+          {
+            "value": "lessbright",
+            "description": "dim display on power source"
+          },
+          {
+            "value": "halfdim",
+            "description": "use half-bright display sleep"
+          },
+          {
+            "value": "sms",
+            "description": "use sudden motion sensor"
+          },
+          {
+            "value": "hibernatemode",
+            "description": "set hibernation mode"
+          },
+          {
+            "value": "hibernatefile",
+            "description": "set hibernation image path"
+          },
+          {
+            "value": "ttyskeepawake",
+            "description": "prevent sleep for active ttys"
+          },
+          {
+            "value": "networkoversleep",
+            "description": "set network over sleep behavior"
+          },
+          {
+            "value": "destroyfvkeyonstandby",
+            "description": "destroy FileVault key on standby"
+          }
+        ]
+      },
+      "pmset.events": {
+        "values": [
+          "sleep",
+          "wake",
+          "poweron",
+          "shutdown",
+          "wakeorpoweron"
+        ]
+      },
+      "pmset.actions": {
+        "values": [
+          "sleepnow",
+          "noidle",
+          "lock",
+          "touch"
+        ]
+      },
+      "pmset.get-modes": {
+        "values": [
+          {
+            "value": "live",
+            "description": "display the settings currently in use"
+          },
+          {
+            "value": "custom",
+            "description": "display custom settings for all power sources"
+          },
+          {
+            "value": "cap",
+            "description": "display which power management features the machine supports"
+          },
+          {
+            "value": "sched",
+            "description": "display scheduled startup/wake and shutdown/sleep events"
+          },
+          {
+            "value": "ups",
+            "description": "display UPS emergency thresholds"
+          },
+          {
+            "value": "ps",
+            "description": "display status of batteries and UPSs"
+          },
+          {
+            "value": "batt",
+            "description": "display status of batteries and UPSs"
+          },
+          {
+            "value": "pslog",
+            "description": "display an ongoing log of power source (battery and UPS)s..."
+          },
+          {
+            "value": "rawlog",
+            "description": "display an ongoing log of battery state as read directly..."
+          },
+          {
+            "value": "profiles",
+            "description": "display the settings associated with each Energy Saver pr..."
+          },
+          {
+            "value": "thermlog",
+            "description": "show a log of thermal notifications that affect CPU speed"
+          },
+          {
+            "value": "assertions",
+            "description": "display a summary of power assertions"
+          },
+          {
+            "value": "assertionslog",
+            "description": "show a log of assertion creations and releases"
+          },
+          {
+            "value": "activity",
+            "description": "display a summary of power state of Display wrangler and..."
+          },
+          {
+            "value": "activitylog",
+            "description": "show a log of power state changes to Display Wrangler and..."
+          },
+          {
+            "value": "sysload",
+            "description": "display the \"system load advisory\" 10"
+          },
+          {
+            "value": "sysloadlog",
+            "description": "display an ongoing log of lives changes to the system loa..."
+          },
+          {
+            "value": "ac",
+            "description": "display details about an attached AC power adapter"
+          },
+          {
+            "value": "adapter",
+            "description": "display details about an attached AC power adapter"
+          },
+          {
+            "value": "log",
+            "description": "display a history of sleeps, wakes, and other power manag..."
+          },
+          {
+            "value": "uuid",
+            "description": "display the currently active sleep/wake UUID"
+          },
+          {
+            "value": "uuidlog",
+            "description": "display the currently active sleep/wake UUID, and prints..."
+          },
+          {
+            "value": "history",
+            "description": "a debugging tool"
+          },
+          {
+            "value": "historydetailed",
+            "description": "prints driver-level timings for a sleep/wake"
+          },
+          {
+            "value": "everything",
+            "description": "print output from every argument under the GETTING header 10"
+          }
+        ]
+      }
+    }
+  }
+}
