@@ -1,0 +1,1109 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "k3d",
+    "description": "run k3s in Docker",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "help for k3d",
+        "inherit": true
+      },
+      {
+        "long": "verbose",
+        "description": "verbose output",
+        "inherit": true
+      },
+      {
+        "long": "trace",
+        "description": "trace output",
+        "inherit": true
+      },
+      {
+        "long": "version",
+        "description": "print version information",
+        "inherit": false
+      },
+      {
+        "long": "timestamps",
+        "description": "print timestamp in log output",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "cluster",
+        "description": "manage k3s clusters",
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create a new k3s cluster",
+            "options": [
+              {
+                "short": "a",
+                "long": "agents",
+                "description": "number of agents to create",
+                "inherit": false,
+                "value": {
+                  "name": "number-of-agents",
+                  "description": "number of agents to create"
+                }
+              },
+              {
+                "long": "agents-memory",
+                "description": "memory limit imposed on the agents nodes",
+                "inherit": false,
+                "value": {
+                  "name": "memory-limit",
+                  "description": "memory limit imposed on the agents nodes"
+                }
+              },
+              {
+                "long": "api-port",
+                "description": "specify the Kubernetes API server port exposed on the LoadBalancer",
+                "inherit": false,
+                "value": {
+                  "name": "port",
+                  "description": "specify the Kubernetes API server port exposed on the LoadBalancer"
+                }
+              },
+              {
+                "short": "c",
+                "long": "config",
+                "description": "path of a config file to use",
+                "inherit": false,
+                "value": {
+                  "name": "path",
+                  "description": "path of a config file to use"
+                }
+              },
+              {
+                "short": "e",
+                "long": "env",
+                "description": "add environment variables to nodes",
+                "inherit": false,
+                "value": {
+                  "name": "environment-variables",
+                  "description": "add environment variables to nodes"
+                }
+              },
+              {
+                "long": "gpus",
+                "description": "gPU devices to add to the cluster node containers",
+                "inherit": false,
+                "value": {
+                  "name": "devices",
+                  "description": "gPU devices to add to the cluster node containers"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "help for create",
+                "inherit": false
+              },
+              {
+                "long": "host-alias",
+                "description": "add ip:host[,host,...] mappings",
+                "inherit": false,
+                "value": {
+                  "name": "ip:host[,host,...]",
+                  "description": "add ip:host[,host,...] mappings"
+                }
+              },
+              {
+                "long": "host-pid-mode",
+                "description": "enable host pid mode of server(s) and agent(s)",
+                "inherit": false
+              },
+              {
+                "short": "i",
+                "long": "image",
+                "description": "specify k3s image that you want to use for the nodes",
+                "inherit": false,
+                "value": {
+                  "name": "image",
+                  "description": "specify k3s image that you want to use for the nodes"
+                }
+              },
+              {
+                "long": "k3s-arg",
+                "description": "additional args passed to k3s command",
+                "inherit": false,
+                "value": {
+                  "name": "ARG@NODEFILTER[;@NODEFILTER]",
+                  "description": "additional args passed to k3s command"
+                }
+              },
+              {
+                "long": "k3s-node-label",
+                "description": "add label to k3s node",
+                "inherit": false,
+                "value": {
+                  "name": "KEY[=VALUE][@NODEFILTER[;NODEFILTER...]]",
+                  "description": "add label to k3s node"
+                }
+              },
+              {
+                "long": "kubeconfig-switch-context",
+                "description": "directly switch the default kubeconfig's current-context to the new cluster's context (requires --kubeconfig-update-default) (default true)",
+                "inherit": false
+              },
+              {
+                "long": "kubeconfig-update-default",
+                "description": "directly update the default kubeconfig with the new cluster's context (default true)",
+                "inherit": false
+              },
+              {
+                "long": "lb-config-override",
+                "description": "use dotted YAML path syntax to override nginx loadbalancer settings",
+                "inherit": false,
+                "value": {
+                  "name": "path"
+                }
+              },
+              {
+                "long": "network",
+                "description": "specify the docker network to use",
+                "inherit": false,
+                "value": {
+                  "name": "network",
+                  "description": "specify the docker network to use"
+                }
+              },
+              {
+                "long": "no-image-volume",
+                "description": "don't create a volume for the container's root filesystem",
+                "inherit": false
+              },
+              {
+                "long": "no-lb",
+                "description": "don't create a loadbalancer for the cluster",
+                "inherit": false
+              },
+              {
+                "long": "no-rollback",
+                "description": "don't rollback changes if cluster creation failed",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "port",
+                "description": "map ports from the node containers (via the serverlb) to the host",
+                "inherit": false,
+                "value": {
+                  "name": "port",
+                  "description": "map ports from the node containers (via the serverlb) to the host"
+                }
+              },
+              {
+                "long": "registry-config",
+                "description": "specify path to an extra registries.yaml file",
+                "inherit": false,
+                "value": {
+                  "name": "path",
+                  "description": "specify path to an extra registries.yaml file"
+                }
+              },
+              {
+                "long": "registry-create",
+                "description": "create a k3d-managed registry and connect it to the cluster (Format: NAME[:HOST][:HOSTPORT] - Example: `k3d cluster create --registry-create mycluster-registry",
+                "inherit": false,
+                "value": {
+                  "name": "NAME[:HOST][:HOSTPORT]",
+                  "description": "create a k3d-managed registry and connect it to the cluster (Format: NAME[:HOST][:HOSTPORT] - Example: `k3d cluster create --registry-create mycluster-registry"
+                }
+              },
+              {
+                "long": "registry-use",
+                "description": "connect to one or more k3d-managed registries running locally",
+                "inherit": false,
+                "value": {
+                  "name": "NAME[:HOST][:HOSTPORT]"
+                }
+              },
+              {
+                "long": "runtime-label",
+                "description": "add label to container runtime (Format: KEY[=VALUE][@NODEFILTER[;NODEFILTER...]] - Example: `k3d cluster create --agents 2 --runtime-label \"my.label@agent:0,1\" ",
+                "inherit": false
+              },
+              {
+                "short": "s",
+                "long": "servers",
+                "description": "specify how many servers you want to create",
+                "inherit": false,
+                "value": {
+                  "name": "int",
+                  "description": "specify how many servers you want to create"
+                }
+              },
+              {
+                "long": "servers-memory",
+                "description": "memory limit imposed on the server nodes [From docker]",
+                "inherit": false,
+                "value": {
+                  "name": "string",
+                  "description": "memory limit imposed on the server nodes [From docker]"
+                }
+              },
+              {
+                "long": "subnet",
+                "description": "[Experimental: IPAM] Define a subnet for the newly created container network",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "timeout",
+                "description": "rollback changes if cluster couldn't be created in specified duration",
+                "inherit": false,
+                "value": {
+                  "name": "duration",
+                  "description": "rollback changes if cluster couldn't be created in specified duration"
+                }
+              },
+              {
+                "long": "token",
+                "description": "specify a cluster token. By default, we generate one",
+                "inherit": false,
+                "value": {
+                  "name": "string",
+                  "description": "specify a cluster token. By default, we generate one"
+                }
+              },
+              {
+                "short": "v",
+                "long": "volume",
+                "description": "mount volumes into the nodes",
+                "inherit": false,
+                "value": {
+                  "name": "[SOURCE:]DEST[@NODEFILTER[;NODEFILTER...]]",
+                  "description": "mount volumes into the nodes"
+                }
+              },
+              {
+                "long": "wait",
+                "description": "wait for the server(s) to be ready before returning",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "cluster-name",
+                  "description": "name of the cluster to create",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "aliases": [
+              "del",
+              "rm"
+            ],
+            "description": "delete a cluster",
+            "options": [
+              {
+                "short": "a",
+                "long": "all",
+                "description": "delete all clusters",
+                "inherit": false
+              },
+              {
+                "short": "c",
+                "long": "config",
+                "description": "path of a config file to use",
+                "inherit": false,
+                "value": {
+                  "name": "path",
+                  "description": "path of a config file to use"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "cluster",
+                  "description": "cluster to delete",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "edit",
+            "aliases": [
+              "update"
+            ],
+            "description": "edit a cluster",
+            "options": [
+              {
+                "long": "port-add",
+                "description": "map ports from the node containers",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "cluster",
+                  "description": "cluster to edit",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "aliases": [
+              "ls",
+              "get"
+            ],
+            "description": "list clusters",
+            "options": [
+              {
+                "long": "no-headers",
+                "description": "don't print headers",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format",
+                "inherit": false,
+                "value": {
+                  "name": "string",
+                  "description": "output format",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "json"
+                      },
+                      {
+                        "value": "yaml"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "token",
+                "description": "print k3s cluster token",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "cluster",
+                  "description": "cluster to list",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "start",
+            "description": "start a cluster",
+            "options": [
+              {
+                "long": "all",
+                "spellings": [
+                  "a"
+                ],
+                "description": "start all clusters",
+                "inherit": false
+              },
+              {
+                "long": "timeout",
+                "description": "maximum waiting time for '--wait' before canceling/returning",
+                "inherit": false,
+                "value": {
+                  "name": "duration",
+                  "description": "maximum waiting time for '--wait' before canceling/returning"
+                }
+              },
+              {
+                "long": "wait",
+                "description": "wait for the server(s) (and loadbalancer) to be ready before returning",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "cluster",
+                  "description": "cluster to start",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "stop",
+            "description": "stop a cluster",
+            "options": [
+              {
+                "short": "a",
+                "long": "all",
+                "description": "stop all clusters",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "cluster",
+                  "description": "cluster to stop",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "completion",
+        "description": "generate shell completion scripts",
+        "arguments": {
+          "states": [
+            {
+              "name": "shell",
+              "description": "shell to generate completion script for",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "config",
+        "description": "manage k3d config",
+        "subcommands": [
+          {
+            "name": "init",
+            "aliases": [
+              "create"
+            ],
+            "description": "create a new config file",
+            "options": [
+              {
+                "short": "f",
+                "long": "force",
+                "description": "force overwrite of target file",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "write a default k3d config (default \"k3d-default.yaml\")",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "migrate",
+            "aliases": [
+              "update"
+            ],
+            "description": "migrate a config file to the latest version"
+          }
+        ]
+      },
+      {
+        "name": "image",
+        "description": "manage k3d images",
+        "subcommands": [
+          {
+            "name": "import",
+            "aliases": [
+              "load"
+            ],
+            "description": "import image(s) from docker into k3d cluster(s)",
+            "options": [
+              {
+                "short": "c",
+                "long": "cluster",
+                "description": "cluster to import image(s) into",
+                "inherit": false,
+                "value": {
+                  "name": "cluster",
+                  "description": "cluster to import image(s) into"
+                }
+              },
+              {
+                "short": "k",
+                "long": "keep-tarball",
+                "description": "do not delete the tarball containing the saved images from the shared volume",
+                "inherit": false
+              },
+              {
+                "short": "t",
+                "long": "keep-tools",
+                "description": "do not delete the tools node after import",
+                "inherit": false
+              },
+              {
+                "short": "m",
+                "long": "mode",
+                "description": "import mode",
+                "inherit": false,
+                "value": {
+                  "name": "mode",
+                  "description": "import mode",
+                  "provider": {
+                    "values": [
+                      "auto",
+                      "direct",
+                      "tools"
+                    ]
+                  }
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "image",
+                  "description": "image to import",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "kubeconfig",
+        "description": "manage k3d kubeconfig",
+        "subcommands": [
+          {
+            "name": "get",
+            "aliases": [
+              "print",
+              "show"
+            ],
+            "options": [
+              {
+                "short": "a",
+                "long": "all",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "cluster",
+                  "description": "cluster to get kubeconfig for",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "merge",
+            "aliases": [
+              "write"
+            ],
+            "description": "write/Merge kubeconfig(s) from cluster(s) into new or existing kubeconfig/file",
+            "options": [
+              {
+                "short": "a",
+                "long": "all",
+                "inherit": false
+              },
+              {
+                "short": "d",
+                "long": "kubeconfig-merge-default",
+                "description": "merge into the default kubeconfig ($KUBECONFIG or /Users/balli/.kube/config)",
+                "inherit": false
+              },
+              {
+                "short": "s",
+                "long": "kubeconfig-switch-context",
+                "description": "switch to new context (default true)",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "define output [ - | FILE ] (default from $KUBECONFIG or /Users/balli/.kube/config",
+                "inherit": false,
+                "value": {
+                  "name": "string",
+                  "description": "define output [ - | FILE ] (default from $KUBECONFIG or /Users/balli/.kube/config"
+                }
+              },
+              {
+                "long": "overwrite",
+                "description": "[Careful!] Overwrite existing file, ignoring its contents",
+                "priority": -10,
+                "inherit": false
+              },
+              {
+                "short": "u",
+                "long": "update",
+                "description": "update conflicting fields in existing kubeconfig (default true)",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "cluster",
+                  "description": "cluster to get kubeconfig for",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "node",
+        "description": "manage k3d nodes",
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create a new node",
+            "options": [
+              {
+                "short": "c",
+                "long": "cluster",
+                "description": "cluster URL or k3d cluster name to connect to. (default \"k3s-default\")",
+                "inherit": false,
+                "value": {
+                  "name": "cluster",
+                  "description": "cluster to connect to"
+                }
+              },
+              {
+                "short": "i",
+                "long": "image",
+                "description": "node image to use",
+                "inherit": false,
+                "value": {
+                  "name": "image",
+                  "description": "node image to use"
+                }
+              },
+              {
+                "long": "k3s-arg",
+                "description": "additional k3s arguments",
+                "inherit": false,
+                "value": {
+                  "name": "k3s-arg",
+                  "description": "additional k3s arguments"
+                }
+              },
+              {
+                "long": "k3s-node-label",
+                "description": "specify k3s node labels in format",
+                "inherit": false,
+                "value": {
+                  "name": "k3s-node-label",
+                  "description": "specify k3s node labels in format \"foo=bar\""
+                }
+              },
+              {
+                "long": "memory",
+                "description": "memory limit for the node container",
+                "inherit": false,
+                "value": {
+                  "name": "memory",
+                  "description": "memory limit for the node container"
+                }
+              },
+              {
+                "short": "n",
+                "long": "network",
+                "description": "add node to (another) runtime network",
+                "inherit": false,
+                "value": {
+                  "name": "network"
+                }
+              },
+              {
+                "long": "replicas",
+                "description": "number of replicas to create",
+                "inherit": false,
+                "value": {
+                  "name": "replicas",
+                  "description": "number of replicas to create",
+                  "provider": "k3d-replica-counts"
+                }
+              },
+              {
+                "long": "role",
+                "description": "node role",
+                "inherit": false,
+                "value": {
+                  "name": "role",
+                  "description": "node role",
+                  "provider": "k3d-node-roles"
+                }
+              },
+              {
+                "long": "runtime-label",
+                "description": "specify runtime labels in format",
+                "inherit": false,
+                "value": {
+                  "name": "runtime-label",
+                  "description": "specify runtime labels in format \"foo=bar\""
+                }
+              },
+              {
+                "long": "timeout",
+                "description": "maximum waiting time for '--wait' before canceling/returning",
+                "inherit": false,
+                "value": {
+                  "name": "timeout",
+                  "description": "maximum waiting time for '--wait' before canceling/returning"
+                }
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "override cluster token",
+                "inherit": false,
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "wait",
+                "description": "wait for the node(s) to be ready before returning",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "Node-Name",
+                  "description": "name of the node",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete a node",
+            "options": [
+              {
+                "short": "a",
+                "long": "all",
+                "description": "delete all existing nodes",
+                "inherit": false
+              },
+              {
+                "short": "r",
+                "long": "registry",
+                "description": "also delete registries",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "Node-Name",
+                  "description": "name of the node",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "edit",
+            "aliases": [
+              "update"
+            ],
+            "description": "[EXPERIMENTAL] Edit node(s)",
+            "options": [
+              {
+                "long": "port-add",
+                "description": "map ports from the node container to the host",
+                "inherit": false,
+                "value": {
+                  "name": "port-add",
+                  "description": "map ports from the node container to the host"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "Node-Name",
+                  "description": "name of the node",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "aliases": [
+              "ls",
+              "get"
+            ],
+            "description": "list nodes",
+            "options": [
+              {
+                "long": "no-headers",
+                "description": "don't print headers (default print headers)",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "description": "output format",
+                  "provider": {
+                    "values": [
+                      "json",
+                      "yaml"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "start",
+            "description": "start a node",
+            "arguments": {
+              "states": [
+                {
+                  "name": "Node-Name",
+                  "description": "name of the node",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "stop",
+            "description": "stop a node",
+            "arguments": {
+              "states": [
+                {
+                  "name": "Node-Name",
+                  "description": "name of the node",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "registry",
+        "aliases": [
+          "registries",
+          "reg"
+        ],
+        "description": "manage registry/registries",
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create a new registry",
+            "options": [
+              {
+                "long": "default-network",
+                "inherit": false,
+                "description": "specify registry network"
+              },
+              {
+                "short": "i",
+                "long": "image",
+                "inherit": false,
+                "value": {
+                  "name": "image"
+                },
+                "description": "specify image"
+              },
+              {
+                "long": "no-help",
+                "description": "disable the help text (How-To use the registry)",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "port",
+                "description": "select which port the registry should be listening on your machine (localhost) (Format: [HOST:]HOSTPORT)",
+                "inherit": false,
+                "value": {
+                  "name": "port"
+                }
+              },
+              {
+                "long": "proxy-password",
+                "description": "specify the password of the proxied remote registry",
+                "inherit": false,
+                "value": {
+                  "name": "proxy-password"
+                }
+              },
+              {
+                "long": "proxy-remote-url",
+                "description": "specify the url of the proxied remote registry",
+                "inherit": false,
+                "value": {
+                  "name": "proxy-remote-url"
+                }
+              },
+              {
+                "long": "proxy-username",
+                "description": "specify the username of the proxied remote registry",
+                "inherit": false,
+                "value": {
+                  "name": "proxy-username"
+                }
+              },
+              {
+                "short": "v",
+                "long": "volume",
+                "description": "mount volumes into the registry node (Format: [SOURCE:]DEST",
+                "inherit": false,
+                "value": {
+                  "name": "volume"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "Registry-Name",
+                  "description": "name of the registry",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "aliases": [
+              "del",
+              "rm"
+            ],
+            "description": "delete registry/registries",
+            "options": [
+              {
+                "short": "a",
+                "long": "all",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "Registry-Name",
+                  "description": "name of the registry",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "aliases": [
+              "ls",
+              "get"
+            ],
+            "description": "list registries",
+            "options": [
+              {
+                "long": "no-headers",
+                "description": "don't print headers (default print headers)",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "output format",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "description": "output format",
+                  "provider": {
+                    "values": [
+                      "json",
+                      "yaml"
+                    ]
+                  }
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "Registry-Name",
+                  "description": "name of the registry",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "show k3d and default k3s version"
+      }
+    ],
+    "providers": {
+      "k3d-shells": {
+        "values": [
+          {
+            "value": "bash"
+          },
+          {
+            "value": "zsh"
+          },
+          {
+            "value": "fish"
+          },
+          {
+            "value": "powershell"
+          }
+        ]
+      },
+      "k3d-node-roles": {
+        "values": [
+          {
+            "value": "agent"
+          },
+          {
+            "value": "server"
+          }
+        ]
+      },
+      "k3d-replica-counts": {
+        "values": [
+          {
+            "value": "1"
+          },
+          {
+            "value": "2"
+          },
+          {
+            "value": "3"
+          },
+          {
+            "value": "4"
+          },
+          {
+            "value": "5"
+          }
+        ]
+      }
+    }
+  }
+}
