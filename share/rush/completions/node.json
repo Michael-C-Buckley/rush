@@ -1,0 +1,118 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "node",
+    "description": "run the node.js interpreter",
+    "options": [
+      {
+        "short": "e",
+        "long": "eval",
+        "description": "evaluate script",
+        "inherit": false,
+        "value": {
+          "name": "script"
+        }
+      },
+      {
+        "short": "p",
+        "long": "print",
+        "description": "evaluate script and print result",
+        "inherit": false,
+        "value": {
+          "name": "script"
+        }
+      },
+      {
+        "short": "c",
+        "long": "check",
+        "description": "syntax check script without executing",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "long": "interactive",
+        "description": "always enter the repl",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "print node.js version",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "watch",
+        "description": "watch input files",
+        "inherit": false
+      },
+      {
+        "long": "watch-path",
+        "description": "watch a file or directory",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "watch-preserve-output",
+        "description": "preserve console output when watch mode restarts",
+        "inherit": false
+      },
+      {
+        "long": "env-file",
+        "description": "load environment variables from a file",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "inspect",
+        "description": "activate inspector",
+        "inherit": false,
+        "value": {
+          "name": "[host:]port",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "preserve-symlinks",
+        "description": "preserve symlink paths when resolving modules",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "script",
+          "description": "node.js script",
+          "provider": "builtin.files",
+          "index": 0
+        },
+        {
+          "name": "argument",
+          "description": "script argument",
+          "index": 1,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
