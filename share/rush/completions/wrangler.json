@@ -1,0 +1,544 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "wrangler",
+    "description": "cloudflare Workers CLI",
+    "options": [
+      {
+        "short": "c",
+        "long": "config",
+        "description": "path to configuration file",
+        "value": {
+          "name": "wrangler.toml",
+          "provider": "builtin.files"
+        },
+        "priority": 70
+      },
+      {
+        "short": "e",
+        "long": "env",
+        "description": "environment to use",
+        "value": {
+          "name": "environment"
+        },
+        "priority": 60
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "print help information",
+        "priority": 50
+      },
+      {
+        "long": "verbose",
+        "description": "enable verbose output",
+        "priority": 40
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "prints version information",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "generate",
+        "description": "generate a new worker project",
+        "options": [
+          {
+            "short": "s",
+            "long": "site",
+            "inherit": false,
+            "value": {
+              "name": "site",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "short": "t",
+            "long": "type",
+            "description": "the type of project you want generated",
+            "inherit": false,
+            "value": {
+              "name": "type",
+              "required": false,
+              "style": "optional"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "the name of your worker! [default: worker]",
+              "index": 0
+            },
+            {
+              "name": "template",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "kv:namespace",
+        "description": "interact with your Workers KV Namespaces",
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create a new namespace",
+            "arguments": {
+              "states": [
+                {
+                  "name": "namespace",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete namespace"
+          },
+          {
+            "name": "list",
+            "description": "list all namespaces on your Cloudflare account"
+          }
+        ]
+      },
+      {
+        "name": "kv:key",
+        "description": "individually manage Workers KV key-value",
+        "subcommands": [
+          {
+            "name": "delete",
+            "description": "delete a key and its value from a namespace",
+            "options": [
+              {
+                "short": "b",
+                "long": "binding",
+                "description": "the binding of the namespace this action applies to",
+                "inherit": false,
+                "value": {
+                  "name": "binding"
+                }
+              },
+              {
+                "short": "n",
+                "long": "namespace-id",
+                "description": "the ID of the namespace this action applies to",
+                "inherit": false,
+                "value": {
+                  "name": "namespace-id"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "description": "key whose value to delete",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "get",
+            "description": "get a key's value from a namespace",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "help",
+            "description": "prints this message or the help of the given subcommand(s)"
+          },
+          {
+            "name": "list",
+            "description": "list all keys in a namespace. Produces JSON output"
+          },
+          {
+            "name": "put",
+            "description": "put a key-value pair into a namespace",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "kv:bulk",
+        "description": "interact with multiple Workers KV key-value pairs at once",
+        "subcommands": [
+          {
+            "name": "delete",
+            "description": "delete multiple keys and their values from a namespace",
+            "arguments": {
+              "states": [
+                {
+                  "name": "keys",
+                  "index": 0,
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "help",
+            "description": "prints this message or the help of the given subcommand(s)"
+          },
+          {
+            "name": "put",
+            "description": "upload multiple key-value pairs to a namespace",
+            "arguments": {
+              "states": [
+                {
+                  "name": "keys",
+                  "provider": "builtin.files",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "route",
+        "description": "list or delete worker routes",
+        "subcommands": [
+          {
+            "name": "delete",
+            "description": "delete a route by ID",
+            "arguments": {
+              "states": [
+                {
+                  "name": "routeId",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list all routes associated with a zone (outputs json)"
+          }
+        ]
+      },
+      {
+        "name": "secret",
+        "description": "generate a secret that can be referenced in the worker script",
+        "subcommands": [
+          {
+            "name": "delete",
+            "description": "delete a secret variable from a script",
+            "arguments": {
+              "states": [
+                {
+                  "name": "secret",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list all secrets for a script"
+          },
+          {
+            "name": "put",
+            "description": "create or update a secret variable for a script",
+            "arguments": {
+              "states": [
+                {
+                  "name": "secret",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "create a wrangler.toml for an existing project",
+        "options": [
+          {
+            "short": "s",
+            "long": "site",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "type",
+            "description": "the type of project you want generated",
+            "inherit": false,
+            "value": {
+              "name": "type",
+              "required": false,
+              "style": "optional"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "the name of your worker! [default: worker]",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "build",
+        "description": "build your worker"
+      },
+      {
+        "name": "preview",
+        "description": "preview your code temporarily on cloudflareworkers.com",
+        "options": [
+          {
+            "long": "headless",
+            "description": "don't open the browser on preview",
+            "inherit": false
+          },
+          {
+            "long": "watch",
+            "inherit": false
+          },
+          {
+            "short": "u",
+            "long": "url",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "method",
+              "provider": {
+                "values": [
+                  "get",
+                  "post"
+                ]
+              },
+              "index": 0
+            },
+            {
+              "name": "body",
+              "description": "body string to post to your preview worker request",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "dev",
+        "description": "start a local server for developing your worker",
+        "options": [
+          {
+            "short": "h",
+            "long": "host",
+            "inherit": false,
+            "value": {
+              "name": "hostname"
+            }
+          },
+          {
+            "short": "i",
+            "long": "ip",
+            "description": "iP to listen on. Defaults to 127.0.0.1",
+            "inherit": false,
+            "value": {
+              "name": "ip_address"
+            }
+          },
+          {
+            "short": "p",
+            "long": "port",
+            "description": "port to listen on. Defaults to 8787",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          }
+        ]
+      },
+      {
+        "name": "publish",
+        "description": "publish your worker to the orange cloud",
+        "options": [
+          {
+            "long": "delete-class",
+            "description": "delete all durable objects associated with a class in your script",
+            "inherit": false,
+            "value": {
+              "name": "delete-class"
+            }
+          },
+          {
+            "long": "new-class",
+            "description": "allow durable objects to be created from a class in your script",
+            "inherit": false,
+            "value": {
+              "name": "new-class"
+            }
+          },
+          {
+            "long": "rename-class",
+            "description": "rename a durable object class in your script",
+            "inherit": false,
+            "value": {
+              "name": "rename-class-new-name"
+            }
+          },
+          {
+            "long": "transfer-class",
+            "description": "transfer all durable objects associated with a class in another script to a class in this script",
+            "inherit": false,
+            "value": {
+              "name": "transfer-class"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "output",
+              "description": "[possible values: json]",
+              "provider": {
+                "values": [
+                  "json"
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "config",
+        "description": "authenticate Wrangler with a Cloudflare API Token or Global API Key",
+        "options": [
+          {
+            "long": "api-key",
+            "description": "use an email and global API key for authentication. This is not recommended; use API tokens (the default) if possible",
+            "inherit": false
+          },
+          {
+            "long": "no-verify",
+            "description": "do not verify provided credentials before writing out Wrangler config file",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "subdomain",
+        "description": "configure your workers.dev subdomain",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "the subdomain on workers.dev you'd like to reserve",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "whoami",
+        "description": "retrieve your user info and test your auth config"
+      },
+      {
+        "name": "tail",
+        "description": "aggregate logs from production worker",
+        "options": [
+          {
+            "short": "f",
+            "long": "format",
+            "description": "specify an output format [default: json] [possible values: json, pretty]",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "json",
+                  "pretty"
+                ]
+              }
+            }
+          },
+          {
+            "long": "metrics",
+            "description": "provides endpoint for cloudflared metrics. Used to retrieve tunnel url",
+            "inherit": false,
+            "value": {
+              "name": "metrics-port"
+            }
+          },
+          {
+            "short": "p",
+            "long": "port",
+            "description": "port to accept tail log requests",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          }
+        ]
+      },
+      {
+        "name": "login",
+        "description": "authenticate Wrangler with your Cloudflare username and password"
+      },
+      {
+        "name": "report",
+        "description": "report an error caught by Wrangler to Cloudflare",
+        "options": [
+          {
+            "spellings": [
+              "log"
+            ],
+            "description": "specifies a log to report (e.g. --log=1619728882567.log)",
+            "inherit": false,
+            "value": {
+              "name": "logfile",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "prints this message or the help of the given subcommand(s)",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
