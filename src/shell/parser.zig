@@ -70,7 +70,7 @@ fn parseWithAliasState(
     return parseWithAliasStateOptions(allocator, src, tokens, alias_state, .{});
 }
 
-const ParseOptions = struct {
+pub const ParseOptions = struct {
     require_complete_here_docs: bool = false,
 };
 
@@ -107,6 +107,16 @@ pub const Incremental = struct {
         tokens: []const token.Token,
         shell_state: state_mod.State,
     ) Incremental {
+        return initWithOptions(allocator, src, tokens, shell_state, .{});
+    }
+
+    pub fn initWithOptions(
+        allocator: std.mem.Allocator,
+        src: source_mod.Source,
+        tokens: []const token.Token,
+        shell_state: state_mod.State,
+        options: ParseOptions,
+    ) Incremental {
         src.validate();
         std.debug.assert(tokens.len != 0);
         return .{ .parser = .{
@@ -114,7 +124,14 @@ pub const Incremental = struct {
             .source = src,
             .tokens = tokens,
             .alias_state = shell_state,
+            .require_complete_here_docs = options.require_complete_here_docs,
         } };
+    }
+
+    /// True when parsing stopped at end of input, meaning an error from
+    /// `next` describes incomplete input rather than a genuine syntax error.
+    pub fn atEndOfInput(self: *const Incremental) bool {
+        return self.parser.at(.eof);
     }
 
     /// Parses and returns the next complete command, or null when only

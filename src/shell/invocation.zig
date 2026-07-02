@@ -22,6 +22,9 @@ pub const Interactive = struct {
     options: state.Options = .{},
     arg_zero: []const u8,
     login: bool = false,
+    /// True only when -i was given explicitly. Without it, a shell whose
+    /// standard input is not a terminal must run non-interactively.
+    forced_interactive: bool = false,
 };
 
 pub const CommandString = struct {
@@ -45,6 +48,7 @@ pub fn parse(args: []const []const u8) ParseError!Invocation {
     var mode: state.Mode = .bash;
     var options: state.Options = .{};
     var login = isLoginArgZero(args[0]);
+    var forced_interactive = false;
     var index: usize = 1;
     while (index < args.len) : (index += 1) {
         const arg = args[index];
@@ -69,7 +73,10 @@ pub fn parse(args: []const []const u8) ParseError!Invocation {
         }
         if (arg.len > 1 and arg[0] == '-' and !std.mem.eql(u8, arg, "-c")) {
             for (arg[1..]) |option| switch (option) {
-                'i' => options.interactive = true,
+                'i' => {
+                    options.interactive = true;
+                    forced_interactive = true;
+                },
                 'u' => options.nounset = true,
                 'x' => options.xtrace = true,
                 else => return error.UnsupportedOption,
@@ -108,6 +115,7 @@ pub fn parse(args: []const []const u8) ParseError!Invocation {
         .options = options,
         .arg_zero = args[0],
         .login = login,
+        .forced_interactive = forced_interactive,
     } };
 }
 
@@ -125,8 +133,20 @@ test "invocation parses bare interactive shell" {
     };
     try std.testing.expectEqual(state.Mode.bash, interactive.mode);
     try std.testing.expect(interactive.options.interactive);
+    try std.testing.expect(!interactive.forced_interactive);
     try std.testing.expect(!interactive.login);
     try std.testing.expectEqualStrings("rush", interactive.arg_zero);
+}
+
+test "invocation records explicit -i as forced interactive" {
+    const args = [_][]const u8{ "rush", "-i" };
+    const invocation = try parse(&args);
+    const interactive = switch (invocation) {
+        .interactive => |interactive| interactive,
+        .help, .command_string, .script_file => return error.TestExpectedEqual,
+    };
+    try std.testing.expect(interactive.options.interactive);
+    try std.testing.expect(interactive.forced_interactive);
 }
 
 test "invocation parses explicit login shell" {

@@ -54,6 +54,7 @@ pub fn run(
                 .arg_zero = interactive_invocation.arg_zero,
                 .positionals = &.{},
                 .login = interactive_invocation.login,
+                .forced_interactive = interactive_invocation.forced_interactive,
             });
         },
         .command_string => |command| {

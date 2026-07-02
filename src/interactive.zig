@@ -20,6 +20,7 @@ pub const Options = struct {
     arg_zero: []const u8,
     positionals: []const []const u8 = &.{},
     login: bool = false,
+    forced_interactive: bool = false,
 };
 
 pub fn run(
@@ -30,8 +31,16 @@ pub fn run(
     env: []const [*:0]const u8,
     options: Options,
 ) !u8 {
+    var host_probe = real_host;
+    const stdin_terminal = host_probe.isTerminalFd(.stdin);
+    // POSIX: without -i, a shell whose standard input is not a terminal is
+    // not interactive; it reads commands from standard input like a script.
+    const interactive = options.forced_interactive or stdin_terminal;
+    var state_options = options.state_options;
+    if (!interactive) state_options.interactive = false;
+
     var sh = RushShell.init(allocator, real_host, .{
-        .state = options.state_options,
+        .state = state_options,
         .env = env,
         .arg_zero = options.arg_zero,
         .positionals = options.positionals,
@@ -39,10 +48,10 @@ pub fn run(
     defer sh.deinit();
     sh.setFunctionAutoload(autoloadRushFunction);
 
-    const prompted_stdin = !sh.host.isTerminalFd(.stdin);
-
     var source_id: shell.source.SourceId = 1;
-    if (try startup.source(&sh, &source_id, options.login, !prompted_stdin)) |status| return status;
+    if (try startup.source(&sh, &source_id, options.login, stdin_terminal)) |status| return status;
+
+    if (!interactive) return runStdinScript(allocator, &sh, &source_id);
 
     var command_history = history.History.init(allocator);
     defer command_history.deinit();
@@ -61,7 +70,7 @@ pub fn run(
     var history_service = history.InteractiveHistoryService.init(&command_history);
     sh.setCommandHistory(history_service.commandHistory(io));
 
-    if (prompted_stdin) {
+    if (!stdin_terminal) {
         return runPromptedStdin(allocator, &sh, &source_id);
     }
 
@@ -580,6 +589,135 @@ fn appendPrint(
 
 fn autoloadRushFunction(sh: *RushShell, name: []const u8) !bool {
     return function_autoload.autoload(sh, name);
+}
+
+/// Runs a non-interactive shell reading commands from standard input.
+///
+/// Lines accumulate until they form complete commands, so multi-line
+/// constructs and here-documents work across lines while commands still
+/// execute as soon as they are complete, sharing standard input with the
+/// commands they run (POSIX sh -s semantics). Per POSIX 2.8.1 the shell
+/// exits on a syntax error or fatal shell error.
+fn runStdinScript(
+    allocator: std.mem.Allocator,
+    sh: *RushShell,
+    source_id: *shell.source.SourceId,
+) !u8 {
+    var pending: std.ArrayList(u8) = .empty;
+    defer pending.deinit(allocator);
+
+    while (true) {
+        const line = try readStdinLineWithNewline(allocator, sh) orelse break;
+        defer allocator.free(line);
+        try pending.appendSlice(allocator, line);
+        if (endsWithLineContinuation(pending.items)) continue;
+        if (!stdinCommandsComplete(sh, pending.items)) continue;
+        if (try evalStdinPending(sh, source_id, &pending)) |status| return status;
+    }
+    if (pending.items.len != 0) {
+        if (try evalStdinPending(sh, source_id, &pending)) |status| return status;
+    }
+    return shell.eval.runExitTrap(sh, sh.state.last_status) catch {
+        try sh.host.writeAll(.stderr, "rush: shell error\n");
+        return 2;
+    };
+}
+
+/// Evaluates the pending buffer; returns an exit status when the shell
+/// must stop reading standard input.
+fn evalStdinPending(
+    sh: *RushShell,
+    source_id: *shell.source.SourceId,
+    pending: *std.ArrayList(u8),
+) !?u8 {
+    const src: shell.source.Source = .{
+        .id = source_id.*,
+        .kind = .standard_input,
+        .name = "stdin",
+        .text = pending.items,
+    };
+    source_id.* +%= 1;
+
+    const evaluated = sh.evalSource(src) catch |err| switch (err) {
+        error.OutOfMemory => return error.OutOfMemory,
+        else => {
+            try sh.host.writeAll(.stderr, "rush: shell error\n");
+            return 2;
+        },
+    };
+    pending.clearRetainingCapacity();
+    switch (evaluated.flow) {
+        .exit, .fatal => return shell.eval.runExitTrap(sh, evaluated.status) catch {
+            try sh.host.writeAll(.stderr, "rush: shell error\n");
+            return 2;
+        },
+        else => return null,
+    }
+}
+
+/// Checks whether the accumulated text parses as complete commands, so
+/// evaluation never runs a prefix of a construct that later lines finish.
+/// Alias values that open compound commands cannot be detected here; such
+/// constructs must not span physical lines when piped into the shell.
+fn stdinCommandsComplete(sh: *RushShell, text: []const u8) bool {
+    var arena = std.heap.ArenaAllocator.init(sh.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const src: shell.source.Source = .{ .id = 0, .kind = .standard_input, .name = "stdin", .text = text };
+    const tokens = shell.lexer.lex(allocator, src) catch return true;
+    var incremental = shell.parser.Incremental.initWithOptions(allocator, src, tokens, sh.state, .{
+        .require_complete_here_docs = true,
+    });
+    while (true) {
+        const maybe_program = incremental.next() catch |err| return switch (err) {
+            error.IncompleteHereDoc,
+            error.UnclosedQuote,
+            error.UnclosedCommandSubstitution,
+            => false,
+            error.ExpectedCommand,
+            error.ExpectedRedirectionTarget,
+            error.UnexpectedToken,
+            => !incremental.atEndOfInput(),
+            error.InvalidParameterExpansion, error.OutOfMemory => true,
+        };
+        if (maybe_program == null) return true;
+    }
+}
+
+/// True when the text ends with an unquoted <backslash><newline>, which the
+/// lexer removes as line continuation; the next line must be read first.
+fn endsWithLineContinuation(text: []const u8) bool {
+    if (text.len < 2 or text[text.len - 1] != '\n') return false;
+    var backslashes: usize = 0;
+    var index = text.len - 1;
+    while (index > 0 and text[index - 1] == '\\') : (index -= 1) backslashes += 1;
+    return backslashes % 2 == 1;
+}
+
+test "line continuation detection counts trailing backslashes" {
+    try std.testing.expect(endsWithLineContinuation("echo a\\\n"));
+    try std.testing.expect(!endsWithLineContinuation("echo a\\\\\n"));
+    try std.testing.expect(endsWithLineContinuation("echo a\\\\\\\n"));
+    try std.testing.expect(!endsWithLineContinuation("echo a\n"));
+    try std.testing.expect(!endsWithLineContinuation("echo a"));
+    try std.testing.expect(!endsWithLineContinuation("\n"));
+}
+
+fn readStdinLineWithNewline(allocator: std.mem.Allocator, sh: *RushShell) !?[]const u8 {
+    var line: std.ArrayList(u8) = .empty;
+    defer line.deinit(allocator);
+
+    while (true) {
+        var byte: [1]u8 = undefined;
+        const read_len = try sh.host.read(.stdin, &byte);
+        if (read_len == 0) {
+            if (line.items.len == 0) return null;
+            return try line.toOwnedSlice(allocator);
+        }
+        try line.append(allocator, byte[0]);
+        if (byte[0] == '\n') return try line.toOwnedSlice(allocator);
+    }
 }
 
 fn runPromptedStdin(
