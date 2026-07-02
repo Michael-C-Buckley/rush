@@ -1,0 +1,72 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "shortcuts",
+    "description": "run macOS Shortcuts",
+    "providers": {
+      "shortcuts.names": { "function": "__rush_complete_shortcuts_names" },
+      "shortcuts.folders": { "function": "__rush_complete_shortcuts_folders" },
+      "shortcuts.output-types": {
+        "values": [
+          { "value": "public.json", "description": "JSON" },
+          { "value": "public.plain-text", "description": "plain text" },
+          { "value": "public.html", "description": "HTML" },
+          { "value": "public.xml", "description": "XML" },
+          { "value": "com.adobe.pdf", "description": "PDF" },
+          { "value": "public.vcard", "description": "vCard" }
+        ]
+      },
+      "shortcuts.sign-modes": {
+        "values": [
+          { "value": "people-who-know-me" },
+          { "value": "anyone" }
+        ]
+      }
+    },
+    "subcommands": [
+      {
+        "name": "run",
+        "description": "run a shortcut",
+        "arguments": { "states": [ { "name": "shortcut", "index": 0, "provider": "shortcuts.names", "description": "shortcut to run" } ] },
+        "options": [
+          { "short": "i", "long": "input-path", "description": "set shortcut input path", "value": { "name": "file", "provider": "builtin.files" } },
+          { "short": "o", "long": "output-path", "description": "set output path", "value": { "name": "file", "provider": "builtin.files" } },
+          { "long": "output-type", "description": "set output UTI", "value": { "name": "type", "provider": "shortcuts.output-types" } }
+        ]
+      },
+      {
+        "name": "list",
+        "description": "list shortcuts",
+        "options": [
+          { "short": "f", "long": "folder-name", "description": "set folder name", "value": { "name": "folder", "provider": "shortcuts.folders" } },
+          { "long": "folders", "description": "list folders instead of shortcuts" }
+        ]
+      },
+      {
+        "name": "view",
+        "description": "view a shortcut",
+        "arguments": { "states": [ { "name": "shortcut", "index": 0, "provider": "shortcuts.names", "description": "shortcut to view" } ] }
+      },
+      {
+        "name": "sign",
+        "description": "sign a shortcut file",
+        "options": [
+          { "short": "i", "long": "input", "description": "set shortcut file", "value": { "name": "file", "provider": "builtin.files" } },
+          { "short": "o", "long": "output", "description": "set output path", "value": { "name": "file", "provider": "builtin.files" } },
+          { "short": "m", "long": "mode", "description": "set signing mode", "value": { "name": "mode", "provider": "shortcuts.sign-modes" } }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "show help",
+        "subcommands": [
+          { "name": "run", "description": "run a shortcut" },
+          { "name": "list", "description": "list shortcuts" },
+          { "name": "view", "description": "view a shortcut" },
+          { "name": "sign", "description": "sign a shortcut file" }
+        ]
+      }
+    ]
+  }
+}
