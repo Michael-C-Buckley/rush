@@ -1,0 +1,39 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "readlink",
+    "description": "print resolved symbolic link targets",
+    "options": [
+      {
+        "short": "f",
+        "description": "canonicalize by following every symlink component",
+        "inherit": false,
+        "value": {
+          "name": "format"
+        }
+      },
+      {
+        "short": "n",
+        "description": "do not output the trailing newline",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "description": "file to read",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
