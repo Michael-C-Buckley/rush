@@ -1,0 +1,811 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "kitty",
+    "options": [
+      {
+        "short": "T",
+        "long": "title",
+        "description": "set the OS window title",
+        "inherit": false,
+        "value": {
+          "name": "title"
+        }
+      },
+      {
+        "short": "C",
+        "long": "config",
+        "description": "specify a path to the configuration file(s) to use",
+        "inherit": false,
+        "value": {
+          "name": "config",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "o",
+        "long": "override",
+        "description": "override individual configuration options",
+        "repeatable": true,
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "long": "directory",
+        "aliases": [
+          "working-directory"
+        ],
+        "description": "change to the specified directory when launching",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "session",
+        "description": "path to a file containing the startup session",
+        "inherit": false,
+        "value": {
+          "name": "session",
+          "provider": {
+            "values": [
+              {
+                "value": "-",
+                "description": "read from stdin"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "hold",
+        "description": "remain open after child process exits",
+        "inherit": false
+      },
+      {
+        "short": "1",
+        "long": "single-instance",
+        "description": "only a single instance of kitty will run",
+        "inherit": false
+      },
+      {
+        "long": "instance-group",
+        "description": "kitty will open a new window in an existing instance and quit immediately",
+        "inherit": false,
+        "value": {
+          "name": "instance-group"
+        }
+      },
+      {
+        "long": "wait-for-single-instance-window-close",
+        "description": "the new window will not quit till the newly opened window is closed",
+        "inherit": false
+      },
+      {
+        "long": "listen-on",
+        "description": "tell kitty to listen on the specified address for control messages",
+        "inherit": false,
+        "value": {
+          "name": "listen-on"
+        }
+      },
+      {
+        "long": "start-as",
+        "description": "control how the initial kitty window is created",
+        "inherit": false,
+        "value": {
+          "name": "start-as",
+          "provider": "kitty-window-modes"
+        }
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "the current kitty version",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "display this help message",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "value",
+          "provider": "builtin.executables",
+          "index": 0
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "@",
+        "options": [
+          {
+            "long": "to",
+            "description": "an address for the kitty instance to control",
+            "inherit": false,
+            "value": {
+              "name": "to"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "close-tab",
+            "description": "close the specified tab(s)",
+            "options": [
+              {
+                "short": "m",
+                "long": "match",
+                "description": "the tab to match",
+                "inherit": false,
+                "value": {
+                  "name": "match"
+                }
+              },
+              {
+                "long": "self",
+                "description": "close the tab of the window this command is run in, rather than the active tab",
+                "inherit": false
+              },
+              {
+                "long": "target-group",
+                "description": "close the specified group of tabs",
+                "inherit": false,
+                "value": {
+                  "name": "target-group"
+                }
+              }
+            ]
+          },
+          {
+            "name": "close-window",
+            "description": "close the specified window(s)",
+            "options": [
+              {
+                "short": "m",
+                "long": "match",
+                "description": "the window to match",
+                "inherit": false,
+                "value": {
+                  "name": "match"
+                }
+              },
+              {
+                "long": "self",
+                "description": "close the window this command is run in, rather than the active window",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "create-marker",
+            "options": [
+              {
+                "short": "m",
+                "long": "match",
+                "description": "the window to match",
+                "inherit": false,
+                "value": {
+                  "name": "match"
+                }
+              },
+              {
+                "long": "self",
+                "description": "close the window this command is run in, rather than the active window",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "MARKER",
+                  "index": 0
+                },
+                {
+                  "name": "SPECIFICATION",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "detach-tab",
+            "description": "detach the specified tab",
+            "options": [
+              {
+                "short": "m",
+                "long": "match",
+                "description": "the tab to match",
+                "inherit": false,
+                "value": {
+                  "name": "match"
+                }
+              },
+              {
+                "short": "t",
+                "long": "target-tab",
+                "description": "the tab to match",
+                "inherit": false,
+                "value": {
+                  "name": "target-tab"
+                }
+              },
+              {
+                "long": "self",
+                "description": "detach the tab this command is run in, rather than the active tab",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "detach-window",
+            "description": "detach the specified window",
+            "options": [
+              {
+                "short": "m",
+                "long": "match",
+                "description": "the window to match",
+                "inherit": false,
+                "value": {
+                  "name": "match"
+                }
+              },
+              {
+                "short": "t",
+                "long": "target-tab",
+                "description": "the tab to match",
+                "inherit": false,
+                "value": {
+                  "name": "target-tab"
+                }
+              },
+              {
+                "long": "self",
+                "description": "detach the window this command is run in, rather than the active window",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "disable-ligatures",
+            "description": "control ligature rendering for the specified windows/tabs",
+            "options": [
+              {
+                "short": "a",
+                "long": "all",
+                "description": "disable in all windows",
+                "inherit": false
+              },
+              {
+                "short": "m",
+                "long": "match",
+                "description": "the window to match",
+                "inherit": false,
+                "value": {
+                  "name": "match"
+                }
+              },
+              {
+                "short": "t",
+                "long": "match-tab",
+                "description": "the tab to match",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "STRATEGY",
+                  "provider": {
+                    "values": [
+                      "never",
+                      "always",
+                      "cursor"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "env",
+            "description": "change the environment variables seen by processing in newly launched windows",
+            "arguments": {
+              "states": [
+                {
+                  "name": "ENV",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "focus-tab",
+            "description": "the active window in the specified tab will be focused",
+            "options": [
+              {
+                "short": "m",
+                "long": "match",
+                "description": "the tab to match",
+                "inherit": false,
+                "value": {
+                  "name": "match"
+                }
+              },
+              {
+                "long": "no-response",
+                "description": "don't wait for a response indicating the success of the action",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "focus-window",
+            "description": "focus the specified window, if no window is specified, focus the window this command is run inside",
+            "options": [
+              {
+                "short": "m",
+                "long": "match",
+                "description": "the window to match",
+                "inherit": false,
+                "value": {
+                  "name": "match"
+                }
+              },
+              {
+                "long": "no-response",
+                "description": "don't wait for a response indicating the success of the action",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "get-colors",
+            "description": "get the terminal colors for the specified window",
+            "options": [
+              {
+                "short": "c",
+                "long": "configured",
+                "description": "instead of outputting the colors for the specified window, output the currently configured colors",
+                "inherit": false
+              },
+              {
+                "short": "m",
+                "long": "match",
+                "description": "the window to match",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "get-text"
+          },
+          {
+            "name": "goto-layout"
+          },
+          {
+            "name": "kitten"
+          },
+          {
+            "name": "last-used-layout"
+          },
+          {
+            "name": "launch"
+          },
+          {
+            "name": "ls"
+          },
+          {
+            "name": "new-window"
+          },
+          {
+            "name": "remove-marker"
+          },
+          {
+            "name": "resize-os-window"
+          },
+          {
+            "name": "resize-window"
+          },
+          {
+            "name": "scroll-window"
+          },
+          {
+            "name": "select-window"
+          },
+          {
+            "name": "send-text"
+          },
+          {
+            "name": "set-background-image"
+          },
+          {
+            "name": "set-background-opacity"
+          },
+          {
+            "name": "set-colors"
+          },
+          {
+            "name": "set-enabled-layouts"
+          },
+          {
+            "name": "set-font-size"
+          },
+          {
+            "name": "set-spacing"
+          },
+          {
+            "name": "set-tab-color",
+            "description": "the foreground and background colors when active and inactive can be overridden using this command",
+            "options": [
+              {
+                "short": "m",
+                "long": "match",
+                "description": "the tab to match",
+                "inherit": false,
+                "value": {
+                  "name": "match"
+                }
+              },
+              {
+                "long": "self",
+                "description": "close the window this command is run in, rather than the active window",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "set-tab-title",
+            "description": "set the title for the specified tab(s)",
+            "options": [
+              {
+                "short": "m",
+                "long": "match",
+                "description": "the tab to match",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "set-window-logo"
+          },
+          {
+            "name": "set-window-title",
+            "description": "set the title of the specified window(s)",
+            "options": [
+              {
+                "short": "m",
+                "long": "match",
+                "description": "the window to match",
+                "inherit": false
+              },
+              {
+                "long": "temporary",
+                "description": "the title can be overwritten by escape sequences",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "signal-child",
+            "description": "send one or more signals to the foreground process in the specified window(s)",
+            "options": [
+              {
+                "short": "m",
+                "long": "match",
+                "description": "the window to match",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "SIGNAL",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "icat",
+        "description": "display images in the terminal",
+        "options": [
+          {
+            "long": "align",
+            "description": "horizontal alignment",
+            "inherit": false,
+            "value": {
+              "name": "align",
+              "provider": "kitty-alignments"
+            }
+          },
+          {
+            "long": "place",
+            "description": "screen placement",
+            "inherit": false,
+            "value": {
+              "name": "place"
+            }
+          },
+          {
+            "long": "scale-up",
+            "description": "scale small images up",
+            "inherit": false
+          },
+          {
+            "long": "background",
+            "description": "background color",
+            "inherit": false,
+            "value": {
+              "name": "color"
+            }
+          },
+          {
+            "long": "mirror",
+            "description": "mirror image",
+            "inherit": false,
+            "value": {
+              "name": "axis",
+              "provider": "kitty-mirror-modes"
+            }
+          },
+          {
+            "long": "clear",
+            "description": "remove displayed images",
+            "inherit": false
+          },
+          {
+            "long": "transfer-mode",
+            "description": "image transfer mechanism",
+            "inherit": false,
+            "value": {
+              "name": "mode",
+              "provider": "kitty-transfer-modes"
+            }
+          },
+          {
+            "long": "detect-support",
+            "description": "detect image display support",
+            "inherit": false
+          },
+          {
+            "long": "detection-timeout",
+            "description": "image support detection timeout",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "print-window-size",
+            "description": "print terminal window size",
+            "inherit": false
+          },
+          {
+            "long": "stdin",
+            "description": "read image from stdin",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "image-file-or-url-or-directory",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "+icat",
+        "description": "display images in the terminal",
+        "options": [
+          {
+            "long": "align",
+            "description": "horizontal alignment",
+            "inherit": false,
+            "value": {
+              "name": "align",
+              "provider": "kitty-alignments"
+            }
+          },
+          {
+            "long": "place",
+            "description": "screen placement",
+            "inherit": false,
+            "value": {
+              "name": "place"
+            }
+          },
+          {
+            "long": "scale-up",
+            "description": "scale small images up",
+            "inherit": false
+          },
+          {
+            "long": "background",
+            "description": "background color",
+            "inherit": false,
+            "value": {
+              "name": "color"
+            }
+          },
+          {
+            "long": "mirror",
+            "description": "mirror image",
+            "inherit": false,
+            "value": {
+              "name": "axis",
+              "provider": "kitty-mirror-modes"
+            }
+          },
+          {
+            "long": "clear",
+            "description": "remove displayed images",
+            "inherit": false
+          },
+          {
+            "long": "transfer-mode",
+            "description": "image transfer mechanism",
+            "inherit": false,
+            "value": {
+              "name": "mode",
+              "provider": "kitty-transfer-modes"
+            }
+          },
+          {
+            "long": "detect-support",
+            "description": "detect image display support",
+            "inherit": false
+          },
+          {
+            "long": "detection-timeout",
+            "description": "image support detection timeout",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "print-window-size",
+            "description": "print terminal window size",
+            "inherit": false
+          },
+          {
+            "long": "stdin",
+            "description": "read image from stdin",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "image-file-or-url-or-directory",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "+list-fonts",
+        "description": "kitty kitten command"
+      },
+      {
+        "name": "+hold",
+        "description": "kitty kitten command"
+      },
+      {
+        "name": "+complete",
+        "description": "kitty kitten command"
+      },
+      {
+        "name": "+runpy",
+        "description": "kitty kitten command"
+      },
+      {
+        "name": "+launch",
+        "description": "kitty kitten command"
+      },
+      {
+        "name": "+open",
+        "description": "kitty kitten command"
+      },
+      {
+        "name": "+kitten",
+        "description": "kitty kitten command"
+      },
+      {
+        "name": "+edit-config",
+        "description": "kitty kitten command"
+      },
+      {
+        "name": "+shebang",
+        "description": "kitty kitten command"
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "kitty-window-modes": {
+        "values": [
+          {
+            "value": "normal"
+          },
+          {
+            "value": "fullscreen"
+          },
+          {
+            "value": "maximized"
+          },
+          {
+            "value": "minimized"
+          }
+        ]
+      },
+      "kitty-alignments": {
+        "values": [
+          {
+            "value": "center"
+          },
+          {
+            "value": "left"
+          },
+          {
+            "value": "right"
+          }
+        ]
+      },
+      "kitty-mirror-modes": {
+        "values": [
+          {
+            "value": "horizontal"
+          },
+          {
+            "value": "both"
+          },
+          {
+            "value": "none"
+          },
+          {
+            "value": "vertical"
+          }
+        ]
+      },
+      "kitty-transfer-modes": {
+        "values": [
+          {
+            "value": "file"
+          },
+          {
+            "value": "detect"
+          },
+          {
+            "value": "stream"
+          }
+        ]
+      }
+    },
+    "description": "terminal emulator"
+  }
+}
