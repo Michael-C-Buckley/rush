@@ -1,0 +1,759 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pytest",
+    "options": [
+      {
+        "long": "assert",
+        "description": "control assertion debugging tools",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "plain",
+              "rewrite"
+            ]
+          }
+        }
+      },
+      {
+        "long": "basetemp",
+        "description": "base temporary directory for this test run.(warning: this directory is removed if it exists)",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "c",
+        "description": "load configuration from `file` instead of trying to locate one of the implicit configuration files",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "cache-clear",
+        "description": "remove all cache contents at start of test run",
+        "inherit": false
+      },
+      {
+        "long": "cache-show",
+        "description": "show cache contents, don't perform collection or tests. Optional argument: glob (default: '*')",
+        "inherit": false,
+        "value": {
+          "name": "glob",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "capture",
+        "description": "per-test capturing method",
+        "inherit": false,
+        "value": {
+          "name": "method",
+          "description": "One of fd|sys|no|tee-sys",
+          "provider": {
+            "values": [
+              "fd",
+              "sys",
+              "no",
+              "tee-sys"
+            ]
+          }
+        }
+      },
+      {
+        "long": "code-highlight",
+        "description": "whether code should be highlighted (only if --color is also enabled)",
+        "inherit": false,
+        "value": {
+          "name": "highlight",
+          "provider": {
+            "values": [
+              "yes",
+              "no"
+            ]
+          }
+        },
+        "requires": [
+          "--color"
+        ]
+      },
+      {
+        "long": "co",
+        "aliases": [
+          "collect-only"
+        ],
+        "description": "only collect tests, don't execute them",
+        "inherit": false
+      },
+      {
+        "long": "collect-in-virtualenv",
+        "description": "don't ignore tests in a local virtualenv directory",
+        "inherit": false
+      },
+      {
+        "long": "color",
+        "description": "color terminal output",
+        "inherit": false,
+        "value": {
+          "name": "color",
+          "provider": {
+            "values": [
+              "yes",
+              "no",
+              "auto"
+            ]
+          }
+        }
+      },
+      {
+        "long": "confcutdir",
+        "description": "only load conftest.py's relative to specified dir",
+        "inherit": false,
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "continue-on-collection-errors",
+        "description": "force test execution even if collection errors occur",
+        "inherit": false
+      },
+      {
+        "long": "debug",
+        "description": "store internal tracing debug information in this log file. This file is opened with 'w' and truncated as a result, care advised. Defaults to 'pytestdebug.log'",
+        "inherit": false,
+        "value": {
+          "name": "debug-File-Name",
+          "required": false,
+          "style": "optional",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "durations",
+        "description": "show N slowest setup/test durations (N=0 for all)",
+        "inherit": false,
+        "value": {
+          "name": "n",
+          "description": "(N=0 for all)"
+        }
+      },
+      {
+        "long": "durations-min",
+        "description": "minimal duration in seconds for inclusion in slowest list",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        }
+      },
+      {
+        "long": "deselect",
+        "description": "deselect item (via node id prefix) during collection (multi-allowed)",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "nodeid_prefix"
+        }
+      },
+      {
+        "long": "disable-warnings",
+        "aliases": [
+          "disable-pytest-warnings"
+        ],
+        "description": "disable warnings summary",
+        "inherit": false
+      },
+      {
+        "long": "doctest-continue-on-failure",
+        "description": "for a given doctest, continue to run after the first failure",
+        "inherit": false
+      },
+      {
+        "long": "doctest-ignore-import-errors",
+        "description": "ignore doctest ImportErrors",
+        "inherit": false
+      },
+      {
+        "long": "doctest-modules",
+        "description": "run doctests in all .py modules",
+        "inherit": false
+      },
+      {
+        "long": "doctest-report",
+        "description": "choose another output format for diffs on doctest failure",
+        "inherit": false,
+        "value": {
+          "name": "output-format",
+          "description": "None,cdiff,ndiff,udiff,only_first_failure",
+          "provider": {
+            "values": [
+              "none",
+              "cdiff",
+              "ndiff",
+              "udiff",
+              "only_first_failure"
+            ]
+          }
+        }
+      },
+      {
+        "long": "doctest-glob",
+        "description": "doctests file matching pattern, default: test*.txt",
+        "inherit": false,
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "long": "exitfirst",
+        "short": "x",
+        "description": "exit instantly on first error or failed test",
+        "inherit": false
+      },
+      {
+        "long": "failed-first",
+        "aliases": [
+          "ff"
+        ],
+        "description": "run all tests, but run the last failures first",
+        "inherit": false
+      },
+      {
+        "long": "fixtures",
+        "description": "shows builtin and custom fixtures. Note that this command omits fixtures with leading _ unless the -v option is added",
+        "inherit": false
+      },
+      {
+        "long": "fixtures-per-test",
+        "description": "show fixtures per test",
+        "inherit": false
+      },
+      {
+        "long": "full-trace",
+        "description": "don't cut any tracebacks (default is to cut)",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "this shows help on command line and config-line options",
+        "inherit": false
+      },
+      {
+        "long": "ignore",
+        "description": "ignore path during collection (multi-allowed)",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "ignore-glob",
+        "description": "ignore path pattern during collection (multi-allowed)",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "import-mode",
+        "description": "prepend/append to sys.path when importing test modules and conftest files, default is to prepend",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "prepend",
+              "append",
+              "importlib"
+            ]
+          }
+        }
+      },
+      {
+        "long": "junit-xml",
+        "description": "create junit-xml style report file at given path",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "junit-prefix",
+        "description": "prepend prefix to classnames in junit-xml output",
+        "inherit": false,
+        "value": {
+          "name": "str",
+          "description": "String to prepend"
+        }
+      },
+      {
+        "short": "k",
+        "description": "only run tests which match the given substring expression. An expression is a python evaluatable expression where all names are substring-matched against test n",
+        "inherit": false,
+        "value": {
+          "name": "expression",
+          "description": "Ex: 'test_method or test_other'"
+        }
+      },
+      {
+        "long": "keep-duplicates",
+        "description": "keep duplicate tests",
+        "inherit": false
+      },
+      {
+        "long": "showlocals",
+        "short": "l",
+        "description": "show locals in tracebacks (disabled by default)",
+        "inherit": false
+      },
+      {
+        "long": "last-failed-no-failures",
+        "aliases": [
+          "lfnf"
+        ],
+        "description": "which tests to run with no previously (known) failures",
+        "inherit": false,
+        "value": {
+          "name": "tests",
+          "provider": {
+            "values": [
+              "all",
+              "none"
+            ]
+          }
+        }
+      },
+      {
+        "long": "last-failed",
+        "aliases": [
+          "lf"
+        ],
+        "description": "rerun only the tests that failed at the last run (or all if none failed)",
+        "inherit": false
+      },
+      {
+        "long": "log-auto-indent",
+        "description": "auto-indent multiline messages passed to the logging module. Accepts true|on, false|off or an integer",
+        "inherit": false,
+        "value": {
+          "name": "log-Auto-Indent-Setting",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "log-cli-level",
+        "description": "cli logging level",
+        "inherit": false,
+        "value": {
+          "name": "log-CLI-Level",
+          "provider": {
+            "values": [
+              "CRITICAL",
+              "ERROR",
+              "WARNING",
+              "INFO",
+              "DEBUG"
+            ]
+          }
+        }
+      },
+      {
+        "long": "log-cli-format",
+        "description": "log format as used by the logging module",
+        "inherit": false,
+        "value": {
+          "name": "log-CLI-Format"
+        }
+      },
+      {
+        "long": "log-cli-date-format",
+        "description": "log date format as used by the logging module",
+        "inherit": false,
+        "value": {
+          "name": "log-CLI-Date-Format"
+        }
+      },
+      {
+        "long": "log-date-format",
+        "description": "log date format as used by the logging module",
+        "inherit": false,
+        "value": {
+          "name": "log-Date-Format"
+        }
+      },
+      {
+        "long": "log-format",
+        "description": "log format as used by the logging module",
+        "inherit": false,
+        "value": {
+          "name": "log-Format"
+        }
+      },
+      {
+        "long": "log-file",
+        "description": "path to a file where logging will be written to",
+        "inherit": false,
+        "value": {
+          "name": "log-File-Path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "log-file-level",
+        "description": "log file logging level",
+        "inherit": false,
+        "value": {
+          "name": "log-File-Level",
+          "provider": {
+            "values": [
+              "CRITICAL",
+              "ERROR",
+              "WARNING",
+              "INFO",
+              "DEBUG"
+            ]
+          }
+        }
+      },
+      {
+        "long": "log-file-date-format",
+        "description": "log date format as used by the logging module",
+        "inherit": false,
+        "value": {
+          "name": "log-File-Date-Format"
+        }
+      },
+      {
+        "long": "log-file-format",
+        "description": "log format as used by the logging module",
+        "inherit": false,
+        "value": {
+          "name": "log-File-Format"
+        }
+      },
+      {
+        "long": "log-level",
+        "description": "level of messages to catch/display. Not set by default, so it depends on the root/parent log handler's effective level, where it is `WARNING` by default",
+        "inherit": false,
+        "value": {
+          "name": "level",
+          "provider": {
+            "values": [
+              "CRITICAL",
+              "ERROR",
+              "WARNING",
+              "INFO",
+              "DEBUG"
+            ]
+          }
+        }
+      },
+      {
+        "short": "m",
+        "description": "only run tests matching given mark expression",
+        "inherit": false,
+        "value": {
+          "name": "mark-Expression"
+        }
+      },
+      {
+        "long": "markers",
+        "description": "show markers (builtin, plugin and per-project ones)",
+        "inherit": false
+      },
+      {
+        "long": "maxfail",
+        "description": "exit after first num failures or errors",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "long": "new-first",
+        "aliases": [
+          "nf"
+        ],
+        "description": "run tests from new files first, then the rest of the tests sorted by file mtime",
+        "inherit": false
+      },
+      {
+        "long": "noconftest",
+        "description": "don't load any conftest.py files",
+        "inherit": false
+      },
+      {
+        "long": "no-header",
+        "description": "disable header",
+        "inherit": false
+      },
+      {
+        "long": "no-summary",
+        "description": "disable summary",
+        "inherit": false
+      },
+      {
+        "long": "override-ini",
+        "short": "o",
+        "description": "override ini option with `option=value` style`",
+        "inherit": false,
+        "value": {
+          "name": "override-INI",
+          "description": "Ex: `-o xfail_strict=True -o cache_dir=cache"
+        }
+      },
+      {
+        "short": "p",
+        "description": "early-load given plugin module name or entry point (multi-allowed)",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "plugin-name"
+        }
+      },
+      {
+        "long": "pastebin",
+        "description": "send failed|all info to bpaste.net pastebin service",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "failed",
+              "all"
+            ]
+          }
+        }
+      },
+      {
+        "long": "pdb",
+        "description": "start the interactive Python debugger on errors or KeyboardInterrupt",
+        "inherit": false
+      },
+      {
+        "long": "pdbcls",
+        "description": "specify a custom interactive Python debugger for use with --pdb",
+        "inherit": false,
+        "value": {
+          "name": "modulename:classname",
+          "description": "Ex: --pdbcls=IPython.terminal.debugger:TerminalPdb"
+        }
+      },
+      {
+        "long": "pyargs",
+        "description": "try to interpret all arguments as python packages",
+        "inherit": false
+      },
+      {
+        "long": "quiet",
+        "short": "q",
+        "description": "decrease verbosity",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "description": "show extra test summary info as specified by chars: (f)ailed, (E)rror, (s)kipped, (x)failed, (X)passed, (p)assed, (P)assed with output, (a)ll except passed (p/P",
+        "inherit": false,
+        "value": {
+          "name": "chars",
+          "provider": {
+            "values": [
+              "a",
+              "A",
+              "E",
+              "f",
+              "N",
+              "p",
+              "P",
+              "s",
+              "w",
+              "x",
+              "X"
+            ]
+          }
+        }
+      },
+      {
+        "long": "rootdir",
+        "description": "define root directory for tests. Can be relative path: 'root_dir', './root_dir', 'root_dir/another_dir/'; absolute path: '/home/user/root_dir'; path with variab",
+        "inherit": false,
+        "value": {
+          "name": "root-Dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "runxfail",
+        "description": "report the results of xfail tests as if they were not marked",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "shortcut for --capture=no",
+        "inherit": false
+      },
+      {
+        "long": "setup-only",
+        "description": "only setup fixtures, do not execute tests",
+        "inherit": false
+      },
+      {
+        "long": "setup-show",
+        "description": "show setup of fixtures while executing tests",
+        "inherit": false
+      },
+      {
+        "long": "setup-plan",
+        "description": "show what fixtures and tests would be executed but don't execute anything",
+        "inherit": false
+      },
+      {
+        "long": "show-capture",
+        "description": "controls how captured stdout/stderr/log is shown on failed tests",
+        "inherit": false,
+        "value": {
+          "name": "capture-method",
+          "provider": {
+            "values": [
+              "no",
+              "stdout",
+              "stderr",
+              "log",
+              "all"
+            ]
+          }
+        }
+      },
+      {
+        "long": "stepwise",
+        "aliases": [
+          "sw"
+        ],
+        "description": "exit on test failure and continue from last failing test next time",
+        "inherit": false
+      },
+      {
+        "long": "stepwise-skip",
+        "aliases": [
+          "sw-skip"
+        ],
+        "description": "ignore the first failing test but stop on the next failing test",
+        "inherit": false
+      },
+      {
+        "long": "strict",
+        "description": "alias to --strict-markers",
+        "inherit": false,
+        "deprecated": true
+      },
+      {
+        "long": "strict-config",
+        "description": "any warnings encountered while parsing the `pytest` section of the configuration file raise errors",
+        "inherit": false
+      },
+      {
+        "long": "strict-markers",
+        "description": "markers not registered in the `markers` section of the configuration file raise errors",
+        "inherit": false
+      },
+      {
+        "long": "tb",
+        "description": "traceback print mode",
+        "inherit": false,
+        "value": {
+          "name": "traceback-print-mode",
+          "provider": {
+            "values": [
+              "auto",
+              "long",
+              "short",
+              "line",
+              "native",
+              "no"
+            ]
+          }
+        }
+      },
+      {
+        "long": "trace",
+        "description": "immediately break when running each test",
+        "inherit": false
+      },
+      {
+        "long": "trace-config",
+        "description": "trace considerations of conftest.py files",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "short": "v",
+        "description": "increase verbosity",
+        "repeatable": true,
+        "inherit": false
+      },
+      {
+        "long": "verbosity",
+        "description": "set verbosity. Default is 0",
+        "inherit": false,
+        "value": {
+          "name": "verbosity-level"
+        }
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "display pytest version and information about plugins. When given twice, also display information about plugins",
+        "inherit": false
+      },
+      {
+        "long": "pythonwarnings",
+        "short": "W",
+        "description": "set which warnings to report, see -W option of python itself",
+        "inherit": false,
+        "value": {
+          "name": "warnings-to-report"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "path",
+          "description": "test file, directory, or node id",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    },
+    "description": "run Python tests with pytest"
+  }
+}
