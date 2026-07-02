@@ -1,0 +1,721 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "robot",
+    "description": "run Robot Framework tests",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "spellings": [
+          "-?"
+        ],
+        "description": "print usage instructions",
+        "inherit": false
+      },
+      {
+        "long": "rpa",
+        "description": "turn on the generic automation mode. Mainly affects terminology so that \"test\" is replaced with \"task\" in logs and reports",
+        "inherit": false
+      },
+      {
+        "short": "F",
+        "long": "extension",
+        "description": "parse only files with this extension when executing a directory",
+        "inherit": false,
+        "value": {
+          "name": "extension",
+          "description": "File extensions divided by colon",
+          "provider": {
+            "values": [
+              "txt",
+              "robot:txt"
+            ]
+          }
+        }
+      },
+      {
+        "short": "N",
+        "long": "name",
+        "description": "set a name of the top level suite",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "short": "D",
+        "long": "doc",
+        "description": "set a documentation of the top level suite",
+        "inherit": false,
+        "value": {
+          "name": "documentation"
+        }
+      },
+      {
+        "short": "M",
+        "long": "metadata",
+        "description": "set metadata of the top level suite",
+        "inherit": false,
+        "value": {
+          "name": "name:value"
+        }
+      },
+      {
+        "short": "G",
+        "long": "settag",
+        "description": "sets given tag to all executed tests",
+        "inherit": false,
+        "value": {
+          "name": "tag"
+        }
+      },
+      {
+        "short": "t",
+        "long": "test",
+        "description": "select tests by name or by long name containing also parent suite name like `Parent.Test`",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "task",
+        "description": "alias to --test. Especially applicable with --rpa",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "short": "s",
+        "long": "suite",
+        "description": "select suites by name",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "short": "i",
+        "long": "include",
+        "description": "select test cases by tag",
+        "inherit": false,
+        "value": {
+          "name": "tag"
+        }
+      },
+      {
+        "short": "e",
+        "long": "exclude",
+        "description": "select test cases not to run by tag",
+        "inherit": false,
+        "value": {
+          "name": "tag"
+        }
+      },
+      {
+        "short": "R",
+        "long": "rerunfailed",
+        "description": "select failed tests from an earlier output file to be re-executed",
+        "inherit": false,
+        "value": {
+          "name": "output-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "S",
+        "long": "rerunfailedsuites",
+        "description": "select failed suites from an earlier output file to be re-executed",
+        "inherit": false,
+        "value": {
+          "name": "output-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "runemptysuite",
+        "description": "executes suite even if it contains no tests",
+        "inherit": false
+      },
+      {
+        "long": "skip",
+        "description": "tests having given tag will be skipped",
+        "inherit": false,
+        "value": {
+          "name": "tag"
+        }
+      },
+      {
+        "long": "skiponfailure",
+        "description": "tests having given tag will be skipped if they fail",
+        "inherit": false,
+        "value": {
+          "name": "tag"
+        }
+      },
+      {
+        "short": "v",
+        "long": "variable",
+        "description": "set variables in the test data",
+        "inherit": false,
+        "value": {
+          "name": "variable"
+        }
+      },
+      {
+        "short": "V",
+        "long": "variablefile",
+        "description": "python or YAML file file to read variables from",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "d",
+        "long": "outputdir",
+        "description": "where to create output files. The default is the directory where tests are run from",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "o",
+        "long": "output",
+        "description": "xML output file relative to --outputdir unless given as an absolute path. Default: output.xml",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "l",
+        "long": "log",
+        "description": "hTML log file. Can be disabled by giving a special value `NONE`. Default: log.html",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "r",
+        "long": "report",
+        "description": "hTML report file. Can be disabled with `NONE` similarly as --log. Default: report.html",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "x",
+        "long": "xunit",
+        "description": "xUnit compatible result file. Not created unless this option is specified",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "b",
+        "long": "debugfile",
+        "description": "debug file written during execution. Not created unless this option is specified",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "T",
+        "long": "timestampoutputs",
+        "description": "adds timestamp in a format `YYYYMMDD-hhmmss` to all generated output files between their basename and extension",
+        "inherit": false
+      },
+      {
+        "long": "splitlog",
+        "description": "split the log file into smaller pieces that open in browsers transparently",
+        "inherit": false
+      },
+      {
+        "long": "logtitle",
+        "description": "title for the generated log file. The default title is `<SuiteName> Log.`",
+        "inherit": false,
+        "value": {
+          "name": "title"
+        }
+      },
+      {
+        "long": "reporttitle",
+        "description": "title for the generated report file. The default title is `<SuiteName> Report`",
+        "inherit": false,
+        "value": {
+          "name": "title"
+        }
+      },
+      {
+        "long": "reportbackground",
+        "description": "background colors to use in the report file. Given in format `passed:failed:skipped` where the `:skipped` part can be omitted",
+        "inherit": false,
+        "value": {
+          "name": "colors"
+        }
+      },
+      {
+        "long": "maxerrorlines",
+        "description": "maximum number of error message lines to show in report when tests fail. Default is 40, minimum is 10 and `NONE` can be used to show the full message",
+        "inherit": false,
+        "value": {
+          "name": "lines",
+          "provider": {
+            "values": [
+              {
+                "value": "40",
+                "description": "Default number of lines",
+                "priority": 76
+              },
+              {
+                "value": "10",
+                "description": "Minimum number of lines"
+              },
+              {
+                "value": "NONE",
+                "description": "Unlimited number of lines. Shows the full message"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "maxassignlength",
+        "description": "maximum number of characters to show in log when variables are assigned. Zero or negative values can be used to avoid showing assigned values at all. Default is",
+        "inherit": false,
+        "value": {
+          "name": "characters",
+          "provider": {
+            "values": [
+              {
+                "value": "200",
+                "description": "Default number of characters",
+                "priority": 76
+              },
+              {
+                "value": "0",
+                "description": "No values at all"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "L",
+        "long": "loglevel",
+        "description": "threshold level for logging",
+        "inherit": false,
+        "value": {
+          "name": "level",
+          "provider": {
+            "values": [
+              {
+                "value": "TRACE"
+              },
+              {
+                "value": "DEBUG"
+              },
+              {
+                "value": "INFO",
+                "priority": 76
+              },
+              {
+                "value": "WARN"
+              },
+              {
+                "value": "NONE"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "suitestatlevel",
+        "description": "how many levels to show in `Statistics by Suite` in log and report",
+        "inherit": false,
+        "value": {
+          "name": "level"
+        }
+      },
+      {
+        "long": "tagstatinclude",
+        "description": "include only matching tags in `Statistics by Tag` in log and report",
+        "inherit": false,
+        "value": {
+          "name": "tag"
+        }
+      },
+      {
+        "long": "tagstatexclude",
+        "description": "exclude matching tags from `Statistics by Tag`",
+        "inherit": false,
+        "value": {
+          "name": "tag"
+        }
+      },
+      {
+        "long": "tagstatcombine",
+        "description": "create combined statistics based on tags. These statistics are added into `Statistics by Tag`",
+        "inherit": false,
+        "value": {
+          "name": "tags:name"
+        }
+      },
+      {
+        "long": "tagdoc",
+        "description": "add documentation to tags matching the given pattern",
+        "inherit": false,
+        "value": {
+          "name": "pattern:doc"
+        }
+      },
+      {
+        "long": "tagstatlink",
+        "description": "add external links into `Statistics by Tag`. Pattern can use `*`, `?` and `[]` as wildcards",
+        "inherit": false,
+        "value": {
+          "name": "pattern:link:title"
+        }
+      },
+      {
+        "long": "expandkeywords",
+        "description": "matching keywords will be automatically expanded in the log file",
+        "inherit": false,
+        "value": {
+          "name": "pattern",
+          "provider": {
+            "values": [
+              {
+                "value": "name:<pattern>"
+              },
+              {
+                "value": "tag:<pattern>"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "removekeywords",
+        "description": "remove keyword data from the generated log file",
+        "inherit": false,
+        "value": {
+          "name": "pattern",
+          "provider": {
+            "values": [
+              {
+                "value": "all",
+                "description": "Remove data from all keywords"
+              },
+              {
+                "value": "passed",
+                "description": "Remove data only from keywords in passed test cases and suites"
+              },
+              {
+                "value": "for",
+                "description": "Remove passed iterations from for loops"
+              },
+              {
+                "value": "while",
+                "description": "Remove passed iterations from while loops"
+              },
+              {
+                "value": "wuks",
+                "description": "Remove all but the last failing keyword inside `BuiltIn.Wait Until Keyword Succeeds`"
+              },
+              {
+                "value": "name:<pattern>"
+              },
+              {
+                "value": "tag:<pattern>"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "flattenkeywords",
+        "description": "flattens matching keywords in the generated log file",
+        "inherit": false,
+        "value": {
+          "name": "pattern",
+          "provider": {
+            "values": [
+              {
+                "value": "for",
+                "description": "Flatten FOR loops fully"
+              },
+              {
+                "value": "while",
+                "description": "Flatten WHILE loops fully"
+              },
+              {
+                "value": "iteration",
+                "description": "Flatten FOR/WHILE loop iterations"
+              },
+              {
+                "value": "name:<pattern>"
+              },
+              {
+                "value": "tag:<pattern>"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "listener",
+        "description": "a class for monitoring test execution. Gets notifications e.g. when tests start and end",
+        "inherit": false,
+        "value": {
+          "name": "class",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "nostatusrc",
+        "description": "sets the return code to zero regardless of failures in test cases. Error codes are returned normally",
+        "inherit": false
+      },
+      {
+        "long": "dryrun",
+        "description": "sets the return code to zero regardless of failures in test cases. Error codes are returned normally",
+        "inherit": false
+      },
+      {
+        "short": "X",
+        "long": "exitonfailure",
+        "description": "stops test execution if any test fails",
+        "inherit": false
+      },
+      {
+        "long": "exitonerror",
+        "description": "stops test execution if any error occurs when parsing test data, importing libraries, and so on",
+        "inherit": false
+      },
+      {
+        "long": "skipteardownonexit",
+        "description": "causes teardowns to be skipped if test execution is stopped prematurely",
+        "inherit": false
+      },
+      {
+        "long": "randomize",
+        "description": "randomizes the test execution order",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              {
+                "value": "all",
+                "description": "Randomizes both suites and tests"
+              },
+              {
+                "value": "suites",
+                "description": "Randomizes suites"
+              },
+              {
+                "value": "tests",
+                "description": "Randomizes tests"
+              },
+              {
+                "value": "none",
+                "description": "No randomization (default)",
+                "priority": 76
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "prerunmodifier",
+        "description": "class to programmatically modify the suite structure before execution",
+        "inherit": false,
+        "value": {
+          "name": "class"
+        }
+      },
+      {
+        "long": "prerebotmodifier",
+        "description": "class to programmatically modify the result model before creating reports and logs",
+        "inherit": false,
+        "value": {
+          "name": "class",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "console",
+        "description": "how to report execution on the console",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              {
+                "value": "verbose",
+                "description": "Report every suite and test (default)",
+                "priority": 76
+              },
+              {
+                "value": "dotted",
+                "description": "Only show `.` for passed test, `s` for skipped tests, and `F` for failed tests"
+              },
+              {
+                "value": "quiet",
+                "description": "No output except for errors and warnings"
+              },
+              {
+                "value": "none",
+                "description": "No output whatsoever"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": ".",
+        "long": "dotted",
+        "description": "shortcut for `--console dotted`",
+        "inherit": false
+      },
+      {
+        "long": "quiet",
+        "description": "shortcut for `--console quiet`",
+        "inherit": false
+      },
+      {
+        "short": "W",
+        "long": "consolewidth",
+        "description": "width of the console output. Default is 78",
+        "inherit": false,
+        "value": {
+          "name": "chars",
+          "provider": {
+            "values": [
+              {
+                "value": "78",
+                "priority": 76
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "C",
+        "long": "consolecolors",
+        "description": "use colors on console output or not",
+        "inherit": false,
+        "value": {
+          "name": "option",
+          "provider": {
+            "values": [
+              {
+                "value": "auto",
+                "description": "Use colors when output not redirected (default)",
+                "priority": 76
+              },
+              {
+                "value": "on",
+                "description": "Always use colors"
+              },
+              {
+                "value": "ansi",
+                "description": "Like `on` but use ANSI colors also on Windows"
+              },
+              {
+                "value": "off",
+                "description": "Disable colors altogether"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "K",
+        "long": "consolemarkers",
+        "description": "show markers on the console when top level keywords in a test case end",
+        "inherit": false,
+        "value": {
+          "name": "option",
+          "provider": {
+            "values": [
+              {
+                "value": "auto"
+              },
+              {
+                "value": "on"
+              },
+              {
+                "value": "off"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "P",
+        "long": "pythonpath",
+        "description": "additional locations (directories, ZIPs) where to search libraries and other extensions when they are imported",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": [
+            "builtin.directories",
+            "builtin.files"
+          ]
+        }
+      },
+      {
+        "short": "A",
+        "long": "argumentfile",
+        "description": "text file to read more arguments from. Use special path `STDIN` to read contents from the standard input stream",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "version",
+        "description": "print version information",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "robot-file",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true,
+          "description": "Robot Framework file"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
