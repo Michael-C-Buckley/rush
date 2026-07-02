@@ -1,0 +1,213 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "shell-config",
+    "options": [
+      {
+        "short": "V",
+        "long": "version",
+        "description": "output the version number",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "display help for command",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "init shell-config setup with this CLI version. Execute this command only when you want to force-apply the latest shell-config setup",
+        "hidden": true,
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "install MacOS setup with Multi-Selection",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "shell",
+        "description": "setup a shell configuration with a robust set of tools and architecture",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "update",
+        "description": "update the CLI to the latest version",
+        "options": [
+          {
+            "short": "t",
+            "long": "target",
+            "description": "select update version",
+            "inherit": false,
+            "value": {
+              "name": "target"
+            }
+          },
+          {
+            "short": "m",
+            "long": "mute",
+            "description": "daemon check for update notification. When specified is true",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "assets",
+        "description": "configure your shell assets, such as `gitprofile` and `npmrc`",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "external",
+        "description": "install and manage your external shell",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "show list of all exists externals shells",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for command",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "install",
+            "description": "install external shell",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for command",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file_path",
+                  "description": "file to set as external shell",
+                  "index": 0,
+                  "provider": "builtin.files"
+                },
+                {
+                  "name": "external_name",
+                  "description": "name to register under the registry",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete external shell",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "display help for command",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "help",
+            "description": "display help for command",
+            "arguments": {
+              "states": [
+                {
+                  "name": "command",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "completion",
+        "hidden": true,
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "completion-script",
+        "hidden": true,
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "display help for command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "description": "configure shell setup assets"
+  }
+}
