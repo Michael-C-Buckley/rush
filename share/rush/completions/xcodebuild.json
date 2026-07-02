@@ -1,0 +1,699 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "xcodebuild",
+    "description": "build Xcode projects",
+    "options": [
+      {
+        "spellings": [
+          "-usage"
+        ],
+        "description": "print brief usage"
+      },
+      {
+        "spellings": [
+          "-help"
+        ],
+        "description": "print complete usage"
+      },
+      {
+        "spellings": [
+          "-verbose"
+        ],
+        "description": "provide additional status output"
+      },
+      {
+        "spellings": [
+          "-license"
+        ],
+        "description": "show the Xcode and SDK license agreements"
+      },
+      {
+        "spellings": [
+          "-checkFirstLaunchStatus"
+        ],
+        "description": "check if any First Launch tasks need to be performed"
+      },
+      {
+        "spellings": [
+          "-runFirstLaunch"
+        ],
+        "description": "install packages and agree to the license"
+      },
+      {
+        "spellings": [
+          "-project"
+        ],
+        "description": "build the project NAME",
+        "value": {
+          "name": "NAME"
+        }
+      },
+      {
+        "spellings": [
+          "-target"
+        ],
+        "description": "build the target NAME",
+        "value": {
+          "name": "NAME"
+        }
+      },
+      {
+        "spellings": [
+          "-alltargets"
+        ],
+        "description": "build all targets"
+      },
+      {
+        "spellings": [
+          "-workspace"
+        ],
+        "description": "build the workspace NAME",
+        "value": {
+          "name": "NAME",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-scheme"
+        ],
+        "description": "build the scheme NAME",
+        "value": {
+          "name": "NAME"
+        }
+      },
+      {
+        "spellings": [
+          "-configuration"
+        ],
+        "description": "use the build configuration NAME for building each target",
+        "value": {
+          "name": "NAME"
+        }
+      },
+      {
+        "spellings": [
+          "-xcconfig"
+        ],
+        "description": "apply the build settings defined in the file at PATH as overrides",
+        "value": {
+          "name": "NAME",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-arch"
+        ],
+        "description": "build each target for the architecture ARCH; this will override architectures defined in the project",
+        "value": {
+          "name": "ARCH",
+          "provider": {
+            "values": [
+              "x86_64",
+              "arm64",
+              "armv7"
+            ]
+          }
+        }
+      },
+      {
+        "spellings": [
+          "-sdk"
+        ],
+        "description": "use SDK as the name or path of the base SDK when building the project",
+        "value": {
+          "name": "SDK",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "spellings": [
+          "-toolchain"
+        ],
+        "description": "use the toolchain with identifier or name NAME",
+        "value": {
+          "name": "NAME"
+        }
+      },
+      {
+        "spellings": [
+          "-destination"
+        ],
+        "description": "use the destination described by DESTINATIONSPECIFIER (a comma-separated set of key=value pairs describing the destination to use)",
+        "value": {
+          "name": "DESTINATION-SPECIFIER",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "spellings": [
+          "-destination-timeout"
+        ],
+        "description": "wait for TIMEOUT seconds while searching for the destination device",
+        "value": {
+          "name": "TIMEOUT"
+        }
+      },
+      {
+        "spellings": [
+          "-parallelizeTargets"
+        ],
+        "description": "build independent targets in parallel"
+      },
+      {
+        "spellings": [
+          "-jobs"
+        ],
+        "description": "specify the maximum number of concurrent build operations",
+        "value": {
+          "name": "NUMBER"
+        }
+      },
+      {
+        "spellings": [
+          "-maximum-concurrent-test-device-destinations"
+        ],
+        "description": "the maximum number of device destinations to test on concurrently",
+        "value": {
+          "name": "NUMBER"
+        }
+      },
+      {
+        "spellings": [
+          "-maximum-concurrent-test-simulator-destinations"
+        ],
+        "description": "the maximum number of simulator destinations to test on concurrently",
+        "value": {
+          "name": "NUMBER"
+        }
+      },
+      {
+        "spellings": [
+          "-parallel-testing-enabled"
+        ],
+        "description": "overrides the per-target setting in the scheme",
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "YES",
+              "NO"
+            ]
+          }
+        }
+      },
+      {
+        "spellings": [
+          "-parallel-testing-worker-count"
+        ],
+        "description": "the exact number of test runners that will be spawned during parallel testing",
+        "value": {
+          "name": "NUMBER"
+        }
+      },
+      {
+        "spellings": [
+          "-maximum-parallel-testing-workers"
+        ],
+        "description": "the maximum number of test runners that will be spawned during parallel testing",
+        "value": {
+          "name": "NUMBER"
+        }
+      },
+      {
+        "spellings": [
+          "-dry-run"
+        ],
+        "description": "do everything except actually running the commands"
+      },
+      {
+        "spellings": [
+          "-quiet"
+        ],
+        "description": "do not print any output except for warnings and errors"
+      },
+      {
+        "spellings": [
+          "-hideShellScriptEnvironment"
+        ],
+        "description": "don't show shell script environment variables in build log"
+      },
+      {
+        "spellings": [
+          "-showsdks"
+        ],
+        "description": "display a compact list of the installed SDKs"
+      },
+      {
+        "spellings": [
+          "-showdestinations"
+        ],
+        "description": "display a list of destinations"
+      },
+      {
+        "spellings": [
+          "-showTestPlans"
+        ],
+        "description": "display a list of test plans"
+      },
+      {
+        "spellings": [
+          "-showBuildSettings"
+        ],
+        "description": "display a list of build settings and values"
+      },
+      {
+        "spellings": [
+          "-showBuildSettingsForIndex"
+        ],
+        "description": "display build settings for the index service"
+      },
+      {
+        "spellings": [
+          "-list"
+        ],
+        "description": "lists the targets and configurations in a project, or the schemes in a workspace"
+      },
+      {
+        "spellings": [
+          "-find-executable"
+        ],
+        "description": "display the full path to executable NAME in the provided SDK and toolchain",
+        "value": {
+          "name": "NAME"
+        }
+      },
+      {
+        "spellings": [
+          "-find-library"
+        ],
+        "description": "display the full path to library NAME in the provided SDK and toolchain",
+        "value": {
+          "name": "NAME"
+        }
+      },
+      {
+        "spellings": [
+          "-version"
+        ],
+        "description": "display the version of Xcode; with -sdk will display info about one or all installed SDKs"
+      },
+      {
+        "spellings": [
+          "-enableAddressSanitizer"
+        ],
+        "description": "turn the address sanitizer on or off",
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "YES",
+              "NO"
+            ]
+          }
+        }
+      },
+      {
+        "spellings": [
+          "-enableThreadSanitizer"
+        ],
+        "description": "turn the thread sanitizer on or off",
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "YES",
+              "NO"
+            ]
+          }
+        }
+      },
+      {
+        "spellings": [
+          "-enableUndefinedBehaviorSanitizer"
+        ],
+        "description": "turn the undefined behavior sanitizer on or off",
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "YES",
+              "NO"
+            ]
+          }
+        }
+      },
+      {
+        "spellings": [
+          "-resultBundlePath"
+        ],
+        "description": "specifies the directory where a result bundle describing what occurred will be placed",
+        "value": {
+          "name": "PATH",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-resultStreamPath"
+        ],
+        "description": "specifies the file where a result stream will be written to (the file must already exist)",
+        "value": {
+          "name": "PATH",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-resultBundleVersion"
+        ],
+        "description": "specifies which result bundle version should be used",
+        "value": {
+          "name": "version"
+        }
+      },
+      {
+        "spellings": [
+          "-clonedSourcePackagesDirPath"
+        ],
+        "description": "specifies the directory to which remote source packages are fetch or expected to be found",
+        "value": {
+          "name": "PATH",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-derivedDataPath"
+        ],
+        "description": "specifies the directory where build products and other derived data will go",
+        "value": {
+          "name": "PATH",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-archivePath"
+        ],
+        "description": "specifies the directory where any created archives will be placed, or the archive that should be exported",
+        "value": {
+          "name": "PATH",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-exportArchive"
+        ],
+        "description": "specifies that an archive should be exported"
+      },
+      {
+        "spellings": [
+          "-exportNotarizedApp"
+        ],
+        "description": "export an archive that has been notarized by Apple"
+      },
+      {
+        "spellings": [
+          "-exportOptionsPlist"
+        ],
+        "description": "specifies a path to a plist file that configures archive exporting",
+        "value": {
+          "name": "PATH",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-enableCodeCoverage"
+        ],
+        "description": "turn code coverage on or off when testing",
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "YES",
+              "NO"
+            ]
+          }
+        }
+      },
+      {
+        "spellings": [
+          "-exportPath"
+        ],
+        "description": "specifies the destination for the product exported from an archive",
+        "value": {
+          "name": "PATH",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-skipUnavailableActions"
+        ],
+        "description": "specifies that scheme actions that cannot be performed should be skipped instead of causing a failure"
+      },
+      {
+        "spellings": [
+          "-exportLocalizations"
+        ],
+        "description": "exports completed and outstanding project localizations"
+      },
+      {
+        "spellings": [
+          "-importLocalizations"
+        ],
+        "description": "imports localizations for a project, assuming any necessary localized resources have been created in Xcode"
+      },
+      {
+        "spellings": [
+          "-localizationPath"
+        ],
+        "description": "specifies a path to XLIFF localization file",
+        "value": {
+          "name": "PATH",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-exportLanguage"
+        ],
+        "description": "specifies multiple optional ISO 639-1 languages included in a localization export",
+        "value": {
+          "name": "languages"
+        }
+      },
+      {
+        "spellings": [
+          "-xcroot"
+        ],
+        "description": "specifies a path to a .xcroot to use for building and/or testing",
+        "value": {
+          "name": "path",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "spellings": [
+          "-xctestrun"
+        ],
+        "description": "specifies a path to a test run specification",
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-testPlan"
+        ],
+        "description": "specifies the name of the test plan associated with the scheme to use for testing",
+        "value": {
+          "name": "test-plan"
+        }
+      },
+      {
+        "spellings": [
+          "-only-testing"
+        ],
+        "description": "constrains testing by specifying tests to include, and excluding other tests"
+      },
+      {
+        "spellings": [
+          "-only-testing:"
+        ],
+        "description": "constrains testing by specifying tests to include, and excluding other tests",
+        "value": {
+          "name": "Test-Identifier"
+        }
+      },
+      {
+        "spellings": [
+          "-skip-testing"
+        ],
+        "description": "constrains testing by specifying tests to exclude, but including other tests"
+      },
+      {
+        "spellings": [
+          "-skip-testing:"
+        ],
+        "description": "constrains testing by specifying tests to exclude, but including other tests",
+        "value": {
+          "name": "Test-Identifier"
+        }
+      },
+      {
+        "spellings": [
+          "-test-timeouts-enabled"
+        ],
+        "description": "enable or disable test timeout behavior",
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "YES",
+              "NO"
+            ]
+          }
+        }
+      },
+      {
+        "spellings": [
+          "-default-test-execution-time-allowance"
+        ],
+        "description": "the default execution time an individual test is given to execute, if test timeouts are enabled",
+        "value": {
+          "name": "SECONDS"
+        }
+      },
+      {
+        "spellings": [
+          "-maximum-test-execution-time-allowance"
+        ],
+        "description": "the maximum execution time an individual test is given to execute, regardless of the test's preferred allowance",
+        "value": {
+          "name": "SECONDS"
+        }
+      },
+      {
+        "spellings": [
+          "-only-test-configuration"
+        ],
+        "description": "constrains testing by specifying test configurations to include, and excluding other test configurations"
+      },
+      {
+        "spellings": [
+          "-skip-test-configuration"
+        ],
+        "description": "constrains testing by specifying test configurations to exclude, but including other test configurations"
+      },
+      {
+        "spellings": [
+          "-testLanguage"
+        ],
+        "description": "constrains testing by specifying ISO 639-1 language in which to run the tests"
+      },
+      {
+        "spellings": [
+          "-testRegion"
+        ],
+        "description": "constrains testing by specifying ISO 3166-1 region in which to run the tests"
+      },
+      {
+        "spellings": [
+          "-resolvePackageDependencies"
+        ],
+        "description": "resolves any Swift package dependencies referenced by the project or workspace"
+      },
+      {
+        "spellings": [
+          "-disableAutomaticPackageResolution"
+        ],
+        "description": "prevents packages from automatically being resolved to versions other than those recorded in the `Package.resolved` file"
+      },
+      {
+        "spellings": [
+          "-json"
+        ],
+        "description": "output as JSON"
+      },
+      {
+        "spellings": [
+          "-allowProvisioningUpdates"
+        ],
+        "description": "allow xcodebuild to communicate with the Apple Developer website. For automatically signed targets, xcodebuild will create and update profiles, app IDs, and cer"
+      },
+      {
+        "spellings": [
+          "-allowProvisioningDeviceRegistration"
+        ],
+        "description": "allow xcodebuild to register your destination device on the developer portal if necessary. This flag only takes effect if -allowProvisioningUpdates is also pass"
+      },
+      {
+        "spellings": [
+          "-scmProvider"
+        ],
+        "description": "which implementation to use for Git operations (system/xcode)",
+        "value": {
+          "name": "Implementation",
+          "provider": {
+            "values": [
+              "system",
+              "xcode"
+            ]
+          }
+        }
+      },
+      {
+        "spellings": [
+          "-showBuildTimingSummary"
+        ],
+        "description": "display a report of the timings of all the commands invoked during the build"
+      },
+      {
+        "spellings": [
+          "-create-xcframework"
+        ],
+        "description": "create an xcframework from prebuilt libraries; -help for more information"
+      },
+      {
+        "spellings": [
+          "build"
+        ],
+        "description": "build the target in the build root (SYMROOT). This is the default build action"
+      },
+      {
+        "spellings": [
+          "installsrc"
+        ],
+        "description": "copy the source of the project to the source root (SRCROOT)"
+      },
+      {
+        "spellings": [
+          "install"
+        ],
+        "description": "build the target and install it into the target's installation directory in the distribution root (DSTROOT)"
+      },
+      {
+        "spellings": [
+          "clean"
+        ],
+        "description": "remove build products and intermediate files from the build root (SYMROOT)"
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
