@@ -1,0 +1,279 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "psql",
+    "description": "run PostgreSQL interactive terminal",
+    "options": [
+      {
+        "short": "a",
+        "long": "echo-all",
+        "description": "echo all input lines",
+        "inherit": false
+      },
+      {
+        "short": "A",
+        "long": "no-align",
+        "description": "use unaligned output",
+        "inherit": false
+      },
+      {
+        "short": "b",
+        "long": "echo-errors",
+        "description": "echo failed SQL commands",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "long": "command",
+        "description": "execute command string",
+        "inherit": false,
+        "value": {
+          "name": "command",
+          "description": "A command string that is completely parsable by the server (i.e., it contains no psql-specific features), or a single backslash command. Thus you cannot mix SQL"
+        }
+      },
+      {
+        "long": "csv",
+        "description": "use CSV output",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "long": "dbname",
+        "description": "set database name",
+        "inherit": false,
+        "value": {
+          "name": "dbname"
+        }
+      },
+      {
+        "short": "e",
+        "long": "echo-queries",
+        "description": "echo SQL sent to server",
+        "inherit": false
+      },
+      {
+        "short": "E",
+        "long": "echo-hidden",
+        "description": "echo hidden generated queries",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "long": "file",
+        "description": "read commands from file",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "F",
+        "long": "field-separator",
+        "description": "set field separator",
+        "inherit": false,
+        "value": {
+          "name": "separator"
+        }
+      },
+      {
+        "short": "h",
+        "long": "host",
+        "description": "set server host",
+        "inherit": false,
+        "value": {
+          "name": "hostname"
+        }
+      },
+      {
+        "short": "H",
+        "long": "html",
+        "description": "use HTML output",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "long": "list",
+        "description": "list databases",
+        "inherit": false
+      },
+      {
+        "short": "L",
+        "long": "log-file",
+        "description": "write query output log",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "n",
+        "long": "no-readline",
+        "description": "disable readline",
+        "inherit": false
+      },
+      {
+        "short": "o",
+        "long": "output",
+        "description": "write query output to file",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "p",
+        "long": "port",
+        "description": "set server port",
+        "inherit": false,
+        "value": {
+          "name": "port"
+        }
+      },
+      {
+        "short": "P",
+        "long": "pset",
+        "description": "set printing option",
+        "inherit": false,
+        "value": {
+          "name": "assignment"
+        }
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "run quietly",
+        "inherit": false
+      },
+      {
+        "short": "R",
+        "long": "record-separator",
+        "description": "set record separator",
+        "inherit": false,
+        "value": {
+          "name": "separator"
+        }
+      },
+      {
+        "short": "s",
+        "long": "single-step",
+        "description": "run in single-step mode",
+        "inherit": false
+      },
+      {
+        "short": "S",
+        "long": "single-line",
+        "description": "run in single-line mode",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "long": "tuples-only",
+        "description": "show tuples only",
+        "inherit": false
+      },
+      {
+        "short": "T",
+        "long": "table-attr",
+        "description": "set HTML table attributes",
+        "inherit": false,
+        "value": {
+          "name": "table_options"
+        }
+      },
+      {
+        "short": "U",
+        "long": "username",
+        "description": "set database user",
+        "inherit": false,
+        "value": {
+          "name": "username"
+        }
+      },
+      {
+        "short": "v",
+        "long": "set",
+        "aliases": [
+          "variable"
+        ],
+        "description": "set psql variable",
+        "inherit": false,
+        "value": {
+          "name": "assignment"
+        }
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "no-password",
+        "description": "never prompt for password",
+        "inherit": false
+      },
+      {
+        "short": "W",
+        "long": "password",
+        "description": "force password prompt",
+        "inherit": false
+      },
+      {
+        "short": "x",
+        "long": "expanded",
+        "description": "use expanded output",
+        "inherit": false
+      },
+      {
+        "short": "X",
+        "long": "no-psqlrc",
+        "description": "skip psqlrc files",
+        "inherit": false
+      },
+      {
+        "short": "z",
+        "long": "field-separator-zero",
+        "description": "use zero byte field separator",
+        "inherit": false
+      },
+      {
+        "short": "0",
+        "long": "record-separator-zero",
+        "description": "use zero byte record separator",
+        "inherit": false
+      },
+      {
+        "short": "1",
+        "long": "single-transaction",
+        "description": "run commands in one transaction",
+        "inherit": false
+      },
+      {
+        "short": "?",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "database",
+          "index": 0,
+          "description": "database name or connection string"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
