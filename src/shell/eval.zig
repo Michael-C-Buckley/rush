@@ -3397,6 +3397,7 @@ fn copyParameterExpansion(allocator: std.mem.Allocator, parameter: ast.Parameter
         .colon = parameter.colon,
         .op = parameter.op,
         .word = if (parameter.word) |word| try copyWord(allocator, word) else null,
+        .second_word = if (parameter.second_word) |word| try copyWord(allocator, word) else null,
         .span = parameter.span,
     };
 }
@@ -6033,6 +6034,12 @@ fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError!
             .remove_small_suffix,
             .remove_large_suffix,
             => expandParameterPatternRemoval(shell, parameter, operator),
+            .substring => expandParameterSubstring(shell, parameter),
+            .substitute_first,
+            .substitute_all,
+            .substitute_prefix,
+            .substitute_suffix,
+            => expandParameterSubstitution(shell, parameter, operator),
         };
     }
 
@@ -6238,6 +6245,76 @@ fn expandParameterPatternRemoval(
     };
 }
 
+fn expandParameterSubstring(shell: anytype, parameter: ast.ParameterExpansion) EvalError![]const u8 {
+    const value = (try parameterCurrentValue(shell, parameter.parameter)) orelse "";
+    const offset = try parameterArithmeticValue(shell, parameter.word.?);
+    const maybe_length = if (parameter.second_word) |word| try parameterArithmeticValue(shell, word) else null;
+    return substringValue(value, offset, maybe_length);
+}
+
+fn parameterArithmeticValue(shell: anytype, word: ast.Word) EvalError!i64 {
+    const text = try expandWord(shell, word);
+    return evalArithmeticValue(shell, text) catch |err| switch (err) {
+        error.InvalidArithmetic, error.FatalExpansionError => return error.ExpansionError,
+        else => return err,
+    };
+}
+
+fn substringValue(value: []const u8, offset: i64, maybe_length: ?i64) []const u8 {
+    const count = utf8CodepointCount(value);
+    const start_index = substringIndex(value, normalizeSubstringIndex(offset, count));
+    const end_count = if (maybe_length) |length| if (length < 0)
+        normalizeSubstringIndex(length, count)
+    else
+        @min(count, normalizeSubstringIndex(offset, count) + @as(usize, @intCast(length))) else count;
+    const end_index = substringIndex(value, @max(normalizeSubstringIndex(offset, count), end_count));
+    return value[start_index..end_index];
+}
+
+fn normalizeSubstringIndex(value: i64, count: usize) usize {
+    if (value >= 0) return @min(count, @as(usize, @intCast(value)));
+    const magnitude: u64 = if (value == std.math.minInt(i64))
+        @as(u64, 1) << 63
+    else
+        @intCast(-value);
+    if (magnitude >= count) return 0;
+    return count - @as(usize, @intCast(magnitude));
+}
+
+fn substringIndex(value: []const u8, codepoint_count: usize) usize {
+    var byte_index: usize = 0;
+    var index: usize = 0;
+    while (byte_index < value.len and index < codepoint_count) : (index += 1) {
+        byte_index += utf8SequenceLength(value[byte_index..]);
+    }
+    return byte_index;
+}
+
+fn utf8CodepointCount(value: []const u8) usize {
+    var count: usize = 0;
+    var index: usize = 0;
+    while (index < value.len) : (count += 1) index += utf8SequenceLength(value[index..]);
+    return count;
+}
+
+fn expandParameterSubstitution(
+    shell: anytype,
+    parameter: ast.ParameterExpansion,
+    operator: ast.ParameterOperator,
+) EvalError![]const u8 {
+    const value = (try parameterCurrentValue(shell, parameter.parameter)) orelse "";
+    const pattern = try expandPatternWord(shell, parameter.word.?);
+    if (pattern.len == 0) return value;
+    const replacement = try expandWord(shell, parameter.second_word.?);
+    return switch (operator) {
+        .substitute_first => substituteFirst(shell, value, pattern, replacement),
+        .substitute_all => substituteAll(shell, value, pattern, replacement),
+        .substitute_prefix => substitutePrefix(shell, value, pattern, replacement),
+        .substitute_suffix => substituteSuffix(shell, value, pattern, replacement),
+        else => unreachable,
+    };
+}
+
 const RemovalSize = enum {
     small,
     large,
@@ -6318,6 +6395,91 @@ fn removeSuffix(value: []const u8, pattern: []const u8, size: RemovalSize) []con
         },
     }
     return value;
+}
+
+const PatternMatch = struct {
+    start: usize,
+    end: usize,
+};
+
+fn substituteFirst(shell: anytype, value: []const u8, pattern: []const u8, replacement: []const u8) ![]const u8 {
+    const matched = firstSubstitutionMatch(value, pattern) orelse return value;
+    return spliceSubstitution(shell, value, matched, replacement);
+}
+
+fn substituteAll(shell: anytype, value: []const u8, pattern: []const u8, replacement: []const u8) ![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    const allocator = shell.scratchAllocator();
+    var cursor: usize = 0;
+    while (cursor <= value.len) {
+        const matched = firstSubstitutionMatchFrom(value, pattern, cursor) orelse break;
+        try output.appendSlice(allocator, value[cursor..matched.start]);
+        try output.appendSlice(allocator, replacement);
+        cursor = matched.end;
+        if (matched.start == matched.end) {
+            if (cursor >= value.len) break;
+            const next = nextPatternCut(value, cursor);
+            try output.appendSlice(allocator, value[cursor..next]);
+            cursor = next;
+        }
+    }
+    if (output.items.len == 0) return value;
+    try output.appendSlice(allocator, value[cursor..]);
+    return output.toOwnedSlice(allocator);
+}
+
+fn substitutePrefix(shell: anytype, value: []const u8, pattern: []const u8, replacement: []const u8) ![]const u8 {
+    const matched = prefixSubstitutionMatch(value, pattern) orelse return value;
+    return spliceSubstitution(shell, value, matched, replacement);
+}
+
+fn substituteSuffix(shell: anytype, value: []const u8, pattern: []const u8, replacement: []const u8) ![]const u8 {
+    const matched = suffixSubstitutionMatch(value, pattern) orelse return value;
+    return spliceSubstitution(shell, value, matched, replacement);
+}
+
+fn spliceSubstitution(shell: anytype, value: []const u8, matched: PatternMatch, replacement: []const u8) ![]const u8 {
+    return std.fmt.allocPrint(
+        shell.scratchAllocator(),
+        "{s}{s}{s}",
+        .{ value[0..matched.start], replacement, value[matched.end..] },
+    );
+}
+
+fn firstSubstitutionMatch(value: []const u8, pattern: []const u8) ?PatternMatch {
+    return firstSubstitutionMatchFrom(value, pattern, 0);
+}
+
+fn firstSubstitutionMatchFrom(value: []const u8, pattern: []const u8, start: usize) ?PatternMatch {
+    var cursor = start;
+    while (cursor <= value.len) : (cursor = nextPatternCut(value, cursor)) {
+        if (longestMatchFrom(value, pattern, cursor)) |matched| return matched;
+        if (cursor == value.len) break;
+    }
+    return null;
+}
+
+fn prefixSubstitutionMatch(value: []const u8, pattern: []const u8) ?PatternMatch {
+    return longestMatchFrom(value, pattern, 0);
+}
+
+fn suffixSubstitutionMatch(value: []const u8, pattern: []const u8) ?PatternMatch {
+    var start: usize = 0;
+    while (start <= value.len) : (start = nextPatternCut(value, start)) {
+        if (patternMatches(pattern, value[start..])) return .{ .start = start, .end = value.len };
+        if (start == value.len) break;
+    }
+    return null;
+}
+
+fn longestMatchFrom(value: []const u8, pattern: []const u8, start: usize) ?PatternMatch {
+    var end = value.len;
+    while (true) {
+        if (patternMatches(pattern, value[start..end])) return .{ .start = start, .end = end };
+        if (end == start) break;
+        end = previousPatternCut(value, end);
+    }
+    return null;
 }
 
 fn nextPatternCut(value: []const u8, cut: usize) usize {

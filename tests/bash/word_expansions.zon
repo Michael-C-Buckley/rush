@@ -240,5 +240,40 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "parameter substring expansion supports offsets and lengths",
+            .script =
+            \\value=abcdef
+            \\wide=aébc
+            \\printf '<%s>\n' "${value:1}" "${value:1:3}" "${value: -2}" "${value:2:-1}" "${wide:1:2}"
+            ,
+            .stdout =
+            \\<bcdef>
+            \\<bcd>
+            \\<ef>
+            \\<cde>
+            \\<éb>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "parameter pattern substitution supports bash operators",
+            .script =
+            \\value=abcabc
+            \\printf '<%s>\n' "${value/a?/X}" "${value//a?/X}" "${value/#a*/X}" "${value/%*c/X}" "${value/b}"
+            ,
+            .stdout =
+            \\<Xcabc>
+            \\<XcXc>
+            \\<X>
+            \\<X>
+            \\<acabc>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }

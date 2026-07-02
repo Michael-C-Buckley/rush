@@ -2011,5 +2011,27 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "parameter substring expansion bashism is rejected in POSIX mode",
+            .script =
+            \\x=abc
+            \\printf '%s\n' "${x:1}"
+            \\printf bad
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "parameter substitution expansion bashism is rejected in POSIX mode",
+            .script =
+            \\x=abc
+            \\printf '%s\n' "${x/a/X}"
+            \\printf bad
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
     },
 }

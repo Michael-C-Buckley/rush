@@ -196,6 +196,7 @@ pub const ParameterExpansion = struct {
     colon: bool = false,
     op: ?ParameterOperator = null,
     word: ?Word = null,
+    second_word: ?Word = null,
     span: source.Span = .{},
 
     pub fn validate(self: ParameterExpansion) void {
@@ -204,9 +205,11 @@ pub const ParameterExpansion = struct {
         if (self.op == null) {
             std.debug.assert(!self.colon);
             std.debug.assert(self.word == null);
+            std.debug.assert(self.second_word == null);
         }
         if (self.length) std.debug.assert(self.op == null);
         if (self.word) |word| word.validate();
+        if (self.second_word) |word| word.validate();
     }
 };
 
@@ -219,6 +222,11 @@ pub const ParameterOperator = enum {
     remove_large_prefix,
     remove_small_suffix,
     remove_large_suffix,
+    substring,
+    substitute_first,
+    substitute_all,
+    substitute_prefix,
+    substitute_suffix,
 };
 
 pub const Redirection = struct {

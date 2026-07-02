@@ -1029,6 +1029,8 @@ const Parser = struct {
         const rest = content[prefix.end..];
         if (rest.len == 0) return .{ .parameter = prefix.parameter, .span = span };
 
+        if (try self.parseBashSubstring(prefix.parameter, rest, span)) |parameter| return parameter;
+        if (try self.parseBashSubstitution(prefix.parameter, rest, span)) |parameter| return parameter;
         if (try self.parsePatternRemoval(prefix.parameter, rest, span)) |parameter| return parameter;
 
         const colon = rest.len >= 2 and rest[0] == ':' and isParameterOperator(rest[1]);
@@ -1045,6 +1047,71 @@ const Parser = struct {
         }
 
         return null;
+    }
+
+    fn parseBashSubstring(
+        self: *Parser,
+        parameter: ast.Parameter,
+        rest: []const u8,
+        span: source_mod.Span,
+    ) ParserError!?ast.ParameterExpansion {
+        if (self.mode() == .posix or rest.len == 0 or rest[0] != ':') return null;
+        if (rest.len >= 2 and isParameterOperator(rest[1])) return null;
+
+        const offset_text = rest[1..];
+        const length_start = topLevelParameterColon(offset_text) orelse {
+            return .{
+                .parameter = parameter,
+                .op = .substring,
+                .word = try self.parseWordText(offset_text, .{}),
+                .span = span,
+            };
+        };
+        return .{
+            .parameter = parameter,
+            .op = .substring,
+            .word = try self.parseWordText(offset_text[0..length_start], .{}),
+            .second_word = try self.parseWordText(offset_text[length_start + 1 ..], .{}),
+            .span = span,
+        };
+    }
+
+    fn parseBashSubstitution(
+        self: *Parser,
+        parameter: ast.Parameter,
+        rest: []const u8,
+        span: source_mod.Span,
+    ) ParserError!?ast.ParameterExpansion {
+        if (self.mode() == .posix or rest.len == 0 or rest[0] != '/') return null;
+
+        var operator: ast.ParameterOperator = .substitute_first;
+        var pattern_start: usize = 1;
+        if (rest.len >= 2) switch (rest[1]) {
+            '/' => {
+                operator = .substitute_all;
+                pattern_start = 2;
+            },
+            '#' => {
+                operator = .substitute_prefix;
+                pattern_start = 2;
+            },
+            '%' => {
+                operator = .substitute_suffix;
+                pattern_start = 2;
+            },
+            else => {},
+        };
+
+        const replacement_start = topLevelParameterSlash(rest, pattern_start);
+        const pattern_text = if (replacement_start) |index| rest[pattern_start..index] else rest[pattern_start..];
+        const replacement_text = if (replacement_start) |index| rest[index + 1 ..] else "";
+        return .{
+            .parameter = parameter,
+            .op = operator,
+            .word = try self.parseWordText(pattern_text, .{}),
+            .second_word = try self.parseWordText(replacement_text, .{}),
+            .span = span,
+        };
     }
 
     fn parsePatternRemoval(
@@ -1606,6 +1673,51 @@ fn parseSpecialParameter(byte: u8) ?ast.SpecialParameter {
         '!' => .bang,
         else => null,
     };
+}
+
+fn topLevelParameterColon(text: []const u8) ?usize {
+    return topLevelParameterByte(text, 0, ':');
+}
+
+fn topLevelParameterSlash(text: []const u8, start: usize) ?usize {
+    return topLevelParameterByte(text, start, '/');
+}
+
+fn topLevelParameterByte(text: []const u8, start: usize, delimiter: u8) ?usize {
+    var index = start;
+    var paren_depth: usize = 0;
+    while (index < text.len) {
+        switch (text[index]) {
+            '\'', '"' => |quote| {
+                index += 1;
+                while (index < text.len and text[index] != quote) {
+                    index += if (text[index] == '\\' and index + 1 < text.len) 2 else 1;
+                }
+                if (index < text.len) index += 1;
+            },
+            '\\' => index += if (index + 1 < text.len) 2 else 1,
+            '$' => if (index + 1 < text.len and text[index + 1] == '{') {
+                index = (scanBracedParameterEnd(text, index + 1, text.len) orelse return null) + 1;
+            } else if (index + 1 < text.len and text[index + 1] == '(') {
+                index = (scanCommandSubstitution(text, index + 1, text.len) catch return null) + 1;
+            } else {
+                index += 1;
+            },
+            '(' => {
+                paren_depth += 1;
+                index += 1;
+            },
+            ')' => {
+                if (paren_depth != 0) paren_depth -= 1;
+                index += 1;
+            },
+            else => |byte| {
+                if (paren_depth == 0 and byte == delimiter) return index;
+                index += 1;
+            },
+        }
+    }
+    return null;
 }
 
 fn scanDoubleQuoteEnd(text: []const u8, start: usize, end: usize) ParseError!usize {
