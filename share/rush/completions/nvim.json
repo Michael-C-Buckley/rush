@@ -1,0 +1,240 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "nvim",
+    "description": "hyperextensible vim-based text editor",
+    "options": [
+      {
+        "spellings": [
+          "+"
+        ],
+        "description": "start at end of file",
+        "inherit": false
+      },
+      {
+        "long": "cmd",
+        "description": "execute <cmd> before any config",
+        "inherit": false,
+        "value": {
+          "name": "cmd"
+        }
+      },
+      {
+        "short": "c",
+        "description": "execute <cmd> after config and first file",
+        "inherit": false,
+        "value": {
+          "name": "cmd"
+        }
+      },
+      {
+        "short": "b",
+        "description": "binary mode",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "description": "diff mode",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "spellings": [
+          "-E"
+        ],
+        "description": "ex mode",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-es",
+          "-Es"
+        ],
+        "description": "silent batch mode",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "description": "use this shada file",
+        "inherit": false,
+        "value": {
+          "name": "shada",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "m",
+        "description": "modifications (writing files) not allowed",
+        "inherit": false
+      },
+      {
+        "short": "M",
+        "description": "modifications in text not allowed",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "description": "disable swap files",
+        "inherit": false
+      },
+      {
+        "short": "o",
+        "description": "open N windows (default: one per file)",
+        "inherit": false,
+        "value": {
+          "name": "N"
+        }
+      },
+      {
+        "short": "O",
+        "description": "open N vertical windows (default: one per file)",
+        "inherit": false,
+        "value": {
+          "name": "N"
+        }
+      },
+      {
+        "short": "p",
+        "description": "open N tab pages (default: one per file)",
+        "inherit": false,
+        "value": {
+          "name": "N"
+        }
+      },
+      {
+        "short": "L",
+        "description": "list swap files",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "description": "recover edit state for this file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "R",
+        "description": "read-only mode",
+        "inherit": false
+      },
+      {
+        "short": "S",
+        "description": "source <session> after loading the first file",
+        "inherit": false,
+        "value": {
+          "name": "session",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "s",
+        "description": "read Normal mode commands from <scriptin>",
+        "inherit": false,
+        "value": {
+          "name": "scriptin",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "u",
+        "description": "use this config file",
+        "inherit": false,
+        "value": {
+          "name": "config",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version information",
+        "inherit": false
+      },
+      {
+        "long": "api-info",
+        "description": "write msgpack-encoded API metadata to stdout",
+        "inherit": false
+      },
+      {
+        "long": "embed",
+        "description": "use stdin/stdout as a msgpack-rpc channel",
+        "inherit": false
+      },
+      {
+        "long": "headless",
+        "description": "do not start a user interface",
+        "inherit": false
+      },
+      {
+        "long": "listen",
+        "description": "serve RPC API from this address",
+        "inherit": false,
+        "value": {
+          "name": "address"
+        }
+      },
+      {
+        "long": "noplugin",
+        "description": "do not load plugins",
+        "inherit": false
+      },
+      {
+        "long": "remote",
+        "aliases": [
+          "remote-subcommand"
+        ],
+        "description": "execute commands remotely on a server",
+        "inherit": false
+      },
+      {
+        "long": "server",
+        "description": "specify RPC server to send commands to",
+        "inherit": false,
+        "value": {
+          "name": "address"
+        }
+      },
+      {
+        "long": "startuptime",
+        "description": "write startup timing messages to <file>",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 0,
+          "description": "file or directory",
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
