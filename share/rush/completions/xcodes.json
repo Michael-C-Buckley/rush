@@ -1,0 +1,368 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "xcodes",
+    "description": "manage installed Xcode versions",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help information",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "help",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "download",
+        "description": "download a specific version of Xcode",
+        "options": [
+          {
+            "long": "latest",
+            "description": "update and then install the latest non-prerelease version available"
+          },
+          {
+            "long": "latest-prerelease",
+            "description": "update and then install the latest prerelease version available, including GM seeds and GMs"
+          },
+          {
+            "long": "aria2",
+            "description": "the path to an aria2 executable. Searches $PATH by default",
+            "value": {
+              "name": "aria2",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "no-aria2",
+            "description": "don't use aria2 to download Xcode, even if it's available"
+          },
+          {
+            "long": "directory",
+            "description": "the directory where your Xcodes are installed. Defaults to /Applications",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "data-source",
+            "description": "the data source for available Xcode versions. (default: xcodereleases)",
+            "value": {
+              "name": "dataSource",
+              "provider": {
+                "values": [
+                  "xcodereleases",
+                  "apple"
+                ]
+              }
+            }
+          },
+          {
+            "long": "color",
+            "description": "color the output"
+          },
+          {
+            "long": "no-color",
+            "description": "do not color the output"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "the version to install",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "install",
+        "description": "download and install a specific version of Xcode",
+        "options": [
+          {
+            "long": "path",
+            "description": "local path to Xcode.xip",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "latest",
+            "description": "update and then install the latest non-prerelease version available"
+          },
+          {
+            "long": "latest-prerelease",
+            "description": "update and then install the latest prerelease version available, including GM seeds and GMs"
+          },
+          {
+            "long": "aria2",
+            "description": "the path to an aria2 executable. Searches $PATH by default",
+            "value": {
+              "name": "aria2",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "no-aria2",
+            "description": "don't use aria2 to download Xcode, even if it's available"
+          },
+          {
+            "long": "experimental-unxip",
+            "description": "use the experimental unxip functionality. May speed up unarchiving by up to 2-3x"
+          },
+          {
+            "long": "directory",
+            "description": "the directory where your Xcodes are installed. Defaults to /Applications",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "data-source",
+            "description": "the data source for available Xcode versions. (default: xcodereleases)",
+            "value": {
+              "name": "dataSource",
+              "provider": {
+                "values": [
+                  "xcodereleases",
+                  "apple"
+                ]
+              }
+            }
+          },
+          {
+            "long": "color",
+            "description": "color the output"
+          },
+          {
+            "long": "no-color",
+            "description": "do not color the output"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "the version to install",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "installed",
+        "description": "list the versions of Xcode that are installed",
+        "options": [
+          {
+            "long": "directory",
+            "description": "the directory where your Xcodes are installed. Defaults to /Applications",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "color",
+            "description": "color the output"
+          },
+          {
+            "long": "no-color",
+            "description": "do not color the output"
+          }
+        ]
+      },
+      {
+        "name": "list",
+        "description": "list all versions of Xcode available to install",
+        "options": [
+          {
+            "long": "directory",
+            "description": "the directory where your Xcodes are installed. Defaults to /Applications",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "data-source",
+            "description": "the data source for available Xcode versions. (default: xcodereleases)",
+            "value": {
+              "name": "dataSource",
+              "provider": {
+                "values": [
+                  "xcodereleases",
+                  "apple"
+                ]
+              }
+            }
+          },
+          {
+            "long": "color",
+            "description": "color the output"
+          },
+          {
+            "long": "no-color",
+            "description": "do not color the output"
+          }
+        ]
+      },
+      {
+        "name": "select",
+        "description": "change the selected Xcode",
+        "options": [
+          {
+            "short": "p",
+            "long": "print-path",
+            "description": "print the path of the selected Xcode"
+          },
+          {
+            "long": "directory",
+            "description": "the directory where your Xcodes are installed. Defaults to /Applications",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "color",
+            "description": "color the output"
+          },
+          {
+            "long": "no-color",
+            "description": "do not color the output"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version-or-path",
+              "description": "version or path of Xcode to select",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "uninstall",
+        "description": "uninstall a version of Xcode",
+        "options": [
+          {
+            "long": "directory",
+            "description": "the directory where your Xcodes are installed. Defaults to /Applications",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "color",
+            "description": "color the output"
+          },
+          {
+            "long": "no-color",
+            "description": "do not color the output"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "update",
+        "description": "update the list of available versions of Xcode",
+        "options": [
+          {
+            "long": "directory",
+            "description": "the directory where your Xcodes are installed. Defaults to /Applications",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "data-source",
+            "description": "the data source for available Xcode versions. (default: xcodereleases)",
+            "value": {
+              "name": "dataSource",
+              "provider": {
+                "values": [
+                  "xcodereleases",
+                  "apple"
+                ]
+              }
+            }
+          },
+          {
+            "long": "color",
+            "description": "color the output"
+          },
+          {
+            "long": "no-color",
+            "description": "do not color the output"
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "print the version number of xcodes itself",
+        "options": [
+          {
+            "long": "color",
+            "description": "color the output"
+          },
+          {
+            "long": "no-color",
+            "description": "do not color the output"
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help information"
+          }
+        ]
+      },
+      {
+        "name": "signout",
+        "description": "clears the stored username and password",
+        "options": [
+          {
+            "long": "color",
+            "description": "color the output"
+          },
+          {
+            "long": "no-color",
+            "description": "do not color the output"
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
