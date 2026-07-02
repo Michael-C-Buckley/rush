@@ -1,0 +1,190 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "nl",
+    "description": "number lines in files",
+    "options": [
+      {
+        "short": "b",
+        "description": "Specify the logical page body lines to be numbered",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              {
+                "value": "a",
+                "description": "Number all lines"
+              },
+              {
+                "value": "t",
+                "description": "Number only non-empty lines"
+              },
+              {
+                "value": "pexpr",
+                "description": "Only those lines that contain the basic regular expression specified by 'expr'"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "d",
+        "inherit": false,
+        "value": {
+          "name": "delim",
+          "provider": {
+            "values": [
+              "\\:"
+            ]
+          }
+        },
+        "description": "set logical page delimiter characters"
+      },
+      {
+        "short": "f",
+        "description": "Specify the same as -b type except for logical page footer lines",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              "n"
+            ]
+          }
+        }
+      },
+      {
+        "short": "h",
+        "description": "Specify the same as -b type except for logical page header lines",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              "n"
+            ]
+          }
+        }
+      },
+      {
+        "short": "i",
+        "description": "Specify the increment value used to number logical page lines",
+        "inherit": false,
+        "value": {
+          "name": "incr",
+          "provider": {
+            "values": [
+              "1"
+            ]
+          }
+        }
+      },
+      {
+        "short": "l",
+        "inherit": false,
+        "value": {
+          "name": "num",
+          "provider": {
+            "values": [
+              "1"
+            ]
+          }
+        },
+        "description": "set adjacent blank lines counted as one"
+      },
+      {
+        "short": "n",
+        "description": "Specify the line numbering output format",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "provider": {
+            "values": [
+              {
+                "value": "ln",
+                "description": "Left justified"
+              },
+              {
+                "value": "rn",
+                "description": "Right justified (leading zeros suppressed)"
+              },
+              {
+                "value": "rz",
+                "description": "Right justified (leading zeros kept)"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "p",
+        "description": "Specify that line numbering should not be restarted at logical page delimiters",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "inherit": false,
+        "value": {
+          "name": "sep",
+          "provider": {
+            "values": [
+              "\\t"
+            ]
+          }
+        },
+        "description": "set line number separator"
+      },
+      {
+        "short": "v",
+        "description": "Specify the initial value used to number logical page lines; see also the description of the -p option",
+        "inherit": false,
+        "value": {
+          "name": "startnum",
+          "provider": {
+            "values": [
+              "1",
+              "2",
+              "3"
+            ]
+          }
+        }
+      },
+      {
+        "short": "w",
+        "inherit": false,
+        "value": {
+          "name": "width",
+          "provider": {
+            "values": [
+              "6",
+              "5",
+              "4",
+              "3",
+              "2",
+              "1"
+            ]
+          }
+        },
+        "description": "set line number field width"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "description": "File(s) to number",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
