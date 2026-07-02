@@ -1,0 +1,302 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "jmeter",
+    "description": "Java load testing tool",
+    "options": [
+      {
+        "short": "v",
+        "long": "version",
+        "description": "print the JMeter version information and exit",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "print usage information and exit",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "long": "propfile",
+        "description": "the jmeter property file to use",
+        "inherit": false,
+        "value": {
+          "name": "property",
+          "description": "Your jmeter property file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "q",
+        "long": "addprop",
+        "description": "additional JMeter property file(s)",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "description": "Additional JMeter property file(s)",
+          "provider": "builtin.files",
+          "repeatable": true
+        }
+      },
+      {
+        "short": "t",
+        "long": "testfile",
+        "description": "the JMeter test(.jmx) file to run. \"-t LAST\" will load last used file",
+        "inherit": false,
+        "value": {
+          "name": "testfile",
+          "description": "The JMeter test(.jmx) file to run. \"-t LAST\" will load last used file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "l",
+        "long": "logfile",
+        "description": "the file to log samples to",
+        "inherit": false,
+        "value": {
+          "name": "logfile",
+          "description": "The file to log samples to",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "i",
+        "long": "jmeterlogconf",
+        "description": "jMeter logging configuration file",
+        "inherit": false,
+        "value": {
+          "name": "jmeterlogconf",
+          "description": "Jmeter logging configuration file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "j",
+        "long": "jmeterlogfile",
+        "description": "jMeter run log file",
+        "inherit": false,
+        "value": {
+          "name": "jmeterlogfile",
+          "description": "JMeter run log file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "n",
+        "long": "nongui",
+        "description": "run JMeter in nongui mode",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "server",
+        "description": "run the JMeter server",
+        "inherit": false
+      },
+      {
+        "short": "E",
+        "long": "proxyScheme",
+        "description": "set a proxy scheme to use for the proxy server",
+        "inherit": false,
+        "value": {
+          "name": "proxyScheme",
+          "description": "Set a proxy scheme to use for the proxy server"
+        }
+      },
+      {
+        "short": "H",
+        "long": "proxyHost",
+        "description": "set a proxy server for JMeter to use",
+        "inherit": false,
+        "value": {
+          "name": "server"
+        }
+      },
+      {
+        "short": "P",
+        "long": "proxyPort",
+        "description": "set proxy server port for JMeter to use",
+        "inherit": false,
+        "value": {
+          "name": "port"
+        }
+      },
+      {
+        "short": "N",
+        "long": "nonProxyHosts",
+        "description": "set nonproxy host list (e.g. *.apache.org|localhost)",
+        "inherit": false,
+        "value": {
+          "name": "nonProxyHosts",
+          "description": "Set nonproxy host list (e.g. *.apache.org|localhost)"
+        }
+      },
+      {
+        "short": "u",
+        "long": "username",
+        "description": "set username for proxy server that JMeter is to use",
+        "inherit": false,
+        "value": {
+          "name": "username",
+          "description": "Set username for proxy server that JMeter is to use"
+        }
+      },
+      {
+        "short": "a",
+        "long": "password",
+        "description": "set password for proxy server that JMeter is to use",
+        "inherit": false,
+        "value": {
+          "name": "password",
+          "description": "Set password for proxy server that JMeter is to use"
+        }
+      },
+      {
+        "short": "J",
+        "long": "jmeterproperty",
+        "description": "define additional JMeter properties <argument>=<value>",
+        "inherit": false,
+        "value": {
+          "name": "jmeterproperty",
+          "description": "Define additional JMeter properties <argument>=<value>"
+        }
+      },
+      {
+        "short": "G",
+        "long": "globalproperty",
+        "description": "define Global properties (sent to servers) e.g. -Gport=123 or -Gglobal.properties",
+        "inherit": false,
+        "value": {
+          "name": "globalproperty",
+          "description": "Define Global properties (sent to servers) e.g. -Gport=123 or -Gglobal.properties"
+        }
+      },
+      {
+        "short": "D",
+        "long": "systemproperty",
+        "description": "define additional system properties <argument>=<value>",
+        "inherit": false,
+        "value": {
+          "name": "systemproperty",
+          "description": "Define additional system properties <argument>=<value>"
+        }
+      },
+      {
+        "short": "S",
+        "long": "systemPropertyFile",
+        "description": "additional system property file(s)",
+        "inherit": false,
+        "value": {
+          "name": "systemPropertyFile",
+          "description": "Additional system property file(s)",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "f",
+        "long": "forceDeleteResultFile",
+        "description": "force delete existing results files and web report folder",
+        "inherit": false
+      },
+      {
+        "short": "L",
+        "long": "loglevel",
+        "description": "[category=]level e.g. jorphan=INFO, jmeter.util=DEBUG or com.example.foo=WARN",
+        "inherit": false,
+        "value": {
+          "name": "loglevel",
+          "provider": "jmeter-log-levels"
+        }
+      },
+      {
+        "short": "r",
+        "long": "runremote",
+        "description": "start remote servers (as defined in remote_hosts)",
+        "inherit": false
+      },
+      {
+        "short": "R",
+        "long": "remotestart",
+        "description": "start these remote servers (overrides remote_hosts)",
+        "inherit": false,
+        "value": {
+          "name": "servers"
+        }
+      },
+      {
+        "short": "d",
+        "long": "homedir",
+        "description": "the JMeter home directory to use",
+        "inherit": false,
+        "value": {
+          "name": "homedir"
+        }
+      },
+      {
+        "short": "X",
+        "long": "remoteexit",
+        "description": "exit the remote servers at end of test (non-GUI)",
+        "inherit": false
+      },
+      {
+        "short": "g",
+        "long": "reportonly",
+        "description": "generate report dashboard only, from a test results file",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "long": "reportatendofloadtests",
+        "description": "generate report dashboard after load test",
+        "inherit": false
+      },
+      {
+        "short": "o",
+        "long": "reportoutputfolder",
+        "description": "output folder for report dashboard",
+        "inherit": false,
+        "value": {
+          "name": "reportoutputfolder",
+          "description": "Output folder for report dashboard",
+          "provider": "builtin.directories"
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "jmeter-log-levels": {
+        "values": [
+          {
+            "value": "OFF"
+          },
+          {
+            "value": "FATAL"
+          },
+          {
+            "value": "WARN"
+          },
+          {
+            "value": "INFO"
+          },
+          {
+            "value": "DEBUG"
+          },
+          {
+            "value": "TRACE"
+          },
+          {
+            "value": "ALL"
+          }
+        ]
+      }
+    }
+  }
+}
