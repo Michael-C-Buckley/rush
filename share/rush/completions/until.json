@@ -1,0 +1,23 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "until",
+    "description": "repeat commands until a condition succeeds",
+    "arguments": {
+      "states": [
+        {
+          "name": "command",
+          "provider": "builtin.executables",
+          "index": 0,
+          "description": "condition command"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.executables": {
+        "builtin": "executables"
+      }
+    }
+  }
+}
