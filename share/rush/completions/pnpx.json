@@ -1,0 +1,157 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pnpx",
+    "description": "execute binaries from npm packages",
+    "options": [
+      {
+        "long": "package",
+        "short": "p",
+        "description": "set package to execute",
+        "inherit": false,
+        "value": {
+          "name": "package"
+        }
+      },
+      {
+        "long": "cache",
+        "description": "set npm cache path",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "always-spawn",
+        "description": "always spawn a child process",
+        "inherit": false
+      },
+      {
+        "long": "no-install",
+        "description": "skip missing package installation",
+        "inherit": false
+      },
+      {
+        "long": "userconfig",
+        "description": "set npmrc path",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "call",
+        "short": "c",
+        "description": "execute a command string",
+        "inherit": false,
+        "value": {
+          "name": "script"
+        }
+      },
+      {
+        "long": "shell",
+        "short": "s",
+        "description": "set shell",
+        "inherit": false,
+        "value": {
+          "name": "shell",
+          "provider": "pnpx.shells"
+        }
+      },
+      {
+        "long": "shell-auto-fallback",
+        "description": "generate command-not-found fallback",
+        "inherit": false,
+        "value": {
+          "name": "shell-fallback",
+          "provider": "pnpx.shells"
+        }
+      },
+      {
+        "long": "ignore-existing",
+        "description": "ignore existing binaries",
+        "inherit": false
+      },
+      {
+        "long": "quiet",
+        "short": "q",
+        "description": "suppress pnpx output",
+        "inherit": false
+      },
+      {
+        "long": "npm",
+        "description": "set npm binary",
+        "inherit": false,
+        "value": {
+          "name": "path-to-binary",
+          "provider": "builtin.executables"
+        }
+      },
+      {
+        "long": "node-arg",
+        "short": "n",
+        "description": "pass argument to node",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "create-react-native-app",
+        "description": "run create-react-native-app"
+      },
+      {
+        "name": "react-native",
+        "description": "run react-native"
+      },
+      {
+        "name": "tailwindcss",
+        "description": "run tailwindcss"
+      },
+      {
+        "name": "next",
+        "description": "run next"
+      },
+      {
+        "name": "gltfjsx",
+        "description": "run gltfjsx"
+      },
+      {
+        "name": "prisma",
+        "description": "run prisma"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "pnpx.shells": {
+        "values": [
+          "bash",
+          "fish",
+          "zsh"
+        ]
+      }
+    }
+  }
+}
