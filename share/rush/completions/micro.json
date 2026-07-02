@@ -1,0 +1,915 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "micro",
+    "description": "edit files with micro",
+    "options": [
+      {
+        "long": "clean",
+        "description": "cleans the configuration directory",
+        "inherit": false
+      },
+      {
+        "long": "config-dir",
+        "description": "specify a custom location for the configuration directory",
+        "inherit": false,
+        "value": {
+          "name": "dir"
+        }
+      },
+      {
+        "long": "options",
+        "description": "show all option help",
+        "inherit": false
+      },
+      {
+        "long": "debug",
+        "description": "enable debug mode",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "show the version number and information",
+        "inherit": false
+      },
+      {
+        "long": "autoindent",
+        "description": "when creating a new line, use the same indentation as the previous line",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "autosave",
+        "description": "automatically save the buffer every <n> seconds. If set to 0, no autosaving is performed",
+        "inherit": false,
+        "value": {
+          "name": "n",
+          "description": "Seconds",
+          "provider": {
+            "values": [
+              "0",
+              "60",
+              "120",
+              "300",
+              "600",
+              "1800"
+            ]
+          }
+        }
+      },
+      {
+        "long": "autosu",
+        "description": "automatically attempt to use super user privileges to save without asking",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "backup",
+        "description": "automatically keep backups of all open buffers",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "backupdir",
+        "description": "the directory to place backups in",
+        "inherit": false,
+        "value": {
+          "name": "dir",
+          "provider": {
+            "values": [
+              "~/.config/micro.backups"
+            ]
+          }
+        }
+      },
+      {
+        "long": "basename",
+        "description": "in the infobar and tabbar, show only the basename of the file being edited rather than the full path",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "clipboard",
+        "description": "apecifies how the system clipboard should be accessed",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              {
+                "value": "external",
+                "description": "Accesses clipboard via an external tool, such as xclip/xsel or wl-clipboard on Linux, pbcopy/pbpaste on MacOS, and system calls on Windows"
+              },
+              {
+                "value": "terminal",
+                "description": "Accesses the clipboard via your terminal emulator"
+              },
+              {
+                "value": "internal",
+                "description": "Uses an internal clipboard"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "colorcolumn",
+        "description": "display a color at the specified column if not set to 0",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": {
+            "values": [
+              "0",
+              "1"
+            ]
+          }
+        }
+      },
+      {
+        "long": "colorscheme",
+        "description": "loads the colorscheme stored in $(configDir)/colorschemes/<scheme>.micro",
+        "inherit": false,
+        "value": {
+          "name": "scheme",
+          "provider": {
+            "values": [
+              "default"
+            ]
+          }
+        }
+      },
+      {
+        "long": "cursorline",
+        "description": "highlight the line that the cursor is on in a different color",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "diffgutter",
+        "description": "display diff indicators before lines",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "divchars",
+        "description": "specifies the divider characters used for the dividing line between vertical/horizontal splits (the first character is for vertical dividers, and the second is",
+        "inherit": false,
+        "value": {
+          "name": "chars",
+          "provider": {
+            "values": [
+              "|-"
+            ]
+          }
+        }
+      },
+      {
+        "long": "divreverse",
+        "description": "reverse colors specified by the colorscheme",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "encoding",
+        "description": "the encoding to open and save files with",
+        "inherit": false,
+        "value": {
+          "name": "encoding",
+          "provider": {
+            "values": [
+              "utf-8"
+            ]
+          }
+        }
+      },
+      {
+        "long": "eofnewline",
+        "description": "automatically add a newline to the end of the file if one does not exist",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "fastdirty",
+        "description": "use 'fast dirty' algorithm to determine if a buffer is modified or not",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "fileformat",
+        "description": "type of line endings to be used for the file",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "provider": {
+            "values": [
+              "unix",
+              "dos"
+            ]
+          }
+        }
+      },
+      {
+        "long": "filetype",
+        "description": "file type for the current buffer",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              {
+                "value": "unknown",
+                "description": "Automatically overridden depending on type of file opened"
+              },
+              {
+                "value": "off",
+                "description": "Disable file type detection"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "ignorecase",
+        "description": "perform case-insensitive searches",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "incsearch",
+        "description": "enable incremental search in \"Find\" prompt",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "indentchar",
+        "description": "sets the indentation character",
+        "inherit": false,
+        "value": {
+          "name": "character",
+          "provider": {
+            "values": [
+              {
+                "value": " "
+              },
+              {
+                "value": "\\t"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "infobar",
+        "description": "enables the line at the bottom of the editor where messages are printed",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "keepautoindent",
+        "description": "remove trailing whitespace from a line with no insertions when moving to the next line",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "keymenu",
+        "description": "display the nano-style key menu at the bottom of the screen",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "matchbrace",
+        "description": "underline matching braces for '()', '{}', '[]' when the cursor is on a brace character",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "mkparents",
+        "description": "allow parent directories to be created automatically when opening a file on a path that doesn't exist",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "mouse",
+        "description": "enable mouse support",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "paste",
+        "description": "treat characters sent from the terminal in a single chunk as a paste event rather than a series of manual key presses",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "parsecursor",
+        "description": "parse filenames such as file.txt:10:5 as requesting to open file.txt with the cursor at line 10 and column 5",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "permbackup",
+        "description": "cause backups to be permanently saved",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "pluginchannels",
+        "description": "list of URLs pointing to plugin channels for downloading and installing plugins",
+        "inherit": false,
+        "value": {
+          "name": "url",
+          "provider": {
+            "values": [
+              "https://raw.githubusercontent.com/micro-editor/plugin-channel/master/channel.json"
+            ]
+          }
+        }
+      },
+      {
+        "long": "pluginrepos",
+        "description": "a list of links to plugin repositories",
+        "inherit": false,
+        "value": {
+          "name": "link"
+        }
+      },
+      {
+        "long": "readonly",
+        "description": "disallow edits to the buffer",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "relativeruler",
+        "description": "make line numbers display relatively",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "rmtrailingws",
+        "description": "automatically trim trailing whitespaces at ends of lines",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "ruler",
+        "description": "display line numbers",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "savecursor",
+        "description": "remember where the cursor was last time the file was opened and put it there when re-opened",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "savehistory",
+        "description": "remember command history between closing and re-opening micro",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "saveundo",
+        "description": "remember undo state between closing and re-opening a file",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "scrollbar",
+        "description": "display a scroll bar",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "scrollmargin",
+        "description": "margin at which the view starts scrolling when the cursor approaches the edge of the view",
+        "inherit": false,
+        "value": {
+          "name": "margin",
+          "provider": {
+            "values": [
+              "0",
+              "1",
+              "2",
+              "3",
+              "5",
+              "10"
+            ]
+          }
+        }
+      },
+      {
+        "long": "scrollspeed",
+        "description": "number of lines to scroll for one scroll event",
+        "inherit": false,
+        "value": {
+          "name": "number",
+          "provider": {
+            "values": [
+              "1",
+              "2",
+              "3",
+              "4",
+              "5"
+            ]
+          }
+        }
+      },
+      {
+        "long": "smartpaste",
+        "description": "add leading whitespace when pasting multiple lines",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "softwrap",
+        "description": "wrap lines that are too long to fit on the screen",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "splitbottom",
+        "description": "when a horizontal split is created, create it below the current split",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "splitright",
+        "description": "when a vertical split is created, create it to the right of the current split",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "statusformatl",
+        "description": "format string definition for the left-justified part of the statusline",
+        "inherit": false,
+        "value": {
+          "name": "format"
+        }
+      },
+      {
+        "long": "statusformatr",
+        "description": "format string definition for the right-justified part of the statusline",
+        "inherit": false,
+        "value": {
+          "name": "format"
+        }
+      },
+      {
+        "long": "statusline",
+        "description": "display the status line at the bottom of the screen",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "sucmd",
+        "description": "the super user command",
+        "inherit": false,
+        "value": {
+          "name": "command",
+          "provider": {
+            "values": [
+              "sudo",
+              "doas"
+            ]
+          }
+        }
+      },
+      {
+        "long": "syntax",
+        "description": "enables syntax highlighting",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "tabmovement",
+        "description": "navigate spaces at the beginning of lines as if they are tabs",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "tabsize",
+        "description": "the size in spaces that a tab character should be displayed with",
+        "inherit": false,
+        "value": {
+          "name": "size",
+          "provider": {
+            "values": [
+              "2",
+              "4",
+              "8",
+              "16"
+            ]
+          }
+        }
+      },
+      {
+        "long": "tabstospaces",
+        "description": "use spaces instead of tabs",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "useprimary",
+        "description": "use the primary clipboard to copy selections in the background",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "wordwrap",
+        "description": "wrap long lines by words",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "xterm",
+        "description": "assume that the terminal conforms to xterm-256color regardless of what the $TERM variable actually contains",
+        "inherit": false,
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "provider": "builtin.files",
+          "index": 0,
+          "description": "file to edit",
+          "repeatable": true
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "--plugin",
+        "description": "Manage plugins",
+        "options": [
+          {
+            "spellings": [
+              "remove"
+            ],
+            "description": "Remove plugin(s)",
+            "inherit": false,
+            "value": {
+              "name": "plugin"
+            }
+          },
+          {
+            "spellings": [
+              "update"
+            ],
+            "description": "Update plugin(s) (if no argument is given, updates all plugins)",
+            "inherit": false,
+            "value": {
+              "name": "plugin"
+            }
+          },
+          {
+            "spellings": [
+              "search"
+            ],
+            "description": "Search for a plugin",
+            "inherit": false,
+            "value": {
+              "name": "plugin"
+            }
+          },
+          {
+            "spellings": [
+              "list"
+            ],
+            "description": "List installed plugins",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "available"
+            ],
+            "description": "List available plugins",
+            "inherit": false
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
