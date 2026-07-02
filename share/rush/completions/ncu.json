@@ -1,0 +1,458 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ncu",
+    "description": "upgrade npm package dependency versions",
+    "options": [
+      {
+        "long": "cache",
+        "description": "cache versions locally",
+        "inherit": false
+      },
+      {
+        "long": "cacheClear",
+        "description": "clear the version cache",
+        "inherit": false
+      },
+      {
+        "long": "cacheExpiration",
+        "description": "cache expiration in minutes",
+        "inherit": false,
+        "value": {
+          "name": "minutes"
+        },
+        "requires": [
+          "cache"
+        ]
+      },
+      {
+        "long": "cacheFile",
+        "description": "cache file path",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        },
+        "requires": [
+          "cache"
+        ]
+      },
+      {
+        "long": "color",
+        "description": "force color output",
+        "inherit": false
+      },
+      {
+        "long": "concurrency",
+        "description": "maximum concurrent registry requests",
+        "inherit": false,
+        "value": {
+          "name": "count"
+        }
+      },
+      {
+        "long": "configFileName",
+        "description": "config file name",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "configFilePath",
+        "description": "config file directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "cwd",
+        "description": "working directory for npm",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "deep",
+        "description": "run recursively in current directory",
+        "inherit": false
+      },
+      {
+        "long": "dep",
+        "description": "dependency sections to check",
+        "inherit": false,
+        "value": {
+          "name": "section",
+          "provider": {
+            "values": [
+              "dev",
+              "optional",
+              "peer",
+              "prod",
+              "packageManager"
+            ]
+          }
+        }
+      },
+      {
+        "long": "deprecated",
+        "description": "include deprecated packages",
+        "inherit": false
+      },
+      {
+        "long": "doctor",
+        "description": "iteratively install upgrades and run tests",
+        "inherit": false,
+        "short": "d"
+      },
+      {
+        "long": "doctorInstall",
+        "description": "install command for doctor mode",
+        "inherit": false,
+        "value": {
+          "name": "command"
+        }
+      },
+      {
+        "long": "doctorTest",
+        "description": "test command for doctor mode",
+        "inherit": false,
+        "value": {
+          "name": "command"
+        }
+      },
+      {
+        "long": "enginesNode",
+        "description": "only include packages satisfying engines.node",
+        "inherit": false
+      },
+      {
+        "long": "errorLevel",
+        "description": "set error level",
+        "inherit": false,
+        "short": "e",
+        "value": {
+          "name": "level",
+          "provider": {
+            "values": [
+              "1",
+              "2"
+            ]
+          }
+        }
+      },
+      {
+        "long": "filter",
+        "description": "include matching packages",
+        "inherit": false,
+        "short": "f",
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "long": "filterResults",
+        "description": "filter upgrades with a function",
+        "inherit": false
+      },
+      {
+        "long": "filterVersion",
+        "description": "filter on package version",
+        "inherit": false,
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "long": "format",
+        "description": "output formatting fields",
+        "inherit": false,
+        "value": {
+          "name": "field",
+          "provider": {
+            "values": [
+              "group",
+              "ownerChanged",
+              "repo",
+              "time",
+              "lines"
+            ]
+          }
+        }
+      },
+      {
+        "long": "global",
+        "description": "check global packages",
+        "inherit": false,
+        "short": "g"
+      },
+      {
+        "long": "groupFunction",
+        "description": "customize grouped output",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "description": "show help",
+        "inherit": false,
+        "short": "h"
+      },
+      {
+        "long": "interactive",
+        "description": "enable interactive prompts",
+        "inherit": false,
+        "short": "i"
+      },
+      {
+        "long": "jsonAll",
+        "description": "output new package file as JSON",
+        "inherit": false,
+        "short": "j"
+      },
+      {
+        "long": "jsonDeps",
+        "description": "output upgraded dependency sections as JSON",
+        "inherit": false
+      },
+      {
+        "long": "jsonUpgraded",
+        "description": "output upgraded dependencies as JSON",
+        "inherit": false
+      },
+      {
+        "long": "loglevel",
+        "description": "set log level",
+        "inherit": false,
+        "short": "l",
+        "value": {
+          "name": "level",
+          "provider": {
+            "values": [
+              "silent",
+              "error",
+              "minimal",
+              "warn",
+              "info",
+              "verbose",
+              "silly"
+            ]
+          }
+        }
+      },
+      {
+        "long": "mergeConfig",
+        "description": "merge nested configs with root config",
+        "inherit": false
+      },
+      {
+        "long": "minimal",
+        "description": "skip versions already satisfied by range",
+        "inherit": false,
+        "short": "m"
+      },
+      {
+        "long": "packageData",
+        "description": "package file data",
+        "inherit": false,
+        "value": {
+          "name": "json"
+        }
+      },
+      {
+        "long": "packageFile",
+        "description": "package file path or glob",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "packageManager",
+        "description": "package manager to use",
+        "inherit": false,
+        "short": "p",
+        "value": {
+          "name": "manager",
+          "provider": {
+            "values": [
+              "npm",
+              "yarn",
+              "pnpm",
+              "deno",
+              "staticRegistry"
+            ]
+          }
+        }
+      },
+      {
+        "long": "peer",
+        "description": "filter updates to peer-compatible versions",
+        "inherit": false
+      },
+      {
+        "long": "pre",
+        "description": "include prerelease versions",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "0",
+              "1"
+            ]
+          }
+        }
+      },
+      {
+        "long": "prefix",
+        "description": "current working directory of npm",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "registry",
+        "description": "npm registry URL",
+        "inherit": false,
+        "short": "r",
+        "value": {
+          "name": "uri"
+        }
+      },
+      {
+        "long": "reject",
+        "description": "exclude matching packages",
+        "inherit": false,
+        "short": "x",
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "long": "rejectVersion",
+        "description": "exclude matching package versions",
+        "inherit": false,
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "long": "removeRange",
+        "description": "remove version ranges from final versions",
+        "inherit": false
+      },
+      {
+        "long": "retry",
+        "description": "number of request retries",
+        "inherit": false,
+        "value": {
+          "name": "count"
+        }
+      },
+      {
+        "long": "root",
+        "description": "include the workspace root project",
+        "inherit": false
+      },
+      {
+        "long": "silent",
+        "description": "do not output anything",
+        "inherit": false,
+        "short": "s"
+      },
+      {
+        "long": "stdin",
+        "description": "read package.json from stdin",
+        "inherit": false
+      },
+      {
+        "long": "target",
+        "description": "target version range",
+        "inherit": false,
+        "short": "t",
+        "value": {
+          "name": "target",
+          "provider": {
+            "values": [
+              "latest",
+              "newest",
+              "greatest",
+              "minor",
+              "patch"
+            ]
+          }
+        }
+      },
+      {
+        "long": "timeout",
+        "description": "global timeout in milliseconds",
+        "inherit": false,
+        "value": {
+          "name": "ms"
+        }
+      },
+      {
+        "long": "upgrade",
+        "description": "overwrite package file with upgraded versions",
+        "inherit": false,
+        "short": "u"
+      },
+      {
+        "long": "verbose",
+        "description": "log debugging information",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "show version information",
+        "inherit": false,
+        "short": "v"
+      },
+      {
+        "long": "workspace",
+        "description": "run on specified workspace",
+        "inherit": false,
+        "short": "w",
+        "value": {
+          "name": "workspace"
+        }
+      },
+      {
+        "spellings": [
+          "-ws"
+        ],
+        "long": "workspaces",
+        "description": "run on all workspaces",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "filter",
+          "description": "package name filter",
+          "index": 0,
+          "repeatable": true,
+          "required": false
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
