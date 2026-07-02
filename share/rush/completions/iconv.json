@@ -1,0 +1,149 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "iconv",
+    "description": "convert character encodings",
+    "options": [
+      {
+        "long": "help",
+        "description": "show help for iconv",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "output version information and exit",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "long": "from-code",
+        "description": "specifies the encoding of the input",
+        "inherit": false,
+        "value": {
+          "name": "encoding",
+          "provider": "iconv-encodings"
+        },
+        "exclusiveGroup": "iconv-list-mode"
+      },
+      {
+        "short": "t",
+        "long": "to-code",
+        "description": "specifies the encoding of the output",
+        "inherit": false,
+        "value": {
+          "name": "encoding",
+          "provider": "iconv-encodings"
+        },
+        "exclusiveGroup": "iconv-list-mode"
+      },
+      {
+        "short": "c",
+        "description": "discard unconvertible characters",
+        "inherit": false,
+        "exclusiveGroup": "iconv-list-mode"
+      },
+      {
+        "short": "l",
+        "long": "list",
+        "description": "list the supported encodings",
+        "inherit": false,
+        "exclusiveGroup": "iconv-list-mode"
+      },
+      {
+        "long": "unicode-subst",
+        "description": "substitution for unconvertible Unicode characters",
+        "inherit": false,
+        "value": {
+          "name": "formatstring",
+          "description": "The formatstring must be a format string in the same format as for the printf command",
+          "style": "equals"
+        },
+        "exclusiveGroup": "iconv-list-mode"
+      },
+      {
+        "long": "byte-subst",
+        "description": "substitution for unconvertible bytes",
+        "inherit": false,
+        "value": {
+          "name": "formatstring",
+          "description": "The formatstring must be a format string in the same format as for the printf command",
+          "style": "equals"
+        },
+        "exclusiveGroup": "iconv-list-mode"
+      },
+      {
+        "long": "widechar-subst",
+        "description": "substitution for unconvertible wide characters",
+        "inherit": false,
+        "value": {
+          "name": "formatstring",
+          "description": "The formatstring must be a format string in the same format as for the printf command",
+          "style": "equals"
+        },
+        "exclusiveGroup": "iconv-list-mode"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "input-file",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "iconv-encodings": {
+        "values": [
+          {
+            "value": "UTF-8"
+          },
+          {
+            "value": "UTF-16"
+          },
+          {
+            "value": "UTF-32"
+          },
+          {
+            "value": "ASCII"
+          },
+          {
+            "value": "ISO-8859-1"
+          },
+          {
+            "value": "ISO-8859-15"
+          },
+          {
+            "value": "WINDOWS-1252"
+          },
+          {
+            "value": "CP437"
+          },
+          {
+            "value": "CP850"
+          },
+          {
+            "value": "GBK"
+          },
+          {
+            "value": "BIG5"
+          },
+          {
+            "value": "SHIFT_JIS"
+          },
+          {
+            "value": "EUC-JP"
+          },
+          {
+            "value": "KOI8-R"
+          }
+        ]
+      }
+    }
+  }
+}
