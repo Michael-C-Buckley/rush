@@ -1,0 +1,91 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "httpy",
+    "description": "programmable command-line HTTP client",
+    "options": [
+      {
+        "long": "exec",
+        "short": "x",
+        "description": "execute httpy command",
+        "inherit": false
+      },
+      {
+        "long": "status",
+        "short": "S",
+        "description": "print only the response status",
+        "inherit": false
+      },
+      {
+        "long": "header",
+        "short": "H",
+        "description": "print only the response headers",
+        "inherit": false
+      },
+      {
+        "long": "body",
+        "short": "B",
+        "description": "print only the response body",
+        "inherit": false
+      },
+      {
+        "long": "allow-redirect",
+        "short": "r",
+        "description": "allow requests to be redirected",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "short": "V",
+        "description": "show request and response in verbose",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for httpy",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "show version for httpy",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "url",
+          "description": "the scheme defaults to 'http://' if the URL does not include one",
+          "index": 0
+        },
+        {
+          "name": "method",
+          "description": "the HTTP method to be used for the request (GET, POST, PUT, DELETE, ...)",
+          "provider": "httpy-methods",
+          "index": 1
+        }
+      ]
+    },
+    "providers": {
+      "httpy-methods": {
+        "values": [
+          {
+            "value": "GET"
+          },
+          {
+            "value": "POST"
+          },
+          {
+            "value": "PUT"
+          },
+          {
+            "value": "DELETE"
+          }
+        ]
+      }
+    }
+  }
+}
