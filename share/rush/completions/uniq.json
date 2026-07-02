@@ -1,0 +1,123 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "uniq",
+    "description": "report or omit repeated lines",
+    "options": [
+      {
+        "short": "c",
+        "long": "count",
+        "description": "prefix lines by the number of occurrences",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "long": "repeated",
+        "description": "only print duplicate lines",
+        "inherit": false
+      },
+      {
+        "short": "D",
+        "long": "all-repeated",
+        "description": "print all duplicate lines. Delimiting is done with blank lines",
+        "inherit": false,
+        "value": {
+          "name": "delimit-method",
+          "required": false,
+          "style": "optional",
+          "provider": "uniq.delimit-methods"
+        }
+      },
+      {
+        "short": "f",
+        "long": "skip-fields",
+        "description": "avoid comparing the first N fields",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "short": "i",
+        "long": "ignore-case",
+        "description": "ignore differences in case when comparing",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "skip-chars",
+        "description": "avoid comparing the first N characters",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "short": "u",
+        "long": "unique",
+        "description": "only print unique lines",
+        "inherit": false
+      },
+      {
+        "short": "z",
+        "long": "zero-terminated",
+        "description": "end lines with 0 byte, not newline",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "check-chars",
+        "description": "compare no more than N characters in lines",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "help",
+        "description": "display this help and exit",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "output version information and exit",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "input",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 0,
+          "description": "input file"
+        },
+        {
+          "name": "output",
+          "index": 1,
+          "provider": "builtin.files",
+          "description": "output file"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "uniq.delimit-methods": {
+        "values": [
+          "none",
+          "prepend",
+          "separate"
+        ]
+      }
+    }
+  }
+}
