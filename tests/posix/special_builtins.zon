@@ -546,6 +546,25 @@
             .status = 0,
         },
         .{
+            .name = "set accepts -o inside an option flag cluster",
+            .script =
+            \\set -euo pipefail
+            \\case $- in *e*) printf 'errexit-on\n' ;; *) printf 'bad-e:%s\n' "$-" ;; esac
+            \\case $- in *u*) printf 'nounset-on\n' ;; *) printf 'bad-u:%s\n' "$-" ;; esac
+            \\set +e
+            \\false | true
+            \\printf '<%s>\n' "$?"
+            ,
+            .stdout =
+            \\errexit-on
+            \\nounset-on
+            \\<1>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "set accepts notify and hashall option flags",
             .script =
             \\set -bh

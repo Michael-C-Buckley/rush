@@ -1958,6 +1958,11 @@ fn evalSet(shell: anytype, args: []const []const u8) !result.EvalResult {
             'h' => shell.state.options.hashall = enabled,
             'm' => shell.state.options.monitor = enabled,
             'n' => shell.state.options.noexec = enabled,
+            'o' => {
+                index += 1;
+                if (index >= args.len) return listSetOptions(shell, enabled);
+                if (!setNamedOption(shell, args[index], enabled)) return setUsageError(shell);
+            },
             'u' => shell.state.options.nounset = enabled,
             'v' => shell.state.options.verbose = enabled,
             'x' => shell.state.options.xtrace = enabled,
