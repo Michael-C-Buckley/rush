@@ -1,0 +1,3919 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "gh",
+    "description": "GitHub CLI",
+    "options": [
+      {
+        "long": "help",
+        "description": "show help for command",
+        "inherit": true
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "alias",
+          "description": "custom user defined gh alias",
+          "index": 0
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "alias",
+        "description": "create command shortcuts",
+        "subcommands": [
+          {
+            "name": "delete",
+            "description": "delete an alias",
+            "arguments": {
+              "states": [
+                {
+                  "name": "alias",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list available aliases"
+          },
+          {
+            "name": "set",
+            "description": "set an alias for a gh command",
+            "options": [
+              {
+                "short": "s",
+                "long": "shell",
+                "description": "declare an alias to be passed through a shell interpreter",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "alias",
+                  "description": "a word that will expand to the gh command",
+                  "index": 0
+                },
+                {
+                  "name": "expansion",
+                  "description": "the gh command to be invoked, more info with --help",
+                  "index": 1
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "api",
+        "description": "make an authenticated GitHub API request"
+      },
+      {
+        "name": "auth",
+        "description": "login, logout, and refresh your authentication",
+        "subcommands": [
+          {
+            "name": "login",
+            "description": "authenticate with a GitHub host",
+            "options": [
+              {
+                "short": "h",
+                "long": "hostname",
+                "description": "the hostname of the GitHub instance to authenticate with",
+                "inherit": false,
+                "value": {
+                  "name": "hostname"
+                }
+              },
+              {
+                "short": "s",
+                "long": "scopes",
+                "description": "additional authentication scopes for gh to have",
+                "inherit": false,
+                "value": {
+                  "name": "scopes"
+                }
+              },
+              {
+                "short": "w",
+                "long": "web",
+                "description": "open a browser to authenticate",
+                "inherit": false
+              },
+              {
+                "long": "with-token",
+                "description": "read token from standard input",
+                "inherit": false,
+                "value": {
+                  "name": "token"
+                }
+              }
+            ]
+          },
+          {
+            "name": "logout",
+            "description": "log out of a GitHub host",
+            "options": [
+              {
+                "short": "h",
+                "long": "hostname",
+                "description": "the hostname of the GitHub instance to authenticate with",
+                "inherit": false,
+                "value": {
+                  "name": "hostname"
+                }
+              }
+            ]
+          },
+          {
+            "name": "refresh",
+            "description": "refresh stored authentication credentials",
+            "options": [
+              {
+                "short": "h",
+                "long": "hostname",
+                "description": "the hostname of the GitHub instance to authenticate with",
+                "inherit": false,
+                "value": {
+                  "name": "hostname"
+                }
+              },
+              {
+                "short": "s",
+                "long": "scopes",
+                "description": "additional authentication scopes for gh to have",
+                "inherit": false,
+                "value": {
+                  "name": "scopes"
+                }
+              }
+            ]
+          },
+          {
+            "name": "setup-git",
+            "description": "configure git to use GitHub CLI as a credential helper",
+            "options": [
+              {
+                "short": "h",
+                "long": "hostname",
+                "description": "the hostname of the GitHub instance to authenticate with",
+                "inherit": false,
+                "value": {
+                  "name": "hostname"
+                }
+              }
+            ]
+          },
+          {
+            "name": "status",
+            "description": "view authentication status",
+            "options": [
+              {
+                "short": "h",
+                "long": "hostname",
+                "description": "the hostname of the GitHub instance to authenticate with",
+                "inherit": false,
+                "value": {
+                  "name": "hostname"
+                }
+              },
+              {
+                "long": "with-token",
+                "description": "read token from standard input",
+                "inherit": false,
+                "value": {
+                  "name": "token"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "gpg-key",
+        "description": "manage GPG keys registered with your GitHub account",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add a GPG key to your GitHub account"
+          },
+          {
+            "name": "list",
+            "description": "lists GPG keys in your GitHub account"
+          }
+        ]
+      },
+      {
+        "name": "browse",
+        "description": "open the repository in the browser",
+        "options": [
+          {
+            "short": "b",
+            "long": "branch",
+            "description": "select another branch by passing in the branch name",
+            "inherit": false,
+            "value": {
+              "name": "branch"
+            }
+          },
+          {
+            "short": "c",
+            "long": "commit",
+            "description": "open the last commit",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "no-browser",
+            "description": "print destination URL instead of opening the browser",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "projects",
+            "description": "open repository projects",
+            "inherit": false
+          },
+          {
+            "short": "R",
+            "long": "repo",
+            "description": "select another repository using the [HOST/]OWNER/REPO format",
+            "inherit": false,
+            "value": {
+              "name": "[HOST/]OWNER/REPO"
+            }
+          },
+          {
+            "short": "s",
+            "long": "settings",
+            "description": "open repository settings",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "long": "wiki",
+            "description": "open repository wiki",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "[pr-|-issue-|-path[:line]",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "completion",
+        "description": "generate shell completion scripts",
+        "options": [
+          {
+            "short": "s",
+            "long": "shell",
+            "inherit": false,
+            "value": {
+              "name": "shell",
+              "provider": {
+                "values": [
+                  "bash",
+                  "zsh",
+                  "fish",
+                  "powershell"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "config",
+        "description": "manage configuration for gh",
+        "subcommands": [
+          {
+            "name": "get",
+            "description": "print the value of a given configuration key",
+            "options": [
+              {
+                "short": "h",
+                "long": "host",
+                "description": "get per-host setting",
+                "inherit": false,
+                "value": {
+                  "name": "host"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "provider": {
+                    "values": [
+                      "git_protocol",
+                      "editor",
+                      "prompt",
+                      "pager",
+                      "http_unix_socket"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "set",
+            "description": "update configuration with a value for the given key",
+            "options": [
+              {
+                "short": "h",
+                "long": "host",
+                "description": "get per-host setting",
+                "inherit": false,
+                "value": {
+                  "name": "host"
+                }
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "git_protocol",
+                "description": "the protocol to use for git clone and push operations",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "option",
+                      "provider": {
+                        "values": [
+                          "https",
+                          "ssh"
+                        ]
+                      },
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "editor",
+                "description": "the text editor program to use for authoring text",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "editor",
+                      "provider": {
+                        "values": [
+                          "vim",
+                          "nano"
+                        ]
+                      },
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "prompt",
+                "description": "toggle interactive prompting in the terminal",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "value",
+                      "provider": {
+                        "values": [
+                          "enable",
+                          "disable"
+                        ]
+                      },
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "pager",
+                "description": "the terminal pager program to send standard output to",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "value",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "http_unix_socket",
+                "description": "the path to a unix socket through which to make HTTP connection",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "path",
+                      "index": 0
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "extensions",
+        "description": "manage gh extensions",
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create a new extension",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "install",
+            "description": "install a gh extension from a repository",
+            "arguments": {
+              "states": [
+                {
+                  "name": "repo",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list installed extension commands"
+          },
+          {
+            "name": "remove",
+            "description": "remove an installed extension",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "upgrade",
+            "description": "upgrade installed extensions",
+            "options": [
+              {
+                "long": "all",
+                "description": "upgrade all extensions",
+                "inherit": false
+              },
+              {
+                "long": "force",
+                "description": "force upgrade extensions",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "gist",
+        "description": "manage gists",
+        "subcommands": [
+          {
+            "name": "clone",
+            "description": "clone a gist locally",
+            "arguments": {
+              "states": [
+                {
+                  "name": "gist",
+                  "description": "gist ID or URL",
+                  "index": 0
+                },
+                {
+                  "name": "directory",
+                  "provider": "builtin.directories",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "create",
+            "description": "create a new gist",
+            "options": [
+              {
+                "short": "d",
+                "long": "desc",
+                "description": "a description for this gist",
+                "inherit": false,
+                "value": {
+                  "name": "description"
+                }
+              },
+              {
+                "short": "f",
+                "long": "filename",
+                "description": "provide a filename to be used when reading from STDIN",
+                "inherit": false,
+                "value": {
+                  "name": "filename",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "p",
+                "long": "public",
+                "description": "list the gist publicly (default: secret)",
+                "inherit": false
+              },
+              {
+                "short": "w",
+                "long": "web",
+                "description": "open the web browser with created gist",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "filename",
+                  "provider": "builtin.files",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete a gist",
+            "arguments": {
+              "states": [
+                {
+                  "name": "gist",
+                  "description": "gist ID or URL",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "edit",
+            "description": "edit one of your gists",
+            "options": [
+              {
+                "short": "a",
+                "long": "add",
+                "description": "add a new file to the gist",
+                "inherit": false,
+                "value": {
+                  "name": "filename",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "f",
+                "long": "filename",
+                "description": "select a file to edit",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "gist",
+                  "description": "gist ID or URL",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list your gists",
+            "options": [
+              {
+                "short": "L",
+                "long": "limit",
+                "description": "maximum number of gists to fetch (default 10)",
+                "inherit": false,
+                "value": {
+                  "name": "int"
+                }
+              },
+              {
+                "long": "public",
+                "description": "show only public gists",
+                "inherit": false
+              },
+              {
+                "long": "secret",
+                "description": "show only secret gists",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "view",
+            "description": "view a gist",
+            "options": [
+              {
+                "short": "f",
+                "long": "filename",
+                "description": "display a single file from the gist",
+                "inherit": false
+              },
+              {
+                "long": "files",
+                "description": "list file names from the gist",
+                "inherit": false
+              },
+              {
+                "short": "r",
+                "long": "raw",
+                "description": "print raw instead of rendered gist contents",
+                "inherit": false
+              },
+              {
+                "short": "w",
+                "long": "web",
+                "description": "open gist in the browser",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "gist",
+                  "description": "gist ID or URL",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "issue",
+        "description": "manage issues",
+        "subcommands": [
+          {
+            "name": "close",
+            "description": "close issue",
+            "options": [
+              {
+                "short": "R",
+                "long": "repo",
+                "description": "select another repository using the [HOST/]OWNER/REPO format",
+                "inherit": false,
+                "value": {
+                  "name": "repo"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "issue",
+                  "description": "number or URL",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "comment",
+            "description": "create a new issue comment",
+            "options": [
+              {
+                "short": "R",
+                "long": "repo",
+                "description": "select another repository using the [HOST/]OWNER/REPO format",
+                "inherit": false,
+                "value": {
+                  "name": "repo"
+                }
+              },
+              {
+                "short": "b",
+                "long": "body",
+                "description": "supply a body. Will prompt for one otherwise",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "F",
+                "long": "body-file",
+                "description": "read body text from file",
+                "inherit": false,
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "e",
+                "long": "editor",
+                "description": "add body using editor",
+                "inherit": false,
+                "value": {
+                  "name": "editor"
+                }
+              },
+              {
+                "short": "w",
+                "long": "web",
+                "description": "add body in browser",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "issue",
+                  "description": "number or URL",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "create",
+            "description": "create a new issue",
+            "options": [
+              {
+                "short": "R",
+                "long": "repo",
+                "description": "select another repository using the [HOST/]OWNER/REPO format",
+                "inherit": false,
+                "value": {
+                  "name": "repo"
+                }
+              },
+              {
+                "short": "a",
+                "long": "assignee",
+                "description": "assign people by their login. Use \"@me\" to self-assign",
+                "inherit": false,
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "short": "b",
+                "long": "body",
+                "description": "supply a body. Will prompt for one otherwise",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "F",
+                "long": "body-file",
+                "description": "read body text from file",
+                "inherit": false,
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "l",
+                "long": "label",
+                "description": "add labels by name",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "short": "m",
+                "long": "milestone",
+                "description": "add the issue to a milestone by name",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "add the issue to projects by name",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "recover",
+                "description": "recover input from a failed run of create",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "t",
+                "long": "title",
+                "description": "supply a title. Will prompt for one otherwise",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "w",
+                "long": "web",
+                "description": "open the browser to create an issue",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "delete issue",
+            "options": [
+              {
+                "short": "R",
+                "long": "repo",
+                "description": "select another repository using the [HOST/]OWNER/REPO format",
+                "inherit": false,
+                "value": {
+                  "name": "repo"
+                }
+              }
+            ]
+          },
+          {
+            "name": "edit",
+            "description": "edit an issue",
+            "options": [
+              {
+                "short": "R",
+                "long": "repo",
+                "description": "select another repository using the [HOST/]OWNER/REPO format",
+                "inherit": false,
+                "value": {
+                  "name": "repo"
+                }
+              },
+              {
+                "long": "add-assignee",
+                "description": "add assigned users by their login. Use \"@me\" to assign yourself",
+                "inherit": false,
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "add-label",
+                "description": "add labels by name",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "short": "b",
+                "long": "body",
+                "description": "set the new body",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "F",
+                "long": "body-file",
+                "description": "read body text from file",
+                "inherit": false,
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "m",
+                "long": "milestone",
+                "description": "edit the milestone the issue belongs to by name",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "remove-assignee",
+                "description": "remove assigned users by their login. Use \"@me\" to unassign yourself",
+                "inherit": false,
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "remove-label",
+                "description": "remove labels by name",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "remove-project",
+                "description": "remove the issue from projects by name",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "short": "t",
+                "long": "title",
+                "description": "set the new title",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "issue",
+                  "description": "number or URL",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list and filter issues in this repository",
+            "options": [
+              {
+                "short": "R",
+                "long": "repo",
+                "description": "select another repository using the [HOST/]OWNER/REPO format",
+                "inherit": false,
+                "value": {
+                  "name": "repo"
+                }
+              },
+              {
+                "short": "a",
+                "long": "assignee",
+                "description": "filter by assignee",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "A",
+                "long": "author",
+                "description": "filter by author",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "q",
+                "long": "jq",
+                "description": "filter JSON output using a jq expression",
+                "inherit": false,
+                "value": {
+                  "name": "expression"
+                }
+              },
+              {
+                "long": "json",
+                "description": "output JSON with the specified fields",
+                "inherit": false,
+                "value": {
+                  "name": "fields"
+                }
+              },
+              {
+                "short": "l",
+                "long": "label",
+                "description": "filter by labels",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "L",
+                "long": "limit",
+                "description": "maximum number of issues to fetch (default 30)",
+                "inherit": false,
+                "value": {
+                  "name": "int"
+                }
+              },
+              {
+                "long": "mention",
+                "description": "filter by mention",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "m",
+                "long": "milestone",
+                "description": "filter by milestone number or `title`",
+                "inherit": false,
+                "value": {
+                  "name": "number",
+                  "description": "number or Title"
+                }
+              },
+              {
+                "short": "S",
+                "long": "search",
+                "description": "search issues with query",
+                "inherit": false,
+                "value": {
+                  "name": "query"
+                }
+              },
+              {
+                "short": "s",
+                "long": "state",
+                "description": "filter by state (default \"open\")",
+                "inherit": false,
+                "value": {
+                  "name": "state",
+                  "description": "(default \"open\")",
+                  "provider": {
+                    "values": [
+                      "open",
+                      "closed",
+                      "all"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "t",
+                "long": "template",
+                "description": "format JSON output using a Go template",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "w",
+                "long": "web",
+                "description": "open the browser to list the issue(s)",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "reopen",
+            "description": "reopen issue",
+            "options": [
+              {
+                "short": "R",
+                "long": "repo",
+                "description": "select another repository using the [HOST/]OWNER/REPO format",
+                "inherit": false,
+                "value": {
+                  "name": "repo"
+                }
+              }
+            ]
+          },
+          {
+            "name": "status",
+            "description": "show status of relevant issues",
+            "options": [
+              {
+                "short": "R",
+                "long": "repo",
+                "description": "select another repository using the [HOST/]OWNER/REPO format",
+                "inherit": false,
+                "value": {
+                  "name": "repo"
+                }
+              },
+              {
+                "short": "q",
+                "long": "jq",
+                "description": "filter JSON output using a jq expression",
+                "inherit": false,
+                "value": {
+                  "name": "expression"
+                }
+              },
+              {
+                "long": "json",
+                "description": "output JSON with the specified fields",
+                "inherit": false,
+                "value": {
+                  "name": "fields"
+                }
+              },
+              {
+                "short": "t",
+                "long": "template",
+                "description": "format JSON output using a Go template",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ]
+          },
+          {
+            "name": "transfer",
+            "description": "transfer issue to another repository",
+            "options": [
+              {
+                "short": "R",
+                "long": "repo",
+                "description": "select another repository using the [HOST/]OWNER/REPO format",
+                "inherit": false,
+                "value": {
+                  "name": "repo"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "issue",
+                  "description": "number or URL",
+                  "index": 0
+                },
+                {
+                  "name": "destination-repo",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "view",
+            "description": "view an issue",
+            "options": [
+              {
+                "short": "R",
+                "long": "repo",
+                "description": "select another repository using the [HOST/]OWNER/REPO format",
+                "inherit": false,
+                "value": {
+                  "name": "repo"
+                }
+              },
+              {
+                "short": "c",
+                "long": "comments",
+                "description": "view issue comments",
+                "inherit": false
+              },
+              {
+                "short": "q",
+                "long": "jq",
+                "description": "filter JSON output using a jq expression",
+                "inherit": false,
+                "value": {
+                  "name": "expression"
+                }
+              },
+              {
+                "long": "json",
+                "description": "output JSON with the specified fields",
+                "inherit": false,
+                "value": {
+                  "name": "fields"
+                }
+              },
+              {
+                "short": "t",
+                "long": "template",
+                "description": "format JSON output using a Go template",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "w",
+                "long": "web",
+                "description": "open an issue in the browser",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "issue",
+                  "description": "number or URL",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "pr",
+        "description": "manage pull requests",
+        "subcommands": [
+          {
+            "name": "checkout",
+            "description": "check out a pull request in git",
+            "options": [
+              {
+                "long": "recurse-submodules",
+                "description": "update all active submodules (recursively)",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "number-|-url-|-branch",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "checks",
+            "description": "show CI status for a single pull request",
+            "options": [
+              {
+                "short": "w",
+                "long": "web",
+                "description": "open the web browser to show details about checks",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "number-|-url-|-branch",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "close",
+            "description": "close a pull request",
+            "options": [
+              {
+                "short": "d",
+                "long": "delete-branch",
+                "description": "delete the local and remote branch after close",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "number-|-url-|-branch",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "edit",
+            "description": "edit a pull request. Without an argument, the pull request that belongs to the current branch is selected",
+            "options": [
+              {
+                "long": "add-assignee",
+                "description": "add assigned users by their login. Use \"@me\" to assign yourself",
+                "inherit": false,
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "add-label",
+                "description": "add labels by name",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "add-project",
+                "description": "add the pull request to projects by name",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "add-reviewer",
+                "description": "add reviewers by their login",
+                "inherit": false,
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "short": "B",
+                "long": "base",
+                "description": "change the base branch for this pull request",
+                "inherit": false,
+                "value": {
+                  "name": "branch"
+                }
+              },
+              {
+                "short": "b",
+                "long": "body",
+                "description": "set the new body",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "F",
+                "long": "body-file",
+                "description": "read body text from file (use \"-\" to read from standard input)",
+                "inherit": false,
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "m",
+                "long": "milestone",
+                "description": "edit the milestone the pull request belongs to by name",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "remove-assignee",
+                "description": "remove assigned users by their login. Use \"@me\" to unassign yourself",
+                "inherit": false,
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "remove-label",
+                "description": "remove labels by name",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "remove-project",
+                "description": "remove the pull request from projects by name",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "remove-reviewer",
+                "description": "remove reviewers by their login",
+                "inherit": false,
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "short": "t",
+                "long": "title",
+                "description": "set the new title",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "number-|-url-|-branch",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "comment",
+            "description": "create a new pr comment",
+            "options": [
+              {
+                "short": "b",
+                "long": "body",
+                "description": "supply a body. Will prompt for one otherwise",
+                "inherit": false,
+                "value": {
+                  "name": "message"
+                }
+              },
+              {
+                "short": "e",
+                "long": "editor",
+                "description": "add body using editor",
+                "inherit": false
+              },
+              {
+                "short": "w",
+                "long": "web",
+                "description": "add body in browser",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "number-|-url-|-branch",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "create",
+            "description": "create a pull request",
+            "options": [
+              {
+                "short": "a",
+                "long": "assignee",
+                "description": "assign people by their login",
+                "inherit": false,
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "short": "B",
+                "long": "base",
+                "description": "the branch into which you want your code merged",
+                "inherit": false,
+                "value": {
+                  "name": "branch"
+                }
+              },
+              {
+                "short": "b",
+                "long": "body",
+                "description": "body for the pull request",
+                "inherit": false,
+                "value": {
+                  "name": "body"
+                }
+              },
+              {
+                "short": "d",
+                "long": "draft",
+                "description": "mark pull request as a draft",
+                "inherit": false
+              },
+              {
+                "short": "f",
+                "long": "fill",
+                "description": "do not prompt for title/body and just use commit info",
+                "inherit": false
+              },
+              {
+                "short": "H",
+                "long": "head",
+                "description": "the branch that contains commits for your pull request (default: current branch)",
+                "inherit": false,
+                "value": {
+                  "name": "branch"
+                }
+              },
+              {
+                "short": "l",
+                "long": "label",
+                "description": "the branch that contains commits for your pull request (default: current branch)",
+                "inherit": false,
+                "value": {
+                  "name": "branch"
+                }
+              },
+              {
+                "short": "m",
+                "long": "milestone",
+                "description": "add the pull request to a milestone by name",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "no-maintainer-edit",
+                "description": "disable maintainer's ability to modify pull request",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "project",
+                "description": "add the pull request to projects by name",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "spellings": [
+                  "-recover"
+                ],
+                "description": "recover input from a failed run of create",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "r",
+                "long": "reviewer",
+                "description": "request reviews from people or teams by their handle",
+                "inherit": false,
+                "value": {
+                  "name": "handle"
+                }
+              },
+              {
+                "short": "t",
+                "long": "title",
+                "description": "title for the pull request",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "w",
+                "long": "web",
+                "description": "open the web browser to create a pull request",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "diff",
+            "description": "view changes in a pull request",
+            "options": [
+              {
+                "long": "color",
+                "description": "use color in diff output: {always|never|auto}",
+                "inherit": false,
+                "value": {
+                  "name": "choice"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "number-|-url-|-branch",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list and filter pull requests in this repository",
+            "options": [
+              {
+                "short": "a",
+                "long": "assignee",
+                "description": "filter by assignee",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "B",
+                "long": "base",
+                "description": "filter by base branch",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "l",
+                "long": "label",
+                "description": "filter by labels",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "L",
+                "long": "limit",
+                "description": "maximum number of items to fetch",
+                "inherit": false,
+                "value": {
+                  "name": "int"
+                }
+              },
+              {
+                "short": "s",
+                "long": "state",
+                "description": "filter by state: {open|closed|merged|all}",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "w",
+                "long": "web",
+                "description": "open the browser to list the pull requests",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ]
+          },
+          {
+            "name": "merge",
+            "description": "merge a pull request",
+            "options": [
+              {
+                "short": "d",
+                "long": "delete-branch",
+                "description": "delete the local and remote branch after merge",
+                "inherit": false
+              },
+              {
+                "short": "m",
+                "long": "merge",
+                "description": "merge the commits with the base branch",
+                "inherit": false
+              },
+              {
+                "short": "r",
+                "long": "rebase",
+                "description": "rebase the commits onto the base branch",
+                "inherit": false
+              },
+              {
+                "short": "s",
+                "long": "squash",
+                "description": "squash the commits into one commit and merge it into the base branch",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "number-|-url-|-branch",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "ready",
+            "description": "mark a pull request as ready for review",
+            "arguments": {
+              "states": [
+                {
+                  "name": "number-|-url-|-branch",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "reopen",
+            "description": "reopen a pull request",
+            "arguments": {
+              "states": [
+                {
+                  "name": "number-|-url-|-branch",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "review",
+            "description": "add a review to a pull request",
+            "options": [
+              {
+                "short": "a",
+                "long": "approve",
+                "description": "approve pull request",
+                "inherit": false
+              },
+              {
+                "short": "b",
+                "long": "body",
+                "description": "specify the body of a review",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "c",
+                "long": "comment",
+                "description": "comment on a pull request",
+                "inherit": false
+              },
+              {
+                "short": "r",
+                "long": "request-changes",
+                "description": "request changes on a pull request",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "number-|-url-|-branch",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "description": "show status of relevant pull requests"
+          },
+          {
+            "name": "view",
+            "description": "view a pull request",
+            "options": [
+              {
+                "short": "c",
+                "long": "comments",
+                "description": "view pull request comments",
+                "inherit": false
+              },
+              {
+                "short": "w",
+                "long": "web",
+                "description": "open a pull request in the browser",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "number-|-url-|-branch",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "release",
+        "description": "manage GitHub releases"
+      },
+      {
+        "name": "repo",
+        "description": "work with GitHub repositories",
+        "subcommands": [
+          {
+            "name": "archive",
+            "description": "archive a GitHub repository. With no argument, archives the current repository",
+            "arguments": {
+              "states": [
+                {
+                  "name": "repository",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "clone",
+            "options": [
+              {
+                "short": "u",
+                "long": "upstream-remote-name",
+                "description": "upstream remote name when cloning a fork (default \"upstream\")",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "repository",
+                  "index": 0
+                },
+                {
+                  "name": "directory",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "create",
+            "options": [
+              {
+                "short": "d",
+                "long": "description",
+                "description": "description of the repository",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "h",
+                "long": "homepage",
+                "description": "repository home page URL",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "public",
+                "description": "make the repository public",
+                "inherit": false
+              },
+              {
+                "long": "private",
+                "description": "make the repository private",
+                "inherit": false
+              },
+              {
+                "long": "internal",
+                "description": "make the repository internal",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "template",
+                "description": "make the new repository based on a template repository",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "c",
+                "long": "clone",
+                "description": "clone the new repository to the current directory",
+                "inherit": false
+              },
+              {
+                "long": "disable-issues",
+                "description": "disable issues in the new repository",
+                "inherit": false
+              },
+              {
+                "long": "disable-wiki",
+                "description": "disable wiki in the new repository",
+                "inherit": false
+              },
+              {
+                "short": "g",
+                "long": "gitignore",
+                "description": "specify a gitignore template for the repository",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "l",
+                "long": "license",
+                "description": "specify an Open Source License for the repository",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "r",
+                "long": "remote",
+                "description": "specify remote name for the new repository",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "s",
+                "long": "source",
+                "description": "specify path to local repository to use as source",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "t",
+                "long": "team",
+                "description": "the name of the organization team to be granted access",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "include-all-branches",
+                "description": "include all branches from template repository",
+                "inherit": false
+              },
+              {
+                "long": "push",
+                "description": "push local commits to the new repository",
+                "inherit": false
+              },
+              {
+                "long": "add-readme",
+                "description": "add a README file to the new repository",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "deploy-key",
+            "description": "manage deploy keys in a repository",
+            "options": [
+              {
+                "short": "R",
+                "long": "repo",
+                "description": "select another repository using the `[HOST/]OWNER/REPO` format",
+                "inherit": false,
+                "value": {
+                  "name": "[HOST/]OWNER/REPO"
+                }
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "add",
+                "description": "add a deploy key to a GitHub repository",
+                "options": [
+                  {
+                    "short": "w",
+                    "long": "allow-write",
+                    "description": "allow write access for the key",
+                    "inherit": false
+                  },
+                  {
+                    "short": "t",
+                    "long": "title",
+                    "description": "title of the new key",
+                    "inherit": false,
+                    "value": {
+                      "name": "string"
+                    }
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "key-file",
+                      "description": "path to the public key file",
+                      "provider": "builtin.files",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "delete",
+                "description": "delete a deploy key from a GitHub repository",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "key-id",
+                      "description": "iD of the key to delete",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "list",
+                "description": "list deploy keys in a GitHub repository"
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "arguments": {
+              "states": [
+                {
+                  "name": "repository",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "edit",
+            "description": "edit repository settings",
+            "options": [
+              {
+                "long": "add-topic",
+                "description": "add repository topic",
+                "inherit": false,
+                "value": {
+                  "name": "topic-names"
+                }
+              },
+              {
+                "long": "allow-forking",
+                "description": "allow forking of an organization repository",
+                "inherit": false
+              },
+              {
+                "long": "default-branch",
+                "description": "set the default branch name for the repository",
+                "inherit": false,
+                "value": {
+                  "name": "branch-name"
+                }
+              },
+              {
+                "long": "delete-branch-on-merge",
+                "description": "delete head branch when pull requests are merged",
+                "inherit": false
+              },
+              {
+                "short": "d",
+                "long": "description",
+                "description": "description of the repository",
+                "inherit": false,
+                "value": {
+                  "name": "description"
+                }
+              },
+              {
+                "long": "enable-auto-merge",
+                "description": "enable auto-merge functionality",
+                "inherit": false
+              },
+              {
+                "long": "enable-issues",
+                "description": "enable issues in the repository",
+                "inherit": false
+              },
+              {
+                "long": "enable-merge-commit",
+                "description": "enable merging pull requests via merge commit",
+                "inherit": false
+              },
+              {
+                "long": "enable-projects",
+                "description": "enable projects in the repository",
+                "inherit": false
+              },
+              {
+                "long": "enable-rebase-merge",
+                "description": "enable merging pull requests via rebase",
+                "inherit": false
+              },
+              {
+                "long": "enable-squash-merge",
+                "description": "enable merging pull requests via squashed commit",
+                "inherit": false
+              },
+              {
+                "long": "enable-wiki",
+                "description": "enable wiki in the repository",
+                "inherit": false
+              },
+              {
+                "short": "h",
+                "long": "homepage",
+                "description": "repository home page URL",
+                "inherit": false,
+                "value": {
+                  "name": "URL"
+                }
+              },
+              {
+                "long": "remove-topic",
+                "description": "remove repository topic",
+                "inherit": false,
+                "value": {
+                  "name": "topic-names"
+                }
+              },
+              {
+                "long": "template",
+                "description": "make the repository available as a template repository",
+                "inherit": false
+              },
+              {
+                "long": "visibility",
+                "description": "change the visibility of the repository to {public,private,internal}",
+                "inherit": false,
+                "value": {
+                  "name": "string",
+                  "provider": {
+                    "values": [
+                      "public",
+                      "private",
+                      "internal"
+                    ]
+                  }
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "repository",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "fork",
+            "options": [
+              {
+                "long": "clone",
+                "description": "clone the fork",
+                "inherit": false
+              },
+              {
+                "long": "remote",
+                "description": "add remote for fork {true|false}",
+                "inherit": false
+              },
+              {
+                "long": "remote-name",
+                "description": "specify a name for a fork's new remote. (default \"origin\")",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "org",
+                "description": "create the fork in an organization",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "fork-name",
+                "description": "rename the forked repository",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "repository",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "options": [
+              {
+                "long": "visibility",
+                "description": "filter repositories by visibility",
+                "inherit": false,
+                "value": {
+                  "name": "visibility",
+                  "provider": {
+                    "values": [
+                      "public",
+                      "private",
+                      "internal"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "archived",
+                "description": "show only archived repositories",
+                "inherit": false
+              },
+              {
+                "long": "fork",
+                "description": "show only forked repositories",
+                "inherit": false
+              },
+              {
+                "short": "l",
+                "long": "language",
+                "description": "filter by primary coding language",
+                "inherit": false
+              },
+              {
+                "short": "L",
+                "long": "limit",
+                "description": "maximum number of repositories to list (default 30)",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "no-archived",
+                "description": "omit archived repositories",
+                "inherit": false
+              },
+              {
+                "long": "source",
+                "description": "show only non-forks",
+                "inherit": false
+              },
+              {
+                "short": "q",
+                "long": "jq",
+                "description": "filter JSON output using a jq expression",
+                "inherit": false
+              },
+              {
+                "long": "json",
+                "description": "output JSON with the specified fields",
+                "inherit": false
+              },
+              {
+                "short": "t",
+                "long": "template",
+                "description": "format JSON output using a Go template",
+                "inherit": false
+              },
+              {
+                "long": "topic",
+                "description": "filter by topic",
+                "inherit": false,
+                "value": {
+                  "name": "topic"
+                }
+              },
+              {
+                "long": "private",
+                "description": "show only private repositories",
+                "inherit": false,
+                "deprecated": true
+              },
+              {
+                "long": "public",
+                "description": "show only public repositories",
+                "inherit": false,
+                "deprecated": true
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "owner",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "rename",
+            "options": [
+              {
+                "short": "R",
+                "long": "repo",
+                "description": "select another repository using the `[HOST/]OWNER/REPO` format",
+                "inherit": false,
+                "value": {
+                  "name": "[HOST/]OWNER/REPO"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "new-name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "set-default",
+            "description": "sets the default remote repository to use when querying the GitHub API for the locally cloned repository",
+            "options": [
+              {
+                "short": "u",
+                "long": "unset",
+                "description": "unset the current default repository",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "long": "view",
+                "description": "view the current default repository",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "repository",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "sync",
+            "options": [
+              {
+                "short": "b",
+                "long": "branch",
+                "description": "branch to sync",
+                "inherit": false,
+                "value": {
+                  "name": "branch-name"
+                }
+              },
+              {
+                "long": "force",
+                "description": "hard reset the branch of the destination repository to match the source repository",
+                "inherit": false
+              },
+              {
+                "short": "s",
+                "long": "source",
+                "description": "source repository",
+                "inherit": false,
+                "value": {
+                  "name": "source-repository"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "destination-repository",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "view",
+            "options": [
+              {
+                "short": "b",
+                "long": "branch",
+                "description": "view a specific branch of the repository",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "w",
+                "long": "web",
+                "description": "open a repository in the browser",
+                "inherit": false
+              },
+              {
+                "short": "q",
+                "long": "jq",
+                "description": "filter JSON output using a jq expression",
+                "inherit": false,
+                "value": {
+                  "name": "expression"
+                }
+              },
+              {
+                "long": "json",
+                "description": "output JSON with the specified fields",
+                "inherit": false,
+                "value": {
+                  "name": "fields"
+                }
+              },
+              {
+                "short": "t",
+                "long": "template",
+                "description": "format JSON output using a Go template",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "repository",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "view details about workflow runs",
+        "subcommands": [
+          {
+            "name": "download",
+            "description": "download artifacts generated by a workflow run",
+            "arguments": {
+              "states": [
+                {
+                  "name": "run-id",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list recent workflow runs",
+            "options": [
+              {
+                "short": "L",
+                "long": "limit",
+                "description": "maximum number of runs to fetch (default 20)",
+                "inherit": false,
+                "value": {
+                  "name": "int"
+                }
+              },
+              {
+                "short": "w",
+                "long": "workflow",
+                "description": "filter runs by workflow",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ]
+          },
+          {
+            "name": "rerun",
+            "description": "rerun a failed run",
+            "arguments": {
+              "states": [
+                {
+                  "name": "run-id",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "view",
+            "description": "view a summary of a workflow run",
+            "options": [
+              {
+                "long": "exit-status",
+                "description": "exit with non-zero status if run failed",
+                "inherit": false
+              },
+              {
+                "short": "j",
+                "long": "job",
+                "description": "view a specific job ID from a run",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "log",
+                "description": "view full log for either a run or specific job",
+                "inherit": false
+              },
+              {
+                "long": "log-failed",
+                "description": "view the log for any failed steps in a run or specific job",
+                "inherit": false
+              },
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "show job steps",
+                "inherit": false
+              },
+              {
+                "short": "w",
+                "long": "web",
+                "description": "open run in the browser",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "run-id",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "watch",
+            "description": "watch a run until it completes, showing its progress",
+            "options": [
+              {
+                "long": "exit-status",
+                "description": "exit with non-zero status if run fails",
+                "inherit": false
+              },
+              {
+                "short": "i",
+                "long": "interval",
+                "description": "refresh interval in seconds (default 3)",
+                "inherit": false,
+                "value": {
+                  "name": "int"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "secret",
+        "description": "manage GitHub secrets",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list secrets for a repository, environment, or organization",
+            "options": [
+              {
+                "short": "e",
+                "long": "env",
+                "description": "list secrets for an environment",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "o",
+                "long": "org",
+                "description": "list secrets for an environment",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ]
+          },
+          {
+            "name": "remove",
+            "description": "remove secrets"
+          },
+          {
+            "name": "set",
+            "description": "create or update secrets",
+            "options": [
+              {
+                "short": "b",
+                "long": "body",
+                "description": "a value for the secret. Reads from STDIN if not specified",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "v",
+                "long": "visibility",
+                "description": "set visibility for an organization secret: all, `private`, or `selected` (default 'private')",
+                "inherit": false,
+                "value": {
+                  "name": "string",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "private"
+                      },
+                      {
+                        "value": "selected"
+                      },
+                      {
+                        "value": "all"
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "ssh-key",
+        "description": "manage SSH keys",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add an SSH key to your GitHub account",
+            "options": [
+              {
+                "short": "t",
+                "long": "title",
+                "description": "title for the new key",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "<key-file>",
+                  "provider": "builtin.files",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "lists SSH keys in your GitHub account"
+          }
+        ]
+      },
+      {
+        "name": "workflow",
+        "description": "view details about GitHub Actions workflows",
+        "subcommands": [
+          {
+            "name": "disable",
+            "description": "disable a workflow",
+            "arguments": {
+              "states": [
+                {
+                  "name": "[<workflow-id>-|-<workflow-name>]",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "enable",
+            "description": "enable a workflow",
+            "arguments": {
+              "states": [
+                {
+                  "name": "[<workflow-id>-|-<workflow-name>]",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list workflows",
+            "options": [
+              {
+                "short": "a",
+                "long": "all",
+                "description": "show all workflows, including disabled workflows",
+                "inherit": false
+              },
+              {
+                "short": "L",
+                "long": "limit",
+                "description": "show all workflows, including disabled workflows",
+                "inherit": false,
+                "value": {
+                  "name": "int",
+                  "description": "maximum number of workflows to fetch (default 50)"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "[<workflow-id>-|-<workflow-name>]",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "run",
+            "description": "run a workflow by creating a workflow_dispatch event",
+            "options": [
+              {
+                "short": "F",
+                "long": "field",
+                "description": "add a string parameter in key=value format, respecting @ syntax",
+                "inherit": false,
+                "value": {
+                  "name": "key=value"
+                }
+              },
+              {
+                "long": "json",
+                "description": "read workflow inputs as JSON via STDIN",
+                "inherit": false
+              },
+              {
+                "short": "f",
+                "long": "raw-field",
+                "description": "add a string parameter in key=value format",
+                "inherit": false,
+                "value": {
+                  "name": "key=value"
+                }
+              },
+              {
+                "short": "r",
+                "long": "ref",
+                "description": "the branch or tag name which contains the version of the workflow file you'd like to run",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "[<workflow-id>-|-<workflow-name>]",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "view",
+            "description": "view the summary of a workflow",
+            "options": [
+              {
+                "short": "r",
+                "long": "ref",
+                "description": "the branch or tag name which contains the version of the workflow file you'd like to view",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "w",
+                "long": "web",
+                "description": "open workflow in the browser",
+                "inherit": false
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "view the workflow yaml file",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "workflow-id",
+                  "index": 0
+                },
+                {
+                  "name": "workflow-name",
+                  "index": 1
+                },
+                {
+                  "name": "filename",
+                  "provider": "builtin.files",
+                  "index": 2
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "codespace",
+        "aliases": [
+          "cs"
+        ],
+        "description": "connect to and manage codespaces",
+        "subcommands": [
+          {
+            "name": "code",
+            "description": "open a codespace in Visual Studio Code",
+            "options": [
+              {
+                "long": "insiders",
+                "description": "use the insiders version of Visual Studio Code",
+                "inherit": false
+              },
+              {
+                "short": "w",
+                "long": "web",
+                "description": "use the web version of Visual Studio Code",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "cp",
+            "description": "the cp command copies files between the local and remote file systems",
+            "options": [
+              {
+                "short": "e",
+                "long": "expand",
+                "description": "expand remote file names on remote shell",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "profile",
+                "description": "name of the SSH profile to use",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "r",
+                "long": "recursive",
+                "description": "recursively copy directories",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "sources",
+                  "index": 0,
+                  "repeatable": true
+                },
+                {
+                  "name": "dest",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "create",
+            "description": "create a codespace",
+            "options": [
+              {
+                "short": "b",
+                "long": "branch",
+                "description": "repository branch",
+                "inherit": false
+              },
+              {
+                "long": "default-permissions",
+                "description": "do not prompt to accept additional permissions requested by the codespace",
+                "inherit": false
+              },
+              {
+                "long": "devcontainer-path",
+                "description": "path to the devcontainer.json file to use when creating codespace",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "short": "d",
+                "long": "display-name",
+                "description": "display name for the codespace",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "idle-timeout",
+                "description": "allowed inactivity before codespace is stopped",
+                "inherit": false,
+                "value": {
+                  "name": "duration",
+                  "description": "example: '10m', '1h'"
+                }
+              },
+              {
+                "short": "l",
+                "long": "location",
+                "description": "determined automatically if not provided",
+                "inherit": false,
+                "value": {
+                  "name": "location",
+                  "provider": {
+                    "values": [
+                      "EastUs",
+                      "SouthEastAsia",
+                      "WestEurope",
+                      "WestUs2"
+                    ]
+                  }
+                }
+              },
+              {
+                "short": "m",
+                "long": "machine",
+                "description": "hardware specifications for the VM",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "R",
+                "long": "repo",
+                "description": "repository name with owner: user/repo",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "retention-period",
+                "description": "allowed time after shutting down before the codespace is automatically deleted (maximum 30 days)",
+                "inherit": false,
+                "value": {
+                  "name": "duration",
+                  "description": "example: '10m', '1h'"
+                }
+              },
+              {
+                "short": "s",
+                "long": "status",
+                "description": "show status of post-create command and dotfiles",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "delete codespaces based on selection criteria. All codespaces for the authenticated user can be deleted, as well as codespaces for a specific repository. Altern",
+            "options": [
+              {
+                "long": "all",
+                "description": "delete all codespaces",
+                "inherit": false
+              },
+              {
+                "long": "days",
+                "description": "delete codespaces older than N days",
+                "inherit": false,
+                "value": {
+                  "name": "N-days"
+                }
+              },
+              {
+                "short": "f",
+                "long": "force",
+                "description": "skip confirmation for codespaces that contain unsaved changes",
+                "priority": -10,
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "org",
+                "description": "the login handle of the organization (admin-only)",
+                "inherit": false,
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "short": "r",
+                "long": "repo",
+                "description": "delete codespaces for a repository",
+                "inherit": false,
+                "value": {
+                  "name": "repository"
+                }
+              },
+              {
+                "short": "u",
+                "long": "user",
+                "description": "the username to delete codespaces for",
+                "inherit": false,
+                "value": {
+                  "name": "username"
+                }
+              }
+            ]
+          },
+          {
+            "name": "edit",
+            "description": "edit a codespace",
+            "options": [
+              {
+                "short": "d",
+                "long": "display-name",
+                "description": "set the display name",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "m",
+                "long": "machine",
+                "description": "set hardware specifications for the VM",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ]
+          },
+          {
+            "name": "jupyter",
+            "description": "open a codespace in JupyterLab"
+          },
+          {
+            "name": "list",
+            "description": "list codespaces of the authenticated user. Alternatively, organization administrators may list all codespaces billed to the organization",
+            "options": [
+              {
+                "short": "q",
+                "long": "jq",
+                "description": "filter JSON output using a jq expression",
+                "inherit": false,
+                "value": {
+                  "name": "expression"
+                }
+              },
+              {
+                "long": "json",
+                "description": "output JSON with the specified fields",
+                "inherit": false,
+                "value": {
+                  "name": "fields"
+                }
+              },
+              {
+                "short": "L",
+                "long": "limit",
+                "description": "maximum number of codespaces to list",
+                "inherit": false,
+                "value": {
+                  "name": "int"
+                }
+              },
+              {
+                "short": "o",
+                "long": "org",
+                "description": "the login handle of the organization to list codespaces for (admin-only)",
+                "inherit": false,
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "short": "R",
+                "long": "repo",
+                "description": "repository name with owner: user/repo",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "t",
+                "long": "template",
+                "description": "format JSON output using a Go template; see 'gh help formatting'",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "short": "u",
+                "long": "user",
+                "description": "the username to list codespaces for",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ]
+          },
+          {
+            "name": "logs",
+            "description": "access codespace logs",
+            "options": [
+              {
+                "short": "f",
+                "long": "follow",
+                "description": "tail and follow the logs",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "ports",
+            "description": "list ports in a codespace",
+            "options": [
+              {
+                "short": "q",
+                "long": "jq",
+                "description": "filter JSON output using a jq expression",
+                "inherit": false,
+                "value": {
+                  "name": "expression"
+                }
+              },
+              {
+                "long": "json",
+                "description": "output JSON with the specified fields",
+                "inherit": false,
+                "value": {
+                  "name": "fields"
+                }
+              },
+              {
+                "short": "t",
+                "long": "template",
+                "description": "format JSON output using a Go template; see 'gh help formatting'",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "forward",
+                "description": "forward ports",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "value",
+                      "index": 0,
+                      "repeatable": true
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "visibility",
+                "description": "change the visibility of the forwarded port",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "value",
+                      "index": 0,
+                      "repeatable": true
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "rebuild",
+            "description": "rebuild a codespace"
+          },
+          {
+            "name": "ssh",
+            "description": "sSH into a codespace",
+            "options": [
+              {
+                "long": "config",
+                "description": "write OpenSSH configuration to stdout",
+                "inherit": false
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "log debug data to a file",
+                "inherit": false
+              },
+              {
+                "long": "debug-file",
+                "description": "path of the file log to",
+                "inherit": false,
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "profile",
+                "description": "name of the SSH profile to use",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              },
+              {
+                "long": "server-port",
+                "description": "sSH server port number (0 => pick unused)",
+                "inherit": false,
+                "value": {
+                  "name": "int"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "command",
+                  "provider": "builtin.executables",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "stop",
+            "description": "stop running a codespace",
+            "options": [
+              {
+                "short": "o",
+                "long": "org",
+                "description": "the login handle of the organization (admin-only)",
+                "inherit": false,
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "short": "u",
+                "long": "user",
+                "description": "the username to delete codespaces for",
+                "inherit": false,
+                "value": {
+                  "name": "username"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "project",
+        "description": "manage projects",
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create a project",
+            "options": [
+              {
+                "long": "title",
+                "description": "title for the project",
+                "inherit": false,
+                "value": {
+                  "name": "title"
+                }
+              },
+              {
+                "long": "owner",
+                "description": "login of the owner. Use \"@me\" for the current user",
+                "inherit": false,
+                "value": {
+                  "name": "owner"
+                }
+              },
+              {
+                "long": "format",
+                "description": "output format: {json}",
+                "inherit": false,
+                "value": {
+                  "name": "body"
+                }
+              }
+            ]
+          },
+          {
+            "name": "edit",
+            "description": "edit a project",
+            "options": [
+              {
+                "long": "title",
+                "description": "new title of the project",
+                "inherit": false,
+                "value": {
+                  "name": "title"
+                }
+              },
+              {
+                "short": "d",
+                "long": "description",
+                "description": "new description of the project",
+                "inherit": false,
+                "value": {
+                  "name": "description"
+                }
+              },
+              {
+                "long": "owner",
+                "description": "login of the owner. Use \"@me\" for the current user",
+                "inherit": false,
+                "value": {
+                  "name": "owner"
+                }
+              },
+              {
+                "long": "readme",
+                "description": "new readme for the project",
+                "inherit": false,
+                "value": {
+                  "name": "readme"
+                }
+              },
+              {
+                "long": "visibility",
+                "description": "change project visibility",
+                "inherit": false,
+                "value": {
+                  "name": "visibility",
+                  "provider": {
+                    "values": [
+                      "PUBLIC",
+                      "PRIVATE"
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "list projects",
+            "options": [
+              {
+                "long": "closed",
+                "description": "include closed projects",
+                "inherit": false,
+                "value": {
+                  "name": "closed"
+                }
+              },
+              {
+                "long": "owner",
+                "description": "login of the owner",
+                "inherit": false,
+                "value": {
+                  "name": "owner"
+                }
+              },
+              {
+                "short": "L",
+                "long": "limit",
+                "description": "maximum number of projects to fetch",
+                "inherit": false,
+                "value": {
+                  "name": "int"
+                }
+              },
+              {
+                "long": "format",
+                "description": "output format: {json}",
+                "inherit": false,
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "web",
+                "description": "open projects list in the browser",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "delete a project",
+            "options": [
+              {
+                "long": "owner",
+                "description": "login of the owner. Use @me for the current user",
+                "inherit": false,
+                "value": {
+                  "name": "owner"
+                }
+              },
+              {
+                "long": "format",
+                "description": "output format: {json}",
+                "inherit": false,
+                "value": {
+                  "name": "format"
+                }
+              }
+            ]
+          },
+          {
+            "name": "close",
+            "description": "close a project",
+            "options": [
+              {
+                "long": "owner",
+                "description": "login of the owner. Use @me for the current user",
+                "inherit": false,
+                "value": {
+                  "name": "owner"
+                }
+              },
+              {
+                "long": "format",
+                "description": "output format: {json}",
+                "inherit": false,
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "undo",
+                "description": "reopen a closed project",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "view",
+            "description": "view a project",
+            "options": [
+              {
+                "long": "owner",
+                "description": "login of the owner. Use @me for the current user",
+                "inherit": false,
+                "value": {
+                  "name": "owner"
+                }
+              },
+              {
+                "long": "format",
+                "description": "output format: {json}",
+                "inherit": false,
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "short": "w",
+                "long": "web",
+                "description": "open project in the browser",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "copy",
+            "description": "copy a project",
+            "options": [
+              {
+                "long": "title",
+                "description": "title for the new project",
+                "inherit": false,
+                "value": {
+                  "name": "title"
+                }
+              },
+              {
+                "long": "target-owner",
+                "description": "login of the target owner. Use @me for the current user",
+                "inherit": false,
+                "value": {
+                  "name": "target-owner"
+                }
+              },
+              {
+                "long": "source-owner",
+                "description": "login of the source owner. Use @me for the current user",
+                "inherit": false,
+                "value": {
+                  "name": "source-owner"
+                }
+              },
+              {
+                "long": "format",
+                "description": "output format: {json}",
+                "inherit": false,
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "drafts",
+                "description": "include draft issues when copying",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "field-create",
+            "description": "create a project field",
+            "options": [
+              {
+                "long": "name",
+                "description": "name of the field",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "data-type",
+                "description": "dataType of the new field",
+                "inherit": false,
+                "value": {
+                  "name": "data-type",
+                  "provider": {
+                    "values": [
+                      "TEXT",
+                      "SINGLE_SELECT",
+                      "DATE",
+                      "NUMBER"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "owner",
+                "description": "login of the owner. Use @me for the current user",
+                "inherit": false,
+                "value": {
+                  "name": "owner"
+                }
+              },
+              {
+                "long": "format",
+                "description": "output format: {json}",
+                "inherit": false,
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "single-select-options",
+                "description": "options for SINGLE_SELECT data type",
+                "inherit": false,
+                "value": {
+                  "name": "single-select-options"
+                }
+              }
+            ]
+          },
+          {
+            "name": "field-delete",
+            "description": "delete a project field",
+            "options": [
+              {
+                "long": "id",
+                "description": "iD of the field to delete",
+                "inherit": false,
+                "value": {
+                  "name": "id"
+                }
+              },
+              {
+                "long": "format",
+                "description": "output format: {json}",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "field-list",
+            "description": "list project fields",
+            "options": [
+              {
+                "long": "owner",
+                "description": "login of the owner. Use @me for the current user",
+                "inherit": false,
+                "value": {
+                  "name": "owner"
+                }
+              },
+              {
+                "long": "format",
+                "description": "output format: {json}",
+                "inherit": false
+              },
+              {
+                "short": "L",
+                "long": "limit",
+                "description": "maximum number of fields to fetch",
+                "inherit": false,
+                "value": {
+                  "name": "int"
+                }
+              }
+            ]
+          },
+          {
+            "name": "item-create",
+            "description": "create a draft issue item in a project",
+            "options": [
+              {
+                "long": "title",
+                "description": "title for the draft issue",
+                "inherit": false,
+                "value": {
+                  "name": "title"
+                }
+              },
+              {
+                "long": "body",
+                "description": "body for the draft issue",
+                "inherit": false,
+                "value": {
+                  "name": "body"
+                }
+              },
+              {
+                "long": "format",
+                "description": "output format: {json}",
+                "inherit": false,
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "owner",
+                "description": "login of the owner. Use @me for the current user",
+                "inherit": false,
+                "value": {
+                  "name": "owner"
+                }
+              }
+            ]
+          },
+          {
+            "name": "item-edit",
+            "description": "edit a project item",
+            "options": [
+              {
+                "long": "id",
+                "description": "iD of the item to edit",
+                "inherit": false,
+                "value": {
+                  "name": "id"
+                }
+              },
+              {
+                "long": "project-id",
+                "description": "iD of the project to which the field belongs to",
+                "inherit": false,
+                "value": {
+                  "name": "project-id"
+                }
+              },
+              {
+                "long": "title",
+                "description": "title of the draft issue item",
+                "inherit": false,
+                "value": {
+                  "name": "title"
+                }
+              },
+              {
+                "long": "body",
+                "description": "body of the draft issue item",
+                "inherit": false,
+                "value": {
+                  "name": "body"
+                }
+              },
+              {
+                "long": "format",
+                "description": "output format: {json}",
+                "inherit": false,
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "field-id",
+                "description": "iD of the field to update",
+                "inherit": false,
+                "value": {
+                  "name": "field-id"
+                }
+              },
+              {
+                "long": "iteration-id",
+                "description": "iD of the iteration value to set on the field",
+                "inherit": false,
+                "value": {
+                  "name": "iteration-id"
+                }
+              },
+              {
+                "long": "text",
+                "description": "text value for the field",
+                "inherit": false,
+                "value": {
+                  "name": "text"
+                }
+              },
+              {
+                "long": "number",
+                "description": "number value for the field",
+                "inherit": false,
+                "value": {
+                  "name": "number"
+                }
+              },
+              {
+                "long": "single-select-option-id",
+                "description": "iD of the single select option value to set on the field",
+                "inherit": false,
+                "value": {
+                  "name": "single-select-option-id"
+                }
+              },
+              {
+                "long": "date",
+                "description": "date value for the field (YYYY-MM-DD)",
+                "inherit": false,
+                "value": {
+                  "name": "date"
+                }
+              }
+            ]
+          },
+          {
+            "name": "item-delete",
+            "description": "delete a project item",
+            "options": [
+              {
+                "long": "id",
+                "description": "iD of the item to delete",
+                "inherit": false,
+                "value": {
+                  "name": "id"
+                }
+              },
+              {
+                "long": "format",
+                "description": "output format: {json}",
+                "inherit": false,
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "owner",
+                "description": "login of the owner. Use @me for the current user",
+                "inherit": false,
+                "value": {
+                  "name": "owner"
+                }
+              }
+            ]
+          },
+          {
+            "name": "item-list",
+            "description": "list project items",
+            "options": [
+              {
+                "long": "format",
+                "description": "output format: {json}",
+                "inherit": false,
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "short": "L",
+                "long": "limit",
+                "description": "maximum number of items to fetch",
+                "inherit": false,
+                "value": {
+                  "name": "int"
+                }
+              },
+              {
+                "long": "owner",
+                "description": "login of the owner. Use @me for the current user",
+                "inherit": false,
+                "value": {
+                  "name": "owner"
+                }
+              }
+            ]
+          },
+          {
+            "name": "item-add",
+            "description": "add a pull request or an issue to a project",
+            "options": [
+              {
+                "long": "url",
+                "description": "uRL of the issue or pull request to add to the project",
+                "inherit": false,
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "owner",
+                "description": "login of the owner. Use @me for the current user",
+                "inherit": false,
+                "value": {
+                  "name": "owner"
+                }
+              },
+              {
+                "long": "format",
+                "description": "output format: {json}",
+                "inherit": false,
+                "value": {
+                  "name": "format"
+                }
+              }
+            ]
+          },
+          {
+            "name": "item-archive",
+            "description": "archive a project item",
+            "options": [
+              {
+                "long": "id",
+                "description": "iD of the item to archive",
+                "inherit": false,
+                "value": {
+                  "name": "id"
+                }
+              },
+              {
+                "long": "format",
+                "description": "output format: {json}",
+                "inherit": false,
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "owner",
+                "description": "login of the owner. Use @me for the current user",
+                "inherit": false,
+                "value": {
+                  "name": "owner"
+                }
+              },
+              {
+                "long": "undo",
+                "description": "unarchive a project item",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.executables": {
+        "builtin": "executables"
+      }
+    }
+  }
+}
