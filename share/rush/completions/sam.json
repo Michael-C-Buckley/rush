@@ -1,0 +1,1219 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "sam",
+    "description": "build and deploy AWS serverless applications",
+    "options": [
+      {
+        "long": "config-env",
+        "description": "set configuration environment",
+        "value": {
+          "name": "environment"
+        }
+      },
+      {
+        "long": "config-file",
+        "description": "set configuration file",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "debug",
+        "description": "enable debug logging"
+      },
+      {
+        "long": "help",
+        "description": "show help"
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "init an AWS SAM application",
+        "options": [
+          {
+            "long": "config-env",
+            "description": "set configuration environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config-file",
+            "description": "set configuration file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "enable debug logging"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "no-interactive",
+            "description": "disable interactive prompting for init parameters, and fail if any required values are missing",
+            "inherit": false
+          },
+          {
+            "short": "a",
+            "long": "architecture",
+            "description": "architectures your Lambda function will run on",
+            "inherit": false,
+            "value": {
+              "name": "architecture",
+              "provider": {
+                "values": [
+                  "arm64",
+                  "x86_64"
+                ]
+              }
+            }
+          },
+          {
+            "short": "l",
+            "long": "location",
+            "description": "template location (git, mercurial, http(s), zip, path)",
+            "inherit": false,
+            "value": {
+              "name": "location"
+            }
+          },
+          {
+            "short": "r",
+            "long": "runtime",
+            "description": "lambda Runtime for your app",
+            "inherit": false,
+            "value": {
+              "name": "runtime",
+              "provider": {
+                "values": [
+                  "dotnet8",
+                  "dotnet6",
+                  "go1.x",
+                  "java21",
+                  "java17",
+                  "java11",
+                  "java8.al2",
+                  "nodejs20.x",
+                  "nodejs18.x",
+                  "nodejs16.x",
+                  "provided.al2023",
+                  "provided.al2",
+                  "provided",
+                  "python3.12",
+                  "python3.11",
+                  "python3.10",
+                  "python3.9",
+                  "python3.8",
+                  "ruby3.2"
+                ]
+              }
+            }
+          },
+          {
+            "short": "p",
+            "long": "package-type",
+            "description": "package type for your app",
+            "inherit": false,
+            "value": {
+              "name": "type",
+              "provider": {
+                "values": [
+                  "zip",
+                  "image"
+                ]
+              }
+            }
+          },
+          {
+            "short": "i",
+            "long": "base-image",
+            "description": "lambda Image of your app",
+            "inherit": false,
+            "value": {
+              "name": "image-name",
+              "provider": {
+                "values": [
+                  "amazon/dotnet8-base",
+                  "amazon/dotnet6-base",
+                  "amazon/go1.x-base",
+                  "amazon/go-provided.al2-base",
+                  "amazon/go-provided.al2023-base",
+                  "amazon/java21-base",
+                  "amazon/java17-base",
+                  "amazon/java11-base",
+                  "amazon/java8.al2-base",
+                  "amazon/nodejs20.x-base",
+                  "amazon/nodejs18.x-base",
+                  "amazon/nodejs16.x-base",
+                  "amazon/python3.12-base",
+                  "amazon/python3.11-base",
+                  "amazon/python3.10-base",
+                  "amazon/python3.9-base",
+                  "amazon/python3.8-base",
+                  "amazon/ruby3.2-base"
+                ]
+              }
+            }
+          },
+          {
+            "short": "d",
+            "long": "dependency-manager",
+            "description": "dependency manager for your Lambda runtime",
+            "inherit": false,
+            "value": {
+              "name": "manager",
+              "provider": {
+                "values": [
+                  "npm",
+                  "mod",
+                  "gradle",
+                  "cli-package",
+                  "bundler",
+                  "pip",
+                  "maven"
+                ]
+              }
+            }
+          },
+          {
+            "short": "o",
+            "long": "output-dir",
+            "description": "where to output the initialized app into",
+            "inherit": false,
+            "value": {
+              "name": "path"
+            }
+          },
+          {
+            "short": "n",
+            "long": "name",
+            "description": "name of your project to be generated as a folder",
+            "inherit": false,
+            "value": {
+              "name": "text"
+            }
+          },
+          {
+            "long": "app-template",
+            "description": "identifier of the managed application template you want to use",
+            "inherit": false,
+            "value": {
+              "name": "text",
+              "description": "template name"
+            }
+          },
+          {
+            "long": "no-input",
+            "description": "disable Cookiecutter prompting and accept default values defined template config",
+            "inherit": false
+          },
+          {
+            "long": "extra-context",
+            "description": "override any custom parameters in the template's cookiecutter.json configuration",
+            "inherit": false,
+            "value": {
+              "name": "text",
+              "description": "e.g. {\"customParam1\": \"customValue1\", \"customParam2\":\"customValue2\"}"
+            }
+          }
+        ]
+      },
+      {
+        "name": "validate",
+        "description": "validate an AWS SAM template",
+        "options": [
+          {
+            "long": "config-env",
+            "description": "set configuration environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config-file",
+            "description": "set configuration file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "enable debug logging"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "region",
+            "description": "set AWS region",
+            "value": {
+              "name": "region",
+              "provider": "sam.aws-regions"
+            }
+          },
+          {
+            "short": "t",
+            "long": "template-file",
+            "description": "set SAM template file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "build",
+        "description": "build your Lambda function code",
+        "options": [
+          {
+            "long": "config-env",
+            "description": "set configuration environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config-file",
+            "description": "set configuration file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "enable debug logging"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "region",
+            "description": "set AWS region",
+            "value": {
+              "name": "region",
+              "provider": "sam.aws-regions"
+            }
+          },
+          {
+            "short": "t",
+            "long": "template-file",
+            "description": "set SAM template file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "docker-network",
+            "description": "set Docker network",
+            "value": {
+              "name": "network"
+            }
+          },
+          {
+            "long": "parameter-overrides",
+            "description": "set CloudFormation parameter overrides",
+            "value": {
+              "name": "overrides"
+            }
+          },
+          {
+            "long": "skip-pull-image",
+            "description": "skip pulling Docker images"
+          },
+          {
+            "short": "u",
+            "long": "use-container",
+            "description": "if your functions depend on packages that have natively compiled dependencies,",
+            "inherit": false
+          },
+          {
+            "short": "e",
+            "long": "container-env-var",
+            "description": "input environment variables through command line to pass into build containers,",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "env-var"
+            }
+          },
+          {
+            "long": "container-env-var-file",
+            "spellings": [
+              "-ef"
+            ],
+            "description": "path to environment variable json file (e.g., env_vars.json) to pass into build containers",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "build-image",
+            "spellings": [
+              "-bi"
+            ],
+            "description": "container image URIs",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "image-uri",
+              "description": "container image URIs for building functions/layers."
+            }
+          },
+          {
+            "short": "p",
+            "long": "parallel",
+            "description": "enabled parallel builds",
+            "inherit": false
+          },
+          {
+            "short": "b",
+            "long": "build-dir",
+            "description": "path to a folder where the built artifacts will be stored",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "cache-dir",
+            "spellings": [
+              "-cd"
+            ],
+            "description": "the folder where the cached artifacts are stored with `--cached` is specified",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "s",
+            "long": "base-dir",
+            "description": "resolve relative paths to function's source code with respect to this folder",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "m",
+            "long": "manifest",
+            "description": "path to a custom dependency manifest to use instead of the default one",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "c",
+            "long": "cached",
+            "description": "enable cached builds. Use this flag to reuse build artifacts that have not changed from previous builds",
+            "inherit": false
+          },
+          {
+            "long": "beta-features",
+            "aliases": [
+              "no-beta-features"
+            ],
+            "description": "should beta features be enabled",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "local",
+        "description": "run your Serverless application locally for quick development & testing",
+        "subcommands": [
+          {
+            "name": "generate-event",
+            "description": "you can use this command to generate sample payloads from different event sources such as S3, API Gateway, and SNS",
+            "options": [
+              {
+                "long": "config-env",
+                "description": "set configuration environment",
+                "value": {
+                  "name": "environment"
+                }
+              },
+              {
+                "long": "config-file",
+                "description": "set configuration file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "debug",
+                "description": "enable debug logging"
+              },
+              {
+                "long": "help",
+                "description": "show help"
+              }
+            ]
+          },
+          {
+            "name": "invoke",
+            "description": "invokes a local Lambda function once",
+            "options": [
+              {
+                "long": "config-env",
+                "description": "set configuration environment",
+                "value": {
+                  "name": "environment"
+                }
+              },
+              {
+                "long": "config-file",
+                "description": "set configuration file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "debug",
+                "description": "enable debug logging"
+              },
+              {
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "docker-network",
+                "description": "set Docker network",
+                "value": {
+                  "name": "network"
+                }
+              },
+              {
+                "long": "parameter-overrides",
+                "description": "set CloudFormation parameter overrides",
+                "value": {
+                  "name": "overrides"
+                }
+              },
+              {
+                "long": "skip-pull-image",
+                "description": "skip pulling Docker images"
+              },
+              {
+                "short": "e",
+                "long": "event",
+                "description": "jSON file containing event data passed to the Lambda function",
+                "inherit": false,
+                "value": {
+                  "name": "path",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "start-api",
+            "description": "sets up a local endpoint you can use to test your API",
+            "options": [
+              {
+                "long": "config-env",
+                "description": "set configuration environment",
+                "value": {
+                  "name": "environment"
+                }
+              },
+              {
+                "long": "config-file",
+                "description": "set configuration file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "debug",
+                "description": "enable debug logging"
+              },
+              {
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "docker-network",
+                "description": "set Docker network",
+                "value": {
+                  "name": "network"
+                }
+              },
+              {
+                "long": "parameter-overrides",
+                "description": "set CloudFormation parameter overrides",
+                "value": {
+                  "name": "overrides"
+                }
+              },
+              {
+                "long": "skip-pull-image",
+                "description": "skip pulling Docker images"
+              },
+              {
+                "short": "s",
+                "long": "static-dir",
+                "description": "any static assets files locates in this directory will be presented at /",
+                "inherit": false,
+                "value": {
+                  "name": "path",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "start-lambda",
+            "description": "starts a local endpoint you can use to invoke your local Lambda functions",
+            "options": [
+              {
+                "long": "config-env",
+                "description": "set configuration environment",
+                "value": {
+                  "name": "environment"
+                }
+              },
+              {
+                "long": "config-file",
+                "description": "set configuration file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "debug",
+                "description": "enable debug logging"
+              },
+              {
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "docker-network",
+                "description": "set Docker network",
+                "value": {
+                  "name": "network"
+                }
+              },
+              {
+                "long": "parameter-overrides",
+                "description": "set CloudFormation parameter overrides",
+                "value": {
+                  "name": "overrides"
+                }
+              },
+              {
+                "long": "skip-pull-image",
+                "description": "skip pulling Docker images"
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "long": "config-env",
+            "description": "set configuration environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config-file",
+            "description": "set configuration file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "enable debug logging"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "short": "t",
+            "long": "template-file",
+            "description": "set SAM template file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "package",
+        "description": "package an AWS SAM application",
+        "options": [
+          {
+            "long": "config-env",
+            "description": "set configuration environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config-file",
+            "description": "set configuration file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "enable debug logging"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "region",
+            "description": "set AWS region",
+            "value": {
+              "name": "region",
+              "provider": "sam.aws-regions"
+            }
+          },
+          {
+            "short": "t",
+            "long": "template-file",
+            "description": "set SAM template file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "output-template-file",
+            "description": "the path to the file where the command writes the output AWS CloudFormation template. If unspecified, the command writes the template to the standard output",
+            "inherit": false,
+            "value": {
+              "name": "path"
+            }
+          }
+        ]
+      },
+      {
+        "name": "deploy",
+        "description": "deploy an AWS SAM application",
+        "options": [
+          {
+            "long": "config-env",
+            "description": "set configuration environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config-file",
+            "description": "set configuration file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "enable debug logging"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "region",
+            "description": "set AWS region",
+            "value": {
+              "name": "region",
+              "provider": "sam.aws-regions"
+            }
+          },
+          {
+            "short": "t",
+            "long": "template-file",
+            "description": "set SAM template file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "delete",
+        "description": "delete an AWS SAM application and the artifacts created by `sam deploy`",
+        "options": [
+          {
+            "long": "config-env",
+            "description": "set configuration environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config-file",
+            "description": "set configuration file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "enable debug logging"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "region",
+            "description": "set AWS region",
+            "value": {
+              "name": "region",
+              "provider": "sam.aws-regions"
+            }
+          },
+          {
+            "long": "no-prompts",
+            "description": "specify this flag to allow SAM CLI to skip through the guided prompts",
+            "priority": -10,
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "logs",
+        "description": "fetch logs for a function",
+        "options": [
+          {
+            "long": "config-env",
+            "description": "set configuration environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config-file",
+            "description": "set configuration file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "enable debug logging"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "region",
+            "description": "set AWS region",
+            "value": {
+              "name": "region",
+              "provider": "sam.aws-regions"
+            }
+          }
+        ]
+      },
+      {
+        "name": "publish",
+        "description": "publish a packaged AWS SAM template to the AWS Serverless Application Repository",
+        "options": [
+          {
+            "long": "config-env",
+            "description": "set configuration environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config-file",
+            "description": "set configuration file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "enable debug logging"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "region",
+            "description": "set AWS region",
+            "value": {
+              "name": "region",
+              "provider": "sam.aws-regions"
+            }
+          },
+          {
+            "long": "semantic-version",
+            "description": "the value provided here overrides SemanticVersion in the template metadata",
+            "inherit": false,
+            "value": {
+              "name": "text"
+            }
+          }
+        ]
+      },
+      {
+        "name": "traces",
+        "description": "[Beta Feature] Fetch AWS X-Ray traces",
+        "options": [
+          {
+            "long": "config-env",
+            "description": "set configuration environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config-file",
+            "description": "set configuration file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "enable debug logging"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "region",
+            "description": "set AWS region",
+            "value": {
+              "name": "region",
+              "provider": "sam.aws-regions"
+            }
+          }
+        ]
+      },
+      {
+        "name": "sync",
+        "description": "[Beta Feature] Sync a project to AWS",
+        "options": [
+          {
+            "long": "config-env",
+            "description": "set configuration environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config-file",
+            "description": "set configuration file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "enable debug logging"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "profile",
+            "description": "set AWS profile",
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "region",
+            "description": "set AWS region",
+            "value": {
+              "name": "region",
+              "provider": "sam.aws-regions"
+            }
+          },
+          {
+            "short": "t",
+            "long": "template-file",
+            "description": "set SAM template file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "docker-network",
+            "description": "set Docker network",
+            "value": {
+              "name": "network"
+            }
+          },
+          {
+            "long": "parameter-overrides",
+            "description": "set CloudFormation parameter overrides",
+            "value": {
+              "name": "overrides"
+            }
+          },
+          {
+            "long": "skip-pull-image",
+            "description": "skip pulling Docker images"
+          }
+        ]
+      },
+      {
+        "name": "pipeline",
+        "description": "manage the continuous delivery of the application",
+        "subcommands": [
+          {
+            "name": "init",
+            "description": "generates a CI/CD pipeline configuration file",
+            "options": [
+              {
+                "long": "config-env",
+                "description": "set configuration environment",
+                "value": {
+                  "name": "environment"
+                }
+              },
+              {
+                "long": "config-file",
+                "description": "set configuration file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "debug",
+                "description": "enable debug logging"
+              },
+              {
+                "long": "help",
+                "description": "show help"
+              }
+            ]
+          },
+          {
+            "name": "bootstrap",
+            "description": "generates the required AWS resources to connect your CI/CD system",
+            "options": [
+              {
+                "long": "config-env",
+                "description": "set configuration environment",
+                "value": {
+                  "name": "environment"
+                }
+              },
+              {
+                "long": "config-file",
+                "description": "set configuration file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "debug",
+                "description": "enable debug logging"
+              },
+              {
+                "long": "help",
+                "description": "show help"
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "long": "config-env",
+            "description": "set configuration environment",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "config-file",
+            "description": "set configuration file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "enable debug logging"
+          },
+          {
+            "long": "help",
+            "description": "show help"
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "sam.aws-regions": {
+        "values": [
+          {
+            "value": "us-east-1"
+          },
+          {
+            "value": "us-east-2"
+          },
+          {
+            "value": "us-west-1"
+          },
+          {
+            "value": "us-west-2"
+          },
+          {
+            "value": "eu-west-1"
+          },
+          {
+            "value": "eu-west-2"
+          },
+          {
+            "value": "eu-central-1"
+          },
+          {
+            "value": "ap-south-1"
+          },
+          {
+            "value": "ap-southeast-1"
+          },
+          {
+            "value": "ap-southeast-2"
+          },
+          {
+            "value": "ap-northeast-1"
+          }
+        ]
+      },
+      "sam.hook-names": {
+        "values": [
+          {
+            "value": "terraform"
+          }
+        ]
+      },
+      "sam.warm-containers": {
+        "values": [
+          {
+            "value": "EAGER"
+          },
+          {
+            "value": "LAZY"
+          }
+        ]
+      },
+      "sam.resolve-image-repos": {
+        "values": [
+          {
+            "value": "true"
+          },
+          {
+            "value": "false"
+          }
+        ]
+      }
+    }
+  }
+}
