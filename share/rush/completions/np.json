@@ -1,0 +1,116 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "np",
+    "description": "publish npm packages",
+    "options": [
+      {
+        "long": "any-branch",
+        "description": "allow publishing from any branch",
+        "inherit": false
+      },
+      {
+        "long": "branch",
+        "description": "release branch",
+        "inherit": false,
+        "value": {
+          "name": "branch"
+        }
+      },
+      {
+        "long": "no-cleanup",
+        "description": "skip cleanup of node_modules",
+        "inherit": false
+      },
+      {
+        "long": "no-tests",
+        "description": "skip tests",
+        "inherit": false
+      },
+      {
+        "long": "yolo",
+        "description": "skip cleanup and tests",
+        "inherit": false
+      },
+      {
+        "long": "no-publish",
+        "description": "skip publishing",
+        "inherit": false
+      },
+      {
+        "long": "preview",
+        "description": "show tasks without executing them",
+        "inherit": false
+      },
+      {
+        "long": "tag",
+        "description": "publish under a dist-tag",
+        "inherit": false,
+        "value": {
+          "name": "tag"
+        }
+      },
+      {
+        "long": "no-yarn",
+        "description": "do not use yarn",
+        "inherit": false
+      },
+      {
+        "long": "contents",
+        "description": "subdirectory to publish",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "no-release-draft",
+        "description": "skip opening a github release draft",
+        "inherit": false
+      },
+      {
+        "long": "release-draft-only",
+        "description": "only open a github release draft",
+        "inherit": false
+      },
+      {
+        "long": "test-script",
+        "description": "npm script to run before publishing",
+        "inherit": false,
+        "value": {
+          "name": "script"
+        }
+      },
+      {
+        "long": "no-2fa",
+        "description": "do not enable 2fa on new packages",
+        "inherit": false
+      },
+      {
+        "long": "message",
+        "description": "version bump commit message",
+        "inherit": false,
+        "value": {
+          "name": "message"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "version",
+          "description": "version to publish",
+          "index": 0,
+          "required": false
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
