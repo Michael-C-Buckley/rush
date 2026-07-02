@@ -1,0 +1,199 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "swc",
+    "description": "compile JavaScript and TypeScript with SWC",
+    "options": [
+      {
+        "long": "filename",
+        "short": "f",
+        "description": "set stdin filename",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "config-file",
+        "description": "set .swcrc config file",
+        "inherit": false,
+        "value": {
+          "name": "config_file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "env-name",
+        "description": "set config environment",
+        "inherit": false,
+        "value": {
+          "name": "env_name",
+          "provider": {
+            "values": [
+              "production",
+              "development",
+              "test"
+            ]
+          }
+        }
+      },
+      {
+        "long": "no-swcrc",
+        "description": "do not look up .swcrc files",
+        "inherit": false
+      },
+      {
+        "long": "ignore",
+        "description": "ignore glob paths",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "only",
+        "description": "only compile glob paths",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "watch",
+        "short": "w",
+        "description": "watch and recompile",
+        "inherit": false
+      },
+      {
+        "long": "quiet",
+        "short": "q",
+        "description": "suppress output",
+        "inherit": false
+      },
+      {
+        "long": "source-maps",
+        "short": "s",
+        "description": "generate source maps",
+        "inherit": false,
+        "value": {
+          "name": "source_map",
+          "provider": {
+            "values": [
+              "true",
+              "false",
+              "inline",
+              "both"
+            ]
+          }
+        }
+      },
+      {
+        "long": "source-map-target",
+        "description": "set source map file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "source-file-name",
+        "description": "set source map source file",
+        "inherit": false
+      },
+      {
+        "long": "source-root",
+        "description": "set source map root",
+        "inherit": false
+      },
+      {
+        "long": "out-file",
+        "short": "o",
+        "description": "compile into one file",
+        "inherit": false,
+        "value": {
+          "name": "output_file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "out-dir",
+        "short": "d",
+        "description": "set output directory",
+        "inherit": false,
+        "value": {
+          "name": "output_dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "copy-files",
+        "short": "D",
+        "description": "copy non-compilable files",
+        "inherit": false
+      },
+      {
+        "long": "include-dotfiles",
+        "description": "include dotfiles",
+        "inherit": false
+      },
+      {
+        "long": "config",
+        "short": "C",
+        "description": "override .swcrc config",
+        "inherit": false,
+        "value": {
+          "name": "config_file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "sync",
+        "description": "run synchronously",
+        "inherit": false
+      },
+      {
+        "long": "log-watch-compilation",
+        "description": "log watch compilations",
+        "inherit": false
+      },
+      {
+        "long": "extensions",
+        "description": "set input extensions",
+        "inherit": false
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    },
+    "arguments": {
+      "states": [
+        {
+          "name": "path",
+          "description": "input file or directory",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    }
+  }
+}
