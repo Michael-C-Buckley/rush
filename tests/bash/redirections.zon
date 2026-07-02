@@ -3,6 +3,65 @@
     .mode = .bash,
     .cases = .{
         .{
+            .name = "ampersand output redirection redirects stdout and stderr",
+            .script =
+            \\{ printf 'out\n'; printf 'err\n' >&2; } &>both
+            \\cat both
+            ,
+            .stdout =
+            \\out
+            \\err
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "ampersand append redirection appends stdout and stderr",
+            .script =
+            \\printf 'old\n' >both
+            \\{ printf 'out\n'; printf 'err\n' >&2; } &>>both
+            \\cat both
+            ,
+            .stdout =
+            \\old
+            \\out
+            \\err
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pipe ampersand redirects stderr into the pipeline",
+            .script =
+            \\{ printf 'out\n'; printf 'err\n' >&2; } |& sort
+            ,
+            .stdout =
+            \\err
+            \\out
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "pipe ampersand applies after command redirections",
+            .script =
+            \\{ printf 'out\n'; printf 'err\n' >&2; } >file |& cat
+            \\printf 'pipe-status:<%s>\n' "$?"
+            \\cat file
+            ,
+            .stdout =
+            \\pipe-status:<0>
+            \\out
+            \\err
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "self-duplicate redirection is a no-op even when the descriptor is closed",
             .script =
             \\exec 3>&1 1>&-

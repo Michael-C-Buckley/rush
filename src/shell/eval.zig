@@ -3302,6 +3302,10 @@ fn applyRedirection(
         try applyDuplicateRedirection(shell, redirection, target, frames);
         return;
     }
+    if (redirection.op == .output_and_error or redirection.op == .append_and_error) {
+        try applyOutputAndErrorRedirection(shell, redirection, frames);
+        return;
+    }
 
     const saved = saveFd(shell, target) catch |err| switch (err) {
         error.BadFd => null,
@@ -3321,6 +3325,7 @@ fn applyRedirection(
             }
         },
         .duplicate_input, .duplicate_output => unreachable,
+        .output_and_error, .append_and_error => unreachable,
         .here_doc, .here_doc_strip_tabs => {
             const pid = try applyHereDocRedirection(shell, target, redirection.here_doc.?);
             try here_doc_writers.append(shell.scratchAllocator(), pid);
@@ -3332,6 +3337,39 @@ fn applyRedirection(
             try here_doc_writers.append(shell.scratchAllocator(), pid);
         },
     }
+}
+
+fn applyOutputAndErrorRedirection(
+    shell: anytype,
+    redirection: ast.Redirection,
+    frames: *std.ArrayList(RedirectionFrame),
+) !void {
+    const stdout_saved = saveFd(shell, .stdout) catch |err| switch (err) {
+        error.BadFd => null,
+        else => return err,
+    };
+    try frames.append(shell.scratchAllocator(), .{ .target = .stdout, .saved = stdout_saved });
+
+    const stderr_saved = saveFd(shell, .stderr) catch |err| switch (err) {
+        error.BadFd => null,
+        else => return err,
+    };
+    try frames.append(shell.scratchAllocator(), .{ .target = .stderr, .saved = stderr_saved });
+
+    const path = try shell.scratchAllocator().dupeZ(u8, try expandWord(shell, redirection.target));
+    const file_op: ast.RedirectionOperator = switch (redirection.op) {
+        .output_and_error => .output,
+        .append_and_error => .append,
+        else => unreachable,
+    };
+    const opened = try openRedirectionPath(shell, path, file_op);
+    if (opened != .stdout) {
+        defer shell.host.close(opened) catch {};
+        try shell.host.duplicateTo(opened, .stdout);
+    } else {
+        try shell.host.setCloseOnExec(.stdout, false);
+    }
+    try shell.host.duplicateTo(.stdout, .stderr);
 }
 
 fn applyDuplicateRedirection(
@@ -3439,7 +3477,7 @@ fn saveFd(shell: anytype, fd: host_mod.Fd) !host_mod.Fd {
 fn redirectionFd(redirection: ast.Redirection) host_mod.Fd {
     return if (redirection.fd) |fd| parseKnownFd(fd) else switch (redirection.op) {
         .input, .duplicate_input, .read_write, .here_doc, .here_doc_strip_tabs, .here_string => .stdin,
-        .output, .append, .duplicate_output, .clobber => .stdout,
+        .output, .append, .output_and_error, .append_and_error, .duplicate_output, .clobber => .stdout,
     };
 }
 

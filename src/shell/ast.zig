@@ -243,6 +243,8 @@ pub const RedirectionOperator = enum {
     input,
     output,
     append,
+    output_and_error,
+    append_and_error,
     read_write,
     duplicate_input,
     duplicate_output,

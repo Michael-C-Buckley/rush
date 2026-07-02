@@ -3,6 +3,24 @@
     .mode = .posix,
     .cases = .{
         .{
+            .name = "ampersand output redirection is rejected in POSIX mode",
+            .script =
+            \\printf 'bad\n' &>out
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status = 2,
+        },
+        .{
+            .name = "ampersand append redirection is rejected in POSIX mode",
+            .script =
+            \\printf 'bad\n' &>>out
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status = 2,
+        },
+        .{
             .name = "output redirection creates and truncates the target file",
             .script =
             \\printf '%s\n' old >out

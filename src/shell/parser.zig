@@ -327,13 +327,40 @@ const Parser = struct {
         errdefer stages.deinit(self.allocator);
 
         try stages.append(self.allocator, try self.parseCommand());
-        while (self.eat(.pipe) != null) {
+        while (self.eatPipelineOperator()) |operator_token| {
+            if (operator_token.kind == .pipe_ampersand) try self.appendPipeAndRedirection(&stages, operator_token.span);
             try self.skipLinebreak();
             try stages.append(self.allocator, try self.parseCommand());
         }
 
         const pipeline: ast.Pipeline = .{ .stages = try stages.toOwnedSlice(self.allocator), .negated = negated };
         return pipeline;
+    }
+
+    fn eatPipelineOperator(self: *Parser) ?token.Token {
+        if (self.eat(.pipe)) |tok| return tok;
+        if (self.at(.pipe_ampersand)) {
+            if (self.mode() == .posix) return null;
+            return self.eat(.pipe_ampersand).?;
+        }
+        return null;
+    }
+
+    fn appendPipeAndRedirection(self: *Parser, stages: *std.ArrayList(ast.Command), span: source_mod.Span) !void {
+        std.debug.assert(stages.items.len != 0);
+        const redirection = pipeAndRedirection(span);
+        const last = &stages.items[stages.items.len - 1];
+        switch (last.*) {
+            .simple => |*simple| {
+                simple.redirections = try appendRedirection(self.allocator, simple.redirections, redirection);
+            },
+            .compound => |*compound| {
+                compound.redirections = try appendRedirection(self.allocator, compound.redirections, redirection);
+            },
+            .function_definition => |*definition| {
+                definition.redirections = try appendRedirection(self.allocator, definition.redirections, redirection);
+            },
+        }
     }
 
     fn parseCommand(self: *Parser) ParserError!ast.Command {
@@ -618,7 +645,7 @@ const Parser = struct {
             if (fd_token != null) return error.UnexpectedToken;
             return null;
         };
-        if (operator_token.kind == .less_less_less and self.mode() == .posix) return error.UnexpectedToken;
+        if (redirectionOperatorIsBashOnly(operator_token.kind) and self.mode() == .posix) return error.UnexpectedToken;
         const target_token = self.eat(.word) orelse return error.ExpectedRedirectionTarget;
         const redirection: ast.Redirection = .{
             .fd = if (fd_token) |tok| try parseIoNumber(tok.text) else null,
@@ -1192,6 +1219,8 @@ const Parser = struct {
             .greater,
             .greater_greater,
             .greater_ampersand,
+            .ampersand_greater,
+            .ampersand_greater_greater,
             .clobber,
             => self.eat(self.tokens[self.index].kind).?,
             else => null,
@@ -1289,9 +1318,41 @@ fn redirectionOperator(kind: token.Kind) ast.RedirectionOperator {
         .greater => .output,
         .greater_greater => .append,
         .greater_ampersand => .duplicate_output,
+        .ampersand_greater => .output_and_error,
+        .ampersand_greater_greater => .append_and_error,
         .clobber => .clobber,
         else => unreachable,
     };
+}
+
+fn redirectionOperatorIsBashOnly(kind: token.Kind) bool {
+    return switch (kind) {
+        .less_less_less, .ampersand_greater, .ampersand_greater_greater => true,
+        else => false,
+    };
+}
+
+fn pipeAndRedirection(span: source_mod.Span) ast.Redirection {
+    const target: ast.Word = .{ .data = .{ .literal = "1" }, .span = span };
+    const redirection: ast.Redirection = .{
+        .fd = 2,
+        .op = .duplicate_output,
+        .target = target,
+        .span = span,
+    };
+    redirection.validate();
+    return redirection;
+}
+
+fn appendRedirection(
+    allocator: std.mem.Allocator,
+    redirections: []const ast.Redirection,
+    redirection: ast.Redirection,
+) ![]const ast.Redirection {
+    const expanded = try allocator.alloc(ast.Redirection, redirections.len + 1);
+    @memcpy(expanded[0..redirections.len], redirections);
+    expanded[redirections.len] = redirection;
+    return expanded;
 }
 
 fn extendCommandSpan(existing: ?source_mod.Span, span: source_mod.Span) source_mod.Span {
@@ -1813,6 +1874,26 @@ test "parser recognizes leading assignment words" {
     try std.testing.expectEqualStrings("hello", command.assignments[0].value.data.literal);
     try std.testing.expectEqual(@as(usize, 2), command.words.len);
     try std.testing.expectEqualStrings("x=arg", command.words[1].data.literal);
+}
+
+test "parser recognizes bash redirection shorthand" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "a &>out |& b" };
+    // ziglint-ignore: Z028 inline import kept local to test/helper; avoid non-semantic refactor
+    const tokens = try @import("lexer.zig").lex(allocator, src);
+    const program = try parse(allocator, src, tokens);
+    const pipeline = program.body.entries[0].and_or.pipelines[0].pipeline;
+
+    try std.testing.expectEqual(@as(usize, 2), pipeline.stages.len);
+    const left = pipeline.stages[0].simple;
+    try std.testing.expectEqual(@as(usize, 2), left.redirections.len);
+    try std.testing.expectEqual(ast.RedirectionOperator.output_and_error, left.redirections[0].op);
+    try std.testing.expectEqual(ast.RedirectionOperator.duplicate_output, left.redirections[1].op);
+    try std.testing.expectEqual(@as(?u31, 2), left.redirections[1].fd);
+    try std.testing.expectEqualStrings("1", left.redirections[1].target.data.literal);
 }
 
 test "parser recognizes bash append assignment words" {

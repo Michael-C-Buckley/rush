@@ -3,6 +3,15 @@
     .mode = .posix,
     .cases = .{
         .{
+            .name = "pipe ampersand is rejected in POSIX mode",
+            .script =
+            \\printf 'bad\n' |& cat
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status = 2,
+        },
+        .{
             .name = "pipe connects stdout to next command stdin",
             .script =
             \\printf '%s\n' hello | cat

@@ -136,7 +136,10 @@ fn tokenStartsCommandPosition(kind: token.Kind) bool {
         .newline,
         .semicolon,
         .ampersand,
+        .ampersand_greater,
+        .ampersand_greater_greater,
         .pipe,
+        .pipe_ampersand,
         .pipe_pipe,
         .ampersand_ampersand,
         .bang,
@@ -161,6 +164,8 @@ fn isRedirectionOperatorKind(kind: token.Kind) bool {
         .greater,
         .greater_greater,
         .greater_ampersand,
+        .ampersand_greater,
+        .ampersand_greater_greater,
         .clobber,
         => true,
         else => false,
@@ -464,9 +469,20 @@ const Lexer = struct {
     fn appendAmpersand(self: *Lexer, tokens: *std.ArrayList(token.Token)) !void {
         const start = self.position;
         self.advanceOne();
-        const kind: token.Kind = if (!self.atEnd() and self.peek() == '&') kind: {
-            self.advanceOne();
-            break :kind .ampersand_ampersand;
+        const kind: token.Kind = if (!self.atEnd()) switch (self.peek()) {
+            '&' => kind: {
+                self.advanceOne();
+                break :kind .ampersand_ampersand;
+            },
+            '>' => kind: {
+                self.advanceOne();
+                if (!self.atEnd() and self.peek() == '>') {
+                    self.advanceOne();
+                    break :kind .ampersand_greater_greater;
+                }
+                break :kind .ampersand_greater;
+            },
+            else => .ampersand,
         } else .ampersand;
         const tok: token.Token = .{ .kind = kind, .span = source_mod.Span.init(start, self.position.byte_offset) };
         tok.validate();
@@ -476,9 +492,16 @@ const Lexer = struct {
     fn appendPipe(self: *Lexer, tokens: *std.ArrayList(token.Token)) !void {
         const start = self.position;
         self.advanceOne();
-        const kind: token.Kind = if (!self.atEnd() and self.peek() == '|') kind: {
-            self.advanceOne();
-            break :kind .pipe_pipe;
+        const kind: token.Kind = if (!self.atEnd()) switch (self.peek()) {
+            '|' => kind: {
+                self.advanceOne();
+                break :kind .pipe_pipe;
+            },
+            '&' => kind: {
+                self.advanceOne();
+                break :kind .pipe_ampersand;
+            },
+            else => .pipe,
         } else .pipe;
         const tok: token.Token = .{ .kind = kind, .span = source_mod.Span.init(start, self.position.byte_offset) };
         tok.validate();
@@ -1071,6 +1094,18 @@ test "lexer tokenizes AND-OR operators" {
     try std.testing.expectEqual(token.Kind.word, tokens[5].kind);
     try std.testing.expectEqualStrings("true", tokens[5].text);
     try std.testing.expectEqual(token.Kind.eof, tokens[6].kind);
+}
+
+test "lexer tokenizes bash redirection shorthand operators" {
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = ": &>out &>>log |& cat" };
+    const tokens = try lex(std.testing.allocator, src);
+    defer std.testing.allocator.free(tokens);
+
+    try std.testing.expectEqual(token.Kind.ampersand_greater, tokens[1].kind);
+    try std.testing.expectEqualStrings("out", tokens[2].text);
+    try std.testing.expectEqual(token.Kind.ampersand_greater_greater, tokens[3].kind);
+    try std.testing.expectEqualStrings("log", tokens[4].text);
+    try std.testing.expectEqual(token.Kind.pipe_ampersand, tokens[5].kind);
 }
 
 test "lexer keeps exclamation mark words together" {
