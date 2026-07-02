@@ -1,0 +1,118 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "graphcdn",
+    "description": "GraphCDN CLI",
+    "subcommands": [
+      {
+        "name": "login",
+        "description": "authenticate the CLI",
+        "options": [
+          {
+            "long": "token",
+            "inherit": false,
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "create a new GraphCDN service",
+        "options": [
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "skip all the questions and just init",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          }
+        ]
+      },
+      {
+        "name": "pull",
+        "description": "pull the latest service configuration",
+        "options": [
+          {
+            "long": "service",
+            "description": "name of the service to pull from (only required without graphcdn.yml)",
+            "inherit": false,
+            "value": {
+              "name": "service",
+              "description": "name of the environment to pull from"
+            }
+          },
+          {
+            "long": "env",
+            "inherit": false,
+            "value": {
+              "name": "env"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          }
+        ]
+      },
+      {
+        "name": "push",
+        "description": "push and deploy the latest app configuration",
+        "options": [
+          {
+            "long": "env",
+            "inherit": false,
+            "value": {
+              "name": "env"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "field",
+              "provider": "graphcdn.fields",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "graphcdn.fields": {
+        "candidates": [
+          {
+            "value": "schema"
+          },
+          {
+            "value": "rules"
+          }
+        ]
+      }
+    },
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help"
+      }
+    ]
+  }
+}
