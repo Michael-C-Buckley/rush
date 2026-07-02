@@ -1,0 +1,21 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "while",
+    "description": "repeat a command while a condition succeeds",
+    "arguments": {
+      "states": [
+        {
+          "name": "command",
+          "rest": "command-line"
+        }
+      ]
+    },
+    "providers": {
+      "executables": {
+        "builtin": "executables"
+      }
+    }
+  }
+}
