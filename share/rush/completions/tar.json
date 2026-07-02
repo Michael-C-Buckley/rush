@@ -1,0 +1,1389 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "tar",
+    "description": "manipulate archive files",
+    "options": [
+      {
+        "short": "g",
+        "long": "listed-incremental",
+        "spellings": [
+          "g"
+        ],
+        "description": "handle new GNU-format incremental backups",
+        "inherit": true,
+        "value": {
+          "name": "file"
+        }
+      },
+      {
+        "long": "hole-detection",
+        "description": "use METHOD to detect holes in sparse files",
+        "inherit": true,
+        "value": {
+          "name": "method",
+          "required": false,
+          "style": "optional",
+          "provider": {
+            "values": [
+              "seek",
+              "raw"
+            ]
+          }
+        }
+      },
+      {
+        "short": "G",
+        "long": "incremental",
+        "spellings": [
+          "G"
+        ],
+        "description": "handle old GNU-format incremental backups",
+        "inherit": true
+      },
+      {
+        "long": "sparse-version",
+        "description": "set version of the sparse format to use",
+        "inherit": true,
+        "value": {
+          "name": "major[.minor]",
+          "provider": {
+            "values": [
+              "0",
+              "0.1",
+              "1"
+            ]
+          }
+        }
+      },
+      {
+        "short": "S",
+        "long": "sparse",
+        "spellings": [
+          "S"
+        ],
+        "description": "handle sparse files efficiently",
+        "inherit": true
+      },
+      {
+        "long": "ignore-command-error",
+        "description": "ignore subprocess exit codes",
+        "inherit": true
+      },
+      {
+        "long": "no-ignore-command-error",
+        "description": "treat non-zero exit codes of children as error",
+        "inherit": true
+      },
+      {
+        "long": "numeric-owner",
+        "description": "always use numbers for user/group names",
+        "inherit": true
+      },
+      {
+        "long": "acls",
+        "description": "enable POSIX ACLs support",
+        "inherit": true
+      },
+      {
+        "long": "no-acls",
+        "description": "disable POSIX ACLs support",
+        "inherit": true
+      },
+      {
+        "long": "selinux",
+        "description": "enable SELinux context support",
+        "inherit": true
+      },
+      {
+        "long": "no-selinux",
+        "description": "disable SELinux context support",
+        "inherit": true
+      },
+      {
+        "long": "xattrs",
+        "description": "enable extended attributes support",
+        "inherit": true
+      },
+      {
+        "long": "no-xattrs",
+        "description": "disable extended attributes support",
+        "inherit": true
+      },
+      {
+        "long": "xattrs-exclude",
+        "description": "specify the exclude pattern for xattr keys",
+        "inherit": true,
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "long": "xattrs-include",
+        "description": "specify the include pattern for xattr keys",
+        "inherit": true,
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "long": "backup",
+        "description": "backup before removal",
+        "inherit": true,
+        "value": {
+          "name": "control",
+          "required": false,
+          "style": "optional",
+          "provider": {
+            "values": [
+              {
+                "value": "none",
+                "description": "Never make backups"
+              },
+              {
+                "value": "off",
+                "description": "Never make backups"
+              },
+              {
+                "value": "t",
+                "description": "Make numbered backups"
+              },
+              {
+                "value": "numbered",
+                "description": "Make numbered backups"
+              },
+              {
+                "value": "nil",
+                "description": "Make numbered backups if numbered backups exist"
+              },
+              {
+                "value": "existing",
+                "description": "Make numbered backups if numbered backups exist"
+              },
+              {
+                "value": "never",
+                "description": "Always make simple backups"
+              },
+              {
+                "value": "simple",
+                "description": "Always make simple backups"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "C",
+        "long": "directory",
+        "spellings": [
+          "C"
+        ],
+        "description": "change to DIR before performing any operations",
+        "repeatable": true,
+        "inherit": true,
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "newer-mtime",
+        "description": "work on files whose data changed after the DATE",
+        "inherit": true,
+        "value": {
+          "name": "date",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "no-null",
+        "description": "disable the effect of the previous --null option",
+        "inherit": true
+      },
+      {
+        "long": "no-recursion",
+        "description": "avoid descending automatically in directories",
+        "inherit": true
+      },
+      {
+        "long": "no-unquote",
+        "description": "do not unquote input file or member names",
+        "inherit": true
+      },
+      {
+        "long": "no-verbatim-files-from",
+        "description": "treat each line read from a file list as if it were supplied in the command line",
+        "repeatable": true,
+        "inherit": true
+      },
+      {
+        "spellings": [
+          "-null"
+        ],
+        "description": "instruct subsequent -T options to read null-terminated names verbatim",
+        "inherit": true
+      },
+      {
+        "long": "recursion",
+        "description": "recurse into directories",
+        "inherit": true
+      },
+      {
+        "long": "suffix",
+        "description": "backup before removal, override usual suffix",
+        "inherit": true,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "short": "T",
+        "long": "files-from",
+        "spellings": [
+          "T"
+        ],
+        "description": "get names to extract or create from FILE",
+        "repeatable": true,
+        "inherit": true,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "unquote",
+        "description": "unquote file or member names",
+        "inherit": true
+      },
+      {
+        "long": "verbatim-files-from",
+        "description": "treat each line obtained from a file list as a file name, even if it starts with a dash",
+        "repeatable": true,
+        "inherit": true
+      },
+      {
+        "short": "X",
+        "long": "exclude-from",
+        "spellings": [
+          "X"
+        ],
+        "description": "exclude files matching patterns listed in FILE",
+        "repeatable": true,
+        "inherit": true,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "index-file",
+        "description": "send verbose output to FILE",
+        "inherit": true,
+        "value": {
+          "name": "file"
+        }
+      },
+      {
+        "long": "no-quote-chars",
+        "description": "disable quoting for characters from STRING",
+        "inherit": true,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "quote-chars",
+        "description": "additionally quote characters from STRING",
+        "inherit": true,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "quoting-style",
+        "description": "set quoting style for file and member names",
+        "inherit": true,
+        "value": {
+          "name": "style",
+          "provider": {
+            "values": [
+              "literal",
+              "shell",
+              "shell-always",
+              "c",
+              "c-maybe",
+              "escape",
+              "locale",
+              "clocale"
+            ]
+          }
+        }
+      },
+      {
+        "short": "R",
+        "long": "block-number",
+        "spellings": [
+          "R"
+        ],
+        "description": "show block number within archive with each message",
+        "inherit": true
+      },
+      {
+        "long": "show-transformed-names",
+        "aliases": [
+          "show-stored-names"
+        ],
+        "description": "show file or archive names after transformation by --strip and --transform options",
+        "inherit": true
+      },
+      {
+        "long": "totals",
+        "description": "print total bytes after processing the archive",
+        "inherit": true,
+        "value": {
+          "name": "signal",
+          "required": false,
+          "style": "optional",
+          "provider": {
+            "values": [
+              {
+                "value": "SIGHUP"
+              },
+              {
+                "value": "HUP"
+              },
+              {
+                "value": "SIGQUIT"
+              },
+              {
+                "value": "QUIT"
+              },
+              {
+                "value": "SIGINT"
+              },
+              {
+                "value": "INT"
+              },
+              {
+                "value": "SIGUSR1"
+              },
+              {
+                "value": "USR1"
+              },
+              {
+                "value": "SIGUSR2"
+              },
+              {
+                "value": "USR2"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "spellings": [
+          "v"
+        ],
+        "description": "verbosely list files processed",
+        "repeatable": true,
+        "inherit": true
+      },
+      {
+        "short": "w",
+        "long": "interactive",
+        "aliases": [
+          "confirmation"
+        ],
+        "spellings": [
+          "w"
+        ],
+        "description": "ask for confirmation for every action",
+        "inherit": false
+      },
+      {
+        "description": "use archive file",
+        "inherit": true,
+        "long": "file",
+        "short": "f",
+        "spellings": [
+          "f"
+        ],
+        "value": {
+          "name": "archive",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "description": "treat archive as local",
+        "inherit": true,
+        "long": "force-local"
+      },
+      {
+        "description": "run script at end of each tape",
+        "inherit": true,
+        "long": "info-script",
+        "short": "F",
+        "spellings": [
+          "F"
+        ],
+        "value": {
+          "name": "command"
+        }
+      },
+      {
+        "description": "change tape after size",
+        "inherit": true,
+        "long": "tape-length",
+        "short": "L",
+        "spellings": [
+          "L"
+        ],
+        "value": {
+          "name": "size"
+        }
+      },
+      {
+        "description": "use multi-volume archive",
+        "inherit": true,
+        "long": "multi-volume",
+        "short": "M",
+        "spellings": [
+          "M"
+        ]
+      },
+      {
+        "description": "set rmt command",
+        "inherit": true,
+        "long": "rmt-command",
+        "value": {
+          "name": "command"
+        }
+      },
+      {
+        "description": "set rsh command",
+        "inherit": true,
+        "long": "rsh-command",
+        "value": {
+          "name": "command"
+        }
+      },
+      {
+        "description": "track volume number in file",
+        "inherit": true,
+        "long": "volno-file",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "description": "choose compression by suffix",
+        "inherit": true,
+        "long": "auto-compress",
+        "short": "a",
+        "spellings": [
+          "a"
+        ]
+      },
+      {
+        "description": "filter through command",
+        "inherit": true,
+        "long": "use-compress-program",
+        "short": "I",
+        "spellings": [
+          "I"
+        ],
+        "value": {
+          "name": "command"
+        }
+      },
+      {
+        "description": "filter through bzip2",
+        "inherit": true,
+        "long": "bzip2",
+        "short": "j",
+        "spellings": [
+          "j"
+        ]
+      },
+      {
+        "description": "filter through xz",
+        "inherit": true,
+        "long": "xz",
+        "short": "J",
+        "spellings": [
+          "J"
+        ]
+      },
+      {
+        "description": "filter through lzip",
+        "inherit": true,
+        "long": "lzip"
+      },
+      {
+        "description": "filter through lzma",
+        "inherit": true,
+        "long": "lzma"
+      },
+      {
+        "description": "filter through lzop",
+        "inherit": true,
+        "long": "lzop"
+      },
+      {
+        "description": "do not choose compression by suffix",
+        "inherit": true,
+        "long": "no-auto-compress"
+      },
+      {
+        "description": "filter through gzip",
+        "inherit": true,
+        "long": "gzip",
+        "short": "z",
+        "spellings": [
+          "z"
+        ]
+      },
+      {
+        "description": "filter through compress",
+        "inherit": true,
+        "long": "compress",
+        "short": "Z",
+        "spellings": [
+          "Z"
+        ]
+      },
+      {
+        "description": "filter through zstd",
+        "inherit": true,
+        "long": "zstd"
+      },
+      {
+        "description": "transform file names",
+        "inherit": true,
+        "long": "transform",
+        "value": {
+          "name": "expression"
+        }
+      },
+      {
+        "description": "show checkpoint progress",
+        "inherit": true,
+        "long": "checkpoint",
+        "value": {
+          "name": "number",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "description": "run action on checkpoint",
+        "inherit": true,
+        "long": "checkpoint-action",
+        "value": {
+          "name": "action"
+        }
+      },
+      {
+        "description": "process Nth occurrence",
+        "inherit": true,
+        "long": "occurrence",
+        "value": {
+          "name": "number",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "description": "ignore unreadable files",
+        "inherit": true,
+        "long": "ignore-failed-read"
+      },
+      {
+        "description": "remove files after archiving",
+        "inherit": true,
+        "long": "remove-files"
+      },
+      {
+        "description": "verify archive after writing",
+        "inherit": true,
+        "long": "verify",
+        "short": "W",
+        "spellings": [
+          "W"
+        ]
+      },
+      {
+        "description": "force group for added files",
+        "inherit": true,
+        "long": "group",
+        "value": {
+          "name": "group"
+        }
+      },
+      {
+        "description": "read group map file",
+        "inherit": true,
+        "long": "group-map",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "description": "force symbolic mode",
+        "inherit": true,
+        "long": "mode",
+        "value": {
+          "name": "changes"
+        }
+      },
+      {
+        "description": "set mtime for added files",
+        "inherit": true,
+        "long": "mtime",
+        "value": {
+          "name": "date-or-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "description": "force owner for added files",
+        "inherit": true,
+        "long": "owner",
+        "value": {
+          "name": "owner"
+        }
+      },
+      {
+        "description": "read owner map file",
+        "inherit": true,
+        "long": "owner-map",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "description": "sort directory entries",
+        "inherit": true,
+        "long": "sort",
+        "value": {
+          "name": "order",
+          "provider": {
+            "values": [
+              "none",
+              "name",
+              "inode"
+            ]
+          }
+        }
+      },
+      {
+        "description": "add file to archive",
+        "inherit": true,
+        "long": "add-file",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "description": "exclude matching files",
+        "inherit": true,
+        "long": "exclude",
+        "value": {
+          "name": "pattern"
+        },
+        "repeatable": true
+      },
+      {
+        "description": "assume archive is seekable",
+        "inherit": true,
+        "long": "seek",
+        "short": "n",
+        "spellings": [
+          "n"
+        ]
+      },
+      {
+        "description": "assume archive is not seekable",
+        "inherit": true,
+        "long": "no-seek"
+      },
+      {
+        "description": "accept incomplete input records",
+        "inherit": true,
+        "long": "read-full-records",
+        "short": "B",
+        "spellings": [
+          "B"
+        ]
+      },
+      {
+        "description": "ignore zeroed archive blocks",
+        "inherit": true,
+        "long": "ignore-zeros",
+        "short": "i",
+        "spellings": [
+          "i"
+        ]
+      },
+      {
+        "description": "set or match volume label",
+        "inherit": true,
+        "long": "label",
+        "short": "V",
+        "spellings": [
+          "V"
+        ],
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "description": "start at archive member",
+        "inherit": true,
+        "long": "starting-file",
+        "short": "K",
+        "spellings": [
+          "K"
+        ],
+        "value": {
+          "name": "member"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "A",
+        "description": "append archive to the end of another archive",
+        "arguments": {
+          "states": [
+            {
+              "name": "archive",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "c",
+        "description": "create a new archive",
+        "options": [
+          {
+            "long": "check-device",
+            "description": "Check device numbers when creating incremental archives",
+            "inherit": false
+          },
+          {
+            "long": "level",
+            "description": "Set dump level for created listed-incremental archive",
+            "inherit": false,
+            "value": {
+              "name": "NUMBER"
+            }
+          },
+          {
+            "long": "no-check-device",
+            "description": "Do not check device numbers when creating incremental archives",
+            "inherit": false
+          },
+          {
+            "short": "b",
+            "long": "blocking-factor",
+            "spellings": [
+              "b"
+            ],
+            "description": "Set record size to BLOCKSx512 bytes",
+            "inherit": false,
+            "value": {
+              "name": "BLOCKS"
+            }
+          },
+          {
+            "long": "record-size",
+            "description": "Set record size",
+            "inherit": false,
+            "value": {
+              "name": "NUMBER",
+              "description": "The number of bytes per record"
+            }
+          },
+          {
+            "short": "H",
+            "long": "format",
+            "spellings": [
+              "H"
+            ],
+            "description": "Create archive of the given format",
+            "inherit": false,
+            "value": {
+              "name": "FORMAT",
+              "provider": {
+                "values": [
+                  {
+                    "value": "gnu",
+                    "description": "GNU tar 1.13.x format"
+                  },
+                  {
+                    "value": "oldgnu",
+                    "description": "GNU format as per tar <= 1.12"
+                  },
+                  {
+                    "value": "pax",
+                    "description": "POSIX 1003.1-2001 (pax) format"
+                  },
+                  {
+                    "value": "posix",
+                    "description": "POSIX 1003.1-2001 (pax) format"
+                  },
+                  {
+                    "value": "ustar",
+                    "description": "POSIX 1003.1-1988 (ustar) format"
+                  },
+                  {
+                    "value": "v7",
+                    "description": "Old V7 tar format"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "old-archive",
+            "aliases": [
+              "portability"
+            ],
+            "description": "Same as --format=v7",
+            "inherit": false
+          },
+          {
+            "long": "pax-option",
+            "description": "Control pax keywords when creating PAX archives",
+            "inherit": false,
+            "value": {
+              "name": "keyword[[:]=value][,keyword[[:]=value]]..."
+            }
+          },
+          {
+            "long": "posix",
+            "description": "Same as --format=posix",
+            "inherit": false
+          },
+          {
+            "short": "V",
+            "long": "label",
+            "spellings": [
+              "V"
+            ],
+            "description": "Create archive with volume name TEXT",
+            "inherit": false,
+            "value": {
+              "name": "TEXT"
+            }
+          },
+          {
+            "long": "warning",
+            "description": "Enable or disable warning messages identified by KEYWORD",
+            "repeatable": true,
+            "inherit": true,
+            "value": {
+              "name": "KEYWORD",
+              "provider": {
+                "values": [
+                  {
+                    "value": "cachedir",
+                    "description": "\"%s: contains a cache directory tag %s; %s\""
+                  },
+                  {
+                    "value": "no-cachedir",
+                    "description": "No \"%s: contains a cache directory tag %s; %s\""
+                  },
+                  {
+                    "value": "file-shrank",
+                    "description": "\"%s: File shrank by %s bytes; padding with zeros\""
+                  },
+                  {
+                    "value": "no-file-shrank",
+                    "description": "No \"%s: File shrank by %s bytes; padding with zeros\""
+                  },
+                  {
+                    "value": "xdev",
+                    "description": "\"%s: file is on a different filesystem; not dumped\""
+                  },
+                  {
+                    "value": "no-xdev",
+                    "description": "No \"%s: file is on a different filesystem; not dumped\""
+                  },
+                  {
+                    "value": "file-ignored",
+                    "description": "\"%s: Unknown file type; file ignored\", \"%s: socket ignored\", \"%s: door ignored\""
+                  },
+                  {
+                    "value": "no-file-ignored",
+                    "description": "No \"%s: Unknown file type; file ignored\", \"%s: socket ignored\", \"%s: door ignored\""
+                  },
+                  {
+                    "value": "file-unchanged",
+                    "description": "\"%s: file is unchanged; not dumped\""
+                  },
+                  {
+                    "value": "no-file-unchanged",
+                    "description": "No \"%s: file is unchanged; not dumped\""
+                  },
+                  {
+                    "value": "ignore-archive",
+                    "description": "\"%s: file is the archive; not dumped\""
+                  },
+                  {
+                    "value": "no-ignore-archive",
+                    "description": "No \"%s: file is the archive; not dumped\""
+                  },
+                  {
+                    "value": "file-removed",
+                    "description": "\"%s: File removed before we read it\""
+                  },
+                  {
+                    "value": "no-file-removed",
+                    "description": "No \"%s: File removed before we read it\""
+                  },
+                  {
+                    "value": "file-changed",
+                    "description": "\"%s: file changed as we read it\""
+                  },
+                  {
+                    "value": "no-file-changed",
+                    "description": "No \"%s: file changed as we read it\""
+                  },
+                  {
+                    "value": "failed-read",
+                    "description": "Enables warnings about unreadable files or directories"
+                  },
+                  {
+                    "value": "no-failed-read",
+                    "description": "Suppresses warnings about unreadable files or directories"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "o",
+            "spellings": [
+              "o"
+            ],
+            "description": "Same as --old-archive",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "d",
+        "description": "find differences between archive and file system",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "t",
+        "description": "list the contents of an archive",
+        "arguments": {
+          "states": [
+            {
+              "name": "member",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "r",
+        "description": "append files to the end of an archive",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "u",
+        "description": "append files which are newer than the corresponding copy in the archive",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "x",
+        "description": "extract files from an archive",
+        "options": [
+          {
+            "short": "k",
+            "long": "keep-old-files",
+            "spellings": [
+              "k"
+            ],
+            "description": "Don't replace existing files when extracting",
+            "inherit": false
+          },
+          {
+            "long": "keep-newer-files",
+            "description": "Don't replace existing files that are newer than their archive copies",
+            "inherit": false
+          },
+          {
+            "long": "keep-directory-symlink",
+            "description": "Don't replace existing symlinks to directories when extracting",
+            "inherit": false
+          },
+          {
+            "long": "no-overwrite-dir",
+            "description": "Preserve metadata of existing directories",
+            "inherit": false
+          },
+          {
+            "long": "one-top-level",
+            "description": "Extract all files into DIR",
+            "inherit": false,
+            "value": {
+              "name": "DIR"
+            }
+          },
+          {
+            "long": "overwrite",
+            "description": "Overwrite existing files when extracting",
+            "inherit": false
+          },
+          {
+            "long": "overwrite-dir",
+            "description": "Overwrite metadata of existing directories when extracting",
+            "inherit": false
+          },
+          {
+            "long": "recursive-unlink",
+            "description": "Recursively remove all files in the directory prior to extracting it",
+            "inherit": false
+          },
+          {
+            "long": "skip-old-files",
+            "description": "Don't replace existing files when extracting, silently skip over them",
+            "inherit": false
+          },
+          {
+            "short": "U",
+            "long": "unlink-first",
+            "spellings": [
+              "U"
+            ],
+            "description": "Remove each file prior to extracting over it",
+            "inherit": false
+          },
+          {
+            "short": "O",
+            "long": "to-stdout",
+            "spellings": [
+              "O"
+            ],
+            "description": "Extract files to standard output",
+            "inherit": false
+          },
+          {
+            "long": "to-command",
+            "description": "Pipe extracted files to COMMAND",
+            "inherit": false,
+            "value": {
+              "name": "COMMAND",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "delay-directory-restore",
+            "description": "Delay setting modification times and permissions of extracted directories until the end of extraction",
+            "inherit": false
+          },
+          {
+            "short": "m",
+            "long": "touch",
+            "spellings": [
+              "m"
+            ],
+            "description": "Don't extract file modified time",
+            "inherit": false
+          },
+          {
+            "long": "no-delay-directory-restore",
+            "description": "Cancel the effect of the prior --delay-directory-restore option",
+            "inherit": false
+          },
+          {
+            "long": "no-same-owner",
+            "description": "Extract files as yourself",
+            "inherit": false
+          },
+          {
+            "long": "no-same-permissions",
+            "description": "Apply the user's umask when extracting permissions from the archive",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "preserve-permissions",
+            "aliases": [
+              "same-permissions"
+            ],
+            "spellings": [
+              "p"
+            ],
+            "description": "Extract information about file permissions",
+            "inherit": false
+          },
+          {
+            "long": "preserve",
+            "description": "Same as both -p and -s",
+            "inherit": false
+          },
+          {
+            "long": "same-owner",
+            "description": "Try extracting files with the same ownership as exists in the archive",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "preserve-order",
+            "aliases": [
+              "same-order"
+            ],
+            "spellings": [
+              "s"
+            ],
+            "description": "Sort names to extract to match archive",
+            "inherit": false
+          },
+          {
+            "long": "strip-components",
+            "description": "Strip NUMBER leading components from file names on extraction",
+            "inherit": false,
+            "value": {
+              "name": "NUMBER"
+            }
+          },
+          {
+            "long": "warning",
+            "description": "Enable or disable warning messages identified by KEYWORD",
+            "repeatable": true,
+            "inherit": true,
+            "value": {
+              "name": "KEYWORD",
+              "provider": {
+                "values": [
+                  {
+                    "value": "existing-file",
+                    "description": "\"%s: skipping existing file\""
+                  },
+                  {
+                    "value": "no-existing-file",
+                    "description": "No \"%s: skipping existing file\""
+                  },
+                  {
+                    "value": "timestamp",
+                    "description": "\"%s: implausibly old time stamp %s\", \"%s: time stamp %s is %s s in the future\""
+                  },
+                  {
+                    "value": "no-timestamp",
+                    "description": "No \"%s: implausibly old time stamp %s\", \"%s: time stamp %s is %s s in the future\""
+                  },
+                  {
+                    "value": "contiguous-cast",
+                    "description": "\"Extracting contiguous files as regular files\""
+                  },
+                  {
+                    "value": "no-contiguous-cast",
+                    "description": "No \"Extracting contiguous files as regular files\""
+                  },
+                  {
+                    "value": "symlink-cast",
+                    "description": "\"Attempting extraction of symbolic links as hard links\""
+                  },
+                  {
+                    "value": "no-symlink-cast",
+                    "description": "No \"Attempting extraction of symbolic links as hard links\""
+                  },
+                  {
+                    "value": "unknown-cast",
+                    "description": "\"%s: Unknown file type '%c', extracted as normal file\""
+                  },
+                  {
+                    "value": "no-unknown-cast",
+                    "description": "No \"%s: Unknown file type '%c', extracted as normal file\""
+                  },
+                  {
+                    "value": "ignore-newer",
+                    "description": "\"Current %s is newer or same age\""
+                  },
+                  {
+                    "value": "no-ignore-newer",
+                    "description": "No \"Current %s is newer or same age\""
+                  },
+                  {
+                    "value": "unknown-keyword",
+                    "description": "\"Ignoring unknown extended header keyword '%s'\""
+                  },
+                  {
+                    "value": "no-unknown-keyword",
+                    "description": "No \"Ignoring unknown extended header keyword '%s'\""
+                  },
+                  {
+                    "value": "decompress-program",
+                    "description": "Enables verbose description of failures occurring when trying to run alternative decompressor programs"
+                  },
+                  {
+                    "value": "no-decompress-program",
+                    "description": "Suppresses verbose description of failures occurring when trying to run alternative decompressor programs"
+                  },
+                  {
+                    "value": "record-size",
+                    "description": "\"Record size = %lu blocks\""
+                  },
+                  {
+                    "value": "no-record-size",
+                    "description": "No \"Record size = %lu blocks\""
+                  },
+                  {
+                    "value": "rename-directory",
+                    "description": "\"%s: Directory has been renamed from %s\", \"%s: Directory has been renamed\""
+                  },
+                  {
+                    "value": "no-rename-directory",
+                    "description": "No \"%s: Directory has been renamed from %s\", \"%s: Directory has been renamed\""
+                  },
+                  {
+                    "value": "new-directory",
+                    "description": "\"%s: Directory is new\""
+                  },
+                  {
+                    "value": "no-new-directory",
+                    "description": "No \"%s: Directory is new\""
+                  },
+                  {
+                    "value": "xdev",
+                    "description": "\"%s: directory is on a different device: not purging\""
+                  },
+                  {
+                    "value": "no-xdev",
+                    "description": "No \"%s: directory is on a different device: not purging\""
+                  },
+                  {
+                    "value": "bad-dumpdir",
+                    "description": "\"Malformed dumpdir: 'X' never used\""
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "o",
+            "spellings": [
+              "o"
+            ],
+            "description": "Same as --no-same-owner",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "member",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--delete",
+        "description": "delete from the archive",
+        "arguments": {
+          "states": [
+            {
+              "name": "member",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--test-label",
+        "description": "test the archive volume label and exit",
+        "arguments": {
+          "states": [
+            {
+              "name": "label",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--show-defaults",
+        "description": "show built-in defaults for various tar options and exit"
+      },
+      {
+        "name": "?",
+        "description": "display a short option summary and exit"
+      },
+      {
+        "name": "--usage",
+        "description": "display a list of available options and exit"
+      },
+      {
+        "name": "--version",
+        "description": "print program version and copyright information and exit"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
