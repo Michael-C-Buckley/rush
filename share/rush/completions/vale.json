@@ -1,0 +1,139 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "vale",
+    "description": "prose linter",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for vale"
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "print the current version"
+      },
+      {
+        "long": "ignore-syntax",
+        "description": "lint all files line-by-line"
+      },
+      {
+        "long": "no-exit",
+        "description": "don't return a nonzero exit code on errors"
+      },
+      {
+        "long": "no-wrap",
+        "description": "don't wrap CLI output"
+      },
+      {
+        "long": "ext",
+        "description": "an extension to associate with stdin",
+        "value": {
+          "name": "ext",
+          "provider": "extensions",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "glob",
+        "description": "a glob pattern",
+        "value": {
+          "name": "glob",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "minAlertLevel",
+        "description": "the minimum level to display",
+        "value": {
+          "name": "level",
+          "provider": "alertLevels",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "output",
+        "description": "the alert output style to use",
+        "value": {
+          "name": "style",
+          "provider": "outputStyles",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "config",
+        "description": "a path to a .vale.ini file",
+        "value": {
+          "name": "path",
+          "style": "equals",
+          "provider": "files"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "path",
+          "provider": [
+            "files",
+            "directories"
+          ],
+          "index": 0,
+          "repeatable": true,
+          "description": "files or directories to lint"
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "ls-config",
+        "description": "print the current configuration to stdout"
+      },
+      {
+        "name": "ls-metrics",
+        "description": "print the given file's internal metrics to stdout",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "description": "The path to a file you want to analyze",
+              "index": 0,
+              "provider": "files"
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "files": {
+        "builtin": "files"
+      },
+      "directories": {
+        "builtin": "directories"
+      },
+      "extensions": {
+        "values": [
+          ".md",
+          ".rst",
+          ".adoc",
+          ".html"
+        ]
+      },
+      "alertLevels": {
+        "values": [
+          "suggestion",
+          "warning",
+          "error"
+        ]
+      },
+      "outputStyles": {
+        "values": [
+          "line",
+          "JSON"
+        ]
+      }
+    }
+  }
+}
