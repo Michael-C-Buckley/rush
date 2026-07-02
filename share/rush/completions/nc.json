@@ -1,0 +1,272 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "nc",
+    "description": "open TCP and UDP connections",
+    "options": [
+      {
+        "short": "4",
+        "description": "Forces nc to use IPv4 addresses only",
+        "inherit": false,
+        "excludes": [
+          "6"
+        ]
+      },
+      {
+        "short": "6",
+        "description": "Forces nc to use IPv6 addresses only",
+        "inherit": false,
+        "excludes": [
+          "4"
+        ]
+      },
+      {
+        "short": "A",
+        "description": "Set SO_RECV_ANYIF on socket",
+        "inherit": false
+      },
+      {
+        "short": "b",
+        "description": "Specifies the interface to bind the socket to",
+        "inherit": false,
+        "value": {
+          "name": "boundif"
+        }
+      },
+      {
+        "short": "c",
+        "description": "Send CRLF as line-ending",
+        "inherit": false
+      },
+      {
+        "short": "D",
+        "description": "Enable debugging on the socket",
+        "inherit": false
+      },
+      {
+        "short": "C",
+        "description": "Force nc not to use cellular data context",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "description": "Do not attempt to read from stdin",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "description": "Specifies a delay time interval between lines of text sent and received",
+        "inherit": false,
+        "value": {
+          "name": "interval"
+        }
+      },
+      {
+        "short": "G",
+        "description": "TCP connection timeout in seconds",
+        "inherit": false,
+        "value": {
+          "name": "conntimeout"
+        }
+      },
+      {
+        "short": "H",
+        "description": "Initial TCP keep alive timeout in seconds",
+        "inherit": false,
+        "value": {
+          "name": "keepidle"
+        }
+      },
+      {
+        "short": "I",
+        "description": "Interval for repeating TCP keep alive timeout in seconds",
+        "inherit": false,
+        "value": {
+          "name": "keepintvl"
+        }
+      },
+      {
+        "short": "J",
+        "description": "Number of times to repeat TCP keep alive packets",
+        "inherit": false,
+        "value": {
+          "name": "keepcnt"
+        }
+      },
+      {
+        "short": "k",
+        "description": "Force nc to stay listening for another connection after its current connection is completed",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "description": "Used to specify that nc should listen for an incoming connection rather than initiate a connection to a remote host",
+        "inherit": false,
+        "value": {
+          "name": "port"
+        },
+        "excludes": [
+          "p",
+          "s",
+          "z",
+          "w"
+        ]
+      },
+      {
+        "short": "L",
+        "description": "Number of prbes to send to the peer before declaring that the peer is not reachable",
+        "inherit": false,
+        "value": {
+          "name": "num_probes"
+        }
+      },
+      {
+        "short": "n",
+        "description": "Do not do any DNS or service lookups on any specified addresses, hostnames or ports",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "description": "Specifies the source port nc should use, subject to privilege restrictions and availability",
+        "inherit": false,
+        "value": {
+          "name": "source_port"
+        },
+        "excludes": [
+          "l"
+        ]
+      },
+      {
+        "short": "r",
+        "description": "Specifies that source and/or destination ports should be chosen randomly instead of sequentially within a range or in the order that the system assigns them",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "Specifies the IP of the interface which is used to send the packets",
+        "inherit": false,
+        "value": {
+          "name": "source_ip_address"
+        },
+        "excludes": [
+          "l"
+        ]
+      },
+      {
+        "short": "t",
+        "description": "Causes nc to send RFC 854 DON'T and WON'T responses to RFC 854 DO and WILL requests",
+        "inherit": false
+      },
+      {
+        "short": "U",
+        "description": "Specifies to use Unix Domain Sockets",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "description": "Use UDP instead of the default option of TCP",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "description": "enable verbose output",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "description": "If a connection and stdin are idle for more than timeout seconds, then the connection is silently closed",
+        "inherit": false,
+        "value": {
+          "name": "timeout"
+        },
+        "excludes": [
+          "l"
+        ]
+      },
+      {
+        "short": "X",
+        "description": "Requests that nc should use the specified protocol when talking to the proxy server",
+        "inherit": false,
+        "value": {
+          "name": "proxy_version"
+        }
+      },
+      {
+        "short": "x",
+        "description": "Requests that nc should connect to hostname using a proxy at proxy_address and port",
+        "inherit": false,
+        "value": {
+          "name": "proxy_address[:port]"
+        }
+      },
+      {
+        "short": "z",
+        "description": "Specifies that nc should just scan for listening daemons, without sending any data to them",
+        "inherit": false,
+        "excludes": [
+          "l"
+        ]
+      },
+      {
+        "long": "apple-delegate-pid",
+        "description": "Requests that nc should delegate the socket for the specified PID",
+        "inherit": false
+      },
+      {
+        "long": "apple-delegate-uuid",
+        "description": "Requests that nc should delegate the socket for the specified UUID",
+        "inherit": false
+      },
+      {
+        "long": "apple-ext-bk-idle",
+        "description": "Requests that nc marks its socket for extended background idle time when the process becomes suspended",
+        "inherit": false
+      },
+      {
+        "long": "apple-nowakefromsleep",
+        "description": "When the parameter n is greater than 0, requests that nc marks its socket to exlude the local port from the list of opened ports that is queried by drivers when",
+        "inherit": false
+      },
+      {
+        "long": "ecn",
+        "description": "Requests that nc marks to use the socket option TCP_ECN_MODE to set the ECN mode",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "required": false,
+          "style": "optional",
+          "provider": {
+            "values": [
+              "default",
+              "enable",
+              "disable"
+            ]
+          }
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "hostname",
+          "description": "Hostname or IP address to listen on or connect to",
+          "index": 0,
+          "required": false
+        },
+        {
+          "name": "port",
+          "description": "Port to listen on or connect to",
+          "index": 1,
+          "repeatable": true,
+          "required": false
+        }
+      ]
+    }
+  }
+}
