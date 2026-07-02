@@ -1,0 +1,79 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "vr",
+    "description": "Velociraptor script runner for Deno",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for Velociraptor"
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "show the version number for Velociraptor"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "script"
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "run",
+        "description": "run a script",
+        "arguments": {
+          "states": [
+            {
+              "name": "script"
+            }
+          ]
+        }
+      },
+      {
+        "name": "export",
+        "description": "export one or more scripts as standalone executable files",
+        "arguments": {
+          "states": [
+            {
+              "name": "script",
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "upgrade",
+        "description": "upgrade Velociraptor to the latest version or to a specific one",
+        "options": [
+          {
+            "short": "o",
+            "long": "out-dir",
+            "description": "the folder where the scripts will be exported",
+            "value": {
+              "name": "directory",
+              "provider": "directories"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version"
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
