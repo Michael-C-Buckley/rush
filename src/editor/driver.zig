@@ -25,7 +25,7 @@ extern "c" fn openpty(
 extern "c" fn close(fd: c_int) c_int;
 
 const read_chunk_size = 4096;
-const semantic_command_start = "\x1b]133;A;cl=w\x07";
+const semantic_command_start = "\x1b]133;A;cl=w;click_events=2\x07";
 const semantic_input_end = "\x1b]133;C\x07";
 const semantic_input_cancel = "\x1b]133;D;err=CANCEL\x07";
 const completion_progress_start = "\x1b]9;4;3\x07";
@@ -374,6 +374,27 @@ pub const TerminalSession = struct {
         return self.prompt_redraw.write.handle;
     }
 
+    fn handleMouse(
+        self: *TerminalSession,
+        session: *line_editor.LineSession,
+        mouse: vaxis.Mouse,
+    ) !bool {
+        if (mouse.type != .press or mouse.button != .left) return false;
+        if (mouse.mods.shift or mouse.mods.alt or mouse.mods.ctrl) return false;
+        if (mouse.row < 0 or mouse.col < 0) return false;
+        const frame = self.renderer.previous orelse return false;
+        const relative_row = @as(usize, @intCast(mouse.row));
+        if (relative_row >= frame.lines.len) return false;
+        return session.handleMouseClick(.{
+            .row = relative_row,
+            .col = @intCast(mouse.col),
+            .frame = frame,
+            .width = self.winsize.cols,
+            .height = self.winsize.rows,
+            .width_method = self.capabilities.widthMethod(),
+        });
+    }
+
     /// Registers an external pipe read end (e.g. prompt async command output)
     /// so `readLine` wakes and pumps it on the main thread. The fd is made
     /// nonblocking so pumping can never stall the editor.
@@ -621,6 +642,9 @@ pub const TerminalSession = struct {
                             } else {
                                 stale_cursor_query_deadline_ms = null;
                             }
+                        },
+                        .mouse => |mouse| {
+                            if (try self.handleMouse(&session, mouse)) render_needed = true;
                         },
                         .key_release, .focus_in, .focus_out => {},
                     }

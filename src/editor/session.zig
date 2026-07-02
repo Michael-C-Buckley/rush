@@ -150,6 +150,16 @@ pub const HistoryResult = request_mod.HistoryResult;
 pub const LineRequest = request_mod.LineRequest;
 const LineRequestOutbox = request_mod.Outbox;
 
+pub const MouseClick = struct {
+    row: usize,
+    col: usize,
+    frame: Frame,
+    width: u16,
+    height: u16,
+    width_method: vaxis.gwidth.Method,
+    menu_presentation: MenuPresentation = .{},
+};
+
 pub const LineSession = struct {
     allocator: std.mem.Allocator,
     prompt: Prompt,
@@ -1921,6 +1931,57 @@ pub const LineSession = struct {
         }
     }
 
+    pub fn handleMouseClick(self: *LineSession, click: MouseClick) !bool {
+        if (self.state != .editing and self.state != .history_search) return false;
+        if (try self.handleCompletionMenuClick(click)) return true;
+        if (click.row >= click.frame.input_line_count) return false;
+
+        const cursor = cursorByteForPromptCell(
+            self.prompt,
+            self.editor.buffer.text(),
+            click.row,
+            click.col,
+            click.width,
+            click.width_method,
+        );
+        if (self.editor.buffer.cursor_byte == cursor) return true;
+        self.editor.buffer.cursor_byte = cursor;
+        if (self.state == .editing) self.completion_menu.clear(self.allocator);
+        self.clearPendingRemovableSuffix();
+        return true;
+    }
+
+    fn handleCompletionMenuClick(self: *LineSession, click: MouseClick) !bool {
+        const max_rows = menu.candidateRows(click.height, click.menu_presentation);
+        switch (self.state) {
+            .editing => {
+                const count = self.completion_menu.candidates.len;
+                if (count == 0) return false;
+                const window = menu.visibleWindow(
+                    count,
+                    self.completion_menu.selected,
+                    self.completion_menu.window_start,
+                    max_rows,
+                );
+                const menu_start = menuStartRow(click.frame, window, count, click.menu_presentation);
+                if (click.row < menu_start or click.row >= menu_start + (window.end - window.start)) return false;
+                self.completion_menu.selectIndex(window.start + click.row - menu_start);
+                if (self.completion_menu.selectedCandidate()) |candidate| try self.applyCompletionCandidate(candidate);
+                return true;
+            },
+            .history_search => {
+                const count = @max(self.history_search_matches.items.len, 1);
+                const window = menu.visibleWindow(count, self.history_search_selected, 0, max_rows);
+                const menu_start = menuStartRow(click.frame, window, count, click.menu_presentation);
+                if (click.row < menu_start or click.row >= menu_start + (window.end - window.start)) return false;
+                self.history_search_selected = window.start + click.row - menu_start;
+                try self.replaceHistorySearchMatchFromSelection();
+                return true;
+            },
+            else => return false,
+        }
+    }
+
     pub fn renderFrame(self: *LineSession, allocator: std.mem.Allocator, options: RenderOptions) !Frame {
         var render_options = options;
         var suggestion_suffix: ?[]const u8 = null;
@@ -2645,6 +2706,62 @@ pub fn frameFromLine(allocator: std.mem.Allocator, editor: Editor, options: Rend
     }, options);
 }
 
+fn menuStartRow(frame: Frame, window: menu.Window, count: usize, presentation: MenuPresentation) usize {
+    const candidate_rows = window.end - window.start;
+    const summary_rows: usize = if (presentation.scroll_summary.visible and
+        (window.start != 0 or window.end != count)) 1 else 0;
+    return frame.lines.len -| (candidate_rows + summary_rows);
+}
+
+fn cursorByteForPromptCell(
+    prompt: Prompt,
+    text: []const u8,
+    row: usize,
+    col: usize,
+    width: u16,
+    width_method: vaxis.gwidth.Method,
+) usize {
+    const wrap_width = @max(@as(usize, @intCast(width)), 1);
+    const prompt_width = if (prompt.visible_width) |visible| @as(usize, @intCast(visible)) else visibleWidth(
+        prompt.bytes,
+        width_method,
+    );
+    var current_row = prompt_width / wrap_width;
+    var current_col = prompt_width % wrap_width;
+    if (row < current_row or (row == current_row and col <= current_col)) return 0;
+
+    var i: usize = 0;
+    while (i < text.len) {
+        var iter = vaxis.unicode.graphemeIterator(text[i..]);
+        const grapheme = iter.next() orelse break;
+        const start = i + grapheme.start;
+        const end = start + grapheme.len;
+        if (text[start] == '\n') {
+            if (row < current_row or (row == current_row and col >= current_col)) return start;
+            current_row += 1;
+            current_col = 0;
+            i = end;
+            continue;
+        }
+
+        const width_delta = vaxis.gwidth.gwidth(text[start..end], width_method);
+        if (current_col != 0 and current_col + width_delta > wrap_width) {
+            if (row == current_row and col >= current_col) return start;
+            current_row += 1;
+            current_col = 0;
+        }
+        if (row < current_row or (row == current_row and col <= current_col)) return start;
+        if (row == current_row and col < current_col + width_delta) return start;
+        current_col += width_delta;
+        i = end;
+        if (current_col == wrap_width) {
+            current_row += 1;
+            current_col = 0;
+        }
+    }
+    return text.len;
+}
+
 test "line session yanks last killed text" {
     var session = try LineSession.init(std.testing.allocator, "");
     defer session.deinit();
@@ -3027,6 +3144,114 @@ test "completion menu selection accepts selected candidate" {
     try std.testing.expectEqualStrings("git cherry-pick ", session.editor.buffer.text());
     try std.testing.expectEqual(LineSession.State.editing, session.state);
     try std.testing.expectEqual(@as(usize, 0), session.completion_menu.candidates.len);
+}
+
+test "mouse click moves cursor within rendered input" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.editor.buffer.replace("abcdef");
+
+    var frame = try session.renderFrame(std.testing.allocator, .{ .width = 80, .height = 24 });
+    defer frame.deinit(std.testing.allocator);
+    const handled = try session.handleMouseClick(.{
+        .row = 0,
+        .col = 5,
+        .frame = frame,
+        .width = 80,
+        .height = 24,
+        .width_method = .unicode,
+    });
+
+    try std.testing.expect(handled);
+    try std.testing.expectEqual(@as(usize, 3), session.editor.buffer.cursor_byte);
+    try std.testing.expectEqual(@as(usize, 0), session.completion_menu.candidates.len);
+}
+
+test "mouse click maps rendered newlines and wide grapheme wrapping" {
+    var newline = try LineSession.init(std.testing.allocator, "");
+    defer newline.deinit();
+    try newline.editor.buffer.replace("a\nb");
+    var newline_frame = try newline.renderFrame(std.testing.allocator, .{ .width = 80, .height = 24 });
+    defer newline_frame.deinit(std.testing.allocator);
+    try std.testing.expect(try newline.handleMouseClick(.{
+        .row = 1,
+        .col = 0,
+        .frame = newline_frame,
+        .width = 80,
+        .height = 24,
+        .width_method = .unicode,
+    }));
+    try std.testing.expectEqual(@as(usize, 2), newline.editor.buffer.cursor_byte);
+
+    var wrapped = try LineSession.init(std.testing.allocator, "");
+    defer wrapped.deinit();
+    try wrapped.editor.buffer.replace("ab界c");
+    var wrapped_frame = try wrapped.renderFrame(std.testing.allocator, .{ .width = 3, .height = 24 });
+    defer wrapped_frame.deinit(std.testing.allocator);
+    try std.testing.expect(try wrapped.handleMouseClick(.{
+        .row = 1,
+        .col = 2,
+        .frame = wrapped_frame,
+        .width = 3,
+        .height = 24,
+        .width_method = .unicode,
+    }));
+    try std.testing.expectEqual("ab界".len, wrapped.editor.buffer.cursor_byte);
+}
+
+test "mouse click accepts completion menu candidate" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.editor.buffer.replace("git che");
+    var candidates = [_]completion.Candidate{
+        .{ .value = "checkout", .kind = .subcommand, .replace_start = 4, .replace_end = 7 },
+        .{ .value = "cherry-pick", .kind = .subcommand, .replace_start = 4, .replace_end = 7 },
+    };
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+
+    var frame = try session.renderFrame(std.testing.allocator, .{ .width = 80, .height = 24 });
+    defer frame.deinit(std.testing.allocator);
+    const handled = try session.handleMouseClick(.{
+        .row = 2,
+        .col = 2,
+        .frame = frame,
+        .width = 80,
+        .height = 24,
+        .width_method = .unicode,
+    });
+
+    try std.testing.expect(handled);
+    try std.testing.expectEqualStrings("git cherry-pick ", session.editor.buffer.text());
+    try std.testing.expectEqual(@as(usize, 0), session.completion_menu.candidates.len);
+}
+
+test "mouse click selects history search match without accepting it" {
+    const entries = [_][]const u8{ "git status", "git diff", "git show" };
+    var history: TestHistorySearch = .{ .entries = &entries };
+    var session = try LineSession.initWithOptions(std.testing.allocator, .{ .bytes = "$ " }, .{
+        .context = &history,
+        .search = testSearchHistoryEntry,
+    });
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "git" });
+    try session.handleKey(.{ .key = .ctrl_r });
+    try applyTestHistoryRequests(&session);
+
+    var frame = try session.renderFrame(std.testing.allocator, .{ .width = 80, .height = 24 });
+    defer frame.deinit(std.testing.allocator);
+    try std.testing.expect(try session.handleMouseClick(.{
+        .row = 2,
+        .col = 2,
+        .frame = frame,
+        .width = 80,
+        .height = 24,
+        .width_method = .unicode,
+    }));
+
+    try std.testing.expectEqual(@as(usize, 1), session.history_search_selected);
+    try std.testing.expectEqualStrings("git", session.editor.buffer.text());
+    try std.testing.expectEqualStrings("git diff", session.history_search_match.?.text);
 }
 
 test "completion menu acceptance uses insertion text while rendering display text" {

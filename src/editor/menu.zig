@@ -102,6 +102,11 @@ pub const State = struct {
         self.selected = if (self.selected == no_selection) 0 else @min(self.selected + 1, self.candidates.len - 1);
     }
 
+    pub fn selectIndex(self: *State, index: usize) void {
+        if (self.candidates.len == 0) return;
+        self.selected = @min(index, self.candidates.len - 1);
+    }
+
     pub fn selectedCandidate(self: State) ?completion.Candidate {
         if (self.candidates.len == 0 or self.selected == no_selection) return null;
         return self.candidates[self.selected];

@@ -12,6 +12,7 @@ const editor_kitty_keyboard_flags: u5 = @bitCast(vaxis.Key.KittyFlags{});
 pub const Event = union(enum) {
     key_press: line_editor.KeyEvent,
     key_release: line_editor.KeyEvent,
+    mouse: vaxis.Mouse,
     paste: []const u8,
     paste_start,
     paste_end,
@@ -304,7 +305,8 @@ pub const Parser = struct {
                 .light => .light,
             } },
             .color_report => |report| .{ .color_report = report },
-            .mouse, .mouse_leave => null,
+            .mouse => |mouse| .{ .mouse = mouse },
+            .mouse_leave => null,
         };
     }
 
@@ -428,6 +430,7 @@ fn applyTerminalEventsForTest(session: *line_editor.LineSession, events: []const
             .paste => |text| try session.handlePaste(text),
             .invalid_utf8,
             .key_release,
+            .mouse,
             .focus_in,
             .focus_out,
             .resize,
@@ -682,6 +685,21 @@ test "terminal parser emits arrow keys" {
 
     try std.testing.expectEqual(@as(usize, 1), events.items.len);
     try std.testing.expectEqual(line_editor.Key.left, events.items[0].key_press.key);
+}
+
+test "terminal parser emits mouse clicks" {
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+    var events: std.ArrayList(Event) = .empty;
+    defer events.deinit(std.testing.allocator);
+
+    try parser.feed("\x1b[<0;4;2M", &events);
+
+    try std.testing.expectEqual(@as(usize, 1), events.items.len);
+    try std.testing.expectEqual(vaxis.Mouse.Type.press, events.items[0].mouse.type);
+    try std.testing.expectEqual(vaxis.Mouse.Button.left, events.items[0].mouse.button);
+    try std.testing.expectEqual(@as(i16, 3), events.items[0].mouse.col);
+    try std.testing.expectEqual(@as(i16, 1), events.items[0].mouse.row);
 }
 
 test "terminal parser keeps split escape sequences pending" {
