@@ -1,0 +1,48 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "twilio",
+    "description": "manage Twilio resources",
+    "providers": {
+      "builtin.files": { "builtin": "files" },
+      "twilio.log-levels": { "values": ["debug", "info", "warn", "error", "none"] },
+      "twilio.output-formats": { "values": ["columns", "json", "tsv", "none"] },
+      "twilio.http-methods": { "values": ["GET", "POST", "PUT", "PATCH", "DELETE", "HEAD"] },
+      "twilio.shells": { "values": ["bash", "zsh"] },
+      "twilio.countries": { "values": ["US", "CA", "GB", "AU", "DE", "FR", "JP", "BR", "IN", "MX"] }
+    },
+    "options": [
+      { "short": "h", "long": "help", "description": "show help", "inherit": true }
+    ],
+    "subcommands": [
+      { "name": "autocomplete", "description": "display autocomplete installation instructions", "arguments": { "states": [{ "name": "shell", "index": 0, "provider": "twilio.shells" }] }, "options": [{ "short": "r", "long": "refresh-cache", "description": "refresh cache" }] },
+      { "name": "config:list", "description": "list CLI configurations", "options": [{ "short": "l", "description": "log level", "value": { "name": "level", "provider": "twilio.log-levels" } }, { "short": "o", "description": "output format", "value": { "name": "format", "provider": "twilio.output-formats" } }, { "long": "silent", "description": "suppress output and logs" }] },
+      { "name": "config:set", "description": "update CLI configuration", "options": [{ "short": "e", "long": "edge", "description": "set edge configuration" }, { "long": "require-profile-input", "description": "require profile input" }, { "long": "no-require-profile-input", "description": "do not require profile input" }] },
+      { "name": "debugger:logs:list", "description": "list debugger log events" },
+      { "name": "email:send", "description": "send email", "options": [{ "long": "attachment", "description": "attachment file", "value": { "name": "file", "provider": "builtin.files" } }, { "long": "from", "description": "sender email", "value": { "name": "email" } }, { "long": "to", "description": "recipient email", "value": { "name": "email" } }, { "long": "subject", "description": "email subject", "value": { "name": "subject" } }, { "long": "text", "description": "email body text", "value": { "name": "text" } }, { "long": "no-attachment", "description": "do not include attachment" }] },
+      { "name": "email:set", "description": "set default sending email", "options": [{ "long": "from", "description": "sender email", "value": { "name": "email" } }, { "long": "subject", "description": "email subject", "value": { "name": "subject" } }] },
+      { "name": "feedback", "description": "provide feedback to the CLI team" },
+      { "name": "login", "description": "create a profile for Twilio credentials", "options": [{ "short": "f", "long": "force", "description": "overwrite existing credentials" }, { "short": "p", "long": "profile", "description": "profile name", "value": { "name": "profile" } }, { "long": "auth-token", "description": "Twilio auth token", "value": { "name": "token" } }, { "long": "region", "description": "Twilio region", "value": { "name": "region" } }] },
+      { "name": "phone-numbers:buy:local", "description": "purchase a local phone number", "options": [{ "long": "country-code", "description": "ISO country code", "value": { "name": "country", "provider": "twilio.countries" } }, { "long": "area-code", "description": "area code", "value": { "name": "area-code" } }] },
+      { "name": "phone-numbers:buy:mobile", "description": "purchase a mobile phone number", "options": [{ "long": "country-code", "description": "ISO country code", "value": { "name": "country", "provider": "twilio.countries" } }] },
+      { "name": "phone-numbers:buy:toll-free", "description": "purchase a toll-free phone number", "options": [{ "long": "country-code", "description": "ISO country code", "value": { "name": "country", "provider": "twilio.countries" } }] },
+      { "name": "phone-numbers:list", "description": "list configured phone numbers", "options": [{ "long": "account-sid", "description": "account SID", "value": { "name": "sid" } }, { "long": "no-header", "description": "omit table headers" }, { "long": "properties", "description": "properties to display", "value": { "name": "properties" } }] },
+      { "name": "phone-numbers:update", "description": "update a phone number", "arguments": { "states": [{ "name": "phone-number", "index": 0, "description": "SID or E.164 phone number" }] }, "options": [{ "long": "friendly-name", "description": "friendly name", "value": { "name": "name" } }, { "long": "sms-method", "description": "SMS webhook method", "value": { "name": "method", "provider": "twilio.http-methods" } }, { "long": "sms-url", "description": "SMS webhook URL", "value": { "name": "url" } }, { "long": "voice-method", "description": "voice webhook method", "value": { "name": "method", "provider": "twilio.http-methods" } }, { "long": "voice-url", "description": "voice webhook URL", "value": { "name": "url" } }] },
+      { "name": "plugins:available", "description": "list available plugins" },
+      { "name": "plugins:inspect", "description": "show plugin installation properties", "arguments": { "states": [{ "name": "plugin", "index": 0 }] }, "options": [{ "short": "v", "long": "verbose", "description": "verbose output" }] },
+      { "name": "plugins:install", "description": "install a plugin", "arguments": { "states": [{ "name": "plugin", "index": 0 }] }, "options": [{ "short": "f", "long": "force", "description": "force install" }, { "short": "v", "long": "verbose", "description": "verbose output" }] },
+      { "name": "plugins:link", "description": "link a plugin for development", "arguments": { "states": [{ "name": "path", "index": 0, "provider": "builtin.files" }] }, "options": [{ "short": "v", "long": "verbose", "description": "verbose output" }] },
+      { "name": "plugins:uninstall", "description": "remove a plugin", "arguments": { "states": [{ "name": "plugin", "index": 0 }] } },
+      { "name": "plugins:update", "description": "update installed plugins" },
+      { "name": "profiles:add", "description": "add a credentials profile" },
+      { "name": "profiles:create", "description": "create a credentials profile" },
+      { "name": "profiles:list", "description": "list configured profiles" },
+      { "name": "profiles:port", "description": "port API keys from keytar", "arguments": { "states": [{ "name": "profile", "index": 0 }] } },
+      { "name": "profiles:remove", "description": "remove a profile", "arguments": { "states": [{ "name": "profile", "index": 0 }] } },
+      { "name": "profiles:use", "description": "select active profile", "arguments": { "states": [{ "name": "profile", "index": 0 }] } },
+      { "name": "update", "description": "update the Twilio CLI", "arguments": { "states": [{ "name": "channel", "index": 0 }] }, "options": [{ "long": "from-local", "description": "choose an installed version" }] },
+      { "name": "plugins", "description": "list installed plugins", "options": [{ "long": "core", "description": "list core plugins" }] }
+    ]
+  }
+}
