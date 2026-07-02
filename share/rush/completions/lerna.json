@@ -1,0 +1,1579 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "lerna",
+    "description": "manage JavaScript monorepos",
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "create a new lerna repo or upgrade an existing repo to the current version of Lerna",
+        "options": [
+          {
+            "description": "number of threads to use",
+            "inherit": false,
+            "long": "concurrency"
+          },
+          {
+            "description": "log level to report",
+            "inherit": false,
+            "long": "loglevel",
+            "value": {
+              "name": "loglevel",
+              "provider": {
+                "values": [
+                  "silent",
+                  "error",
+                  "warn",
+                  "success",
+                  "info",
+                  "verbose",
+                  "silly"
+                ]
+              }
+            }
+          },
+          {
+            "description": "maximum buffer length for each process",
+            "inherit": false,
+            "long": "max-buffer",
+            "value": {
+              "name": "bytes"
+            }
+          },
+          {
+            "description": "disable progress bars",
+            "inherit": false,
+            "long": "no-progress"
+          },
+          {
+            "description": "disable package sorting",
+            "inherit": false,
+            "long": "no-sort"
+          },
+          {
+            "description": "fail if a dependency cycle is found",
+            "inherit": false,
+            "long": "reject-cycles"
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "show version number",
+            "inherit": false,
+            "long": "version",
+            "short": "v"
+          },
+          {
+            "description": "executable to run scripts with",
+            "inherit": false,
+            "long": "npm-client",
+            "value": {
+              "name": "client",
+              "provider": {
+                "values": [
+                  "npm",
+                  "yarn",
+                  "pnpm"
+                ]
+              }
+            }
+          },
+          {
+            "short": "i",
+            "long": "independent",
+            "description": "use independent versioning mode",
+            "inherit": false
+          },
+          {
+            "long": "exact",
+            "description": "set the exact version of lerna in the package.json file",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "bootstrap",
+        "description": "bootstrap the packages in the current Lerna repo. Installing all their dependencies and linking any cross-dependencies",
+        "options": [
+          {
+            "description": "include packages matching a glob",
+            "inherit": false,
+            "long": "scope",
+            "value": {
+              "name": "glob"
+            }
+          },
+          {
+            "description": "exclude packages matching a glob",
+            "inherit": false,
+            "long": "ignore",
+            "value": {
+              "name": "glob"
+            }
+          },
+          {
+            "description": "exclude private packages",
+            "inherit": false,
+            "long": "no-private"
+          },
+          {
+            "description": "include packages changed since a ref",
+            "inherit": false,
+            "long": "since",
+            "value": {
+              "name": "ref"
+            }
+          },
+          {
+            "description": "exclude transitive dependents",
+            "inherit": false,
+            "long": "exclude-dependents"
+          },
+          {
+            "description": "include transitive dependents",
+            "inherit": false,
+            "long": "include-dependents"
+          },
+          {
+            "description": "include transitive dependencies",
+            "inherit": false,
+            "long": "include-dependencies"
+          },
+          {
+            "description": "include tags from merged branches",
+            "inherit": false,
+            "long": "include-merged-tags"
+          },
+          {
+            "description": "executable to run scripts with",
+            "inherit": false,
+            "long": "npm-client",
+            "value": {
+              "name": "client",
+              "provider": {
+                "values": [
+                  "npm",
+                  "yarn",
+                  "pnpm"
+                ]
+              }
+            }
+          },
+          {
+            "long": "hoist",
+            "description": "install external dependencies matching glob at the repo root so they're available to all packages",
+            "inherit": false,
+            "value": {
+              "name": "glob"
+            }
+          },
+          {
+            "long": "nohoist",
+            "description": "do not install external dependencies matching glob at the repo root. This can be used to opt out of hoisting for certain dependencies",
+            "inherit": false,
+            "value": {
+              "name": "glob"
+            }
+          },
+          {
+            "long": "strict",
+            "description": "when used in conjunction with hoist will throw an error and stop bootstrapping after emitting the version warnings. Has no effect if you aren't hoisting, or if",
+            "inherit": false
+          },
+          {
+            "long": "ignore-prepublish",
+            "description": "skip prepublish lifecycle scripts run by default in bootstrapped packages",
+            "inherit": false
+          },
+          {
+            "long": "ignore-scripts",
+            "description": "skip any lifecycle scripts normally run (prepare, etc) in bootstrapped packages",
+            "inherit": false
+          },
+          {
+            "long": "registry",
+            "description": "forwarded npm commands will use the specified registry for your package(s)",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "use-workspaces",
+            "description": "enables integration with Yarn Workspaces",
+            "inherit": false
+          },
+          {
+            "long": "no-ci",
+            "description": "disable usage of `npm ci` in CI environments",
+            "inherit": false
+          },
+          {
+            "long": "force-local",
+            "description": "when passed, this flag causes the bootstrap command to always symlink local dependencies regardless of matching version range",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "import",
+        "description": "import the package in the local path <pathToRepo> into packages/<directory-name> with commit history",
+        "options": [
+          {
+            "description": "number of threads to use",
+            "inherit": false,
+            "long": "concurrency"
+          },
+          {
+            "description": "log level to report",
+            "inherit": false,
+            "long": "loglevel",
+            "value": {
+              "name": "loglevel",
+              "provider": {
+                "values": [
+                  "silent",
+                  "error",
+                  "warn",
+                  "success",
+                  "info",
+                  "verbose",
+                  "silly"
+                ]
+              }
+            }
+          },
+          {
+            "description": "maximum buffer length for each process",
+            "inherit": false,
+            "long": "max-buffer",
+            "value": {
+              "name": "bytes"
+            }
+          },
+          {
+            "description": "disable progress bars",
+            "inherit": false,
+            "long": "no-progress"
+          },
+          {
+            "description": "disable package sorting",
+            "inherit": false,
+            "long": "no-sort"
+          },
+          {
+            "description": "fail if a dependency cycle is found",
+            "inherit": false,
+            "long": "reject-cycles"
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "show version number",
+            "inherit": false,
+            "long": "version",
+            "short": "v"
+          },
+          {
+            "long": "flatten",
+            "description": "flatten the git history of the repository to import",
+            "inherit": false
+          },
+          {
+            "long": "dest",
+            "description": "specify the destination directory by the directory listed in lerna.json",
+            "inherit": false
+          },
+          {
+            "long": "preserve-commit",
+            "description": "preserve the original committer and commit date",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "pathToRepo",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "publish",
+        "description": "create a new release of the packages that have been updated. Prompts for a new version and updates all the packages on git and npm",
+        "options": [
+          {
+            "description": "number of threads to use",
+            "inherit": false,
+            "long": "concurrency"
+          },
+          {
+            "description": "log level to report",
+            "inherit": false,
+            "long": "loglevel",
+            "value": {
+              "name": "loglevel",
+              "provider": {
+                "values": [
+                  "silent",
+                  "error",
+                  "warn",
+                  "success",
+                  "info",
+                  "verbose",
+                  "silly"
+                ]
+              }
+            }
+          },
+          {
+            "description": "maximum buffer length for each process",
+            "inherit": false,
+            "long": "max-buffer",
+            "value": {
+              "name": "bytes"
+            }
+          },
+          {
+            "description": "disable progress bars",
+            "inherit": false,
+            "long": "no-progress"
+          },
+          {
+            "description": "disable package sorting",
+            "inherit": false,
+            "long": "no-sort"
+          },
+          {
+            "description": "fail if a dependency cycle is found",
+            "inherit": false,
+            "long": "reject-cycles"
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "show version number",
+            "inherit": false,
+            "long": "version",
+            "short": "v"
+          },
+          {
+            "long": "npm-tag",
+            "description": "publish to npm with the given npm dist-tag (Defaults to latest)",
+            "inherit": false,
+            "value": {
+              "name": "tagname"
+            }
+          },
+          {
+            "long": "canary",
+            "short": "c",
+            "description": "create a canary release",
+            "inherit": false
+          },
+          {
+            "long": "skip-git",
+            "description": "don't run any git commands",
+            "inherit": false
+          },
+          {
+            "long": "force-publish",
+            "description": "force publish for the specified packages (comma-separated)",
+            "inherit": false,
+            "value": {
+              "name": "packages",
+              "provider": {
+                "values": [
+                  {
+                    "value": "*",
+                    "description": "select all packages"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "ls",
+        "description": "list local packages",
+        "options": [
+          {
+            "description": "show information as a JSON array",
+            "inherit": false,
+            "long": "json"
+          },
+          {
+            "description": "show newline-delimited JSON",
+            "inherit": false,
+            "long": "ndjson"
+          },
+          {
+            "description": "show all packages",
+            "inherit": false,
+            "short": "a"
+          },
+          {
+            "description": "show all packages",
+            "inherit": false,
+            "long": "all"
+          },
+          {
+            "description": "show parseable output",
+            "inherit": false,
+            "long": "parseable"
+          },
+          {
+            "description": "show extended information",
+            "inherit": false,
+            "long": "long",
+            "short": "l"
+          }
+        ]
+      },
+      {
+        "name": "ll",
+        "description": "list local packages",
+        "options": [
+          {
+            "description": "show information as a JSON array",
+            "inherit": false,
+            "long": "json"
+          },
+          {
+            "description": "show newline-delimited JSON",
+            "inherit": false,
+            "long": "ndjson"
+          },
+          {
+            "description": "show all packages",
+            "inherit": false,
+            "short": "a"
+          },
+          {
+            "description": "show all packages",
+            "inherit": false,
+            "long": "all"
+          },
+          {
+            "description": "show parseable output",
+            "inherit": false,
+            "long": "parseable"
+          },
+          {
+            "description": "show extended information",
+            "inherit": false,
+            "long": "long",
+            "short": "l"
+          }
+        ]
+      },
+      {
+        "name": "la",
+        "description": "list local packages",
+        "options": [
+          {
+            "description": "show information as a JSON array",
+            "inherit": false,
+            "long": "json"
+          },
+          {
+            "description": "show newline-delimited JSON",
+            "inherit": false,
+            "long": "ndjson"
+          },
+          {
+            "description": "show all packages",
+            "inherit": false,
+            "short": "a"
+          },
+          {
+            "description": "show all packages",
+            "inherit": false,
+            "long": "all"
+          },
+          {
+            "description": "show parseable output",
+            "inherit": false,
+            "long": "parseable"
+          },
+          {
+            "description": "show extended information",
+            "inherit": false,
+            "long": "long",
+            "short": "l"
+          }
+        ]
+      },
+      {
+        "name": "list",
+        "description": "list local packages",
+        "options": [
+          {
+            "description": "show information as a JSON array",
+            "inherit": false,
+            "long": "json"
+          },
+          {
+            "description": "show newline-delimited JSON",
+            "inherit": false,
+            "long": "ndjson"
+          },
+          {
+            "description": "show all packages",
+            "inherit": false,
+            "short": "a"
+          },
+          {
+            "description": "show all packages",
+            "inherit": false,
+            "long": "all"
+          },
+          {
+            "description": "show parseable output",
+            "inherit": false,
+            "long": "parseable"
+          },
+          {
+            "description": "show extended information",
+            "inherit": false,
+            "long": "long",
+            "short": "l"
+          }
+        ]
+      },
+      {
+        "name": "changed",
+        "description": "check which packages have changed since the last release",
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "description": "number of threads to use",
+            "inherit": false,
+            "long": "concurrency"
+          },
+          {
+            "description": "log level to report",
+            "inherit": false,
+            "long": "loglevel",
+            "value": {
+              "name": "loglevel",
+              "provider": {
+                "values": [
+                  "silent",
+                  "error",
+                  "warn",
+                  "success",
+                  "info",
+                  "verbose",
+                  "silly"
+                ]
+              }
+            }
+          },
+          {
+            "description": "maximum buffer length for each process",
+            "inherit": false,
+            "long": "max-buffer",
+            "value": {
+              "name": "bytes"
+            }
+          },
+          {
+            "description": "disable progress bars",
+            "inherit": false,
+            "long": "no-progress"
+          },
+          {
+            "description": "disable package sorting",
+            "inherit": false,
+            "long": "no-sort"
+          },
+          {
+            "description": "fail if a dependency cycle is found",
+            "inherit": false,
+            "long": "reject-cycles"
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "show version number",
+            "inherit": false,
+            "long": "version",
+            "short": "v"
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "run an npm script in each package that contains that script",
+        "arguments": {
+          "states": [
+            {
+              "name": "script",
+              "description": "name of the npm script to run",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "description": "include packages matching a glob",
+            "inherit": false,
+            "long": "scope",
+            "value": {
+              "name": "glob"
+            }
+          },
+          {
+            "description": "exclude packages matching a glob",
+            "inherit": false,
+            "long": "ignore",
+            "value": {
+              "name": "glob"
+            }
+          },
+          {
+            "description": "exclude private packages",
+            "inherit": false,
+            "long": "no-private"
+          },
+          {
+            "description": "include packages changed since a ref",
+            "inherit": false,
+            "long": "since",
+            "value": {
+              "name": "ref"
+            }
+          },
+          {
+            "description": "exclude transitive dependents",
+            "inherit": false,
+            "long": "exclude-dependents"
+          },
+          {
+            "description": "include transitive dependents",
+            "inherit": false,
+            "long": "include-dependents"
+          },
+          {
+            "description": "include transitive dependencies",
+            "inherit": false,
+            "long": "include-dependencies"
+          },
+          {
+            "description": "include tags from merged branches",
+            "inherit": false,
+            "long": "include-merged-tags"
+          },
+          {
+            "description": "stream child output immediately",
+            "inherit": false,
+            "long": "stream"
+          },
+          {
+            "description": "run commands immediately in matching packages",
+            "inherit": false,
+            "long": "parallel"
+          },
+          {
+            "description": "continue even if a script exits non-zero",
+            "inherit": false,
+            "long": "no-bail"
+          },
+          {
+            "description": "disable streamed package name prefixes",
+            "inherit": false,
+            "long": "no-prefix"
+          },
+          {
+            "description": "produce a performance profile",
+            "inherit": false,
+            "long": "profile"
+          },
+          {
+            "description": "performance profile output location",
+            "inherit": false,
+            "long": "profile-location",
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "number of threads to use",
+            "inherit": false,
+            "long": "concurrency"
+          },
+          {
+            "description": "log level to report",
+            "inherit": false,
+            "long": "loglevel",
+            "value": {
+              "name": "loglevel",
+              "provider": {
+                "values": [
+                  "silent",
+                  "error",
+                  "warn",
+                  "success",
+                  "info",
+                  "verbose",
+                  "silly"
+                ]
+              }
+            }
+          },
+          {
+            "description": "maximum buffer length for each process",
+            "inherit": false,
+            "long": "max-buffer",
+            "value": {
+              "name": "bytes"
+            }
+          },
+          {
+            "description": "disable progress bars",
+            "inherit": false,
+            "long": "no-progress"
+          },
+          {
+            "description": "disable package sorting",
+            "inherit": false,
+            "long": "no-sort"
+          },
+          {
+            "description": "fail if a dependency cycle is found",
+            "inherit": false,
+            "long": "reject-cycles"
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "show version number",
+            "inherit": false,
+            "long": "version",
+            "short": "v"
+          }
+        ]
+      },
+      {
+        "name": "link",
+        "description": "symlink together all Lerna packages that are dependencies of each other in the current Lerna repo",
+        "options": [
+          {
+            "description": "number of threads to use",
+            "inherit": false,
+            "long": "concurrency"
+          },
+          {
+            "description": "log level to report",
+            "inherit": false,
+            "long": "loglevel",
+            "value": {
+              "name": "loglevel",
+              "provider": {
+                "values": [
+                  "silent",
+                  "error",
+                  "warn",
+                  "success",
+                  "info",
+                  "verbose",
+                  "silly"
+                ]
+              }
+            }
+          },
+          {
+            "description": "maximum buffer length for each process",
+            "inherit": false,
+            "long": "max-buffer",
+            "value": {
+              "name": "bytes"
+            }
+          },
+          {
+            "description": "disable progress bars",
+            "inherit": false,
+            "long": "no-progress"
+          },
+          {
+            "description": "disable package sorting",
+            "inherit": false,
+            "long": "no-sort"
+          },
+          {
+            "description": "fail if a dependency cycle is found",
+            "inherit": false,
+            "long": "reject-cycles"
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "show version number",
+            "inherit": false,
+            "long": "version",
+            "short": "v"
+          },
+          {
+            "long": "force-local",
+            "description": "when passed, this flag causes the link command to always symlink local dependencies regardless of matching version range",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "info",
+        "description": "prints local environment information that proves to be useful especially while submitting bug reports"
+      },
+      {
+        "name": "version",
+        "description": "bump version of packages changed since the last release",
+        "options": [
+          {
+            "long": "allow-branch",
+            "description": "an allowlist of globs that match git branches where lerna version is enabled",
+            "inherit": false,
+            "value": {
+              "name": "glob"
+            }
+          },
+          {
+            "long": "amend",
+            "description": "perform all changes on the current commit, instead of adding a new one",
+            "inherit": false
+          },
+          {
+            "long": "changelog-preset",
+            "description": "change the changelog preset type",
+            "inherit": false
+          },
+          {
+            "long": "conventional-commits",
+            "description": "use the Conventional Commits Specification to determine the version bump and generate CHANGELOG.md files",
+            "inherit": false
+          },
+          {
+            "long": "conventional-graduate",
+            "description": "graduate the specified packages (comma-separated) or all packages using *",
+            "inherit": false
+          },
+          {
+            "long": "conventional-prerelease",
+            "description": "release with prerelease versions the specified packages (comma-separated) or all packages using *",
+            "inherit": false
+          },
+          {
+            "long": "create-release",
+            "description": "create an official release based on the changes packages",
+            "inherit": false,
+            "value": {
+              "name": "type",
+              "provider": {
+                "values": [
+                  {
+                    "value": "github"
+                  },
+                  {
+                    "value": "gitlab"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "exact",
+            "description": "specify updated dependencies in updated packages exactly",
+            "inherit": false
+          },
+          {
+            "long": "force-publish",
+            "description": "force publish the specified packages (comma-separated) or all packages using *",
+            "inherit": false
+          },
+          {
+            "long": "git-remote",
+            "description": "push the git changes to the specified remote instead of origin",
+            "inherit": false,
+            "value": {
+              "name": "remote"
+            }
+          },
+          {
+            "long": "ignore-changes",
+            "description": "ignore changes in files matched by glob(s) when detecting changed packages",
+            "inherit": false,
+            "value": {
+              "name": "glob",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "ignore-scripts",
+            "description": "disable running lifecycle scripts during lerna version",
+            "inherit": false
+          },
+          {
+            "long": "include-merged-tags",
+            "description": "include tags from merged branches when detecting changed packages",
+            "inherit": false
+          },
+          {
+            "short": "m",
+            "long": "message",
+            "description": "use the provided message when committing the version updates for publication",
+            "inherit": false,
+            "value": {
+              "name": "msg"
+            }
+          },
+          {
+            "long": "no-changelog",
+            "description": "when using conventional-commits, do not generate any CHANGELOG.md files",
+            "inherit": false
+          },
+          {
+            "long": "no-commit-hooks",
+            "description": "disable running git commit hooks",
+            "inherit": false
+          },
+          {
+            "long": "no-git-tag-version",
+            "description": "don't commit changes to package.json files and don't tag the release",
+            "inherit": false
+          },
+          {
+            "long": "no-granular-pathspec",
+            "inherit": false
+          },
+          {
+            "long": "no-private",
+            "description": "don't include private packages",
+            "inherit": false
+          },
+          {
+            "long": "preid",
+            "description": "bump semver using the specified prerelease identifier",
+            "inherit": false,
+            "value": {
+              "name": "identifier"
+            }
+          },
+          {
+            "long": "sign-git-commit",
+            "inherit": false
+          },
+          {
+            "long": "sign-git-tag",
+            "inherit": false
+          },
+          {
+            "long": "force-git-tag",
+            "inherit": false
+          },
+          {
+            "long": "tag-version-prefix",
+            "description": "change the custom version prefix",
+            "inherit": false,
+            "value": {
+              "name": "prefix"
+            }
+          },
+          {
+            "long": "yes",
+            "description": "skip all confirmation prompts",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0,
+              "provider": {
+                "values": [
+                  "major",
+                  "minor",
+                  "patch",
+                  "premajor",
+                  "preminor",
+                  "prepatch",
+                  "prerelease"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "diff",
+        "description": "diff all packages or a single package since the last release",
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "exec",
+        "description": "execute an arbitrary command in each package",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "description": "include packages matching a glob",
+            "inherit": false,
+            "long": "scope",
+            "value": {
+              "name": "glob"
+            }
+          },
+          {
+            "description": "exclude packages matching a glob",
+            "inherit": false,
+            "long": "ignore",
+            "value": {
+              "name": "glob"
+            }
+          },
+          {
+            "description": "exclude private packages",
+            "inherit": false,
+            "long": "no-private"
+          },
+          {
+            "description": "include packages changed since a ref",
+            "inherit": false,
+            "long": "since",
+            "value": {
+              "name": "ref"
+            }
+          },
+          {
+            "description": "exclude transitive dependents",
+            "inherit": false,
+            "long": "exclude-dependents"
+          },
+          {
+            "description": "include transitive dependents",
+            "inherit": false,
+            "long": "include-dependents"
+          },
+          {
+            "description": "include transitive dependencies",
+            "inherit": false,
+            "long": "include-dependencies"
+          },
+          {
+            "description": "include tags from merged branches",
+            "inherit": false,
+            "long": "include-merged-tags"
+          },
+          {
+            "description": "stream child output immediately",
+            "inherit": false,
+            "long": "stream"
+          },
+          {
+            "description": "run commands immediately in matching packages",
+            "inherit": false,
+            "long": "parallel"
+          },
+          {
+            "description": "continue even if a script exits non-zero",
+            "inherit": false,
+            "long": "no-bail"
+          },
+          {
+            "description": "disable streamed package name prefixes",
+            "inherit": false,
+            "long": "no-prefix"
+          },
+          {
+            "description": "produce a performance profile",
+            "inherit": false,
+            "long": "profile"
+          },
+          {
+            "description": "performance profile output location",
+            "inherit": false,
+            "long": "profile-location",
+            "value": {
+              "name": "location",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "number of threads to use",
+            "inherit": false,
+            "long": "concurrency"
+          },
+          {
+            "description": "log level to report",
+            "inherit": false,
+            "long": "loglevel",
+            "value": {
+              "name": "loglevel",
+              "provider": {
+                "values": [
+                  "silent",
+                  "error",
+                  "warn",
+                  "success",
+                  "info",
+                  "verbose",
+                  "silly"
+                ]
+              }
+            }
+          },
+          {
+            "description": "maximum buffer length for each process",
+            "inherit": false,
+            "long": "max-buffer",
+            "value": {
+              "name": "bytes"
+            }
+          },
+          {
+            "description": "disable progress bars",
+            "inherit": false,
+            "long": "no-progress"
+          },
+          {
+            "description": "disable package sorting",
+            "inherit": false,
+            "long": "no-sort"
+          },
+          {
+            "description": "fail if a dependency cycle is found",
+            "inherit": false,
+            "long": "reject-cycles"
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "show version number",
+            "inherit": false,
+            "long": "version",
+            "short": "v"
+          }
+        ]
+      },
+      {
+        "name": "add",
+        "description": "add a dependency to matched packages",
+        "options": [
+          {
+            "description": "include packages matching a glob",
+            "inherit": false,
+            "long": "scope",
+            "value": {
+              "name": "glob"
+            }
+          },
+          {
+            "description": "exclude packages matching a glob",
+            "inherit": false,
+            "long": "ignore",
+            "value": {
+              "name": "glob"
+            }
+          },
+          {
+            "description": "exclude private packages",
+            "inherit": false,
+            "long": "no-private"
+          },
+          {
+            "description": "include packages changed since a ref",
+            "inherit": false,
+            "long": "since",
+            "value": {
+              "name": "ref"
+            }
+          },
+          {
+            "description": "exclude transitive dependents",
+            "inherit": false,
+            "long": "exclude-dependents"
+          },
+          {
+            "description": "include transitive dependents",
+            "inherit": false,
+            "long": "include-dependents"
+          },
+          {
+            "description": "include transitive dependencies",
+            "inherit": false,
+            "long": "include-dependencies"
+          },
+          {
+            "description": "include tags from merged branches",
+            "inherit": false,
+            "long": "include-merged-tags"
+          },
+          {
+            "description": "number of threads to use",
+            "inherit": false,
+            "long": "concurrency"
+          },
+          {
+            "description": "log level to report",
+            "inherit": false,
+            "long": "loglevel",
+            "value": {
+              "name": "loglevel",
+              "provider": {
+                "values": [
+                  "silent",
+                  "error",
+                  "warn",
+                  "success",
+                  "info",
+                  "verbose",
+                  "silly"
+                ]
+              }
+            }
+          },
+          {
+            "description": "maximum buffer length for each process",
+            "inherit": false,
+            "long": "max-buffer",
+            "value": {
+              "name": "bytes"
+            }
+          },
+          {
+            "description": "disable progress bars",
+            "inherit": false,
+            "long": "no-progress"
+          },
+          {
+            "description": "disable package sorting",
+            "inherit": false,
+            "long": "no-sort"
+          },
+          {
+            "description": "fail if a dependency cycle is found",
+            "inherit": false,
+            "long": "reject-cycles"
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "show version number",
+            "inherit": false,
+            "long": "version",
+            "short": "v"
+          },
+          {
+            "long": "dev",
+            "description": "add the new package to devDependencies instead of dependencies",
+            "inherit": false
+          },
+          {
+            "long": "exact",
+            "description": "add the new package with an exact version",
+            "inherit": false
+          },
+          {
+            "long": "peer",
+            "description": "add the new package to peerDependencies instead of dependencies",
+            "inherit": false
+          },
+          {
+            "long": "registry",
+            "description": "use a custom registry to install the targeted package",
+            "inherit": false,
+            "value": {
+              "name": "registry"
+            }
+          },
+          {
+            "long": "no-bootstrap",
+            "description": "skip the chained lerna bootstrap",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "clean",
+        "description": "remove the node_modules directory from all packages",
+        "options": [
+          {
+            "description": "include packages matching a glob",
+            "inherit": false,
+            "long": "scope",
+            "value": {
+              "name": "glob"
+            }
+          },
+          {
+            "description": "exclude packages matching a glob",
+            "inherit": false,
+            "long": "ignore",
+            "value": {
+              "name": "glob"
+            }
+          },
+          {
+            "description": "exclude private packages",
+            "inherit": false,
+            "long": "no-private"
+          },
+          {
+            "description": "include packages changed since a ref",
+            "inherit": false,
+            "long": "since",
+            "value": {
+              "name": "ref"
+            }
+          },
+          {
+            "description": "exclude transitive dependents",
+            "inherit": false,
+            "long": "exclude-dependents"
+          },
+          {
+            "description": "include transitive dependents",
+            "inherit": false,
+            "long": "include-dependents"
+          },
+          {
+            "description": "include transitive dependencies",
+            "inherit": false,
+            "long": "include-dependencies"
+          },
+          {
+            "description": "include tags from merged branches",
+            "inherit": false,
+            "long": "include-merged-tags"
+          },
+          {
+            "description": "number of threads to use",
+            "inherit": false,
+            "long": "concurrency"
+          },
+          {
+            "description": "log level to report",
+            "inherit": false,
+            "long": "loglevel",
+            "value": {
+              "name": "loglevel",
+              "provider": {
+                "values": [
+                  "silent",
+                  "error",
+                  "warn",
+                  "success",
+                  "info",
+                  "verbose",
+                  "silly"
+                ]
+              }
+            }
+          },
+          {
+            "description": "maximum buffer length for each process",
+            "inherit": false,
+            "long": "max-buffer",
+            "value": {
+              "name": "bytes"
+            }
+          },
+          {
+            "description": "disable progress bars",
+            "inherit": false,
+            "long": "no-progress"
+          },
+          {
+            "description": "disable package sorting",
+            "inherit": false,
+            "long": "no-sort"
+          },
+          {
+            "description": "fail if a dependency cycle is found",
+            "inherit": false,
+            "long": "reject-cycles"
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "show version number",
+            "inherit": false,
+            "long": "version",
+            "short": "v"
+          },
+          {
+            "long": "yes",
+            "description": "skip all confirmation prompts",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "create",
+        "description": "create a new lerna-managed package",
+        "options": [
+          {
+            "long": "access",
+            "description": "set the scope of the package",
+            "inherit": false,
+            "value": {
+              "name": "scope",
+              "provider": {
+                "values": [
+                  "public",
+                  "restricted"
+                ]
+              }
+            }
+          },
+          {
+            "long": "bin",
+            "description": "package has an executable",
+            "inherit": false,
+            "value": {
+              "name": "executableName",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "description",
+            "description": "package description",
+            "inherit": false
+          },
+          {
+            "long": "dependencies",
+            "description": "a list of package dependencies",
+            "inherit": false,
+            "value": {
+              "name": "dependencies"
+            }
+          },
+          {
+            "long": "es-module",
+            "description": "initialize a transpiled ES Module",
+            "inherit": false
+          },
+          {
+            "long": "homepage",
+            "description": "the package homepage, defaulting to a subpath of the root pkg.homepage",
+            "inherit": false
+          },
+          {
+            "long": "keywords",
+            "description": "a list of package keywords",
+            "inherit": false,
+            "value": {
+              "name": "keywords"
+            }
+          },
+          {
+            "long": "license",
+            "description": "the desired package license (SPDX identifier)",
+            "inherit": false
+          },
+          {
+            "long": "private",
+            "description": "make the new package private, never published",
+            "inherit": false
+          },
+          {
+            "long": "registry",
+            "description": "configure the package's publishConfig.registry",
+            "inherit": false
+          },
+          {
+            "long": "tag",
+            "description": "configure the package's publishConfig.tag",
+            "inherit": false
+          },
+          {
+            "long": "yes",
+            "description": "skip all prompts, accepting default values",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0
+            },
+            {
+              "name": "loc",
+              "index": 1
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
