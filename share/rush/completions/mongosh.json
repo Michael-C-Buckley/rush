@@ -1,0 +1,246 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "mongosh",
+    "description": "connect to MongoDB with an interactive shell",
+    "options": [
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version information",
+        "inherit": false
+      },
+      {
+        "long": "shell",
+        "description": "enable the interactive shell after running input",
+        "inherit": false
+      },
+      {
+        "long": "eval",
+        "description": "evaluate JavaScript",
+        "inherit": false,
+        "value": {
+          "name": "javascript"
+        }
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "authenticationDatabase",
+        "description": "authentication database",
+        "inherit": false,
+        "value": {
+          "name": "dbname"
+        }
+      },
+      {
+        "long": "gssapiHostName",
+        "description": "GSSAPI service hostname",
+        "inherit": false,
+        "value": {
+          "name": "hostname",
+          "description": "This option is available only in MongoDB Enterprise"
+        }
+      },
+      {
+        "long": "gssapiServiceName",
+        "description": "GSSAPI service name",
+        "inherit": false,
+        "value": {
+          "name": "saslServiceName",
+          "description": "GssapiServiceName defaults to mongodb for all clients and MongoDB instances. If you change saslServiceName setting on a MongoDB instance, you must set gssapiSer"
+        }
+      },
+      {
+        "long": "password",
+        "short": "p",
+        "description": "password for authentication",
+        "inherit": false,
+        "value": {
+          "name": "password"
+        }
+      },
+      {
+        "long": "username",
+        "short": "u",
+        "description": "username for authentication",
+        "inherit": false,
+        "value": {
+          "name": "username"
+        }
+      },
+      {
+        "long": "retryWrites",
+        "description": "enable retryable writes",
+        "inherit": false
+      },
+      {
+        "long": "authenticationMechanism",
+        "description": "Specifies the authentication mechanism the MongoDB Shell uses to authenticate to the mongod or mongos",
+        "inherit": false,
+        "value": {
+          "name": "authentication-mechanism",
+          "provider": {
+            "values": [
+              {
+                "value": "SCRAM-SHA-1",
+                "description": "RFC 5802 standard Salted Challenge Response Authentication Mechanism using the SHA-1 hash function"
+              },
+              {
+                "value": "SCRAM-SHA-256",
+                "description": "RFC 7677 standard Salted Challenge Response Authentication Mechanism using the SHA-256 hash function"
+              },
+              {
+                "value": "MONGODB-X509",
+                "description": "MongoDB TLS SSL certificate authentication"
+              },
+              {
+                "value": "GSSAPI (Kerberos)",
+                "description": "External authentication using Kerberos. This mechanism is available only in MongoDB Enterprise"
+              },
+              {
+                "value": "PLAIN (LDAP SASL)",
+                "description": "External authentication using LDAP. You can also use PLAIN for authenticating in-database users. PLAIN transmits passwords in plain text. This mechanism is avai"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "nodb",
+        "description": "do not connect to a database",
+        "inherit": false
+      },
+      {
+        "long": "norc",
+        "description": "do not source ~/.mongoshrc.js",
+        "inherit": false
+      },
+      {
+        "long": "quiet",
+        "description": "skip startup messages",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "description": "increase connection verbosity",
+        "inherit": false
+      },
+      {
+        "long": "port",
+        "description": "MongoDB port",
+        "inherit": false,
+        "value": {
+          "name": "port",
+          "provider": {
+            "values": [
+              {
+                "value": "27017",
+                "description": "Default-port"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "tls",
+        "description": "enable TLS",
+        "inherit": false
+      },
+      {
+        "long": "tlsAllowInvalidHostnames",
+        "description": "allow invalid TLS hostnames",
+        "inherit": false
+      },
+      {
+        "long": "tlsAllowInvalidCertificates",
+        "description": "allow invalid TLS certificates",
+        "inherit": false
+      },
+      {
+        "long": "tlsDisabledProtocols",
+        "description": "disable TLS protocols",
+        "inherit": false,
+        "value": {
+          "name": "protocols",
+          "provider": {
+            "values": [
+              {
+                "value": "TLS1_0"
+              },
+              {
+                "value": "TLS1_1"
+              },
+              {
+                "value": "TLS1_2"
+              },
+              {
+                "value": "TLS1_3",
+                "description": "(Starting in version 4.0.4, 3.6.9, 3.4.24)"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "tlsCAFile",
+        "description": "TLS CA certificate file",
+        "inherit": false,
+        "value": {
+          "name": "filePath",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "tlsCRLFile",
+        "description": "TLS certificate revocation list file",
+        "inherit": false,
+        "value": {
+          "name": "filePath",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "tlsCertificateKeyFile",
+        "description": "TLS certificate and key file",
+        "inherit": false,
+        "value": {
+          "name": "filePath",
+          "provider": "builtin.files"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "connection-string",
+          "provider": {
+            "values": [
+              {
+                "value": "mongodb://localhost:27017",
+                "description": "Default Connection String; Equivalent to running mongosh without any commands"
+              },
+              {
+                "value": "mongodb+srv://cluster0.example.mongodb.net/sample_geospatial",
+                "description": "Atlas Connection String Example",
+                "priority": 35
+              }
+            ]
+          },
+          "index": 0,
+          "required": false
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
