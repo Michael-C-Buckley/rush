@@ -75,6 +75,8 @@ pub const ReadLineOptions = struct {
         std.mem.Allocator,
         std.Io,
     ) anyerror![]const u8 = null,
+    prompt_async_context: ?*anyopaque = null,
+    pump_prompt_async: ?*const fn (*anyopaque) void = null,
     history: line_editor.HistoryView = .{},
     completion_context: ?*anyopaque = null,
     complete: ?*const fn (
@@ -369,6 +371,19 @@ pub const TerminalSession = struct {
         return self.prompt_redraw.write.handle;
     }
 
+    /// Registers an external pipe read end (e.g. prompt async command output)
+    /// so `readLine` wakes and pumps it on the main thread. The fd is made
+    /// nonblocking so pumping can never stall the editor.
+    pub fn addPromptAsyncFd(self: *TerminalSession, fd: std.posix.fd_t) !void {
+        try setNonBlocking(fd);
+        try self.loop.addReadFd(fd, .prompt_async);
+    }
+
+    pub fn removePromptAsyncFd(self: *TerminalSession, fd: std.posix.fd_t) void {
+        // ziglint-ignore: Z026 best-effort unregistration; a closed fd drops out of the loop anyway
+        self.loop.removeFd(fd) catch {};
+    }
+
     pub fn ttyFd(self: TerminalSession) std.posix.fd_t {
         return self.tty.fd.handle;
     }
@@ -469,6 +484,9 @@ pub const TerminalSession = struct {
                         .tty_input => try self.processTtyInput(),
                         .resize => try self.processResizeSignal(),
                         .prompt_redraw => try self.processPromptRedraw(),
+                        .prompt_async => {
+                            if (read_options.pump_prompt_async) |pump| pump(read_options.prompt_async_context.?);
+                        },
                         .completion_result => {
                             if (try self.processCompletionResult(&session)) render_needed = true;
                         },
@@ -646,6 +664,7 @@ pub const TerminalSession = struct {
                     continue :read_loop;
                 },
                 .submitted => {
+                    self.quiesceCompletionWorker();
                     if (completion_async_event_active) {
                         var render_needed = false;
                         if (try self.runActivityEvent(
@@ -676,6 +695,7 @@ pub const TerminalSession = struct {
                     return .{ .submitted = session.takeSubmittedLine().? };
                 },
                 .canceled => {
+                    self.quiesceCompletionWorker();
                     if (completion_async_event_active) {
                         var render_needed = false;
                         if (try self.runActivityEvent(
@@ -693,6 +713,7 @@ pub const TerminalSession = struct {
                     return .canceled;
                 },
                 .eof => {
+                    self.quiesceCompletionWorker();
                     if (completion_async_event_active) {
                         var render_needed = false;
                         if (try self.runActivityEvent(
@@ -714,7 +735,28 @@ pub const TerminalSession = struct {
         }
     }
 
+    /// Cancels and joins any active completion worker thread.
+    ///
+    /// Must run before `readLine` hands control back to the shell: the shell
+    /// forks children that keep allocating (subshells, command substitutions),
+    /// and a forked child inherits any allocator lock a live worker thread
+    /// happens to hold at that instant, deadlocking the child.
+    fn quiesceCompletionWorker(self: *TerminalSession) void {
+        const completion_thread = self.completion.active orelse return;
+        self.completion.active = null;
+        completion_thread.cancel.cancel();
+        completion_thread.thread.join();
+        // ziglint-ignore: Z026 best-effort terminal progress cleanup
+        if (self.completion.progress_started) writeTtyAll(&self.tty, completion_progress_stop) catch {};
+        self.completion.progress_started = false;
+        self.completion.progress_deadline_ms = null;
+        if (completion_thread.takeResult()) |result| result.deinit(self.allocator);
+        completion_thread.deinit();
+        self.allocator.destroy(completion_thread);
+    }
+
     fn finishInterruptedReadLine(self: *TerminalSession) !ReadLineResult {
+        self.quiesceCompletionWorker();
         try self.clearRenderedRowsAfterFirst();
         self.renderer.reset(self.allocator);
         try writeTtyAll(&self.tty, semantic_input_cancel ++ "\r\n");

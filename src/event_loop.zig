@@ -10,6 +10,7 @@ pub const Source = enum(u32) {
     tty_input,
     resize,
     prompt_redraw,
+    prompt_async,
     completion_result,
     child_signal,
     interrupt_signal,

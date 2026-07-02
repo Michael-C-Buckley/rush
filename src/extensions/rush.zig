@@ -104,9 +104,9 @@ pub const State = struct {
     abbreviations: std.StringHashMapUnmanaged([]const u8) = .empty,
     event_handlers: std.StringHashMapUnmanaged(EventHandler) = .empty,
     prompt_async_entries: std.ArrayListUnmanaged(*PromptAsyncEntry) = .empty,
-    prompt_async_mutex: std.atomic.Mutex = .unlocked,
     prompt_async_io: ?std.Io = null,
     prompt_async_redraw_fd: ?host.Fd = null,
+    prompt_async_registry: ?PromptAsyncFdRegistry = null,
     prompt_async_active_count: usize = 0,
     prompt_async_pending_start_events: usize = 0,
     prompt_async_pending_end_events: usize = 0,
@@ -135,9 +135,6 @@ pub const State = struct {
             self.allocator.free(entry.value_ptr.action);
         }
         self.event_handlers.deinit(self.allocator);
-        for (self.prompt_async_entries.items) |entry| {
-            if (entry.thread) |thread| thread.join();
-        }
         for (self.prompt_async_entries.items) |entry| entry.deinit(self.allocator);
         self.prompt_async_entries.deinit(self.allocator);
         self.prompt_buffer.deinit(self.allocator);
@@ -253,20 +250,22 @@ pub const State = struct {
         try self.prompt_buffer.appendSlice(self.allocator, bytes);
     }
 
-    pub fn configurePromptAsync(self: *State, io: std.Io, redraw_fd: std.posix.fd_t) void {
+    pub fn configurePromptAsync(
+        self: *State,
+        io: std.Io,
+        redraw_fd: std.posix.fd_t,
+        fd_registry: PromptAsyncFdRegistry,
+    ) void {
         self.prompt_async_io = io;
         self.prompt_async_redraw_fd = @enumFromInt(redraw_fd);
+        self.prompt_async_registry = fd_registry;
     }
 
     pub fn promptAsyncPending(self: *State) bool {
-        lockPromptAsync(self);
-        defer unlockPromptAsync(self);
         return self.prompt_async_render_started or self.prompt_async_active_count != 0;
     }
 
     pub fn takePromptAsyncLifecycleEvents(self: *State) PromptAsyncLifecycleEvents {
-        lockPromptAsync(self);
-        defer unlockPromptAsync(self);
         const events: PromptAsyncLifecycleEvents = .{
             .start_count = self.prompt_async_pending_start_events,
             .end_count = self.prompt_async_pending_end_events,
@@ -275,7 +274,76 @@ pub const State = struct {
         self.prompt_async_pending_end_events = 0;
         return events;
     }
+
+    /// Drains prompt async command pipes on the main thread.
+    ///
+    /// Called from the editor event loop when a pipe becomes readable and
+    /// before each prompt render. Runs entirely on the main thread so no
+    /// reader thread can hold allocator or extension locks while the shell
+    /// forks children that keep running the evaluator.
+    pub fn pumpPromptAsync(self: *State) void {
+        for (self.prompt_async_entries.items) |entry| self.pumpPromptAsyncEntry(entry);
+    }
+
+    fn pumpPromptAsyncEntry(self: *State, entry: *PromptAsyncEntry) void {
+        if (entry.read_fd) |read_fd| {
+            var buffer: [4096]u8 = undefined;
+            while (true) {
+                const read_len = host.platform.read(read_fd, &buffer) catch |err| switch (err) {
+                    error.WouldBlock => return,
+                    else => break,
+                };
+                if (read_len == 0) break;
+                entry.output.appendSlice(self.allocator, buffer[0..read_len]) catch break;
+            }
+            self.finishPromptAsyncEntry(entry);
+        }
+        reapPromptAsyncChild(entry);
+    }
+
+    fn finishPromptAsyncEntry(self: *State, entry: *PromptAsyncEntry) void {
+        std.debug.assert(entry.refreshing);
+        const read_fd = entry.read_fd.?;
+        if (self.prompt_async_registry) |fd_registry| fd_registry.unregister(fd_registry.context, read_fd.raw());
+        // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
+        host.platform.close(read_fd) catch {};
+        entry.read_fd = null;
+
+        if (entry.output.toOwnedSlice(self.allocator) catch null) |stdout| {
+            self.allocator.free(entry.stdout);
+            entry.stdout = stdout;
+            entry.updated_ms = if (self.prompt_async_io) |io| monotonicMillis(io) else 0;
+        } else entry.output.clearAndFree(self.allocator);
+        entry.refreshing = false;
+        std.debug.assert(self.prompt_async_active_count != 0);
+        self.prompt_async_active_count -= 1;
+        if (self.prompt_async_active_count == 0) self.prompt_async_pending_end_events += 1;
+
+        // ziglint-ignore: Z026 best-effort wakeup; the next input event can redraw
+        if (self.prompt_async_redraw_fd) |fd| host.platform.writeAll(fd, "p") catch {};
+    }
 };
+
+/// Event-loop fd registration callbacks supplied by the interactive session.
+///
+/// Keeps the shell extension decoupled from the editor driver while letting
+/// prompt async pipes wake the main-thread event loop.
+pub const PromptAsyncFdRegistry = struct {
+    context: *anyopaque,
+    register: *const fn (*anyopaque, std.posix.fd_t) anyerror!void,
+    unregister: *const fn (*anyopaque, std.posix.fd_t) void,
+};
+
+fn reapPromptAsyncChild(entry: *PromptAsyncEntry) void {
+    std.debug.assert(entry.read_fd == null or entry.pid != null);
+    const pid = entry.pid orelse return;
+    if (entry.read_fd != null) return;
+    const status = host.platform.waitNonBlocking(pid) catch {
+        entry.pid = null;
+        return;
+    };
+    if (status != null) entry.pid = null;
+}
 
 pub const PromptAsyncLifecycleEvents = struct {
     start_count: usize = 0,
@@ -287,29 +355,32 @@ const PromptAsyncEntry = struct {
     key: []const u8,
     cwd: []const u8,
     stdout: []const u8,
+    output: std.ArrayListUnmanaged(u8) = .empty,
     updated_ms: u64 = 0,
     refreshing: bool = false,
-    thread: ?std.Thread = null,
-    pid: host.Pid = 0,
-    read_fd: host.Fd = .stdin,
+    pid: ?host.Pid = null,
+    read_fd: ?host.Fd = null,
 
     // ziglint-ignore: Z030 deinit intentionally leaves reusable/test-local state shape
     fn deinit(self: *PromptAsyncEntry, allocator: std.mem.Allocator) void {
+        if (self.read_fd) |read_fd| {
+            // The event loop is already gone by the time extension state
+            // deinitializes; closing the pipe is enough. The child is
+            // reparented and reaped by init after the shell exits.
+            // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
+            host.platform.close(read_fd) catch {};
+        }
+        if (self.pid) |pid| {
+            // ziglint-ignore: Z026 best-effort reap; init adopts still-running children
+            _ = host.platform.waitNonBlocking(pid) catch {};
+        }
+        self.output.deinit(allocator);
         allocator.free(self.key);
         allocator.free(self.cwd);
         allocator.free(self.stdout);
         allocator.destroy(self);
     }
 };
-
-fn lockPromptAsync(state: *State) void {
-    // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
-    while (!state.prompt_async_mutex.tryLock()) std.Thread.yield() catch {};
-}
-
-fn unlockPromptAsync(state: *State) void {
-    state.prompt_async_mutex.unlock();
-}
 
 fn evalAbbr(state: *State, sh: anytype, args: []const []const u8) !result.EvalResult {
     if (args.len == 1) return listAbbreviations(state, sh);
@@ -626,7 +697,6 @@ fn promptAsyncCachedOutput(state: *State, parsed: PromptAsyncOptions, sh: anytyp
     const io = state.prompt_async_io orelse return "";
     const entry = try promptAsyncEntry(state, sh, parsed.key);
 
-    lockPromptAsync(state);
     const cached_stdout = try sh.scratchAllocator().dupe(u8, entry.stdout);
     const should_refresh = !entry.refreshing and
         (entry.updated_ms == 0 or monotonicMillis(io) >= entry.updated_ms +| parsed.ttl_ms);
@@ -636,7 +706,6 @@ fn promptAsyncCachedOutput(state: *State, parsed: PromptAsyncOptions, sh: anytyp
         state.prompt_async_active_count += 1;
         state.prompt_async_render_started = true;
     }
-    unlockPromptAsync(state);
 
     if (should_refresh) {
         const HostType = switch (@typeInfo(@TypeOf(sh.host))) {
@@ -724,11 +793,9 @@ test "prompt async lifecycle events are drained once" {
     var state = State.init(std.testing.allocator);
     defer state.deinit();
 
-    lockPromptAsync(&state);
     state.prompt_async_active_count = 1;
     state.prompt_async_pending_start_events = 1;
     state.prompt_async_pending_end_events = 2;
-    unlockPromptAsync(&state);
 
     try std.testing.expect(state.promptAsyncPending());
     try std.testing.expectEqual(
@@ -740,11 +807,38 @@ test "prompt async lifecycle events are drained once" {
     try std.testing.expectEqual(PromptAsyncLifecycleEvents{}, state.takePromptAsyncLifecycleEvents());
 }
 
+test "prompt async pump collects pipe output and completes the entry" {
+    var state = State.init(std.testing.allocator);
+    defer state.deinit();
+
+    const entry = try std.testing.allocator.create(PromptAsyncEntry);
+    entry.* = .{
+        .state = &state,
+        .key = try std.testing.allocator.dupe(u8, "git"),
+        .cwd = try std.testing.allocator.dupe(u8, "/"),
+        .stdout = try std.testing.allocator.dupe(u8, "stale"),
+        .refreshing = true,
+    };
+    try state.prompt_async_entries.append(std.testing.allocator, entry);
+    state.prompt_async_active_count = 1;
+
+    const pipe_desc = try host.platform.pipe();
+    entry.read_fd = pipe_desc.read;
+    try host.platform.writeAll(pipe_desc.write, "main\n");
+    try host.platform.close(pipe_desc.write);
+
+    state.pumpPromptAsync();
+
+    try std.testing.expectEqualStrings("main\n", entry.stdout);
+    try std.testing.expect(!entry.refreshing);
+    try std.testing.expectEqual(@as(?host.Fd, null), entry.read_fd);
+    try std.testing.expectEqual(@as(usize, 0), state.prompt_async_active_count);
+    try std.testing.expectEqual(@as(usize, 1), state.takePromptAsyncLifecycleEvents().end_count);
+}
+
 fn promptAsyncEntry(state: *State, sh: anytype, key: []const u8) !*PromptAsyncEntry {
     const cwd = if (sh.state.getVariable("PWD")) |variable| variable.value else shellEnvValue(sh, "PWD") orelse
         try sh.host.currentDir(sh.scratchAllocator());
-    lockPromptAsync(state);
-    defer unlockPromptAsync(state);
     for (state.prompt_async_entries.items) |entry| {
         if (std.mem.eql(u8, entry.key, key) and std.mem.eql(u8, entry.cwd, cwd)) return entry;
     }
@@ -764,10 +858,13 @@ fn promptAsyncEntry(state: *State, sh: anytype, key: []const u8) !*PromptAsyncEn
 }
 
 fn startPromptAsyncRefresh(sh: anytype, entry: *PromptAsyncEntry, command_args: []const []const u8) !void {
-    if (entry.thread) |thread| {
-        thread.join();
-        entry.thread = null;
-    }
+    std.debug.assert(entry.read_fd == null);
+    const state = entry.state;
+    const fd_registry = state.prompt_async_registry orelse return error.PromptAsyncUnavailable;
+    // Best-effort reap of a previous child that outlived its pipe; a
+    // still-running one is abandoned to init rather than blocking the prompt.
+    reapPromptAsyncChild(entry);
+    entry.pid = null;
     const command = try shellCommand(sh.scratchAllocator(), command_args);
     const pipe_desc = try sh.host.pipe();
     var read_open = true;
@@ -787,6 +884,12 @@ fn startPromptAsyncRefresh(sh: anytype, entry: *PromptAsyncEntry, command_args: 
             write_open = false;
             sh.state.options.monitor = false;
             sh.state.shell_pid = null;
+            // The child must never start nested refreshes: its inherited
+            // registry would mutate the parent's event loop (the epoll/kqueue
+            // fd is shared across fork).
+            sh.extensions.prompt_async_io = null;
+            sh.extensions.prompt_async_redraw_fd = null;
+            sh.extensions.prompt_async_registry = null;
             if (sh.host.openZ("/dev/null", .{ .access = .write_only })) |null_fd| {
                 // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
                 sh.host.duplicateTo(null_fd, .stderr) catch {};
@@ -806,9 +909,7 @@ fn startPromptAsyncRefresh(sh: anytype, entry: *PromptAsyncEntry, command_args: 
             // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
             sh.host.close(pipe_desc.write) catch {};
             write_open = false;
-            entry.pid = pid;
-            entry.read_fd = pipe_desc.read;
-            entry.thread = std.Thread.spawn(.{}, promptAsyncReaderMain, .{entry}) catch |err| {
+            fd_registry.register(fd_registry.context, pipe_desc.read.raw()) catch |err| {
                 // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
                 sh.host.close(pipe_desc.read) catch {};
                 read_open = false;
@@ -816,51 +917,18 @@ fn startPromptAsyncRefresh(sh: anytype, entry: *PromptAsyncEntry, command_args: 
                 _ = sh.host.wait(pid) catch {};
                 return err;
             };
+            entry.pid = pid;
+            entry.read_fd = pipe_desc.read;
             read_open = false;
         },
     }
 }
 
 fn promptAsyncRefreshFailed(state: *State, entry: *PromptAsyncEntry) void {
-    lockPromptAsync(state);
     entry.refreshing = false;
     std.debug.assert(state.prompt_async_active_count != 0);
     state.prompt_async_active_count -= 1;
     if (state.prompt_async_active_count == 0) state.prompt_async_pending_end_events += 1;
-    unlockPromptAsync(state);
-}
-
-fn promptAsyncReaderMain(entry: *PromptAsyncEntry) void {
-    const state = entry.state;
-    var output: std.ArrayList(u8) = .empty;
-    defer output.deinit(state.allocator);
-    var buffer: [4096]u8 = undefined;
-    while (true) {
-        const read_len = host.platform.read(entry.read_fd, &buffer) catch break;
-        if (read_len == 0) break;
-        output.appendSlice(state.allocator, buffer[0..read_len]) catch break;
-    }
-    // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
-    host.platform.close(entry.read_fd) catch {};
-    // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
-    _ = host.platform.wait(entry.pid) catch {};
-
-    const owned_stdout = output.toOwnedSlice(state.allocator) catch null;
-    lockPromptAsync(state);
-    if (owned_stdout) |stdout| {
-        state.allocator.free(entry.stdout);
-        entry.stdout = stdout;
-        entry.updated_ms = if (state.prompt_async_io) |io| monotonicMillis(io) else 0;
-    }
-    entry.refreshing = false;
-    std.debug.assert(state.prompt_async_active_count != 0);
-    state.prompt_async_active_count -= 1;
-    if (state.prompt_async_active_count == 0) state.prompt_async_pending_end_events += 1;
-    const redraw_fd = state.prompt_async_redraw_fd;
-    unlockPromptAsync(state);
-
-    // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
-    if (redraw_fd) |fd| host.platform.writeAll(fd, "p") catch {};
 }
 
 fn monotonicMillis(io: std.Io) u64 {

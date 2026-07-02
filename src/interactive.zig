@@ -148,7 +148,11 @@ const InteractiveSession = struct {
         defer self.terminal = null;
         self.sh.setDirectoryChangeCallback(self, onDirectoryChange);
         self.restore_terminal_pgrp = enableJobControl(self.sh, @enumFromInt(terminal.ttyFd()));
-        self.sh.extensions.configurePromptAsync(self.io, terminal.promptRedrawWakeFd());
+        self.sh.extensions.configurePromptAsync(self.io, terminal.promptRedrawWakeFd(), .{
+            .context = self,
+            .register = registerPromptAsyncFd,
+            .unregister = unregisterPromptAsyncFd,
+        });
 
         while (true) {
             const line_result = self.readLine(&terminal) catch |err| switch (err) {
@@ -189,6 +193,10 @@ const InteractiveSession = struct {
         // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
         if (job_output.len != 0) self.sh.host.writeAll(.stderr, job_output) catch {};
 
+        // Collect prompt async refreshes that completed while a foreground
+        // command was running so the first render shows fresh output.
+        self.sh.extensions.pumpPromptAsync();
+
         const prompt_text = self.renderPrompt() catch try prompt(self.allocator, self.sh);
         defer self.allocator.free(prompt_text);
         _ = self.dispatchPromptAsyncLifecycleEvents(self.allocator) catch |err| switch (err) {
@@ -205,6 +213,8 @@ const InteractiveSession = struct {
         return terminal.readLine(.{
             .prompt = prompt_text,
             .history = self.history_service.lineEditorView(self.io),
+            .prompt_async_context = self,
+            .pump_prompt_async = pumpPromptAsync,
             .completion_context = self.sh,
             .complete = completion.complete,
             .expand_abbreviation = expandRushAbbreviation,
@@ -414,6 +424,23 @@ const InteractiveSession = struct {
         };
     }
 };
+
+fn registerPromptAsyncFd(context: *anyopaque, fd: std.posix.fd_t) anyerror!void {
+    const session: *InteractiveSession = @ptrCast(@alignCast(context));
+    const terminal = session.terminal orelse return error.Unexpected;
+    try terminal.addPromptAsyncFd(fd);
+}
+
+fn unregisterPromptAsyncFd(context: *anyopaque, fd: std.posix.fd_t) void {
+    const session: *InteractiveSession = @ptrCast(@alignCast(context));
+    const terminal = session.terminal orelse return;
+    terminal.removePromptAsyncFd(fd);
+}
+
+fn pumpPromptAsync(context: *anyopaque) void {
+    const session: *InteractiveSession = @ptrCast(@alignCast(context));
+    session.sh.extensions.pumpPromptAsync();
+}
 
 fn onDirectoryChange(context: *anyopaque, old_pwd: []const u8, new_pwd: []const u8) void {
     const session: *InteractiveSession = @ptrCast(@alignCast(context));
