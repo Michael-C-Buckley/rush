@@ -1,0 +1,12 @@
+# Complete installed Python packages from the active pip environment.
+__rush_complete_pip3_installed_packages() {
+  pip3 list --format=freeze 2>/dev/null | while IFS= read -r line; do
+    case "$line" in
+      ''|'#'*) continue ;;
+    esac
+    package=${line%%==*}
+    if [ -n "$package" ]; then
+      rush_complete candidate "$package" --kind value --description "installed package"
+    fi
+  done
+}
