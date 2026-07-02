@@ -1,0 +1,2687 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pm2",
+    "description": "manage daemonized Node.js processes",
+    "subcommands": [
+      {
+        "name": "start",
+        "description": "starts and daemonizes an app",
+        "arguments": {
+          "states": [
+            {
+              "name": "file-json-stdin-app-name-pm-id-etc",
+              "index": 0,
+              "description": "app name or id"
+            }
+          ]
+        },
+        "options": [
+          {
+            "description": "show version",
+            "inherit": false,
+            "long": "version",
+            "short": "V"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "v"
+          },
+          {
+            "description": "hide messages",
+            "inherit": false,
+            "long": "silent",
+            "short": "s"
+          },
+          {
+            "description": "show compact process list",
+            "inherit": false,
+            "long": "mini-list",
+            "short": "m"
+          },
+          {
+            "description": "force action",
+            "inherit": false,
+            "long": "force",
+            "short": "f"
+          },
+          {
+            "description": "disable logs",
+            "inherit": false,
+            "long": "disable-logs"
+          },
+          {
+            "description": "set app name",
+            "inherit": false,
+            "long": "name",
+            "short": "n",
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "description": "set instance count",
+            "inherit": false,
+            "long": "instances",
+            "short": "i",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "set parallel action count",
+            "inherit": false,
+            "long": "parallel",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "set combined log file",
+            "inherit": false,
+            "long": "log",
+            "short": "l",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set stdout log file",
+            "inherit": false,
+            "long": "output",
+            "short": "o",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set stderr log file",
+            "inherit": false,
+            "long": "error",
+            "short": "e",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set pid file",
+            "inherit": false,
+            "long": "pid",
+            "short": "p",
+            "value": {
+              "name": "pid",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set SIGKILL delay",
+            "inherit": false,
+            "long": "kill-timeout",
+            "short": "k",
+            "value": {
+              "name": "delay"
+            }
+          },
+          {
+            "description": "set reload listen timeout",
+            "inherit": false,
+            "long": "listen-timeout",
+            "value": {
+              "name": "delay"
+            }
+          },
+          {
+            "description": "set memory restart limit",
+            "inherit": false,
+            "long": "max-memory-restart",
+            "value": {
+              "name": "memory"
+            }
+          },
+          {
+            "description": "set restart delay",
+            "inherit": false,
+            "long": "restart-delay",
+            "value": {
+              "name": "delay"
+            }
+          },
+          {
+            "description": "set environment name",
+            "inherit": false,
+            "long": "env",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "description": "set log output type",
+            "inherit": false,
+            "long": "log-type",
+            "value": {
+              "name": "type",
+              "provider": "pm2.log-types"
+            }
+          },
+          {
+            "description": "execute with fork system",
+            "inherit": false,
+            "long": "execute-command",
+            "short": "x"
+          },
+          {
+            "description": "set maximum restart count",
+            "inherit": false,
+            "long": "max-restarts",
+            "value": {
+              "name": "count"
+            }
+          },
+          {
+            "description": "set startup script user",
+            "inherit": false,
+            "long": "user",
+            "short": "u",
+            "value": {
+              "name": "username"
+            }
+          },
+          {
+            "description": "run with uid",
+            "inherit": false,
+            "long": "uid",
+            "value": {
+              "name": "uid"
+            }
+          },
+          {
+            "description": "run with gid",
+            "inherit": false,
+            "long": "gid",
+            "value": {
+              "name": "gid"
+            }
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "cwd",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set home path",
+            "inherit": false,
+            "long": "hp",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "wait for network before startup",
+            "inherit": false,
+            "long": "wait-ip"
+          },
+          {
+            "description": "set startup service name",
+            "inherit": false,
+            "long": "service-name",
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "description": "set cron restart pattern",
+            "inherit": false,
+            "long": "cron",
+            "short": "c",
+            "value": {
+              "name": "pattern"
+            }
+          },
+          {
+            "description": "write local configuration",
+            "inherit": false,
+            "long": "write",
+            "short": "w"
+          },
+          {
+            "description": "set script interpreter",
+            "inherit": false,
+            "long": "interpreter",
+            "value": {
+              "name": "interpreter",
+              "provider": "builtin.executables"
+            }
+          },
+          {
+            "description": "set interpreter arguments",
+            "inherit": false,
+            "long": "interpreter-args",
+            "value": {
+              "name": "arguments"
+            }
+          },
+          {
+            "description": "set log timestamp format",
+            "inherit": false,
+            "long": "log-date-format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "description": "run daemon in foreground",
+            "inherit": false,
+            "long": "no-daemon"
+          },
+          {
+            "description": "update environment",
+            "inherit": false,
+            "long": "update-env",
+            "short": "a"
+          }
+        ]
+      },
+      {
+        "name": "trigger",
+        "description": "deploy your JSON",
+        "arguments": {
+          "states": [
+            {
+              "name": "proc-name",
+              "index": 0,
+              "description": "app name or id"
+            },
+            {
+              "name": "action-name",
+              "index": 1,
+              "description": "app name or id"
+            },
+            {
+              "name": "params",
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "deploy",
+        "description": "deploy your JSON",
+        "arguments": {
+          "states": [
+            {
+              "name": "file-or-environment",
+              "provider": "builtin.files",
+              "index": 0,
+              "description": "file or environment"
+            }
+          ]
+        }
+      },
+      {
+        "name": "startOrRestart",
+        "description": "start or restart JSON file",
+        "arguments": {
+          "states": [
+            {
+              "name": "json",
+              "description": "JSON process file",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "startOrReload",
+        "description": "start or gracefully reload JSON file",
+        "arguments": {
+          "states": [
+            {
+              "name": "json",
+              "description": "JSON process file",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "pid",
+        "description": "return pid of the specified app or all",
+        "arguments": {
+          "states": [
+            {
+              "name": "app",
+              "index": 0,
+              "description": "app name or id"
+            }
+          ]
+        }
+      },
+      {
+        "name": "startOrGracefulReload",
+        "description": "start or gracefully reload JSON file",
+        "arguments": {
+          "states": [
+            {
+              "name": "json",
+              "description": "JSON process file",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "stop",
+        "description": "stop a process",
+        "arguments": {
+          "states": [
+            {
+              "name": "id-name-all-json-stdin-etc",
+              "index": 0,
+              "description": "app name or id"
+            }
+          ]
+        },
+        "options": [
+          {
+            "description": "show version",
+            "inherit": false,
+            "long": "version",
+            "short": "V"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "v"
+          },
+          {
+            "description": "hide messages",
+            "inherit": false,
+            "long": "silent",
+            "short": "s"
+          },
+          {
+            "description": "show compact process list",
+            "inherit": false,
+            "long": "mini-list",
+            "short": "m"
+          },
+          {
+            "description": "force action",
+            "inherit": false,
+            "long": "force",
+            "short": "f"
+          },
+          {
+            "description": "disable logs",
+            "inherit": false,
+            "long": "disable-logs"
+          },
+          {
+            "description": "set app name",
+            "inherit": false,
+            "long": "name",
+            "short": "n",
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "description": "set instance count",
+            "inherit": false,
+            "long": "instances",
+            "short": "i",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "set parallel action count",
+            "inherit": false,
+            "long": "parallel",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "set combined log file",
+            "inherit": false,
+            "long": "log",
+            "short": "l",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set stdout log file",
+            "inherit": false,
+            "long": "output",
+            "short": "o",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set stderr log file",
+            "inherit": false,
+            "long": "error",
+            "short": "e",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set pid file",
+            "inherit": false,
+            "long": "pid",
+            "short": "p",
+            "value": {
+              "name": "pid",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set SIGKILL delay",
+            "inherit": false,
+            "long": "kill-timeout",
+            "short": "k",
+            "value": {
+              "name": "delay"
+            }
+          },
+          {
+            "description": "set reload listen timeout",
+            "inherit": false,
+            "long": "listen-timeout",
+            "value": {
+              "name": "delay"
+            }
+          },
+          {
+            "description": "set memory restart limit",
+            "inherit": false,
+            "long": "max-memory-restart",
+            "value": {
+              "name": "memory"
+            }
+          },
+          {
+            "description": "set restart delay",
+            "inherit": false,
+            "long": "restart-delay",
+            "value": {
+              "name": "delay"
+            }
+          },
+          {
+            "description": "set environment name",
+            "inherit": false,
+            "long": "env",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "description": "set log output type",
+            "inherit": false,
+            "long": "log-type",
+            "value": {
+              "name": "type",
+              "provider": "pm2.log-types"
+            }
+          },
+          {
+            "description": "execute with fork system",
+            "inherit": false,
+            "long": "execute-command",
+            "short": "x"
+          },
+          {
+            "description": "set maximum restart count",
+            "inherit": false,
+            "long": "max-restarts",
+            "value": {
+              "name": "count"
+            }
+          },
+          {
+            "description": "set startup script user",
+            "inherit": false,
+            "long": "user",
+            "short": "u",
+            "value": {
+              "name": "username"
+            }
+          },
+          {
+            "description": "run with uid",
+            "inherit": false,
+            "long": "uid",
+            "value": {
+              "name": "uid"
+            }
+          },
+          {
+            "description": "run with gid",
+            "inherit": false,
+            "long": "gid",
+            "value": {
+              "name": "gid"
+            }
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "cwd",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set home path",
+            "inherit": false,
+            "long": "hp",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "wait for network before startup",
+            "inherit": false,
+            "long": "wait-ip"
+          },
+          {
+            "description": "set startup service name",
+            "inherit": false,
+            "long": "service-name",
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "description": "set cron restart pattern",
+            "inherit": false,
+            "long": "cron",
+            "short": "c",
+            "value": {
+              "name": "pattern"
+            }
+          },
+          {
+            "description": "write local configuration",
+            "inherit": false,
+            "long": "write",
+            "short": "w"
+          },
+          {
+            "description": "set script interpreter",
+            "inherit": false,
+            "long": "interpreter",
+            "value": {
+              "name": "interpreter",
+              "provider": "builtin.executables"
+            }
+          },
+          {
+            "description": "set interpreter arguments",
+            "inherit": false,
+            "long": "interpreter-args",
+            "value": {
+              "name": "arguments"
+            }
+          },
+          {
+            "description": "set log timestamp format",
+            "inherit": false,
+            "long": "log-date-format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "description": "run daemon in foreground",
+            "inherit": false,
+            "long": "no-daemon"
+          },
+          {
+            "description": "update environment",
+            "inherit": false,
+            "long": "update-env",
+            "short": "a"
+          }
+        ]
+      },
+      {
+        "name": "restart",
+        "description": "restart a process",
+        "arguments": {
+          "states": [
+            {
+              "name": "id-name-all-json-stdin-etc",
+              "index": 0,
+              "description": "app name or id"
+            }
+          ]
+        },
+        "options": [
+          {
+            "description": "show version",
+            "inherit": false,
+            "long": "version",
+            "short": "V"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "v"
+          },
+          {
+            "description": "hide messages",
+            "inherit": false,
+            "long": "silent",
+            "short": "s"
+          },
+          {
+            "description": "show compact process list",
+            "inherit": false,
+            "long": "mini-list",
+            "short": "m"
+          },
+          {
+            "description": "force action",
+            "inherit": false,
+            "long": "force",
+            "short": "f"
+          },
+          {
+            "description": "disable logs",
+            "inherit": false,
+            "long": "disable-logs"
+          },
+          {
+            "description": "set app name",
+            "inherit": false,
+            "long": "name",
+            "short": "n",
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "description": "set instance count",
+            "inherit": false,
+            "long": "instances",
+            "short": "i",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "set parallel action count",
+            "inherit": false,
+            "long": "parallel",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "set combined log file",
+            "inherit": false,
+            "long": "log",
+            "short": "l",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set stdout log file",
+            "inherit": false,
+            "long": "output",
+            "short": "o",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set stderr log file",
+            "inherit": false,
+            "long": "error",
+            "short": "e",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set pid file",
+            "inherit": false,
+            "long": "pid",
+            "short": "p",
+            "value": {
+              "name": "pid",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set SIGKILL delay",
+            "inherit": false,
+            "long": "kill-timeout",
+            "short": "k",
+            "value": {
+              "name": "delay"
+            }
+          },
+          {
+            "description": "set reload listen timeout",
+            "inherit": false,
+            "long": "listen-timeout",
+            "value": {
+              "name": "delay"
+            }
+          },
+          {
+            "description": "set memory restart limit",
+            "inherit": false,
+            "long": "max-memory-restart",
+            "value": {
+              "name": "memory"
+            }
+          },
+          {
+            "description": "set restart delay",
+            "inherit": false,
+            "long": "restart-delay",
+            "value": {
+              "name": "delay"
+            }
+          },
+          {
+            "description": "set environment name",
+            "inherit": false,
+            "long": "env",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "description": "set log output type",
+            "inherit": false,
+            "long": "log-type",
+            "value": {
+              "name": "type",
+              "provider": "pm2.log-types"
+            }
+          },
+          {
+            "description": "execute with fork system",
+            "inherit": false,
+            "long": "execute-command",
+            "short": "x"
+          },
+          {
+            "description": "set maximum restart count",
+            "inherit": false,
+            "long": "max-restarts",
+            "value": {
+              "name": "count"
+            }
+          },
+          {
+            "description": "set startup script user",
+            "inherit": false,
+            "long": "user",
+            "short": "u",
+            "value": {
+              "name": "username"
+            }
+          },
+          {
+            "description": "run with uid",
+            "inherit": false,
+            "long": "uid",
+            "value": {
+              "name": "uid"
+            }
+          },
+          {
+            "description": "run with gid",
+            "inherit": false,
+            "long": "gid",
+            "value": {
+              "name": "gid"
+            }
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "cwd",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set home path",
+            "inherit": false,
+            "long": "hp",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "wait for network before startup",
+            "inherit": false,
+            "long": "wait-ip"
+          },
+          {
+            "description": "set startup service name",
+            "inherit": false,
+            "long": "service-name",
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "description": "set cron restart pattern",
+            "inherit": false,
+            "long": "cron",
+            "short": "c",
+            "value": {
+              "name": "pattern"
+            }
+          },
+          {
+            "description": "write local configuration",
+            "inherit": false,
+            "long": "write",
+            "short": "w"
+          },
+          {
+            "description": "set script interpreter",
+            "inherit": false,
+            "long": "interpreter",
+            "value": {
+              "name": "interpreter",
+              "provider": "builtin.executables"
+            }
+          },
+          {
+            "description": "set interpreter arguments",
+            "inherit": false,
+            "long": "interpreter-args",
+            "value": {
+              "name": "arguments"
+            }
+          },
+          {
+            "description": "set log timestamp format",
+            "inherit": false,
+            "long": "log-date-format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "description": "run daemon in foreground",
+            "inherit": false,
+            "long": "no-daemon"
+          },
+          {
+            "description": "update environment",
+            "inherit": false,
+            "long": "update-env",
+            "short": "a"
+          }
+        ]
+      },
+      {
+        "name": "scale",
+        "description": "scale up/down a process in cluster mode depending on the `number` p...",
+        "arguments": {
+          "states": [
+            {
+              "name": "app",
+              "index": 0,
+              "description": "app name or id"
+            },
+            {
+              "name": "number",
+              "index": 1,
+              "description": "instance count"
+            }
+          ]
+        }
+      },
+      {
+        "name": "snapshot",
+        "description": "snapshot PM2 memory"
+      },
+      {
+        "name": "profile",
+        "description": "profile CPU",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0,
+              "description": "command",
+              "provider": "builtin.executables",
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "reload",
+        "description": "reload processes (for apps using HTTP/HTTPS)",
+        "arguments": {
+          "states": [
+            {
+              "name": "name-or-all",
+              "index": 0,
+              "description": "app name or id"
+            }
+          ]
+        }
+      },
+      {
+        "name": "gracefulReload",
+        "description": "gracefully reload a process. Send a \u201cshutdown\u201d message to close all...",
+        "arguments": {
+          "states": [
+            {
+              "name": "name-or-all",
+              "index": 0,
+              "description": "app name or id"
+            }
+          ]
+        }
+      },
+      {
+        "name": "id",
+        "description": "get process id by name",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "description": "app name"
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete",
+        "description": "stops and deletes a process from pm2 process list",
+        "arguments": {
+          "states": [
+            {
+              "name": "name-id-script-all-json-stdin-etc",
+              "index": 0,
+              "description": "app name or id"
+            }
+          ]
+        }
+      },
+      {
+        "name": "sendSignal",
+        "description": "send a system signal to the target process",
+        "arguments": {
+          "states": [
+            {
+              "name": "signal",
+              "index": 0
+            },
+            {
+              "name": "pm2-id-or-name",
+              "index": 1,
+              "description": "app name or id"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ping",
+        "description": "ping pm2 daemon - if not it will launch up"
+      },
+      {
+        "name": "updatePM2",
+        "description": "update in-memory PM2 with local PM2"
+      },
+      {
+        "name": "update",
+        "description": "update in-memory PM2 with local PM2"
+      },
+      {
+        "name": "install",
+        "aliases": [],
+        "description": "install or update a module and run it forever",
+        "arguments": {
+          "states": [
+            {
+              "name": "module-or-git://",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "description": "show version",
+            "inherit": false,
+            "long": "version",
+            "short": "V"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "v"
+          },
+          {
+            "description": "hide messages",
+            "inherit": false,
+            "long": "silent",
+            "short": "s"
+          },
+          {
+            "description": "show compact process list",
+            "inherit": false,
+            "long": "mini-list",
+            "short": "m"
+          },
+          {
+            "description": "force action",
+            "inherit": false,
+            "long": "force",
+            "short": "f"
+          },
+          {
+            "description": "disable logs",
+            "inherit": false,
+            "long": "disable-logs"
+          },
+          {
+            "description": "set app name",
+            "inherit": false,
+            "long": "name",
+            "short": "n",
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "description": "set instance count",
+            "inherit": false,
+            "long": "instances",
+            "short": "i",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "set parallel action count",
+            "inherit": false,
+            "long": "parallel",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "set combined log file",
+            "inherit": false,
+            "long": "log",
+            "short": "l",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set stdout log file",
+            "inherit": false,
+            "long": "output",
+            "short": "o",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set stderr log file",
+            "inherit": false,
+            "long": "error",
+            "short": "e",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set pid file",
+            "inherit": false,
+            "long": "pid",
+            "short": "p",
+            "value": {
+              "name": "pid",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set SIGKILL delay",
+            "inherit": false,
+            "long": "kill-timeout",
+            "short": "k",
+            "value": {
+              "name": "delay"
+            }
+          },
+          {
+            "description": "set reload listen timeout",
+            "inherit": false,
+            "long": "listen-timeout",
+            "value": {
+              "name": "delay"
+            }
+          },
+          {
+            "description": "set memory restart limit",
+            "inherit": false,
+            "long": "max-memory-restart",
+            "value": {
+              "name": "memory"
+            }
+          },
+          {
+            "description": "set restart delay",
+            "inherit": false,
+            "long": "restart-delay",
+            "value": {
+              "name": "delay"
+            }
+          },
+          {
+            "description": "set environment name",
+            "inherit": false,
+            "long": "env",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "description": "set log output type",
+            "inherit": false,
+            "long": "log-type",
+            "value": {
+              "name": "type",
+              "provider": "pm2.log-types"
+            }
+          },
+          {
+            "description": "execute with fork system",
+            "inherit": false,
+            "long": "execute-command",
+            "short": "x"
+          },
+          {
+            "description": "set maximum restart count",
+            "inherit": false,
+            "long": "max-restarts",
+            "value": {
+              "name": "count"
+            }
+          },
+          {
+            "description": "set startup script user",
+            "inherit": false,
+            "long": "user",
+            "short": "u",
+            "value": {
+              "name": "username"
+            }
+          },
+          {
+            "description": "run with uid",
+            "inherit": false,
+            "long": "uid",
+            "value": {
+              "name": "uid"
+            }
+          },
+          {
+            "description": "run with gid",
+            "inherit": false,
+            "long": "gid",
+            "value": {
+              "name": "gid"
+            }
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "cwd",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set home path",
+            "inherit": false,
+            "long": "hp",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "wait for network before startup",
+            "inherit": false,
+            "long": "wait-ip"
+          },
+          {
+            "description": "set startup service name",
+            "inherit": false,
+            "long": "service-name",
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "description": "set cron restart pattern",
+            "inherit": false,
+            "long": "cron",
+            "short": "c",
+            "value": {
+              "name": "pattern"
+            }
+          },
+          {
+            "description": "write local configuration",
+            "inherit": false,
+            "long": "write",
+            "short": "w"
+          },
+          {
+            "description": "set script interpreter",
+            "inherit": false,
+            "long": "interpreter",
+            "value": {
+              "name": "interpreter",
+              "provider": "builtin.executables"
+            }
+          },
+          {
+            "description": "set interpreter arguments",
+            "inherit": false,
+            "long": "interpreter-args",
+            "value": {
+              "name": "arguments"
+            }
+          },
+          {
+            "description": "set log timestamp format",
+            "inherit": false,
+            "long": "log-date-format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "description": "run daemon in foreground",
+            "inherit": false,
+            "long": "no-daemon"
+          },
+          {
+            "description": "update environment",
+            "inherit": false,
+            "long": "update-env",
+            "short": "a"
+          }
+        ]
+      },
+      {
+        "name": "module:generate",
+        "description": "generate a sample module in current folder",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "description": "app name"
+            }
+          ]
+        }
+      },
+      {
+        "name": "uninstall",
+        "aliases": [],
+        "description": "stop and uninstall a module",
+        "arguments": {
+          "states": [
+            {
+              "name": "module",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "publish",
+        "aliases": [],
+        "description": "publish the module you are currently on"
+      },
+      {
+        "name": "set",
+        "description": "sets the specified config",
+        "arguments": {
+          "states": [
+            {
+              "name": "key",
+              "index": 0,
+              "description": "config key"
+            },
+            {
+              "name": "value",
+              "index": 1,
+              "description": "config value"
+            }
+          ]
+        }
+      },
+      {
+        "name": "multiset",
+        "description": "multiset eg `key1 val1 key2 val2`",
+        "arguments": {
+          "states": [
+            {
+              "name": "key-value",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "get",
+        "description": "get value for the specified key",
+        "arguments": {
+          "states": [
+            {
+              "name": "key",
+              "index": 0,
+              "description": "config key"
+            }
+          ]
+        }
+      },
+      {
+        "name": "conf",
+        "description": "get / set module config values",
+        "arguments": {
+          "states": [
+            {
+              "name": "key",
+              "index": 0,
+              "description": "config key"
+            },
+            {
+              "name": "value",
+              "index": 1,
+              "description": "config value"
+            }
+          ]
+        }
+      },
+      {
+        "name": "config",
+        "description": "get / set module config values",
+        "arguments": {
+          "states": [
+            {
+              "name": "key",
+              "index": 0,
+              "description": "config key"
+            },
+            {
+              "name": "value",
+              "index": 1,
+              "description": "config value"
+            }
+          ]
+        }
+      },
+      {
+        "name": "unset",
+        "description": "clears the specified config key",
+        "arguments": {
+          "states": [
+            {
+              "name": "key",
+              "index": 0,
+              "description": "config key"
+            }
+          ]
+        }
+      },
+      {
+        "name": "report",
+        "description": "give a full pm2 report for https://github.com/Unitech/pm2/issues"
+      },
+      {
+        "name": "link",
+        "aliases": [
+          "interact"
+        ],
+        "description": "linking action to keymetrics.io",
+        "arguments": {
+          "states": [
+            {
+              "name": "secret",
+              "index": 0,
+              "description": "secret key"
+            },
+            {
+              "name": "public",
+              "index": 1,
+              "description": "public key"
+            },
+            {
+              "name": "name",
+              "index": 2,
+              "description": "machine name"
+            }
+          ]
+        },
+        "options": [
+          {
+            "description": "show version",
+            "inherit": false,
+            "long": "version",
+            "short": "V"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "v"
+          },
+          {
+            "description": "hide messages",
+            "inherit": false,
+            "long": "silent",
+            "short": "s"
+          },
+          {
+            "description": "show compact process list",
+            "inherit": false,
+            "long": "mini-list",
+            "short": "m"
+          },
+          {
+            "description": "force action",
+            "inherit": false,
+            "long": "force",
+            "short": "f"
+          },
+          {
+            "description": "disable logs",
+            "inherit": false,
+            "long": "disable-logs"
+          },
+          {
+            "description": "set app name",
+            "inherit": false,
+            "long": "name",
+            "short": "n",
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "description": "set instance count",
+            "inherit": false,
+            "long": "instances",
+            "short": "i",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "set parallel action count",
+            "inherit": false,
+            "long": "parallel",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "set combined log file",
+            "inherit": false,
+            "long": "log",
+            "short": "l",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set stdout log file",
+            "inherit": false,
+            "long": "output",
+            "short": "o",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set stderr log file",
+            "inherit": false,
+            "long": "error",
+            "short": "e",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set pid file",
+            "inherit": false,
+            "long": "pid",
+            "short": "p",
+            "value": {
+              "name": "pid",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set SIGKILL delay",
+            "inherit": false,
+            "long": "kill-timeout",
+            "short": "k",
+            "value": {
+              "name": "delay"
+            }
+          },
+          {
+            "description": "set reload listen timeout",
+            "inherit": false,
+            "long": "listen-timeout",
+            "value": {
+              "name": "delay"
+            }
+          },
+          {
+            "description": "set memory restart limit",
+            "inherit": false,
+            "long": "max-memory-restart",
+            "value": {
+              "name": "memory"
+            }
+          },
+          {
+            "description": "set restart delay",
+            "inherit": false,
+            "long": "restart-delay",
+            "value": {
+              "name": "delay"
+            }
+          },
+          {
+            "description": "set environment name",
+            "inherit": false,
+            "long": "env",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "description": "set log output type",
+            "inherit": false,
+            "long": "log-type",
+            "value": {
+              "name": "type",
+              "provider": "pm2.log-types"
+            }
+          },
+          {
+            "description": "execute with fork system",
+            "inherit": false,
+            "long": "execute-command",
+            "short": "x"
+          },
+          {
+            "description": "set maximum restart count",
+            "inherit": false,
+            "long": "max-restarts",
+            "value": {
+              "name": "count"
+            }
+          },
+          {
+            "description": "set startup script user",
+            "inherit": false,
+            "long": "user",
+            "short": "u",
+            "value": {
+              "name": "username"
+            }
+          },
+          {
+            "description": "run with uid",
+            "inherit": false,
+            "long": "uid",
+            "value": {
+              "name": "uid"
+            }
+          },
+          {
+            "description": "run with gid",
+            "inherit": false,
+            "long": "gid",
+            "value": {
+              "name": "gid"
+            }
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "cwd",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set home path",
+            "inherit": false,
+            "long": "hp",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "wait for network before startup",
+            "inherit": false,
+            "long": "wait-ip"
+          },
+          {
+            "description": "set startup service name",
+            "inherit": false,
+            "long": "service-name",
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "description": "set cron restart pattern",
+            "inherit": false,
+            "long": "cron",
+            "short": "c",
+            "value": {
+              "name": "pattern"
+            }
+          },
+          {
+            "description": "write local configuration",
+            "inherit": false,
+            "long": "write",
+            "short": "w"
+          },
+          {
+            "description": "set script interpreter",
+            "inherit": false,
+            "long": "interpreter",
+            "value": {
+              "name": "interpreter",
+              "provider": "builtin.executables"
+            }
+          },
+          {
+            "description": "set interpreter arguments",
+            "inherit": false,
+            "long": "interpreter-args",
+            "value": {
+              "name": "arguments"
+            }
+          },
+          {
+            "description": "set log timestamp format",
+            "inherit": false,
+            "long": "log-date-format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "description": "run daemon in foreground",
+            "inherit": false,
+            "long": "no-daemon"
+          },
+          {
+            "description": "update environment",
+            "inherit": false,
+            "long": "update-env",
+            "short": "a"
+          }
+        ]
+      },
+      {
+        "name": "unlink",
+        "description": "linking action to keymetrics.io"
+      },
+      {
+        "name": "unmonitor",
+        "description": "unmonitor target process",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "description": "app name"
+            }
+          ]
+        }
+      },
+      {
+        "name": "monitor",
+        "description": "<Unm>onitor target process",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "description": "app name"
+            }
+          ]
+        }
+      },
+      {
+        "name": "open",
+        "description": "open dashboard in browser"
+      },
+      {
+        "name": "register",
+        "description": "create an account on keymetrics"
+      },
+      {
+        "name": "login",
+        "description": "login to keymetrics and link current PM2"
+      },
+      {
+        "name": "web",
+        "description": "launch a health API on 0.0.0.0:9615"
+      },
+      {
+        "name": "dump",
+        "aliases": [
+          "save"
+        ],
+        "description": "dump all processes for resurrecting them later"
+      },
+      {
+        "name": "send",
+        "description": "send stdin to pm id",
+        "arguments": {
+          "states": [
+            {
+              "name": "pm-id",
+              "index": 0,
+              "description": "app name or id"
+            },
+            {
+              "name": "line",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "attach",
+        "description": "attach stdin/stdout to application identified by pm id",
+        "arguments": {
+          "states": [
+            {
+              "name": "pm-id",
+              "index": 0,
+              "description": "app name or id"
+            },
+            {
+              "name": "command",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "resurrect",
+        "description": "resurrect previously dumped processes"
+      },
+      {
+        "name": "unstartup",
+        "description": "disable and clear auto startup",
+        "arguments": {
+          "states": [
+            {
+              "name": "platform",
+              "index": 0,
+              "description": "startup platform",
+              "provider": "pm2.platforms"
+            }
+          ]
+        }
+      },
+      {
+        "name": "startup",
+        "description": "setup script for pm2 at boot",
+        "arguments": {
+          "states": [
+            {
+              "name": "platform",
+              "index": 0,
+              "description": "startup platform",
+              "provider": "pm2.platforms"
+            }
+          ]
+        }
+      },
+      {
+        "name": "logrotate",
+        "description": "copy default logrotate configuration"
+      },
+      {
+        "name": "ecosystem",
+        "aliases": [
+          "init"
+        ],
+        "description": "generate a process conf file",
+        "arguments": {
+          "states": [
+            {
+              "name": "mode",
+              "index": 0,
+              "description": "ecosystem mode",
+              "provider": "pm2.ecosystem-modes"
+            }
+          ]
+        }
+      },
+      {
+        "name": "reset",
+        "description": "reset counters for process",
+        "arguments": {
+          "states": [
+            {
+              "name": "name-id-or-all",
+              "index": 0,
+              "description": "app name or id"
+            }
+          ]
+        }
+      },
+      {
+        "name": "describe",
+        "description": "describe all parameters of a process id",
+        "arguments": {
+          "states": [
+            {
+              "name": "id",
+              "index": 0,
+              "description": "app name or id"
+            }
+          ]
+        }
+      },
+      {
+        "name": "desc",
+        "aliases": [
+          "info",
+          "show"
+        ],
+        "description": "describe all parameters of a process id",
+        "arguments": {
+          "states": [
+            {
+              "name": "id",
+              "index": 0,
+              "description": "app name or id"
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "aliases": [
+          "ls"
+        ],
+        "description": "list all processes"
+      },
+      {
+        "name": "l",
+        "aliases": [
+          "ps",
+          "status"
+        ],
+        "description": "list all processes"
+      },
+      {
+        "name": "jlist",
+        "description": "list all processes in JSON format"
+      },
+      {
+        "name": "prettylist",
+        "description": "print JSON in a prettified JSON"
+      },
+      {
+        "name": "monit",
+        "description": "launch termcaps monitoring"
+      },
+      {
+        "name": "imonit",
+        "description": "launch legacy termcaps monitoring"
+      },
+      {
+        "name": "dashboard",
+        "aliases": [
+          "dash"
+        ],
+        "description": "launch dashboard with monitoring and logs"
+      },
+      {
+        "name": "flush",
+        "description": "flush logs"
+      },
+      {
+        "name": "reloadLogs",
+        "description": "reload all logs"
+      },
+      {
+        "name": "logs",
+        "description": "stream logs logs file",
+        "arguments": {
+          "states": [
+            {
+              "name": "id-or-name",
+              "index": 0,
+              "description": "app name or id"
+            }
+          ]
+        },
+        "options": [
+          {
+            "description": "show version",
+            "inherit": false,
+            "long": "version",
+            "short": "V"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "v"
+          },
+          {
+            "description": "hide messages",
+            "inherit": false,
+            "long": "silent",
+            "short": "s"
+          },
+          {
+            "description": "show compact process list",
+            "inherit": false,
+            "long": "mini-list",
+            "short": "m"
+          },
+          {
+            "description": "force action",
+            "inherit": false,
+            "long": "force",
+            "short": "f"
+          },
+          {
+            "description": "disable logs",
+            "inherit": false,
+            "long": "disable-logs"
+          },
+          {
+            "description": "set app name",
+            "inherit": false,
+            "long": "name",
+            "short": "n",
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "description": "set instance count",
+            "inherit": false,
+            "long": "instances",
+            "short": "i",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "set parallel action count",
+            "inherit": false,
+            "long": "parallel",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "description": "set combined log file",
+            "inherit": false,
+            "long": "log",
+            "short": "l",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set stdout log file",
+            "inherit": false,
+            "long": "output",
+            "short": "o",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set stderr log file",
+            "inherit": false,
+            "long": "error",
+            "short": "e",
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set pid file",
+            "inherit": false,
+            "long": "pid",
+            "short": "p",
+            "value": {
+              "name": "pid",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "set SIGKILL delay",
+            "inherit": false,
+            "long": "kill-timeout",
+            "short": "k",
+            "value": {
+              "name": "delay"
+            }
+          },
+          {
+            "description": "set reload listen timeout",
+            "inherit": false,
+            "long": "listen-timeout",
+            "value": {
+              "name": "delay"
+            }
+          },
+          {
+            "description": "set memory restart limit",
+            "inherit": false,
+            "long": "max-memory-restart",
+            "value": {
+              "name": "memory"
+            }
+          },
+          {
+            "description": "set restart delay",
+            "inherit": false,
+            "long": "restart-delay",
+            "value": {
+              "name": "delay"
+            }
+          },
+          {
+            "description": "set environment name",
+            "inherit": false,
+            "long": "env",
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "description": "set log output type",
+            "inherit": false,
+            "long": "log-type",
+            "value": {
+              "name": "type",
+              "provider": "pm2.log-types"
+            }
+          },
+          {
+            "description": "execute with fork system",
+            "inherit": false,
+            "long": "execute-command",
+            "short": "x"
+          },
+          {
+            "description": "set maximum restart count",
+            "inherit": false,
+            "long": "max-restarts",
+            "value": {
+              "name": "count"
+            }
+          },
+          {
+            "description": "set startup script user",
+            "inherit": false,
+            "long": "user",
+            "short": "u",
+            "value": {
+              "name": "username"
+            }
+          },
+          {
+            "description": "run with uid",
+            "inherit": false,
+            "long": "uid",
+            "value": {
+              "name": "uid"
+            }
+          },
+          {
+            "description": "run with gid",
+            "inherit": false,
+            "long": "gid",
+            "value": {
+              "name": "gid"
+            }
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "cwd",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "set home path",
+            "inherit": false,
+            "long": "hp",
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "wait for network before startup",
+            "inherit": false,
+            "long": "wait-ip"
+          },
+          {
+            "description": "set startup service name",
+            "inherit": false,
+            "long": "service-name",
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "description": "set cron restart pattern",
+            "inherit": false,
+            "long": "cron",
+            "short": "c",
+            "value": {
+              "name": "pattern"
+            }
+          },
+          {
+            "description": "write local configuration",
+            "inherit": false,
+            "long": "write",
+            "short": "w"
+          },
+          {
+            "description": "set script interpreter",
+            "inherit": false,
+            "long": "interpreter",
+            "value": {
+              "name": "interpreter",
+              "provider": "builtin.executables"
+            }
+          },
+          {
+            "description": "set interpreter arguments",
+            "inherit": false,
+            "long": "interpreter-args",
+            "value": {
+              "name": "arguments"
+            }
+          },
+          {
+            "description": "set log timestamp format",
+            "inherit": false,
+            "long": "log-date-format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "description": "run daemon in foreground",
+            "inherit": false,
+            "long": "no-daemon"
+          },
+          {
+            "description": "update environment",
+            "inherit": false,
+            "long": "update-env",
+            "short": "a"
+          }
+        ]
+      },
+      {
+        "name": "kill",
+        "description": "kill daemon"
+      },
+      {
+        "name": "pull",
+        "description": "updates repository for a given app",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "description": "app name"
+            },
+            {
+              "name": "commit",
+              "index": 1,
+              "description": "commit id"
+            }
+          ]
+        }
+      },
+      {
+        "name": "forward",
+        "description": "updates repository to the next commit for a given app",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "description": "app name"
+            }
+          ]
+        }
+      },
+      {
+        "name": "backward",
+        "description": "downgrades repository to the previous commit for a given app",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "description": "app name"
+            }
+          ]
+        }
+      },
+      {
+        "name": "gc",
+        "description": "force PM2 to trigger garbage collection"
+      },
+      {
+        "name": "deepUpdate",
+        "description": "performs a deep update of PM2"
+      },
+      {
+        "name": "serve",
+        "aliases": [
+          "expose"
+        ],
+        "description": "serves a directory over http via port",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0,
+              "description": "directory to serve",
+              "provider": "builtin.directories"
+            },
+            {
+              "name": "port",
+              "index": 1,
+              "description": "port"
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "pm2.platforms": {
+        "values": [
+          "systemd",
+          "upstart",
+          "launchd",
+          "rcd"
+        ]
+      },
+      "pm2.ecosystem-modes": {
+        "values": [
+          "null",
+          "simple"
+        ]
+      },
+      "pm2.log-types": {
+        "values": [
+          "raw",
+          "json"
+        ]
+      }
+    },
+    "options": [
+      {
+        "description": "show version",
+        "inherit": false,
+        "long": "version",
+        "short": "V"
+      },
+      {
+        "description": "show version",
+        "inherit": false,
+        "short": "v"
+      },
+      {
+        "description": "hide messages",
+        "inherit": false,
+        "long": "silent",
+        "short": "s"
+      },
+      {
+        "description": "show compact process list",
+        "inherit": false,
+        "long": "mini-list",
+        "short": "m"
+      },
+      {
+        "description": "force action",
+        "inherit": false,
+        "long": "force",
+        "short": "f"
+      },
+      {
+        "description": "disable logs",
+        "inherit": false,
+        "long": "disable-logs"
+      },
+      {
+        "description": "set app name",
+        "inherit": false,
+        "long": "name",
+        "short": "n",
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "description": "set instance count",
+        "inherit": false,
+        "long": "instances",
+        "short": "i",
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "description": "set parallel action count",
+        "inherit": false,
+        "long": "parallel",
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "description": "set combined log file",
+        "inherit": false,
+        "long": "log",
+        "short": "l",
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "description": "set stdout log file",
+        "inherit": false,
+        "long": "output",
+        "short": "o",
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "description": "set stderr log file",
+        "inherit": false,
+        "long": "error",
+        "short": "e",
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "description": "set pid file",
+        "inherit": false,
+        "long": "pid",
+        "short": "p",
+        "value": {
+          "name": "pid",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "description": "set SIGKILL delay",
+        "inherit": false,
+        "long": "kill-timeout",
+        "short": "k",
+        "value": {
+          "name": "delay"
+        }
+      },
+      {
+        "description": "set reload listen timeout",
+        "inherit": false,
+        "long": "listen-timeout",
+        "value": {
+          "name": "delay"
+        }
+      },
+      {
+        "description": "set memory restart limit",
+        "inherit": false,
+        "long": "max-memory-restart",
+        "value": {
+          "name": "memory"
+        }
+      },
+      {
+        "description": "set restart delay",
+        "inherit": false,
+        "long": "restart-delay",
+        "value": {
+          "name": "delay"
+        }
+      },
+      {
+        "description": "set environment name",
+        "inherit": false,
+        "long": "env",
+        "value": {
+          "name": "environment"
+        }
+      },
+      {
+        "description": "set log output type",
+        "inherit": false,
+        "long": "log-type",
+        "value": {
+          "name": "type",
+          "provider": "pm2.log-types"
+        }
+      },
+      {
+        "description": "execute with fork system",
+        "inherit": false,
+        "long": "execute-command",
+        "short": "x"
+      },
+      {
+        "description": "set maximum restart count",
+        "inherit": false,
+        "long": "max-restarts",
+        "value": {
+          "name": "count"
+        }
+      },
+      {
+        "description": "set startup script user",
+        "inherit": false,
+        "long": "user",
+        "short": "u",
+        "value": {
+          "name": "username"
+        }
+      },
+      {
+        "description": "run with uid",
+        "inherit": false,
+        "long": "uid",
+        "value": {
+          "name": "uid"
+        }
+      },
+      {
+        "description": "run with gid",
+        "inherit": false,
+        "long": "gid",
+        "value": {
+          "name": "gid"
+        }
+      },
+      {
+        "description": "set working directory",
+        "inherit": false,
+        "long": "cwd",
+        "value": {
+          "name": "path",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "description": "set home path",
+        "inherit": false,
+        "long": "hp",
+        "value": {
+          "name": "path",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "description": "wait for network before startup",
+        "inherit": false,
+        "long": "wait-ip"
+      },
+      {
+        "description": "set startup service name",
+        "inherit": false,
+        "long": "service-name",
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "description": "set cron restart pattern",
+        "inherit": false,
+        "long": "cron",
+        "short": "c",
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "description": "write local configuration",
+        "inherit": false,
+        "long": "write",
+        "short": "w"
+      },
+      {
+        "description": "set script interpreter",
+        "inherit": false,
+        "long": "interpreter",
+        "value": {
+          "name": "interpreter",
+          "provider": "builtin.executables"
+        }
+      },
+      {
+        "description": "set interpreter arguments",
+        "inherit": false,
+        "long": "interpreter-args",
+        "value": {
+          "name": "arguments"
+        }
+      },
+      {
+        "description": "set log timestamp format",
+        "inherit": false,
+        "long": "log-date-format",
+        "value": {
+          "name": "format"
+        }
+      },
+      {
+        "description": "run daemon in foreground",
+        "inherit": false,
+        "long": "no-daemon"
+      },
+      {
+        "description": "update environment",
+        "inherit": false,
+        "long": "update-env",
+        "short": "a"
+      }
+    ]
+  }
+}
