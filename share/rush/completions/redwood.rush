@@ -1,0 +1,12 @@
+__rush_complete_redwood_scripts() {
+  dir=.
+  while [ "$dir" != / ] && [ ! -f "$dir/redwood.toml" ]; do
+    dir=$(dirname "$dir")
+  done
+  [ -d "$dir/scripts" ] || return
+  find "$dir/scripts" -maxdepth 1 -type f \( -name '*.js' -o -name '*.ts' \) 2>/dev/null | while IFS= read -r file; do
+    name=${file##*/}
+    name=${name%.*}
+    test -n "$name" && rush_complete candidate "$name" --kind value --description 'script'
+  done
+}

@@ -1,0 +1,1789 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "redwood",
+    "description": "use the RedwoodJS CLI",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for redwood",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "dev",
+        "description": "start development servers for api and web",
+        "options": [
+          {
+            "long": "forward",
+            "aliases": [
+              "fwd"
+            ],
+            "description": "string of one or more Webpack Dev Server config options",
+            "inherit": false,
+            "value": {
+              "name": "options",
+              "description": "Options to pass to Webpack Dev Server"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "side",
+              "description": "which side(s) to build",
+              "provider": "redwood.sides",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "deploy",
+        "description": "deploy your redwood project to a hosting provider target",
+        "subcommands": [
+          {
+            "name": "aws",
+            "description": "deploy to AWS using the selected provider",
+            "options": [
+              {
+                "long": "side",
+                "description": "show help for command",
+                "inherit": false,
+                "value": {
+                  "name": "side",
+                  "description": "Which side(s) to deploy",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "api",
+                        "description": "Deploy the api server"
+                      },
+                      {
+                        "value": "web",
+                        "description": "Deploy the web server"
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "provider",
+                  "description": "aWS Deploy provider to configure",
+                  "provider": {
+                    "values": [
+                      "serverless"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "netlify",
+            "description": "build command for Netlify deploy",
+            "options": [
+              {
+                "long": "build",
+                "description": "build for production [default: \"true\"]",
+                "inherit": false
+              },
+              {
+                "long": "prisma",
+                "description": "apply database migrations [default: \"true\"]",
+                "inherit": false
+              },
+              {
+                "long": "data-migrate",
+                "aliases": [
+                  "dm"
+                ],
+                "description": "migrate the data in your database [default: \"true\"]",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "render",
+            "description": "build (web) and Start (api) command for Render deploy",
+            "options": [
+              {
+                "long": "serve",
+                "description": "run server for api in production [default: \"true\"]",
+                "inherit": false
+              },
+              {
+                "long": "prisma",
+                "description": "apply database migrations [default: \"true\"]",
+                "inherit": false
+              },
+              {
+                "long": "data-migrate",
+                "aliases": [
+                  "dm"
+                ],
+                "description": "migrate the data in your database [default: \"true\"]",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "side",
+                  "description": "select side to build",
+                  "provider": "redwood.sides",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "vercel",
+            "description": "build command for Vercel deploy",
+            "options": [
+              {
+                "long": "build",
+                "description": "build for production [default: \"true\"]",
+                "inherit": false
+              },
+              {
+                "long": "prisma",
+                "description": "apply database migrations [default: \"true\"]",
+                "inherit": false
+              },
+              {
+                "long": "data-migrate",
+                "aliases": [
+                  "dm"
+                ],
+                "description": "migrate the data in your database [default: \"true\"]",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "destroy",
+        "aliases": [
+          "d"
+        ],
+        "description": "rollback changes made by the generate command",
+        "subcommands": [
+          {
+            "name": "cell",
+            "description": "destroy a cell component",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "name of the cell component",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "component",
+            "description": "destroy a component",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "name of the component",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "function",
+            "description": "destroy a Function",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "name of the Function",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "layout",
+            "description": "destroy a layout component",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "name of the layout component",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "description": "destroy a page and route component",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "name of the page",
+                  "index": 0
+                },
+                {
+                  "name": "path",
+                  "description": "uRL path to the page. Defaults to name",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "scaffold",
+            "description": "destroy pages, SDL, and Services files based on a given DB schema Model",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "name of the scaffold",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "sdl",
+            "description": "destroy a GraphQL schema and service component based on a given DB schema Model",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "name of the sdl",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "service",
+            "description": "destroy a service component",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "name of the service",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "generate",
+        "aliases": [
+          "g"
+        ],
+        "description": "save time by generating boilerplate code",
+        "subcommands": [
+          {
+            "name": "cell",
+            "description": "generate a cell component",
+            "options": [
+              {
+                "long": "force",
+                "short": "f",
+                "description": "overwrite existing files",
+                "priority": -10,
+                "inherit": false
+              },
+              {
+                "long": "typescript",
+                "aliases": [
+                  "ts"
+                ],
+                "description": "generate TypeScript files Enabled by default if we detect your project is TypeScript",
+                "inherit": false
+              },
+              {
+                "long": "list",
+                "description": "use this flag to generate a list cell. This flag is needed when dealing with irregular words whose plural and singular is identical such as equipment or pokemon",
+                "inherit": false
+              },
+              {
+                "long": "tests",
+                "description": "generate test files [default: true]",
+                "inherit": false
+              },
+              {
+                "long": "stories",
+                "description": "generate Storybook files [default: true]",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "name of the cell component",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "component",
+            "description": "generate a component component",
+            "options": [
+              {
+                "long": "force",
+                "short": "f",
+                "description": "overwrite existing files",
+                "priority": -10,
+                "inherit": false
+              },
+              {
+                "long": "typescript",
+                "aliases": [
+                  "ts"
+                ],
+                "description": "generate TypeScript files Enabled by default if we detect your project is TypeScript",
+                "inherit": false
+              },
+              {
+                "long": "tests",
+                "description": "generate test files [default: true]",
+                "inherit": false
+              },
+              {
+                "long": "stories",
+                "description": "generate Storybook files [default: true]",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "name of the component",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "dataMigration",
+            "description": "generate a data migration component",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "name of the component",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "directive",
+            "description": "generate a directive",
+            "options": [
+              {
+                "long": "force",
+                "short": "f",
+                "description": "overwrite existing files",
+                "priority": -10,
+                "inherit": false
+              },
+              {
+                "long": "typescript",
+                "aliases": [
+                  "ts"
+                ],
+                "description": "generate TypeScript files Enabled by default if we detect your project is TypeScript",
+                "inherit": false
+              },
+              {
+                "long": "type",
+                "description": "directive type [Choices: \"validator\", \"transformer\"]",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "name of the directive",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "function",
+            "description": "generate a Function",
+            "options": [
+              {
+                "long": "force",
+                "short": "f",
+                "description": "overwrite existing files",
+                "priority": -10,
+                "inherit": false
+              },
+              {
+                "long": "typescript",
+                "aliases": [
+                  "ts"
+                ],
+                "description": "generate TypeScript files Enabled by default if we detect your project is TypeScript",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "name of the Function",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "layout",
+            "description": "generate a layout component",
+            "options": [
+              {
+                "long": "force",
+                "short": "f",
+                "description": "overwrite existing files",
+                "priority": -10,
+                "inherit": false
+              },
+              {
+                "long": "typescript",
+                "aliases": [
+                  "ts"
+                ],
+                "description": "generate TypeScript files Enabled by default if we detect your project is TypeScript",
+                "inherit": false
+              },
+              {
+                "long": "tests",
+                "description": "generate test files [default: true]",
+                "inherit": false
+              },
+              {
+                "long": "stories",
+                "description": "generate Storybook files [default: true]",
+                "inherit": false
+              },
+              {
+                "long": "skipLink",
+                "description": "generate a layout with a skip link [default: false]",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "name of the layout component",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "page",
+            "description": "generate a page component",
+            "options": [
+              {
+                "long": "force",
+                "short": "f",
+                "description": "overwrite existing files",
+                "priority": -10,
+                "inherit": false
+              },
+              {
+                "long": "typescript",
+                "aliases": [
+                  "ts"
+                ],
+                "description": "generate TypeScript files Enabled by default if we detect your project is TypeScript",
+                "inherit": false
+              },
+              {
+                "long": "tests",
+                "description": "generate test files [default: true]",
+                "inherit": false
+              },
+              {
+                "long": "stories",
+                "description": "generate Storybook files [default: true]",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "name of the page",
+                  "index": 0
+                },
+                {
+                  "name": "path",
+                  "description": "uRL path to the page. Defaults to name",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "scaffold",
+            "description": "generate Pages, SDL, and Services files based on a given DB schema Model. Also accepts <path/model>",
+            "options": [
+              {
+                "long": "force",
+                "short": "f",
+                "description": "overwrite existing files",
+                "priority": -10,
+                "inherit": false
+              },
+              {
+                "long": "typescript",
+                "aliases": [
+                  "ts"
+                ],
+                "description": "generate TypeScript files Enabled by default if we detect your project is TypeScript",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "model",
+                  "description": "model to scaffold. You can also use <path/model> to nest files by type at the given path directory (or directories). For example, redwood g scaffold admin/post",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "sdl",
+            "description": "generate a GraphQL schema and service object",
+            "options": [
+              {
+                "long": "force",
+                "short": "f",
+                "description": "overwrite existing files",
+                "priority": -10,
+                "inherit": false
+              },
+              {
+                "long": "typescript",
+                "aliases": [
+                  "ts"
+                ],
+                "description": "generate TypeScript files Enabled by default if we detect your project is TypeScript",
+                "inherit": false
+              },
+              {
+                "long": "crud",
+                "description": "also generate mutations",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "model",
+                  "description": "model to generate the sdl for",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "service",
+            "description": "generate a service component",
+            "options": [
+              {
+                "long": "force",
+                "short": "f",
+                "description": "overwrite existing files",
+                "priority": -10,
+                "inherit": false
+              },
+              {
+                "long": "typescript",
+                "aliases": [
+                  "ts"
+                ],
+                "description": "generate TypeScript files Enabled by default if we detect your project is TypeScript",
+                "inherit": false
+              },
+              {
+                "long": "tests",
+                "description": "generate test files [default: true]",
+                "inherit": false
+              },
+              {
+                "long": "stories",
+                "description": "generate Storybook files [default: true]",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "name of the service",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "types",
+            "description": "generate types and supplementary code"
+          },
+          {
+            "name": "script",
+            "description": "generate a script that can use your services/libs to execute with redwood exec script <name>",
+            "options": [
+              {
+                "long": "typescript",
+                "aliases": [
+                  "ts"
+                ],
+                "description": "generate TypeScript files Enabled by default if we detect your project is TypeScript",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "name of the service",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "exec",
+        "description": "execute scripts generated by yarn redwood generate script to run one-off operations, long-running jobs, or utility scripts",
+        "arguments": {
+          "states": [
+            {
+              "name": "script",
+              "description": "name of the script to execute",
+              "index": 0,
+              "provider": "redwood.scripts"
+            }
+          ]
+        }
+      },
+      {
+        "name": "build",
+        "description": "build the api and web",
+        "options": [
+          {
+            "long": "stats",
+            "description": "use Webpack Bundle Analyzer to visualize the size of Webpack output files via an interactive zoomable treemap",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "print more information while building",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "side",
+              "description": "which side(s) to build",
+              "provider": "redwood.sides",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "diagnostics",
+        "aliases": [
+          "check"
+        ],
+        "description": "get structural diagnostics for a Redwood project (experimental)"
+      },
+      {
+        "name": "console",
+        "aliases": [
+          "c"
+        ],
+        "description": "launch an interactive Redwood shell (experimental)"
+      },
+      {
+        "name": "info",
+        "description": "print your system environment information"
+      },
+      {
+        "name": "upgrade",
+        "description": "upgrade all @redwoodjs packages via an interactive CLI",
+        "options": [
+          {
+            "long": "dry-run",
+            "short": "d",
+            "description": "check for outdated packages without upgrading",
+            "inherit": false
+          },
+          {
+            "long": "tag",
+            "short": "t",
+            "description": "choices are \"canary\", \"rc\", or a specific version (e.g. \"0.19.3\"). WARNING: Unstable releases in the case of \"canary\" and \"rc\", which will force upgrade package",
+            "inherit": false,
+            "value": {
+              "name": "tag",
+              "description": "Tag to use for upgrade",
+              "provider": {
+                "values": [
+                  {
+                    "value": "canary",
+                    "description": "Upgrade to the latest canary release"
+                  },
+                  {
+                    "value": "rc",
+                    "description": "Upgrade to the latest RC release"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "pr",
+            "description": "installs packages for the given PR",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "serve",
+        "description": "runs a server that serves both the api and the web sides",
+        "options": [
+          {
+            "long": "port",
+            "description": "what port should the server run on [default: 8911]",
+            "inherit": false,
+            "value": {
+              "name": "port",
+              "description": "Port to run the server on"
+            }
+          },
+          {
+            "long": "socket",
+            "description": "the socket the server should run. This takes precedence over port",
+            "inherit": false,
+            "value": {
+              "name": "socket",
+              "description": "Socket to run the server on"
+            }
+          },
+          {
+            "long": "apiRootPath",
+            "description": "the root path where your api functions are served",
+            "inherit": false,
+            "value": {
+              "name": "apirootpath",
+              "description": "Root path for the api",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "apiHost",
+            "description": "forwards requests from the apiProxyPath (defined in redwood.toml) to the specified host",
+            "inherit": false,
+            "value": {
+              "name": "apihost",
+              "description": "Host to forward requests to"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "side",
+              "description": "which side(s) to check (Default to both)",
+              "provider": "redwood.sides",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "type-check",
+        "aliases": [
+          "tsc",
+          "tc"
+        ],
+        "description": "runs a TypeScript compiler check on both the api and the web sides",
+        "arguments": {
+          "states": [
+            {
+              "name": "side",
+              "description": "which side(s) to check (Default to both)",
+              "provider": "redwood.sides",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "test",
+        "description": "run Jest tests for api and web",
+        "options": [
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "version",
+            "description": "show version number",
+            "inherit": false
+          },
+          {
+            "long": "watch",
+            "description": "run tests related to changed files based on hg/git (uncommitted files). Specify the name or path to a file to focus on a specific set of tests [default: true]",
+            "inherit": false
+          },
+          {
+            "long": "watchAll",
+            "description": "run all tests",
+            "inherit": false
+          },
+          {
+            "long": "collectCoverage",
+            "description": "show test coverage summary and output info to coverage directory in project root. See this directory for an .html coverage report",
+            "inherit": false
+          },
+          {
+            "long": "clearCache",
+            "description": "delete the Jest cache directory and exit without running tests",
+            "inherit": false
+          },
+          {
+            "long": "db-push",
+            "description": "syncs the test database with your Prisma schema without requiring a migration. It creates a test database if it doesn't already exist [default: true]. This flag",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "sides-or-filter",
+              "description": "which side(s) to test, and/or a regular expression to match against your test files to filter by",
+              "provider": {
+                "values": [
+                  "api",
+                  "web"
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "storybook",
+        "description": "starts Storybook locally",
+        "options": [
+          {
+            "long": "open",
+            "description": "open Storybook in your browser on start",
+            "inherit": false
+          },
+          {
+            "long": "build",
+            "description": "build Storybook",
+            "inherit": false
+          },
+          {
+            "long": "port",
+            "description": "which port to run Storybook on (defaults to 7910)",
+            "inherit": false,
+            "value": {
+              "name": "port",
+              "description": "Port to run Storybook on"
+            }
+          }
+        ]
+      },
+      {
+        "name": "lint",
+        "description": "lint your files",
+        "options": [
+          {
+            "long": "fix",
+            "description": "try to fix linting errors",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "open",
+        "description": "open your project in your browser"
+      },
+      {
+        "name": "setup",
+        "description": "initialize project config and install packages",
+        "subcommands": [
+          {
+            "name": "auth",
+            "description": "setup auth configuration for a provider",
+            "options": [
+              {
+                "long": "force",
+                "short": "f",
+                "description": "overwrite existing files",
+                "priority": -10,
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "provider",
+                  "description": "auth provider to configure",
+                  "provider": {
+                    "values": [
+                      "auth0",
+                      "firebase",
+                      "goTrue",
+                      "magicLink",
+                      "netlify"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "custom-web-index",
+            "description": "setup an index.js file in web/src so you can customize how your Redwood App mounts to the DOM",
+            "options": [
+              {
+                "long": "force",
+                "short": "f",
+                "description": "overwrite existing files",
+                "priority": -10,
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "generator",
+            "description": "sCopies a given generator's template files to your local app for customization. The next time you generate that type again, it will use your custom template ins",
+            "options": [
+              {
+                "long": "force",
+                "short": "f",
+                "description": "overwrite existing copied template files",
+                "priority": -10,
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "name of the generator template(s) to copy (see help for list)",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "tsconfig",
+            "description": "setup tsconfig.json on both web and api sides",
+            "options": [
+              {
+                "long": "force",
+                "short": "f",
+                "description": "overwrite existing files",
+                "priority": -10,
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "deploy",
+            "description": "setup auth configuration for a provider",
+            "options": [
+              {
+                "long": "database",
+                "short": "d",
+                "description": "database deployment for Render only [default: \"postgresql\"]",
+                "inherit": false,
+                "value": {
+                  "name": "database",
+                  "required": false,
+                  "style": "optional",
+                  "provider": {
+                    "values": [
+                      "none",
+                      "postgresql",
+                      "sqlite"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "force",
+                "short": "f",
+                "description": "overwrite existing files",
+                "priority": -10,
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "provider",
+                  "description": "auth provider to configure",
+                  "provider": {
+                    "values": [
+                      "aws-serverless",
+                      "netlify",
+                      "render",
+                      "vercel"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "data-migrate",
+        "aliases": [
+          "dm",
+          "dataMigrate"
+        ],
+        "description": "data migration tools",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "provider": {
+                "values": [
+                  {
+                    "value": "install",
+                    "description": "Appends DataMigration model to schema.prisma, creates api/db/dataMigrations directory"
+                  },
+                  {
+                    "value": "up",
+                    "description": "Executes outstanding data migrations"
+                  }
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "prisma",
+        "description": "prisma commands",
+        "subcommands": [
+          {
+            "name": "init",
+            "description": "setup Prisma for your app",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "long": "datasource-provider",
+                "description": "define the datasource provider to use",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "description": "Choose provider",
+                  "provider": "prisma.datasource-providers"
+                }
+              },
+              {
+                "long": "url",
+                "description": "define a custom datasource url",
+                "inherit": false,
+                "value": {
+                  "name": "full-url",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "generate",
+            "description": "generate artifacts (e.g. Prisma Client)",
+            "options": [
+              {
+                "description": "set Prisma schema path",
+                "inherit": false,
+                "long": "schema",
+                "value": {
+                  "name": "schema",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "long": "data-proxy",
+                "description": "enable the Data Proxy in the Prisma Client",
+                "inherit": false
+              },
+              {
+                "long": "no-hints",
+                "description": "hides the hint messages but still outputs errors and warnings",
+                "inherit": false
+              },
+              {
+                "long": "no-engine",
+                "description": "generate a client for use with Accelerate only",
+                "inherit": false
+              },
+              {
+                "long": "watch",
+                "description": "watch the Prisma schema and rerun after a change",
+                "inherit": false
+              },
+              {
+                "long": "allow-no-models",
+                "description": "allow generating a client without models",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "studio",
+            "description": "open Prisma Studio",
+            "options": [
+              {
+                "description": "set Prisma schema path",
+                "inherit": false,
+                "long": "schema",
+                "value": {
+                  "name": "schema",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "short": "p",
+                "long": "port",
+                "description": "port to start Studio on",
+                "inherit": false,
+                "value": {
+                  "name": "port"
+                }
+              },
+              {
+                "short": "b",
+                "long": "browser",
+                "description": "browser to open Studio in",
+                "inherit": false,
+                "value": {
+                  "name": "browser-choice",
+                  "provider": "prisma.browsers"
+                }
+              },
+              {
+                "short": "n",
+                "long": "hostname",
+                "description": "hostname to bind the Express server to",
+                "inherit": false,
+                "value": {
+                  "name": "port"
+                }
+              }
+            ]
+          },
+          {
+            "name": "format",
+            "description": "format your schema",
+            "options": [
+              {
+                "description": "set Prisma schema path",
+                "inherit": false,
+                "long": "schema",
+                "value": {
+                  "name": "schema",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              }
+            ]
+          },
+          {
+            "name": "migrate",
+            "description": "migrate your database",
+            "subcommands": [
+              {
+                "name": "dev",
+                "description": "the migrate dev command updates your database using migrations files during d...",
+                "options": [
+                  {
+                    "description": "skip seed command",
+                    "inherit": false,
+                    "long": "skip-seed"
+                  },
+                  {
+                    "description": "skip generators",
+                    "inherit": false,
+                    "long": "skip-generate"
+                  },
+                  {
+                    "description": "set Prisma schema path",
+                    "inherit": false,
+                    "long": "schema",
+                    "value": {
+                      "name": "schema",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "description": "show help",
+                    "inherit": false,
+                    "long": "help",
+                    "short": "h"
+                  },
+                  {
+                    "long": "create-only",
+                    "description": "create a new migration but do not apply it. The migration will be empty...",
+                    "inherit": false
+                  },
+                  {
+                    "short": "n",
+                    "long": "name",
+                    "description": "the name of the migration. If no name is provided, the CLI will prompt you",
+                    "inherit": false,
+                    "value": {
+                      "name": "filename",
+                      "required": false,
+                      "style": "optional"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "reset",
+                "description": "reset your database and apply all migrations, all data will be lost",
+                "options": [
+                  {
+                    "description": "skip seed command",
+                    "inherit": false,
+                    "long": "skip-seed"
+                  },
+                  {
+                    "description": "skip generators",
+                    "inherit": false,
+                    "long": "skip-generate"
+                  },
+                  {
+                    "description": "set Prisma schema path",
+                    "inherit": false,
+                    "long": "schema",
+                    "value": {
+                      "name": "schema",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "description": "show help",
+                    "inherit": false,
+                    "long": "help",
+                    "short": "h"
+                  },
+                  {
+                    "short": "f",
+                    "long": "force",
+                    "description": "skip the confirmation prompt",
+                    "priority": -10,
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "deploy",
+                "description": "apply pending migrations to update the database schema in production/staging",
+                "options": [
+                  {
+                    "description": "set Prisma schema path",
+                    "inherit": false,
+                    "long": "schema",
+                    "value": {
+                      "name": "schema",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "description": "show help",
+                    "inherit": false,
+                    "long": "help",
+                    "short": "h"
+                  }
+                ]
+              },
+              {
+                "name": "resolve",
+                "description": "resolve issues with database migrations in deployment databases",
+                "options": [
+                  {
+                    "description": "set Prisma schema path",
+                    "inherit": false,
+                    "long": "schema",
+                    "value": {
+                      "name": "schema",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "description": "show help",
+                    "inherit": false,
+                    "long": "help",
+                    "short": "h"
+                  },
+                  {
+                    "long": "applied",
+                    "description": "record a specific migration as applied",
+                    "inherit": false,
+                    "value": {
+                      "name": "migration-file-path",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "rolled-back",
+                    "description": "record a specific migration as rolled back",
+                    "inherit": false,
+                    "value": {
+                      "name": "migration-file-path",
+                      "provider": "builtin.files"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "status",
+                "description": "check the status of your database migrations",
+                "options": [
+                  {
+                    "description": "set Prisma schema path",
+                    "inherit": false,
+                    "long": "schema",
+                    "value": {
+                      "name": "schema",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "description": "show help",
+                    "inherit": false,
+                    "long": "help",
+                    "short": "h"
+                  }
+                ]
+              },
+              {
+                "name": "diff",
+                "description": "compares the database schema from two arbitrary sources, and outputs the diff...",
+                "options": [
+                  {
+                    "description": "show help",
+                    "inherit": false,
+                    "long": "help",
+                    "short": "h"
+                  },
+                  {
+                    "long": "from-url",
+                    "description": "a datasource url",
+                    "inherit": false,
+                    "value": {
+                      "name": "full-url",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "to-url",
+                    "description": "a datasource url",
+                    "inherit": false,
+                    "value": {
+                      "name": "full-url",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "from-empty",
+                    "description": "flag to assume from is an empty datamodel",
+                    "inherit": false
+                  },
+                  {
+                    "long": "to-empty",
+                    "description": "flag to assume to is an empty datamodel",
+                    "inherit": false
+                  },
+                  {
+                    "long": "from-schema-datamodel",
+                    "description": "path to a Prisma schema file, uses the 'datamodel' for the diff",
+                    "inherit": false,
+                    "value": {
+                      "name": "filepath",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "to-schema-datamodel",
+                    "description": "path to a Prisma schema file, uses the 'datamodel' for the diff",
+                    "inherit": false,
+                    "value": {
+                      "name": "filepath",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "from-schema-datasource",
+                    "description": "path to a Prisma schema file, uses the 'datasource url' for the diff",
+                    "inherit": false,
+                    "value": {
+                      "name": "filepath",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "to-schema-datasource",
+                    "description": "path to a Prisma schema file, uses the 'datasource url' for the diff",
+                    "inherit": false,
+                    "value": {
+                      "name": "filepath",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "from-migrations",
+                    "description": "path to the Prisma Migrate migrations directory",
+                    "inherit": false,
+                    "value": {
+                      "name": "folder",
+                      "provider": "builtin.directories"
+                    }
+                  },
+                  {
+                    "long": "to-migrations",
+                    "description": "path to the Prisma Migrate migrations directory",
+                    "inherit": false,
+                    "value": {
+                      "name": "folder",
+                      "provider": "builtin.directories"
+                    }
+                  },
+                  {
+                    "long": "shadow-database-url",
+                    "description": "uRL for the shadow database. Only required if using --from-migrations or...",
+                    "inherit": false,
+                    "value": {
+                      "name": "full-url",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "script",
+                    "description": "render a SQL script to stdout instead of the default human readable summ...",
+                    "inherit": false,
+                    "value": {
+                      "name": "filepath",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "exit-code",
+                    "description": "change the exit code behavior to signal if the diff is empty or not (Emp...",
+                    "inherit": false
+                  }
+                ]
+              }
+            ],
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              }
+            ]
+          },
+          {
+            "name": "db",
+            "description": "manage your database schema and lifecycle (Preview)",
+            "subcommands": [
+              {
+                "name": "pull",
+                "options": [
+                  {
+                    "description": "show help",
+                    "inherit": false,
+                    "long": "help",
+                    "short": "h"
+                  },
+                  {
+                    "description": "set Prisma schema path",
+                    "inherit": false,
+                    "long": "schema",
+                    "value": {
+                      "name": "schema",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "force",
+                    "description": "ignore current Prisma schema file",
+                    "priority": -10,
+                    "inherit": false
+                  },
+                  {
+                    "long": "print",
+                    "description": "print the introspected Prisma schema to stdout",
+                    "inherit": false
+                  },
+                  {
+                    "long": "url",
+                    "description": "the datasource url",
+                    "inherit": false,
+                    "value": {
+                      "name": "full-url",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "composite-type-depth",
+                    "description": "specify the depth for introspecting composite types (e.g. Embedded Docum...",
+                    "inherit": false,
+                    "value": {
+                      "name": "number"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "push",
+                "description": "this command pushes the state of your Prisma schema file to the database with...",
+                "options": [
+                  {
+                    "description": "show help",
+                    "inherit": false,
+                    "long": "help",
+                    "short": "h"
+                  },
+                  {
+                    "description": "set Prisma schema path",
+                    "inherit": false,
+                    "long": "schema",
+                    "value": {
+                      "name": "schema",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "skip-generate",
+                    "description": "skip generation of artifacts such as Prisma Client",
+                    "inherit": false
+                  },
+                  {
+                    "long": "force-reset",
+                    "description": "resets the database and then updates the schema - useful if you need to...",
+                    "priority": -10,
+                    "inherit": false
+                  },
+                  {
+                    "long": "accept-data-loss",
+                    "description": "ignore data loss warnings. This option is required if as a result of mak...",
+                    "priority": -10,
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "seed",
+                "description": "seed your database",
+                "options": [
+                  {
+                    "description": "show help",
+                    "inherit": false,
+                    "long": "help",
+                    "short": "h"
+                  },
+                  {
+                    "description": "set Prisma schema path",
+                    "inherit": false,
+                    "long": "schema",
+                    "value": {
+                      "name": "schema",
+                      "provider": "builtin.files"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "execute",
+                "description": "execute native commands to your database",
+                "options": [
+                  {
+                    "description": "show help",
+                    "inherit": false,
+                    "long": "help",
+                    "short": "h"
+                  },
+                  {
+                    "description": "set Prisma schema path",
+                    "inherit": false,
+                    "long": "schema",
+                    "value": {
+                      "name": "schema",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "url",
+                    "description": "the datasource url",
+                    "inherit": false,
+                    "value": {
+                      "name": "full-url",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "file",
+                    "description": "path to a file. The content will be sent as the script to be executed",
+                    "inherit": false,
+                    "value": {
+                      "name": "filepath",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "stdin",
+                    "description": "use the terminal standard input as the script to be executed",
+                    "inherit": false
+                  }
+                ]
+              }
+            ],
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              }
+            ]
+          },
+          {
+            "name": "version",
+            "aliases": [],
+            "description": "print current version of Prisma components",
+            "subcommands": [
+              {
+                "name": "--json",
+                "description": "output JSON"
+              }
+            ],
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              }
+            ]
+          }
+        ],
+        "options": []
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "redwood.sides": {
+        "values": [
+          {
+            "value": "api",
+            "description": "api side"
+          },
+          {
+            "value": "web",
+            "description": "web side"
+          }
+        ]
+      },
+      "redwood.scripts": {
+        "function": "__rush_complete_redwood_scripts"
+      },
+      "prisma.datasource-providers": {
+        "values": [
+          "PostgreSQL",
+          "MySQL",
+          "SQLite",
+          "SQLServer",
+          "MongoDB",
+          "CockroachDB"
+        ]
+      },
+      "prisma.browsers": {
+        "values": [
+          "firefox",
+          "chrome",
+          "safari",
+          "none"
+        ]
+      }
+    }
+  }
+}
