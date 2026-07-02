@@ -1,0 +1,407 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "surreal",
+    "description": "manage SurrealDB databases",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "help",
+        "description": "show command help",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "description": "command to show help for",
+              "index": 0,
+              "optional": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "start",
+        "description": "start the database server",
+        "options": [
+          {
+            "spellings": [
+              "--"
+            ],
+            "description": "terminate options",
+            "inherit": false
+          },
+          {
+            "long": "addr",
+            "description": "set allowed networks",
+            "inherit": false,
+            "value": {
+              "name": "addr"
+            }
+          },
+          {
+            "long": "bind",
+            "short": "b",
+            "description": "set listen address",
+            "inherit": false,
+            "value": {
+              "name": "bind"
+            }
+          },
+          {
+            "long": "key",
+            "short": "k",
+            "description": "set disk encryption key",
+            "inherit": false,
+            "value": {
+              "name": "key"
+            }
+          },
+          {
+            "long": "kvs-ca",
+            "description": "set certificate file",
+            "inherit": false,
+            "value": {
+              "name": "kvs-ca",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "kvs-crt",
+            "description": "set certificate file",
+            "inherit": false,
+            "value": {
+              "name": "kvs-crt",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "kvs-key",
+            "description": "set private key file",
+            "inherit": false,
+            "value": {
+              "name": "kvs-key",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "log",
+            "short": "l",
+            "description": "set log level",
+            "inherit": false,
+            "value": {
+              "name": "log",
+              "provider": {
+                "values": [
+                  "warn",
+                  "info",
+                  "debug",
+                  "trace",
+                  "full"
+                ]
+              }
+            }
+          },
+          {
+            "long": "pass",
+            "short": "p",
+            "description": "set master password",
+            "inherit": false,
+            "value": {
+              "name": "pass"
+            }
+          },
+          {
+            "long": "strict",
+            "short": "s",
+            "description": "set strict mode",
+            "inherit": false,
+            "value": {
+              "name": "strict"
+            }
+          },
+          {
+            "long": "user",
+            "short": "u",
+            "description": "set master username",
+            "inherit": false,
+            "value": {
+              "name": "user"
+            }
+          },
+          {
+            "long": "web-crt",
+            "description": "set certificate file",
+            "inherit": false,
+            "value": {
+              "name": "web-crt",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "web-key",
+            "description": "set private key file",
+            "inherit": false,
+            "value": {
+              "name": "web-key",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "database path",
+              "index": 0,
+              "optional": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "backup",
+        "description": "back up database data",
+        "arguments": {
+          "states": [
+            {
+              "name": "from",
+              "description": "Path to the remote database or file from which to export",
+              "index": 0
+            },
+            {
+              "name": "into",
+              "description": "Path to the remote database or file into which to import",
+              "index": 1
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "pass",
+            "short": "p",
+            "description": "set database password",
+            "inherit": false,
+            "value": {
+              "name": "pass"
+            }
+          },
+          {
+            "long": "user",
+            "short": "u",
+            "description": "set database username",
+            "inherit": false,
+            "value": {
+              "name": "user"
+            }
+          }
+        ]
+      },
+      {
+        "name": "import",
+        "description": "import a SurrealQL script",
+        "options": [
+          {
+            "long": "pass",
+            "short": "p",
+            "description": "set database password",
+            "inherit": false,
+            "value": {
+              "name": "pass"
+            }
+          },
+          {
+            "long": "user",
+            "short": "u",
+            "description": "set database username",
+            "inherit": false,
+            "value": {
+              "name": "user"
+            }
+          },
+          {
+            "long": "conn",
+            "short": "c",
+            "description": "set remote database URL",
+            "inherit": false,
+            "value": {
+              "name": "conn"
+            }
+          },
+          {
+            "long": "ns",
+            "description": "set namespace to import into",
+            "required": true,
+            "inherit": false,
+            "value": {
+              "name": "ns"
+            }
+          },
+          {
+            "long": "db",
+            "description": "set database to import into",
+            "required": true,
+            "inherit": false,
+            "value": {
+              "name": "db"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "description": "SQL file to import",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "export",
+        "description": "export a database as SurrealQL",
+        "options": [
+          {
+            "long": "pass",
+            "short": "p",
+            "description": "set database password",
+            "inherit": false,
+            "value": {
+              "name": "pass"
+            }
+          },
+          {
+            "long": "user",
+            "short": "u",
+            "description": "set database username",
+            "inherit": false,
+            "value": {
+              "name": "user"
+            }
+          },
+          {
+            "long": "conn",
+            "short": "c",
+            "description": "set remote database URL",
+            "inherit": false,
+            "value": {
+              "name": "conn"
+            }
+          },
+          {
+            "long": "ns",
+            "description": "set namespace to export from",
+            "required": true,
+            "inherit": false,
+            "value": {
+              "name": "ns"
+            }
+          },
+          {
+            "long": "db",
+            "description": "set database to export from",
+            "required": true,
+            "inherit": false,
+            "value": {
+              "name": "db"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "description": "SQL file to export",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "version",
+        "description": "show version"
+      },
+      {
+        "name": "sql",
+        "description": "start a SQL REPL",
+        "options": [
+          {
+            "long": "pass",
+            "short": "p",
+            "description": "set database password",
+            "inherit": false,
+            "value": {
+              "name": "pass"
+            }
+          },
+          {
+            "long": "user",
+            "short": "u",
+            "description": "set database username",
+            "inherit": false,
+            "value": {
+              "name": "user"
+            }
+          },
+          {
+            "long": "conn",
+            "short": "c",
+            "description": "set remote database URL",
+            "inherit": false,
+            "value": {
+              "name": "conn"
+            }
+          },
+          {
+            "long": "ns",
+            "description": "set namespace to export from",
+            "required": true,
+            "inherit": false,
+            "value": {
+              "name": "ns"
+            }
+          },
+          {
+            "long": "db",
+            "description": "set database to export from",
+            "required": true,
+            "inherit": false,
+            "value": {
+              "name": "db"
+            }
+          },
+          {
+            "long": "pretty",
+            "description": "pretty-print responses",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "description": "SQL file",
+              "provider": "builtin.files",
+              "index": 0,
+              "optional": true
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
