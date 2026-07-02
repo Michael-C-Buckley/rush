@@ -1,0 +1,4357 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "remotion",
+    "description": "create videos programmatically with React",
+    "options": [
+      {
+        "long": "help",
+        "description": "prints the list of commands and flags for quick lookup",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "versions",
+        "description": "prints and validates versions of all Remotion packages"
+      },
+      {
+        "name": "gpu",
+        "description": "prints information about how Chrome uses the GPU"
+      },
+      {
+        "name": "compositions",
+        "description": "prints the list of available compositions",
+        "options": [
+          {
+            "long": "props",
+            "description": "pass input props as filename or as JSON",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "env-file",
+            "description": "specify a location for a dotenv file",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "disable-headless",
+            "description": "run Chrome in normal mode rather than headless",
+            "inherit": false
+          },
+          {
+            "long": "gl",
+            "description": "which OpenGL renderer to use",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  "angle",
+                  "egl",
+                  "swiftshader",
+                  "swangle",
+                  "vulkan"
+                ]
+              }
+            }
+          },
+          {
+            "long": "user-agent",
+            "description": "user agent to use for Chrome during rendering",
+            "inherit": false
+          },
+          {
+            "long": "ignore-certificate-errors",
+            "description": "ignore SSL errors",
+            "inherit": false
+          },
+          {
+            "long": "disable-web-security",
+            "description": "disable CORS and other web security features",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "entry",
+              "description": "The entry point of your Remotion app",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "lambda",
+        "description": "access functionality of @remotion/lambda",
+        "options": [
+          {
+            "long": "quiet",
+            "description": "print less output",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "description": "print less output",
+            "inherit": false
+          },
+          {
+            "long": "log",
+            "description": "log level, \"error\", \"warning\", \"verbose\", \"info\" (default)",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "verbose"
+                  },
+                  {
+                    "value": "info"
+                  },
+                  {
+                    "value": "warn"
+                  },
+                  {
+                    "value": "error"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "custom location for a Remotion config file",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "yes",
+            "description": "skip confirmation",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "description": "skip confirmation",
+            "priority": -10,
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "short": "y",
+            "description": "skip confirmation",
+            "priority": -10,
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "short": "f",
+            "description": "skip confirmation",
+            "priority": -10,
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "region",
+            "description": "the AWS region specifier",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "us-east-1",
+                    "description": "North Virginia"
+                  },
+                  {
+                    "value": "us-east-2",
+                    "description": "Ohio"
+                  },
+                  {
+                    "value": "eu-central-1",
+                    "description": "Frankfurt"
+                  },
+                  {
+                    "value": "eu-west-1",
+                    "description": "Ireland"
+                  },
+                  {
+                    "value": "eu-west-2",
+                    "description": "London"
+                  },
+                  {
+                    "value": "us-west-2",
+                    "description": "Oregon"
+                  },
+                  {
+                    "value": "ap-south-1",
+                    "description": "Mumbai"
+                  },
+                  {
+                    "value": "ap-southeast-1",
+                    "description": "Singapore"
+                  },
+                  {
+                    "value": "ap-southeast-2",
+                    "description": "Sydney"
+                  },
+                  {
+                    "value": "ap-northeast-1",
+                    "description": "Tokyo"
+                  }
+                ]
+              }
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "policies",
+            "description": "manage AWS policies",
+            "subcommands": [
+              {
+                "name": "role",
+                "description": "print policy to be added to the AWS role"
+              },
+              {
+                "name": "user",
+                "description": "print policy to be added to the AWS user"
+              },
+              {
+                "name": "validate",
+                "description": "validate the user policy was configured correctly"
+              }
+            ]
+          },
+          {
+            "name": "quotas",
+            "description": "show current AWS quota",
+            "options": [
+              {
+                "long": "quiet",
+                "description": "print less output",
+                "inherit": false
+              },
+              {
+                "short": "q",
+                "description": "print less output",
+                "inherit": false
+              },
+              {
+                "long": "log",
+                "description": "log level, \"error\", \"warning\", \"verbose\", \"info\" (default)",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "verbose"
+                      },
+                      {
+                        "value": "info"
+                      },
+                      {
+                        "value": "warn"
+                      },
+                      {
+                        "value": "error"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "config",
+                "description": "custom location for a Remotion config file",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "yes",
+                "description": "skip confirmation",
+                "inherit": false
+              },
+              {
+                "long": "force",
+                "description": "skip confirmation",
+                "priority": -10,
+                "inherit": false,
+                "hidden": true
+              },
+              {
+                "short": "y",
+                "description": "skip confirmation",
+                "priority": -10,
+                "inherit": false,
+                "hidden": true
+              },
+              {
+                "short": "f",
+                "description": "skip confirmation",
+                "priority": -10,
+                "inherit": false,
+                "hidden": true
+              },
+              {
+                "long": "region",
+                "description": "the AWS region specifier",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "us-east-1",
+                        "description": "North Virginia"
+                      },
+                      {
+                        "value": "us-east-2",
+                        "description": "Ohio"
+                      },
+                      {
+                        "value": "eu-central-1",
+                        "description": "Frankfurt"
+                      },
+                      {
+                        "value": "eu-west-1",
+                        "description": "Ireland"
+                      },
+                      {
+                        "value": "eu-west-2",
+                        "description": "London"
+                      },
+                      {
+                        "value": "us-west-2",
+                        "description": "Oregon"
+                      },
+                      {
+                        "value": "ap-south-1",
+                        "description": "Mumbai"
+                      },
+                      {
+                        "value": "ap-southeast-1",
+                        "description": "Singapore"
+                      },
+                      {
+                        "value": "ap-southeast-2",
+                        "description": "Sydney"
+                      },
+                      {
+                        "value": "ap-northeast-1",
+                        "description": "Tokyo"
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "increase",
+                "description": "send a request to AWS to increase concurrency quotas",
+                "options": [
+                  {
+                    "long": "quiet",
+                    "description": "print less output",
+                    "inherit": false
+                  },
+                  {
+                    "short": "q",
+                    "description": "print less output",
+                    "inherit": false
+                  },
+                  {
+                    "long": "log",
+                    "description": "log level, \"error\", \"warning\", \"verbose\", \"info\" (default)",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": {
+                        "values": [
+                          {
+                            "value": "verbose"
+                          },
+                          {
+                            "value": "info"
+                          },
+                          {
+                            "value": "warn"
+                          },
+                          {
+                            "value": "error"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "long": "config",
+                    "description": "custom location for a Remotion config file",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "yes",
+                    "description": "skip confirmation",
+                    "inherit": false
+                  },
+                  {
+                    "long": "force",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "short": "y",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "short": "f",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "long": "region",
+                    "description": "the AWS region specifier",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": {
+                        "values": [
+                          {
+                            "value": "us-east-1",
+                            "description": "North Virginia"
+                          },
+                          {
+                            "value": "us-east-2",
+                            "description": "Ohio"
+                          },
+                          {
+                            "value": "eu-central-1",
+                            "description": "Frankfurt"
+                          },
+                          {
+                            "value": "eu-west-1",
+                            "description": "Ireland"
+                          },
+                          {
+                            "value": "eu-west-2",
+                            "description": "London"
+                          },
+                          {
+                            "value": "us-west-2",
+                            "description": "Oregon"
+                          },
+                          {
+                            "value": "ap-south-1",
+                            "description": "Mumbai"
+                          },
+                          {
+                            "value": "ap-southeast-1",
+                            "description": "Singapore"
+                          },
+                          {
+                            "value": "ap-southeast-2",
+                            "description": "Sydney"
+                          },
+                          {
+                            "value": "ap-northeast-1",
+                            "description": "Tokyo"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "regions",
+            "description": "prints list of supported regions",
+            "options": [
+              {
+                "long": "default-only",
+                "description": "only print the regions enabled by default in a new AWS account",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "render",
+            "description": "render media on Lambda",
+            "options": [
+              {
+                "long": "max-retries",
+                "description": "how many times a chunk can be retried before the render times out",
+                "inherit": false,
+                "value": {
+                  "name": "numberofretries"
+                }
+              },
+              {
+                "long": "privacy",
+                "inherit": false,
+                "value": {
+                  "name": "privacy",
+                  "provider": {
+                    "values": [
+                      "public",
+                      "private"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "frames-per-lambda",
+                "description": "how many frames should be rendered per chunk",
+                "inherit": false,
+                "value": {
+                  "name": "framesperlambda"
+                }
+              },
+              {
+                "long": "props",
+                "description": "pass input props as filename or as JSON",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "disable-headless",
+                "description": "run Chrome in normal mode rather than headless",
+                "inherit": false
+              },
+              {
+                "long": "gl",
+                "description": "which OpenGL renderer to use",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      "angle",
+                      "egl",
+                      "swiftshader",
+                      "swangle",
+                      "vulkan"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "user-agent",
+                "description": "user agent to use for Chrome during rendering",
+                "inherit": false
+              },
+              {
+                "long": "ignore-certificate-errors",
+                "description": "ignore SSL errors",
+                "inherit": false
+              },
+              {
+                "long": "disable-web-security",
+                "description": "disable CORS and other web security features",
+                "inherit": false
+              },
+              {
+                "long": "concurrency-per-lambda",
+                "description": "concurrency with which each Lambda function should render",
+                "inherit": false,
+                "value": {
+                  "name": "concurrencyperlambda"
+                }
+              },
+              {
+                "long": "overwrite",
+                "description": "overwrite a video if it already exists in the S3 bucket",
+                "inherit": false
+              },
+              {
+                "long": "function-name",
+                "description": "name of the function that should be invoked",
+                "inherit": false
+              },
+              {
+                "long": "renderer-function-name",
+                "description": "use a different function to render the video. By default, use the same function as the one to start the render",
+                "inherit": false
+              },
+              {
+                "long": "timeout",
+                "description": "the time in milisecond that a delayRender() may take before it times out",
+                "inherit": false
+              },
+              {
+                "long": "quality",
+                "description": "quality for rendered frames, JPEG only, 0-100",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "0"
+                      },
+                      {
+                        "value": "10"
+                      },
+                      {
+                        "value": "20"
+                      },
+                      {
+                        "value": "30"
+                      },
+                      {
+                        "value": "40"
+                      },
+                      {
+                        "value": "50"
+                      },
+                      {
+                        "value": "60"
+                      },
+                      {
+                        "value": "70"
+                      },
+                      {
+                        "value": "80"
+                      },
+                      {
+                        "value": "90"
+                      },
+                      {
+                        "value": "100"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "scale",
+                "description": "upscale or downscale or the dimensions of the video",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "0.25"
+                      },
+                      {
+                        "value": "0.5"
+                      },
+                      {
+                        "value": "1"
+                      },
+                      {
+                        "value": "1.5"
+                      },
+                      {
+                        "value": "2"
+                      },
+                      {
+                        "value": "4"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "codec",
+                "description": "video or audio codec",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "h264"
+                      },
+                      {
+                        "value": "h265"
+                      },
+                      {
+                        "value": "gif"
+                      },
+                      {
+                        "value": "vp8"
+                      },
+                      {
+                        "value": "vp9"
+                      },
+                      {
+                        "value": "mp3"
+                      },
+                      {
+                        "value": "aac"
+                      },
+                      {
+                        "value": "wav"
+                      },
+                      {
+                        "value": "prores"
+                      },
+                      {
+                        "value": "h264-mkv"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "audio-codec",
+                "description": "codec to be used for the audio",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "aac"
+                      },
+                      {
+                        "value": "mp3"
+                      },
+                      {
+                        "value": "opus"
+                      },
+                      {
+                        "value": "pcm-16"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "every-nth-frame",
+                "description": "render only every nth frame (only for GIFs)",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "2"
+                      },
+                      {
+                        "value": "3"
+                      },
+                      {
+                        "value": "4"
+                      },
+                      {
+                        "value": "5"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "number-of-gif-loops",
+                "description": "how many times a GIF should loop. 0 = No loop",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "0"
+                      },
+                      {
+                        "value": "1"
+                      },
+                      {
+                        "value": "2"
+                      },
+                      {
+                        "value": "3"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "audio-bitrate",
+                "description": "customize the output audio bitrate",
+                "inherit": false
+              },
+              {
+                "long": "video-bitrate",
+                "description": "customize the output video bitrate. Mutually exclusive with --crf",
+                "inherit": false,
+                "excludes": [
+                  "--crf"
+                ]
+              },
+              {
+                "long": "crf",
+                "description": "fFMPEG CRF value, controls quality, see docs for info",
+                "inherit": false,
+                "excludes": [
+                  "--video-bitrate"
+                ]
+              },
+              {
+                "long": "frames",
+                "description": "render a portion or a still of a video, 0-9, 50",
+                "inherit": false,
+                "value": {
+                  "name": "frames"
+                }
+              },
+              {
+                "long": "prores-profile",
+                "description": "proRes profile, need --codec=prores to be set",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      "4444-xq",
+                      "4444",
+                      "hq",
+                      "standard",
+                      "light",
+                      "proxy"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "x264-preset",
+                "description": "presets balance encoding speed and compression quality, with slower presets achieving better compression. Needs --codec=h264 to be set",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      "ultrafast",
+                      "superfast",
+                      "veryfast",
+                      "faster",
+                      "fast",
+                      "medium",
+                      "slow",
+                      "slower",
+                      "veryslow",
+                      "placebo"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "image-format",
+                "description": "format to render the frames in, \"jpeg\" or \"png\"",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "jpeg"
+                      },
+                      {
+                        "value": "png"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "pixel-format",
+                "description": "custom pixel format, see docs for available values",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "yuv420p"
+                      },
+                      {
+                        "value": "yuv422p"
+                      },
+                      {
+                        "value": "yuv444p"
+                      },
+                      {
+                        "value": "yuv420p10le"
+                      },
+                      {
+                        "value": "yuv422p10le"
+                      },
+                      {
+                        "value": "yuv444p10le"
+                      },
+                      {
+                        "value": "yuva420p"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "muted",
+                "description": "outputs no audio",
+                "inherit": false
+              },
+              {
+                "long": "height",
+                "description": "override the composition height",
+                "inherit": false,
+                "value": {
+                  "name": "height"
+                }
+              },
+              {
+                "long": "width",
+                "description": "override the composition width",
+                "inherit": false,
+                "value": {
+                  "name": "height"
+                }
+              },
+              {
+                "long": "quiet",
+                "description": "print less output",
+                "inherit": false
+              },
+              {
+                "short": "q",
+                "description": "print less output",
+                "inherit": false
+              },
+              {
+                "long": "log",
+                "description": "log level, \"error\", \"warning\", \"verbose\", \"info\" (default)",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "verbose"
+                      },
+                      {
+                        "value": "info"
+                      },
+                      {
+                        "value": "warn"
+                      },
+                      {
+                        "value": "error"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "config",
+                "description": "custom location for a Remotion config file",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "yes",
+                "description": "skip confirmation",
+                "inherit": false
+              },
+              {
+                "long": "force",
+                "description": "skip confirmation",
+                "priority": -10,
+                "inherit": false,
+                "hidden": true
+              },
+              {
+                "short": "y",
+                "description": "skip confirmation",
+                "priority": -10,
+                "inherit": false,
+                "hidden": true
+              },
+              {
+                "short": "f",
+                "description": "skip confirmation",
+                "priority": -10,
+                "inherit": false,
+                "hidden": true
+              },
+              {
+                "long": "region",
+                "description": "the AWS region specifier",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "us-east-1",
+                        "description": "North Virginia"
+                      },
+                      {
+                        "value": "us-east-2",
+                        "description": "Ohio"
+                      },
+                      {
+                        "value": "eu-central-1",
+                        "description": "Frankfurt"
+                      },
+                      {
+                        "value": "eu-west-1",
+                        "description": "Ireland"
+                      },
+                      {
+                        "value": "eu-west-2",
+                        "description": "London"
+                      },
+                      {
+                        "value": "us-west-2",
+                        "description": "Oregon"
+                      },
+                      {
+                        "value": "ap-south-1",
+                        "description": "Mumbai"
+                      },
+                      {
+                        "value": "ap-southeast-1",
+                        "description": "Singapore"
+                      },
+                      {
+                        "value": "ap-southeast-2",
+                        "description": "Sydney"
+                      },
+                      {
+                        "value": "ap-northeast-1",
+                        "description": "Tokyo"
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "serve-url",
+                  "description": "URL or name of the site",
+                  "index": 0
+                },
+                {
+                  "name": "composition-id",
+                  "description": "Name of the composition",
+                  "index": 1
+                },
+                {
+                  "name": "out-name",
+                  "description": "Where the output should be downloaded. No download it omitted",
+                  "index": 2
+                }
+              ]
+            }
+          },
+          {
+            "name": "compositions",
+            "description": "get the list of available compositions on Lambda",
+            "options": [
+              {
+                "long": "quiet",
+                "description": "print less output",
+                "inherit": false
+              },
+              {
+                "short": "q",
+                "description": "print less output",
+                "inherit": false
+              },
+              {
+                "long": "log",
+                "description": "log level, \"error\", \"warning\", \"verbose\", \"info\" (default)",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "verbose"
+                      },
+                      {
+                        "value": "info"
+                      },
+                      {
+                        "value": "warn"
+                      },
+                      {
+                        "value": "error"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "config",
+                "description": "custom location for a Remotion config file",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "yes",
+                "description": "skip confirmation",
+                "inherit": false
+              },
+              {
+                "long": "force",
+                "description": "skip confirmation",
+                "priority": -10,
+                "inherit": false,
+                "hidden": true
+              },
+              {
+                "short": "y",
+                "description": "skip confirmation",
+                "priority": -10,
+                "inherit": false,
+                "hidden": true
+              },
+              {
+                "short": "f",
+                "description": "skip confirmation",
+                "priority": -10,
+                "inherit": false,
+                "hidden": true
+              },
+              {
+                "long": "region",
+                "description": "the AWS region specifier",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "us-east-1",
+                        "description": "North Virginia"
+                      },
+                      {
+                        "value": "us-east-2",
+                        "description": "Ohio"
+                      },
+                      {
+                        "value": "eu-central-1",
+                        "description": "Frankfurt"
+                      },
+                      {
+                        "value": "eu-west-1",
+                        "description": "Ireland"
+                      },
+                      {
+                        "value": "eu-west-2",
+                        "description": "London"
+                      },
+                      {
+                        "value": "us-west-2",
+                        "description": "Oregon"
+                      },
+                      {
+                        "value": "ap-south-1",
+                        "description": "Mumbai"
+                      },
+                      {
+                        "value": "ap-southeast-1",
+                        "description": "Singapore"
+                      },
+                      {
+                        "value": "ap-southeast-2",
+                        "description": "Sydney"
+                      },
+                      {
+                        "value": "ap-northeast-1",
+                        "description": "Tokyo"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "props",
+                "description": "pass input props as filename or as JSON",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "env-file",
+                "description": "specify a location for a dotenv file",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "disable-headless",
+                "description": "run Chrome in normal mode rather than headless",
+                "inherit": false
+              },
+              {
+                "long": "gl",
+                "description": "which OpenGL renderer to use",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      "angle",
+                      "egl",
+                      "swiftshader",
+                      "swangle",
+                      "vulkan"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "user-agent",
+                "description": "user agent to use for Chrome during rendering",
+                "inherit": false
+              },
+              {
+                "long": "ignore-certificate-errors",
+                "description": "ignore SSL errors",
+                "inherit": false
+              },
+              {
+                "long": "disable-web-security",
+                "description": "disable CORS and other web security features",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "serve-url",
+                  "description": "URL or name of the site",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "still",
+            "description": "render a still on Lambda",
+            "options": [
+              {
+                "long": "max-retries",
+                "description": "how many times a chunk can be retried before the render times out",
+                "inherit": false,
+                "value": {
+                  "name": "numberofretries"
+                }
+              },
+              {
+                "long": "privacy",
+                "inherit": false,
+                "value": {
+                  "name": "privacy",
+                  "provider": {
+                    "values": [
+                      "public",
+                      "private"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "frames-per-lambda",
+                "description": "how many frames should be rendered per chunk",
+                "inherit": false,
+                "value": {
+                  "name": "framesperlambda"
+                }
+              },
+              {
+                "long": "props",
+                "description": "pass input props as filename or as JSON",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "disable-headless",
+                "description": "run Chrome in normal mode rather than headless",
+                "inherit": false
+              },
+              {
+                "long": "gl",
+                "description": "which OpenGL renderer to use",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      "angle",
+                      "egl",
+                      "swiftshader",
+                      "swangle",
+                      "vulkan"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "user-agent",
+                "description": "user agent to use for Chrome during rendering",
+                "inherit": false
+              },
+              {
+                "long": "ignore-certificate-errors",
+                "description": "ignore SSL errors",
+                "inherit": false
+              },
+              {
+                "long": "disable-web-security",
+                "description": "disable CORS and other web security features",
+                "inherit": false
+              },
+              {
+                "long": "frame",
+                "description": "which frame to render (default 0)",
+                "inherit": false,
+                "value": {
+                  "name": "frame"
+                }
+              },
+              {
+                "long": "height",
+                "description": "override the composition height",
+                "inherit": false,
+                "value": {
+                  "name": "height"
+                }
+              },
+              {
+                "long": "width",
+                "description": "override the composition width",
+                "inherit": false,
+                "value": {
+                  "name": "height"
+                }
+              },
+              {
+                "long": "quiet",
+                "description": "print less output",
+                "inherit": false
+              },
+              {
+                "short": "q",
+                "description": "print less output",
+                "inherit": false
+              },
+              {
+                "long": "log",
+                "description": "log level, \"error\", \"warning\", \"verbose\", \"info\" (default)",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "verbose"
+                      },
+                      {
+                        "value": "info"
+                      },
+                      {
+                        "value": "warn"
+                      },
+                      {
+                        "value": "error"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "config",
+                "description": "custom location for a Remotion config file",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "yes",
+                "description": "skip confirmation",
+                "inherit": false
+              },
+              {
+                "long": "force",
+                "description": "skip confirmation",
+                "priority": -10,
+                "inherit": false,
+                "hidden": true
+              },
+              {
+                "short": "y",
+                "description": "skip confirmation",
+                "priority": -10,
+                "inherit": false,
+                "hidden": true
+              },
+              {
+                "short": "f",
+                "description": "skip confirmation",
+                "priority": -10,
+                "inherit": false,
+                "hidden": true
+              },
+              {
+                "long": "region",
+                "description": "the AWS region specifier",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "us-east-1",
+                        "description": "North Virginia"
+                      },
+                      {
+                        "value": "us-east-2",
+                        "description": "Ohio"
+                      },
+                      {
+                        "value": "eu-central-1",
+                        "description": "Frankfurt"
+                      },
+                      {
+                        "value": "eu-west-1",
+                        "description": "Ireland"
+                      },
+                      {
+                        "value": "eu-west-2",
+                        "description": "London"
+                      },
+                      {
+                        "value": "us-west-2",
+                        "description": "Oregon"
+                      },
+                      {
+                        "value": "ap-south-1",
+                        "description": "Mumbai"
+                      },
+                      {
+                        "value": "ap-southeast-1",
+                        "description": "Singapore"
+                      },
+                      {
+                        "value": "ap-southeast-2",
+                        "description": "Sydney"
+                      },
+                      {
+                        "value": "ap-northeast-1",
+                        "description": "Tokyo"
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "serve-url",
+                  "description": "URL or name of the site",
+                  "index": 0
+                },
+                {
+                  "name": "composition-id",
+                  "description": "Name of the composition",
+                  "index": 1
+                },
+                {
+                  "name": "out-name",
+                  "description": "Where the output should be downloaded. No download it omitted",
+                  "index": 2
+                }
+              ]
+            }
+          },
+          {
+            "name": "functions",
+            "description": "manage functions on AWS Lambda",
+            "options": [
+              {
+                "long": "quiet",
+                "description": "print less output",
+                "inherit": false
+              },
+              {
+                "short": "q",
+                "description": "print less output",
+                "inherit": false
+              },
+              {
+                "long": "log",
+                "description": "log level, \"error\", \"warning\", \"verbose\", \"info\" (default)",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "verbose"
+                      },
+                      {
+                        "value": "info"
+                      },
+                      {
+                        "value": "warn"
+                      },
+                      {
+                        "value": "error"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "config",
+                "description": "custom location for a Remotion config file",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "yes",
+                "description": "skip confirmation",
+                "inherit": false
+              },
+              {
+                "long": "force",
+                "description": "skip confirmation",
+                "priority": -10,
+                "inherit": false,
+                "hidden": true
+              },
+              {
+                "short": "y",
+                "description": "skip confirmation",
+                "priority": -10,
+                "inherit": false,
+                "hidden": true
+              },
+              {
+                "short": "f",
+                "description": "skip confirmation",
+                "priority": -10,
+                "inherit": false,
+                "hidden": true
+              },
+              {
+                "long": "region",
+                "description": "the AWS region specifier",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "us-east-1",
+                        "description": "North Virginia"
+                      },
+                      {
+                        "value": "us-east-2",
+                        "description": "Ohio"
+                      },
+                      {
+                        "value": "eu-central-1",
+                        "description": "Frankfurt"
+                      },
+                      {
+                        "value": "eu-west-1",
+                        "description": "Ireland"
+                      },
+                      {
+                        "value": "eu-west-2",
+                        "description": "London"
+                      },
+                      {
+                        "value": "us-west-2",
+                        "description": "Oregon"
+                      },
+                      {
+                        "value": "ap-south-1",
+                        "description": "Mumbai"
+                      },
+                      {
+                        "value": "ap-southeast-1",
+                        "description": "Singapore"
+                      },
+                      {
+                        "value": "ap-southeast-2",
+                        "description": "Sydney"
+                      },
+                      {
+                        "value": "ap-northeast-1",
+                        "description": "Tokyo"
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "ls",
+                "description": "list deployed functions",
+                "options": [
+                  {
+                    "long": "quiet",
+                    "description": "print less output",
+                    "inherit": false
+                  },
+                  {
+                    "short": "q",
+                    "description": "print less output",
+                    "inherit": false
+                  },
+                  {
+                    "long": "log",
+                    "description": "log level, \"error\", \"warning\", \"verbose\", \"info\" (default)",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": {
+                        "values": [
+                          {
+                            "value": "verbose"
+                          },
+                          {
+                            "value": "info"
+                          },
+                          {
+                            "value": "warn"
+                          },
+                          {
+                            "value": "error"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "long": "config",
+                    "description": "custom location for a Remotion config file",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "yes",
+                    "description": "skip confirmation",
+                    "inherit": false
+                  },
+                  {
+                    "long": "force",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "short": "y",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "short": "f",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "long": "region",
+                    "description": "the AWS region specifier",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": {
+                        "values": [
+                          {
+                            "value": "us-east-1",
+                            "description": "North Virginia"
+                          },
+                          {
+                            "value": "us-east-2",
+                            "description": "Ohio"
+                          },
+                          {
+                            "value": "eu-central-1",
+                            "description": "Frankfurt"
+                          },
+                          {
+                            "value": "eu-west-1",
+                            "description": "Ireland"
+                          },
+                          {
+                            "value": "eu-west-2",
+                            "description": "London"
+                          },
+                          {
+                            "value": "us-west-2",
+                            "description": "Oregon"
+                          },
+                          {
+                            "value": "ap-south-1",
+                            "description": "Mumbai"
+                          },
+                          {
+                            "value": "ap-southeast-1",
+                            "description": "Singapore"
+                          },
+                          {
+                            "value": "ap-southeast-2",
+                            "description": "Sydney"
+                          },
+                          {
+                            "value": "ap-northeast-1",
+                            "description": "Tokyo"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "deploy",
+                "description": "deploy a function if one with the same parameters doesn't exist",
+                "options": [
+                  {
+                    "long": "memory",
+                    "description": "amount of memory in MB to allocate",
+                    "inherit": false,
+                    "value": {
+                      "name": "sizeinmegabytes"
+                    }
+                  },
+                  {
+                    "long": "disk",
+                    "description": "amount of disk space in MB to allocate",
+                    "inherit": false,
+                    "value": {
+                      "name": "diskinmegabytes"
+                    }
+                  },
+                  {
+                    "long": "architecture",
+                    "description": "type of CPU architecture to use for the Lambda function",
+                    "inherit": false,
+                    "value": {
+                      "name": "architecture",
+                      "provider": {
+                        "values": [
+                          {
+                            "value": "x86_64"
+                          },
+                          {
+                            "value": "arm64"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "long": "disable-cloudwatch",
+                    "description": "disable CloudWatch logging",
+                    "inherit": false,
+                    "excludes": [
+                      "--retention-period"
+                    ]
+                  },
+                  {
+                    "long": "enable-lambda-insights",
+                    "description": "enable Lambda Insights",
+                    "inherit": false
+                  },
+                  {
+                    "long": "custom-role-arn",
+                    "description": "set a custom role ARN to be used instead of the default",
+                    "inherit": false,
+                    "value": {
+                      "name": "role-arn"
+                    }
+                  },
+                  {
+                    "long": "retention-period",
+                    "description": "cloudWatch log retention period in days",
+                    "inherit": false,
+                    "value": {
+                      "name": "retentionperiodindays"
+                    },
+                    "excludes": [
+                      "--disable-cloudwatch"
+                    ]
+                  },
+                  {
+                    "long": "quiet",
+                    "description": "print less output",
+                    "inherit": false
+                  },
+                  {
+                    "short": "q",
+                    "description": "print less output",
+                    "inherit": false
+                  },
+                  {
+                    "long": "log",
+                    "description": "log level, \"error\", \"warning\", \"verbose\", \"info\" (default)",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": {
+                        "values": [
+                          {
+                            "value": "verbose"
+                          },
+                          {
+                            "value": "info"
+                          },
+                          {
+                            "value": "warn"
+                          },
+                          {
+                            "value": "error"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "long": "config",
+                    "description": "custom location for a Remotion config file",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "yes",
+                    "description": "skip confirmation",
+                    "inherit": false
+                  },
+                  {
+                    "long": "force",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "short": "y",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "short": "f",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "long": "region",
+                    "description": "the AWS region specifier",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": {
+                        "values": [
+                          {
+                            "value": "us-east-1",
+                            "description": "North Virginia"
+                          },
+                          {
+                            "value": "us-east-2",
+                            "description": "Ohio"
+                          },
+                          {
+                            "value": "eu-central-1",
+                            "description": "Frankfurt"
+                          },
+                          {
+                            "value": "eu-west-1",
+                            "description": "Ireland"
+                          },
+                          {
+                            "value": "eu-west-2",
+                            "description": "London"
+                          },
+                          {
+                            "value": "us-west-2",
+                            "description": "Oregon"
+                          },
+                          {
+                            "value": "ap-south-1",
+                            "description": "Mumbai"
+                          },
+                          {
+                            "value": "ap-southeast-1",
+                            "description": "Singapore"
+                          },
+                          {
+                            "value": "ap-southeast-2",
+                            "description": "Sydney"
+                          },
+                          {
+                            "value": "ap-northeast-1",
+                            "description": "Tokyo"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "rmall",
+                "description": "remove all functions in a region",
+                "options": [
+                  {
+                    "long": "quiet",
+                    "description": "print less output",
+                    "inherit": false
+                  },
+                  {
+                    "short": "q",
+                    "description": "print less output",
+                    "inherit": false
+                  },
+                  {
+                    "long": "log",
+                    "description": "log level, \"error\", \"warning\", \"verbose\", \"info\" (default)",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": {
+                        "values": [
+                          {
+                            "value": "verbose"
+                          },
+                          {
+                            "value": "info"
+                          },
+                          {
+                            "value": "warn"
+                          },
+                          {
+                            "value": "error"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "long": "config",
+                    "description": "custom location for a Remotion config file",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "yes",
+                    "description": "skip confirmation",
+                    "inherit": false
+                  },
+                  {
+                    "long": "force",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "short": "y",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "short": "f",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "long": "region",
+                    "description": "the AWS region specifier",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": {
+                        "values": [
+                          {
+                            "value": "us-east-1",
+                            "description": "North Virginia"
+                          },
+                          {
+                            "value": "us-east-2",
+                            "description": "Ohio"
+                          },
+                          {
+                            "value": "eu-central-1",
+                            "description": "Frankfurt"
+                          },
+                          {
+                            "value": "eu-west-1",
+                            "description": "Ireland"
+                          },
+                          {
+                            "value": "eu-west-2",
+                            "description": "London"
+                          },
+                          {
+                            "value": "us-west-2",
+                            "description": "Oregon"
+                          },
+                          {
+                            "value": "ap-south-1",
+                            "description": "Mumbai"
+                          },
+                          {
+                            "value": "ap-southeast-1",
+                            "description": "Singapore"
+                          },
+                          {
+                            "value": "ap-southeast-2",
+                            "description": "Sydney"
+                          },
+                          {
+                            "value": "ap-northeast-1",
+                            "description": "Tokyo"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "rm",
+                "description": "remove a function",
+                "options": [
+                  {
+                    "long": "quiet",
+                    "description": "print less output",
+                    "inherit": false
+                  },
+                  {
+                    "short": "q",
+                    "description": "print less output",
+                    "inherit": false
+                  },
+                  {
+                    "long": "log",
+                    "description": "log level, \"error\", \"warning\", \"verbose\", \"info\" (default)",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": {
+                        "values": [
+                          {
+                            "value": "verbose"
+                          },
+                          {
+                            "value": "info"
+                          },
+                          {
+                            "value": "warn"
+                          },
+                          {
+                            "value": "error"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "long": "config",
+                    "description": "custom location for a Remotion config file",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "yes",
+                    "description": "skip confirmation",
+                    "inherit": false
+                  },
+                  {
+                    "long": "force",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "short": "y",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "short": "f",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "long": "region",
+                    "description": "the AWS region specifier",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": {
+                        "values": [
+                          {
+                            "value": "us-east-1",
+                            "description": "North Virginia"
+                          },
+                          {
+                            "value": "us-east-2",
+                            "description": "Ohio"
+                          },
+                          {
+                            "value": "eu-central-1",
+                            "description": "Frankfurt"
+                          },
+                          {
+                            "value": "eu-west-1",
+                            "description": "Ireland"
+                          },
+                          {
+                            "value": "eu-west-2",
+                            "description": "London"
+                          },
+                          {
+                            "value": "us-west-2",
+                            "description": "Oregon"
+                          },
+                          {
+                            "value": "ap-south-1",
+                            "description": "Mumbai"
+                          },
+                          {
+                            "value": "ap-southeast-1",
+                            "description": "Singapore"
+                          },
+                          {
+                            "value": "ap-southeast-2",
+                            "description": "Sydney"
+                          },
+                          {
+                            "value": "ap-northeast-1",
+                            "description": "Tokyo"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "function-name",
+                      "description": "ID of your function",
+                      "index": 0
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "sites",
+            "options": [
+              {
+                "long": "quiet",
+                "description": "print less output",
+                "inherit": false
+              },
+              {
+                "short": "q",
+                "description": "print less output",
+                "inherit": false
+              },
+              {
+                "long": "log",
+                "description": "log level, \"error\", \"warning\", \"verbose\", \"info\" (default)",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "verbose"
+                      },
+                      {
+                        "value": "info"
+                      },
+                      {
+                        "value": "warn"
+                      },
+                      {
+                        "value": "error"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "config",
+                "description": "custom location for a Remotion config file",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "yes",
+                "description": "skip confirmation",
+                "inherit": false
+              },
+              {
+                "long": "force",
+                "description": "skip confirmation",
+                "priority": -10,
+                "inherit": false,
+                "hidden": true
+              },
+              {
+                "short": "y",
+                "description": "skip confirmation",
+                "priority": -10,
+                "inherit": false,
+                "hidden": true
+              },
+              {
+                "short": "f",
+                "description": "skip confirmation",
+                "priority": -10,
+                "inherit": false,
+                "hidden": true
+              },
+              {
+                "long": "region",
+                "description": "the AWS region specifier",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "us-east-1",
+                        "description": "North Virginia"
+                      },
+                      {
+                        "value": "us-east-2",
+                        "description": "Ohio"
+                      },
+                      {
+                        "value": "eu-central-1",
+                        "description": "Frankfurt"
+                      },
+                      {
+                        "value": "eu-west-1",
+                        "description": "Ireland"
+                      },
+                      {
+                        "value": "eu-west-2",
+                        "description": "London"
+                      },
+                      {
+                        "value": "us-west-2",
+                        "description": "Oregon"
+                      },
+                      {
+                        "value": "ap-south-1",
+                        "description": "Mumbai"
+                      },
+                      {
+                        "value": "ap-southeast-1",
+                        "description": "Singapore"
+                      },
+                      {
+                        "value": "ap-southeast-2",
+                        "description": "Sydney"
+                      },
+                      {
+                        "value": "ap-northeast-1",
+                        "description": "Tokyo"
+                      }
+                    ]
+                  }
+                }
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "ls",
+                "description": "list sites",
+                "options": [
+                  {
+                    "long": "quiet",
+                    "description": "print less output",
+                    "inherit": false
+                  },
+                  {
+                    "short": "q",
+                    "description": "print less output",
+                    "inherit": false
+                  },
+                  {
+                    "long": "log",
+                    "description": "log level, \"error\", \"warning\", \"verbose\", \"info\" (default)",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": {
+                        "values": [
+                          {
+                            "value": "verbose"
+                          },
+                          {
+                            "value": "info"
+                          },
+                          {
+                            "value": "warn"
+                          },
+                          {
+                            "value": "error"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "long": "config",
+                    "description": "custom location for a Remotion config file",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "yes",
+                    "description": "skip confirmation",
+                    "inherit": false
+                  },
+                  {
+                    "long": "force",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "short": "y",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "short": "f",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "long": "region",
+                    "description": "the AWS region specifier",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": {
+                        "values": [
+                          {
+                            "value": "us-east-1",
+                            "description": "North Virginia"
+                          },
+                          {
+                            "value": "us-east-2",
+                            "description": "Ohio"
+                          },
+                          {
+                            "value": "eu-central-1",
+                            "description": "Frankfurt"
+                          },
+                          {
+                            "value": "eu-west-1",
+                            "description": "Ireland"
+                          },
+                          {
+                            "value": "eu-west-2",
+                            "description": "London"
+                          },
+                          {
+                            "value": "us-west-2",
+                            "description": "Oregon"
+                          },
+                          {
+                            "value": "ap-south-1",
+                            "description": "Mumbai"
+                          },
+                          {
+                            "value": "ap-southeast-1",
+                            "description": "Singapore"
+                          },
+                          {
+                            "value": "ap-southeast-2",
+                            "description": "Sydney"
+                          },
+                          {
+                            "value": "ap-northeast-1",
+                            "description": "Tokyo"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "rmall",
+                "description": "remove all sites in a region",
+                "options": [
+                  {
+                    "long": "quiet",
+                    "description": "print less output",
+                    "inherit": false
+                  },
+                  {
+                    "short": "q",
+                    "description": "print less output",
+                    "inherit": false
+                  },
+                  {
+                    "long": "log",
+                    "description": "log level, \"error\", \"warning\", \"verbose\", \"info\" (default)",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": {
+                        "values": [
+                          {
+                            "value": "verbose"
+                          },
+                          {
+                            "value": "info"
+                          },
+                          {
+                            "value": "warn"
+                          },
+                          {
+                            "value": "error"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "long": "config",
+                    "description": "custom location for a Remotion config file",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "yes",
+                    "description": "skip confirmation",
+                    "inherit": false
+                  },
+                  {
+                    "long": "force",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "short": "y",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "short": "f",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "long": "region",
+                    "description": "the AWS region specifier",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": {
+                        "values": [
+                          {
+                            "value": "us-east-1",
+                            "description": "North Virginia"
+                          },
+                          {
+                            "value": "us-east-2",
+                            "description": "Ohio"
+                          },
+                          {
+                            "value": "eu-central-1",
+                            "description": "Frankfurt"
+                          },
+                          {
+                            "value": "eu-west-1",
+                            "description": "Ireland"
+                          },
+                          {
+                            "value": "eu-west-2",
+                            "description": "London"
+                          },
+                          {
+                            "value": "us-west-2",
+                            "description": "Oregon"
+                          },
+                          {
+                            "value": "ap-south-1",
+                            "description": "Mumbai"
+                          },
+                          {
+                            "value": "ap-southeast-1",
+                            "description": "Singapore"
+                          },
+                          {
+                            "value": "ap-southeast-2",
+                            "description": "Sydney"
+                          },
+                          {
+                            "value": "ap-northeast-1",
+                            "description": "Tokyo"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "rm",
+                "description": "remove a site",
+                "options": [
+                  {
+                    "long": "quiet",
+                    "description": "print less output",
+                    "inherit": false
+                  },
+                  {
+                    "short": "q",
+                    "description": "print less output",
+                    "inherit": false
+                  },
+                  {
+                    "long": "log",
+                    "description": "log level, \"error\", \"warning\", \"verbose\", \"info\" (default)",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": {
+                        "values": [
+                          {
+                            "value": "verbose"
+                          },
+                          {
+                            "value": "info"
+                          },
+                          {
+                            "value": "warn"
+                          },
+                          {
+                            "value": "error"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "long": "config",
+                    "description": "custom location for a Remotion config file",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "yes",
+                    "description": "skip confirmation",
+                    "inherit": false
+                  },
+                  {
+                    "long": "force",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "short": "y",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "short": "f",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "long": "region",
+                    "description": "the AWS region specifier",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": {
+                        "values": [
+                          {
+                            "value": "us-east-1",
+                            "description": "North Virginia"
+                          },
+                          {
+                            "value": "us-east-2",
+                            "description": "Ohio"
+                          },
+                          {
+                            "value": "eu-central-1",
+                            "description": "Frankfurt"
+                          },
+                          {
+                            "value": "eu-west-1",
+                            "description": "Ireland"
+                          },
+                          {
+                            "value": "eu-west-2",
+                            "description": "London"
+                          },
+                          {
+                            "value": "us-west-2",
+                            "description": "Oregon"
+                          },
+                          {
+                            "value": "ap-south-1",
+                            "description": "Mumbai"
+                          },
+                          {
+                            "value": "ap-southeast-1",
+                            "description": "Singapore"
+                          },
+                          {
+                            "value": "ap-southeast-2",
+                            "description": "Sydney"
+                          },
+                          {
+                            "value": "ap-northeast-1",
+                            "description": "Tokyo"
+                          }
+                        ]
+                      }
+                    }
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "site-name",
+                      "description": "ID of your site",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "create",
+                "description": "create or update a site",
+                "options": [
+                  {
+                    "long": "quiet",
+                    "description": "print less output",
+                    "inherit": false
+                  },
+                  {
+                    "short": "q",
+                    "description": "print less output",
+                    "inherit": false
+                  },
+                  {
+                    "long": "log",
+                    "description": "log level, \"error\", \"warning\", \"verbose\", \"info\" (default)",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": {
+                        "values": [
+                          {
+                            "value": "verbose"
+                          },
+                          {
+                            "value": "info"
+                          },
+                          {
+                            "value": "warn"
+                          },
+                          {
+                            "value": "error"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "long": "config",
+                    "description": "custom location for a Remotion config file",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "yes",
+                    "description": "skip confirmation",
+                    "inherit": false
+                  },
+                  {
+                    "long": "force",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "short": "y",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "short": "f",
+                    "description": "skip confirmation",
+                    "priority": -10,
+                    "inherit": false,
+                    "hidden": true
+                  },
+                  {
+                    "long": "region",
+                    "description": "the AWS region specifier",
+                    "inherit": false,
+                    "value": {
+                      "name": "value",
+                      "provider": {
+                        "values": [
+                          {
+                            "value": "us-east-1",
+                            "description": "North Virginia"
+                          },
+                          {
+                            "value": "us-east-2",
+                            "description": "Ohio"
+                          },
+                          {
+                            "value": "eu-central-1",
+                            "description": "Frankfurt"
+                          },
+                          {
+                            "value": "eu-west-1",
+                            "description": "Ireland"
+                          },
+                          {
+                            "value": "eu-west-2",
+                            "description": "London"
+                          },
+                          {
+                            "value": "us-west-2",
+                            "description": "Oregon"
+                          },
+                          {
+                            "value": "ap-south-1",
+                            "description": "Mumbai"
+                          },
+                          {
+                            "value": "ap-southeast-1",
+                            "description": "Singapore"
+                          },
+                          {
+                            "value": "ap-southeast-2",
+                            "description": "Sydney"
+                          },
+                          {
+                            "value": "ap-northeast-1",
+                            "description": "Tokyo"
+                          }
+                        ]
+                      }
+                    }
+                  },
+                  {
+                    "long": "site-name",
+                    "inherit": false,
+                    "value": {
+                      "name": "how-the-folder-in-s3-should-be-named."
+                    }
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "entry",
+                      "provider": "builtin.files",
+                      "index": 0
+                    }
+                  ]
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "bundle",
+        "description": "bundle a Remotion project",
+        "options": [
+          {
+            "long": "quiet",
+            "description": "print less output",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "description": "print less output",
+            "inherit": false
+          },
+          {
+            "long": "log",
+            "description": "log level, \"error\", \"warning\", \"verbose\", \"info\" (default)",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "verbose"
+                  },
+                  {
+                    "value": "info"
+                  },
+                  {
+                    "value": "warn"
+                  },
+                  {
+                    "value": "error"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "custom location for a Remotion config file",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "public-dir",
+            "description": "location of the public/ directory",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "out-dir",
+            "description": "define the location of the resulting bundle",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.directories"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "entry",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "render",
+        "description": "render a video based on the entry point, the composition ID and save it to the output location",
+        "options": [
+          {
+            "long": "disable-headless",
+            "description": "run Chrome in normal mode rather than headless",
+            "inherit": false
+          },
+          {
+            "long": "gl",
+            "description": "which OpenGL renderer to use",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  "angle",
+                  "egl",
+                  "swiftshader",
+                  "swangle",
+                  "vulkan"
+                ]
+              }
+            }
+          },
+          {
+            "long": "user-agent",
+            "description": "user agent to use for Chrome during rendering",
+            "inherit": false
+          },
+          {
+            "long": "ignore-certificate-errors",
+            "description": "ignore SSL errors",
+            "inherit": false
+          },
+          {
+            "long": "disable-web-security",
+            "description": "disable CORS and other web security features",
+            "inherit": false
+          },
+          {
+            "long": "timeout",
+            "description": "the time in milisecond that a delayRender() may take before it times out",
+            "inherit": false
+          },
+          {
+            "long": "quality",
+            "description": "quality for rendered frames, JPEG only, 0-100",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "0"
+                  },
+                  {
+                    "value": "10"
+                  },
+                  {
+                    "value": "20"
+                  },
+                  {
+                    "value": "30"
+                  },
+                  {
+                    "value": "40"
+                  },
+                  {
+                    "value": "50"
+                  },
+                  {
+                    "value": "60"
+                  },
+                  {
+                    "value": "70"
+                  },
+                  {
+                    "value": "80"
+                  },
+                  {
+                    "value": "90"
+                  },
+                  {
+                    "value": "100"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "scale",
+            "description": "upscale or downscale or the dimensions of the video",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "0.25"
+                  },
+                  {
+                    "value": "0.5"
+                  },
+                  {
+                    "value": "1"
+                  },
+                  {
+                    "value": "1.5"
+                  },
+                  {
+                    "value": "2"
+                  },
+                  {
+                    "value": "4"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "codec",
+            "description": "video or audio codec",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "h264"
+                  },
+                  {
+                    "value": "h265"
+                  },
+                  {
+                    "value": "gif"
+                  },
+                  {
+                    "value": "vp8"
+                  },
+                  {
+                    "value": "vp9"
+                  },
+                  {
+                    "value": "mp3"
+                  },
+                  {
+                    "value": "aac"
+                  },
+                  {
+                    "value": "wav"
+                  },
+                  {
+                    "value": "prores"
+                  },
+                  {
+                    "value": "h264-mkv"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "audio-codec",
+            "description": "codec to be used for the audio",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "aac"
+                  },
+                  {
+                    "value": "mp3"
+                  },
+                  {
+                    "value": "opus"
+                  },
+                  {
+                    "value": "pcm-16"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "every-nth-frame",
+            "description": "render only every nth frame (only for GIFs)",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "2"
+                  },
+                  {
+                    "value": "3"
+                  },
+                  {
+                    "value": "4"
+                  },
+                  {
+                    "value": "5"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "number-of-gif-loops",
+            "description": "how many times a GIF should loop. 0 = No loop",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "0"
+                  },
+                  {
+                    "value": "1"
+                  },
+                  {
+                    "value": "2"
+                  },
+                  {
+                    "value": "3"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "audio-bitrate",
+            "description": "customize the output audio bitrate",
+            "inherit": false
+          },
+          {
+            "long": "video-bitrate",
+            "description": "customize the output video bitrate. Mutually exclusive with --crf",
+            "inherit": false,
+            "excludes": [
+              "--crf"
+            ]
+          },
+          {
+            "long": "crf",
+            "description": "fFMPEG CRF value, controls quality, see docs for info",
+            "inherit": false,
+            "excludes": [
+              "--video-bitrate"
+            ]
+          },
+          {
+            "long": "frames",
+            "description": "render a portion or a still of a video, 0-9, 50",
+            "inherit": false,
+            "value": {
+              "name": "frames"
+            }
+          },
+          {
+            "long": "prores-profile",
+            "description": "proRes profile, need --codec=prores to be set",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  "4444-xq",
+                  "4444",
+                  "hq",
+                  "standard",
+                  "light",
+                  "proxy"
+                ]
+              }
+            }
+          },
+          {
+            "long": "x264-preset",
+            "description": "presets balance encoding speed and compression quality, with slower presets achieving better compression. Needs --codec=h264 to be set",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  "ultrafast",
+                  "superfast",
+                  "veryfast",
+                  "faster",
+                  "fast",
+                  "medium",
+                  "slow",
+                  "slower",
+                  "veryslow",
+                  "placebo"
+                ]
+              }
+            }
+          },
+          {
+            "long": "image-format",
+            "description": "format to render the frames in, \"jpeg\" or \"png\"",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "jpeg"
+                  },
+                  {
+                    "value": "png"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "pixel-format",
+            "description": "custom pixel format, see docs for available values",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "yuv420p"
+                  },
+                  {
+                    "value": "yuv422p"
+                  },
+                  {
+                    "value": "yuv444p"
+                  },
+                  {
+                    "value": "yuv420p10le"
+                  },
+                  {
+                    "value": "yuv422p10le"
+                  },
+                  {
+                    "value": "yuv444p10le"
+                  },
+                  {
+                    "value": "yuva420p"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "muted",
+            "description": "outputs no audio",
+            "inherit": false
+          },
+          {
+            "long": "height",
+            "description": "override the composition height",
+            "inherit": false,
+            "value": {
+              "name": "height"
+            }
+          },
+          {
+            "long": "width",
+            "description": "override the composition width",
+            "inherit": false,
+            "value": {
+              "name": "height"
+            }
+          },
+          {
+            "long": "sequence",
+            "description": "output as an image sequence",
+            "inherit": false
+          },
+          {
+            "long": "concurrency",
+            "description": "how many frames to render in parallel",
+            "inherit": false
+          },
+          {
+            "long": "enforce-audio-track",
+            "description": "include an audio track even if it's silent",
+            "inherit": false
+          },
+          {
+            "long": "repro",
+            "description": "collect information that you can submit to Remotion if asked for a reproduction",
+            "inherit": false
+          },
+          {
+            "long": "env-file",
+            "description": "specify a location for a dotenv file",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "overwrite",
+            "description": "overwrite if file exists, default true",
+            "inherit": false
+          },
+          {
+            "long": "browser-executable",
+            "description": "custom path for browser executable",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "enable-extensions",
+            "description": "enable Chrome browser extensions while rendering",
+            "inherit": false
+          },
+          {
+            "long": "ffmpeg-executable",
+            "description": "custom path for FFMPEG executable",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "ffprobe-executable",
+            "description": "custom path for FFProbe executable",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "bundle-cache",
+            "description": "cache webpack bundle, boolean, default true",
+            "inherit": false
+          },
+          {
+            "long": "port",
+            "description": "custom port to use for the HTTP server",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "public-dir",
+            "description": "location of the public/ directory",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "props",
+            "description": "pass input props as filename or as JSON",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "quiet",
+            "description": "print less output",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "description": "print less output",
+            "inherit": false
+          },
+          {
+            "long": "log",
+            "description": "log level, \"error\", \"warning\", \"verbose\", \"info\" (default)",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "verbose"
+                  },
+                  {
+                    "value": "info"
+                  },
+                  {
+                    "value": "warn"
+                  },
+                  {
+                    "value": "error"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "custom location for a Remotion config file",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "entry",
+              "provider": "builtin.files",
+              "index": 0
+            },
+            {
+              "name": "comp-id",
+              "description": "The composition ID",
+              "index": 1
+            },
+            {
+              "name": "output",
+              "provider": {
+                "values": [
+                  "out.mp4"
+                ]
+              },
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "still",
+        "description": "render a still frame based on the entry point, the composition ID and save it to the output location",
+        "options": [
+          {
+            "long": "frame",
+            "description": "which frame to render (default 0)",
+            "inherit": false,
+            "value": {
+              "name": "frame"
+            }
+          },
+          {
+            "long": "height",
+            "description": "override the composition height",
+            "inherit": false,
+            "value": {
+              "name": "height"
+            }
+          },
+          {
+            "long": "width",
+            "description": "override the composition width",
+            "inherit": false,
+            "value": {
+              "name": "height"
+            }
+          },
+          {
+            "long": "env-file",
+            "description": "specify a location for a dotenv file",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "overwrite",
+            "description": "overwrite if file exists, default true",
+            "inherit": false
+          },
+          {
+            "long": "browser-executable",
+            "description": "custom path for browser executable",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "enable-extensions",
+            "description": "enable Chrome browser extensions while rendering",
+            "inherit": false
+          },
+          {
+            "long": "ffmpeg-executable",
+            "description": "custom path for FFMPEG executable",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "ffprobe-executable",
+            "description": "custom path for FFProbe executable",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "bundle-cache",
+            "description": "cache webpack bundle, boolean, default true",
+            "inherit": false
+          },
+          {
+            "long": "port",
+            "description": "custom port to use for the HTTP server",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "public-dir",
+            "description": "location of the public/ directory",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "props",
+            "description": "pass input props as filename or as JSON",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "disable-headless",
+            "description": "run Chrome in normal mode rather than headless",
+            "inherit": false
+          },
+          {
+            "long": "gl",
+            "description": "which OpenGL renderer to use",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  "angle",
+                  "egl",
+                  "swiftshader",
+                  "swangle",
+                  "vulkan"
+                ]
+              }
+            }
+          },
+          {
+            "long": "user-agent",
+            "description": "user agent to use for Chrome during rendering",
+            "inherit": false
+          },
+          {
+            "long": "ignore-certificate-errors",
+            "description": "ignore SSL errors",
+            "inherit": false
+          },
+          {
+            "long": "disable-web-security",
+            "description": "disable CORS and other web security features",
+            "inherit": false
+          },
+          {
+            "long": "quiet",
+            "description": "print less output",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "description": "print less output",
+            "inherit": false
+          },
+          {
+            "long": "log",
+            "description": "log level, \"error\", \"warning\", \"verbose\", \"info\" (default)",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "verbose"
+                  },
+                  {
+                    "value": "info"
+                  },
+                  {
+                    "value": "warn"
+                  },
+                  {
+                    "value": "error"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "custom location for a Remotion config file",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "entry",
+              "provider": "builtin.files",
+              "index": 0
+            },
+            {
+              "name": "comp-id",
+              "description": "The composition ID",
+              "index": 1
+            },
+            {
+              "name": "output",
+              "provider": {
+                "values": [
+                  "out.png"
+                ]
+              },
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "preview",
+        "aliases": [
+          "studio"
+        ],
+        "description": "start the Remotion Studio",
+        "options": [
+          {
+            "long": "props",
+            "description": "pass input props as filename or as JSON",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "disable-keyboard-shortcuts",
+            "description": "disable all keyboard shortcuts",
+            "inherit": false
+          },
+          {
+            "long": "webpack-poll",
+            "description": "enable webpack polling instead of file system watchers",
+            "inherit": false,
+            "value": {
+              "name": "polling-interval",
+              "description": "Polling interval in milliseconds"
+            }
+          },
+          {
+            "long": "number-of-shared-audio-tags",
+            "description": "set the number of shared audio tags to prevent autoplay issues",
+            "inherit": false,
+            "value": {
+              "name": "numberofsharedaudiotags"
+            }
+          },
+          {
+            "long": "no-open",
+            "description": "prevent the browser from opening automatically when the server starts",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "entry",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "upgrade",
+        "description": "upgrade all Remotion-related dependencies to the newest version",
+        "options": [
+          {
+            "long": "package-manager",
+            "description": "force a specific package manager to be used",
+            "inherit": false,
+            "value": {
+              "name": "package-manager",
+              "provider": {
+                "values": [
+                  {
+                    "value": "npm"
+                  },
+                  {
+                    "value": "yarn"
+                  },
+                  {
+                    "value": "pnpm"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "version",
+            "description": "upgrade to a specific version",
+            "inherit": false,
+            "value": {
+              "name": "version"
+            }
+          }
+        ]
+      },
+      {
+        "name": "benchmark",
+        "description": "try different render configurations and compare them",
+        "options": [
+          {
+            "long": "disable-headless",
+            "description": "run Chrome in normal mode rather than headless",
+            "inherit": false
+          },
+          {
+            "long": "gl",
+            "description": "which OpenGL renderer to use",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  "angle",
+                  "egl",
+                  "swiftshader",
+                  "swangle",
+                  "vulkan"
+                ]
+              }
+            }
+          },
+          {
+            "long": "user-agent",
+            "description": "user agent to use for Chrome during rendering",
+            "inherit": false
+          },
+          {
+            "long": "ignore-certificate-errors",
+            "description": "ignore SSL errors",
+            "inherit": false
+          },
+          {
+            "long": "disable-web-security",
+            "description": "disable CORS and other web security features",
+            "inherit": false
+          },
+          {
+            "long": "timeout",
+            "description": "the time in milisecond that a delayRender() may take before it times out",
+            "inherit": false
+          },
+          {
+            "long": "quality",
+            "description": "quality for rendered frames, JPEG only, 0-100",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "0"
+                  },
+                  {
+                    "value": "10"
+                  },
+                  {
+                    "value": "20"
+                  },
+                  {
+                    "value": "30"
+                  },
+                  {
+                    "value": "40"
+                  },
+                  {
+                    "value": "50"
+                  },
+                  {
+                    "value": "60"
+                  },
+                  {
+                    "value": "70"
+                  },
+                  {
+                    "value": "80"
+                  },
+                  {
+                    "value": "90"
+                  },
+                  {
+                    "value": "100"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "scale",
+            "description": "upscale or downscale or the dimensions of the video",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "0.25"
+                  },
+                  {
+                    "value": "0.5"
+                  },
+                  {
+                    "value": "1"
+                  },
+                  {
+                    "value": "1.5"
+                  },
+                  {
+                    "value": "2"
+                  },
+                  {
+                    "value": "4"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "codec",
+            "description": "video or audio codec",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "h264"
+                  },
+                  {
+                    "value": "h265"
+                  },
+                  {
+                    "value": "gif"
+                  },
+                  {
+                    "value": "vp8"
+                  },
+                  {
+                    "value": "vp9"
+                  },
+                  {
+                    "value": "mp3"
+                  },
+                  {
+                    "value": "aac"
+                  },
+                  {
+                    "value": "wav"
+                  },
+                  {
+                    "value": "prores"
+                  },
+                  {
+                    "value": "h264-mkv"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "audio-codec",
+            "description": "codec to be used for the audio",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "aac"
+                  },
+                  {
+                    "value": "mp3"
+                  },
+                  {
+                    "value": "opus"
+                  },
+                  {
+                    "value": "pcm-16"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "every-nth-frame",
+            "description": "render only every nth frame (only for GIFs)",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "2"
+                  },
+                  {
+                    "value": "3"
+                  },
+                  {
+                    "value": "4"
+                  },
+                  {
+                    "value": "5"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "number-of-gif-loops",
+            "description": "how many times a GIF should loop. 0 = No loop",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "0"
+                  },
+                  {
+                    "value": "1"
+                  },
+                  {
+                    "value": "2"
+                  },
+                  {
+                    "value": "3"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "audio-bitrate",
+            "description": "customize the output audio bitrate",
+            "inherit": false
+          },
+          {
+            "long": "video-bitrate",
+            "description": "customize the output video bitrate. Mutually exclusive with --crf",
+            "inherit": false,
+            "excludes": [
+              "--crf"
+            ]
+          },
+          {
+            "long": "crf",
+            "description": "fFMPEG CRF value, controls quality, see docs for info",
+            "inherit": false,
+            "excludes": [
+              "--video-bitrate"
+            ]
+          },
+          {
+            "long": "frames",
+            "description": "render a portion or a still of a video, 0-9, 50",
+            "inherit": false,
+            "value": {
+              "name": "frames"
+            }
+          },
+          {
+            "long": "prores-profile",
+            "description": "proRes profile, need --codec=prores to be set",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  "4444-xq",
+                  "4444",
+                  "hq",
+                  "standard",
+                  "light",
+                  "proxy"
+                ]
+              }
+            }
+          },
+          {
+            "long": "x264-preset",
+            "description": "presets balance encoding speed and compression quality, with slower presets achieving better compression. Needs --codec=h264 to be set",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  "ultrafast",
+                  "superfast",
+                  "veryfast",
+                  "faster",
+                  "fast",
+                  "medium",
+                  "slow",
+                  "slower",
+                  "veryslow",
+                  "placebo"
+                ]
+              }
+            }
+          },
+          {
+            "long": "image-format",
+            "description": "format to render the frames in, \"jpeg\" or \"png\"",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "jpeg"
+                  },
+                  {
+                    "value": "png"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "pixel-format",
+            "description": "custom pixel format, see docs for available values",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "yuv420p"
+                  },
+                  {
+                    "value": "yuv422p"
+                  },
+                  {
+                    "value": "yuv444p"
+                  },
+                  {
+                    "value": "yuv420p10le"
+                  },
+                  {
+                    "value": "yuv422p10le"
+                  },
+                  {
+                    "value": "yuv444p10le"
+                  },
+                  {
+                    "value": "yuva420p"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "muted",
+            "description": "outputs no audio",
+            "inherit": false
+          },
+          {
+            "long": "height",
+            "description": "override the composition height",
+            "inherit": false,
+            "value": {
+              "name": "height"
+            }
+          },
+          {
+            "long": "width",
+            "description": "override the composition width",
+            "inherit": false,
+            "value": {
+              "name": "height"
+            }
+          },
+          {
+            "long": "sequence",
+            "description": "output as an image sequence",
+            "inherit": false
+          },
+          {
+            "long": "enforce-audio-track",
+            "description": "include an audio track even if it's silent",
+            "inherit": false
+          },
+          {
+            "long": "repro",
+            "description": "collect information that you can submit to Remotion if asked for a reproduction",
+            "inherit": false
+          },
+          {
+            "long": "env-file",
+            "description": "specify a location for a dotenv file",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "browser-executable",
+            "description": "custom path for browser executable",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "enable-extensions",
+            "description": "enable Chrome browser extensions while rendering",
+            "inherit": false
+          },
+          {
+            "long": "ffmpeg-executable",
+            "description": "custom path for FFMPEG executable",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "ffprobe-executable",
+            "description": "custom path for FFProbe executable",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "bundle-cache",
+            "description": "cache webpack bundle, boolean, default true",
+            "inherit": false
+          },
+          {
+            "long": "port",
+            "description": "custom port to use for the HTTP server",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "public-dir",
+            "description": "location of the public/ directory",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "props",
+            "description": "pass input props as filename or as JSON",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "quiet",
+            "description": "print less output",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "description": "print less output",
+            "inherit": false
+          },
+          {
+            "long": "log",
+            "description": "log level, \"error\", \"warning\", \"verbose\", \"info\" (default)",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "verbose"
+                  },
+                  {
+                    "value": "info"
+                  },
+                  {
+                    "value": "warn"
+                  },
+                  {
+                    "value": "error"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "description": "custom location for a Remotion config file",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "concurrencies",
+            "description": "comma-separated list of concurrency values to include in benchmark",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "ensure Remotion dependencies",
+        "arguments": {
+          "states": [
+            {
+              "name": "dependency",
+              "provider": {
+                "values": [
+                  {
+                    "value": "ffmpeg"
+                  },
+                  {
+                    "value": "ffprobe"
+                  }
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
