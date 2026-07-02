@@ -1,0 +1,193 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ruby",
+    "description": "run Ruby scripts",
+    "options": [
+      {
+        "long": "copyright",
+        "description": "prints the copyright notice",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "prints the version of Ruby interpreter",
+        "inherit": false
+      },
+      {
+        "short": "0",
+        "description": "specifies the input record separator ($/) as an octal number",
+        "inherit": false,
+        "value": {
+          "name": "octal"
+        }
+      },
+      {
+        "short": "C",
+        "description": "causes Ruby to switch to the directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "F",
+        "description": "specifies input field separator ($;)",
+        "inherit": false,
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "short": "I",
+        "description": "used to tell Ruby where to load the library scripts. Directory path will be added to the load-path variable ($:)",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "K",
+        "description": "specifies KANJI (Japanese) encoding",
+        "inherit": false,
+        "value": {
+          "name": "kcode"
+        }
+      },
+      {
+        "short": "S",
+        "description": "makes Ruby use the PATH environment variable to search for script, unless its name begins with a slash. This is used to emulate #! on machines that don't suppor",
+        "inherit": false
+      },
+      {
+        "short": "T",
+        "description": "turns on taint checks at the specified level (default 1)",
+        "inherit": false,
+        "value": {
+          "name": "level"
+        }
+      },
+      {
+        "short": "a",
+        "description": "turns on auto-split mode when used with -n or -p",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "description": "causes Ruby to check the syntax of the script and exit without executing. If there are no syntax errors, Ruby will print \u201cSyntax OK\u201d to the standard output",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "long": "debug",
+        "description": "turns on debug mode. $DEBUG will be set to true",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "description": "specifies script from command-line while telling Ruby not to search the rest of arguments for a script file name",
+        "inherit": false,
+        "value": {
+          "name": "command"
+        }
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "prints a summary of the options",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "description": "specifies in-place-edit mode. The extension, if specified, is added to old file name to make a backup copy",
+        "inherit": false,
+        "value": {
+          "name": "extension",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "short": "l",
+        "description": "enables automatic line-ending processing, which means to firstly set $\\ to the value of $/, and secondly chops every line read using chop!",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "description": "causes Ruby to assume the following loop around your script",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "inherit": false,
+        "description": "print $_ at the end of each loop, like -n with output"
+      },
+      {
+        "short": "r",
+        "description": "causes Ruby to load the library using require",
+        "inherit": false,
+        "value": {
+          "name": "library"
+        }
+      },
+      {
+        "short": "s",
+        "description": "enables some switch parsing for switches after script name but before any file name arguments (or before a --)",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "enables verbose mode",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "description": "enables verbose mode without printing version message at the beginning. It sets the $VERBOSE variable to true",
+        "inherit": false
+      },
+      {
+        "short": "x",
+        "description": "tells Ruby that the script is embedded in a message. Leading garbage will be discarded until the first that starts with \u201c#!\u201d and contains the string, \u201cruby\u201d. An",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "y",
+        "long": "yydebug",
+        "description": "turns on compiler debug mode. Ruby will print a bunch of internal state messages during compiling scripts. You don't have to specify this switch, unless you are",
+        "inherit": false
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    },
+    "arguments": {
+      "states": [
+        {
+          "name": "script",
+          "description": "Ruby script",
+          "provider": "builtin.files",
+          "index": 0
+        },
+        {
+          "name": "args",
+          "description": "script arguments",
+          "index": 1,
+          "repeatable": true
+        }
+      ]
+    }
+  }
+}
