@@ -1,0 +1,119 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "start-storybook",
+    "description": "start Storybook development server",
+    "options": [
+      {
+        "short": "p",
+        "long": "port",
+        "description": "port to run Storybook",
+        "inherit": false,
+        "value": {
+          "name": "port"
+        }
+      },
+      {
+        "short": "h",
+        "long": "host",
+        "description": "host to run Storybook",
+        "inherit": false,
+        "value": {
+          "name": "host"
+        }
+      },
+      {
+        "long": "help",
+        "description": "show help"
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "show version"
+      },
+      {
+        "short": "s",
+        "long": "static-dir",
+        "description": "set static files directory",
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "c",
+        "long": "config-dir",
+        "description": "set config directory",
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "https",
+        "description": "serve over HTTPS"
+      },
+      {
+        "long": "ssl-ca",
+        "description": "set SSL certificate authority",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "ssl-cert",
+        "description": "set SSL certificate",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "ssl-key",
+        "description": "set SSL key",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "smoke-test",
+        "description": "exit after successful start"
+      },
+      {
+        "long": "ci",
+        "description": "run in CI mode"
+      },
+      {
+        "long": "quiet",
+        "description": "suppress verbose output"
+      },
+      {
+        "long": "no-dll",
+        "description": "disable dll reference"
+      },
+      {
+        "long": "debug-webpack",
+        "description": "show webpack config"
+      },
+      {
+        "long": "webpack-stats-json",
+        "description": "write webpack stats JSON",
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "docs",
+        "description": "start in documentation mode"
+      },
+      {
+        "long": "no-manager-cache",
+        "description": "disable manager cache"
+      }
+    ]
+  }
+}
