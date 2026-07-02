@@ -1,0 +1,21 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "nu",
+    "description": "upgrade packages with the detected package manager",
+    "options": [
+      {
+        "short": "i",
+        "description": "show outdated packages before upgrading",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ]
+  }
+}
