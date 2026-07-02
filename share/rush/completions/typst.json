@@ -1,0 +1,427 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "typst",
+    "description": "typst compiler",
+    "options": [
+      {
+        "long": "cert",
+        "description": "path to a custom CA certificate to use when making network requests",
+        "inherit": false,
+        "value": {
+          "name": "cert",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "v",
+        "long": "verbosity",
+        "description": "sets the level of logging verbosity: -v = warning & error, -vv = info, -vvv = debug, -vvvv = trace",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "print help",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "print version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "compile",
+        "aliases": [
+          "c"
+        ],
+        "description": "compiles an input file into a supported output format",
+        "options": [
+          {
+            "long": "root",
+            "description": "configures the project root (for absolute paths)",
+            "inherit": false,
+            "value": {
+              "name": "root",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "font-path",
+            "description": "adds additional directories to search for fonts",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "font_paths",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "diagnostic-format",
+            "description": "the format to emit diagnostics in",
+            "inherit": false,
+            "value": {
+              "name": "diagnostic_format",
+              "provider": "typst.diagnostic-formats"
+            }
+          },
+          {
+            "short": "f",
+            "long": "format",
+            "description": "the format of the output file, inferred from the extension by default",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": "typst.output-formats"
+            }
+          },
+          {
+            "long": "open",
+            "description": "opens the output file using the default viewer after compilation",
+            "inherit": false,
+            "value": {
+              "name": "open",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "ppi",
+            "description": "the PPI (pixels per inch) to use for PNG export",
+            "inherit": false,
+            "value": {
+              "name": "ppi"
+            }
+          },
+          {
+            "long": "flamegraph",
+            "description": "produces a flamegraph of the compilation process",
+            "inherit": false,
+            "value": {
+              "name": "flamegraph",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "input",
+              "description": "path to input Typst file",
+              "index": 0,
+              "provider": "builtin.files"
+            },
+            {
+              "name": "output",
+              "description": "path to output file (PDF, PNG, or SVG)",
+              "provider": "builtin.files",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "watch",
+        "aliases": [
+          "w"
+        ],
+        "description": "watches an input file and recompiles on changes",
+        "options": [
+          {
+            "long": "root",
+            "description": "configures the project root (for absolute paths)",
+            "inherit": false,
+            "value": {
+              "name": "root",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "font-path",
+            "description": "adds additional directories to search for fonts",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "font_paths",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "diagnostic-format",
+            "description": "the format to emit diagnostics in",
+            "inherit": false,
+            "value": {
+              "name": "diagnostic_format",
+              "provider": "typst.diagnostic-formats"
+            }
+          },
+          {
+            "short": "f",
+            "long": "format",
+            "description": "the format of the output file, inferred from the extension by default",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": "typst.output-formats"
+            }
+          },
+          {
+            "long": "open",
+            "description": "opens the output file using the default viewer after compilation",
+            "inherit": false,
+            "value": {
+              "name": "open",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "ppi",
+            "description": "the PPI (pixels per inch) to use for PNG export",
+            "inherit": false,
+            "value": {
+              "name": "ppi"
+            }
+          },
+          {
+            "long": "flamegraph",
+            "description": "produces a flamegraph of the compilation process",
+            "inherit": false,
+            "value": {
+              "name": "flamegraph",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "input",
+              "description": "path to input Typst file",
+              "index": 0,
+              "provider": "builtin.files"
+            },
+            {
+              "name": "output",
+              "description": "path to output file (PDF, PNG, or SVG)",
+              "provider": "builtin.files",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "query",
+        "description": "processes an input file to extract provided metadata",
+        "options": [
+          {
+            "long": "root",
+            "description": "configures the project root (for absolute paths)",
+            "inherit": false,
+            "value": {
+              "name": "root",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "font-path",
+            "description": "adds additional directories to search for fonts",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "font_paths",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "diagnostic-format",
+            "description": "the format to emit diagnostics in",
+            "inherit": false,
+            "value": {
+              "name": "diagnostic_format",
+              "provider": "typst.diagnostic-formats"
+            }
+          },
+          {
+            "long": "field",
+            "description": "extracts just one field from all retrieved elements",
+            "inherit": false,
+            "value": {
+              "name": "field"
+            }
+          },
+          {
+            "long": "format",
+            "description": "the format to serialize in",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": "typst.query-formats"
+            }
+          },
+          {
+            "long": "one",
+            "description": "expects and retrieves exactly one element",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "input",
+              "description": "path to input Typst file",
+              "index": 0,
+              "provider": "builtin.files"
+            },
+            {
+              "name": "selector",
+              "description": "defines which elements to retrieve",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "fonts",
+        "description": "lists all discovered fonts in system and custom font paths",
+        "options": [
+          {
+            "long": "font-path",
+            "description": "adds additional directories to search for fonts",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "font_paths",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "variants",
+            "description": "also lists style variants of each font family",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "update",
+        "description": "self update the Typst CLI (disabled)",
+        "options": [
+          {
+            "long": "force",
+            "description": "forces a downgrade to an older version (required for downgrading)",
+            "inherit": false
+          },
+          {
+            "long": "revert",
+            "description": "reverts to the version from before the last update (only possible if `typst update` has previously ran)",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "which version to update to (defaults to latest)",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "print this message or the help of the given subcommand(s)",
+        "subcommands": [
+          {
+            "name": "compile",
+            "description": "compiles an input file into a supported output format"
+          },
+          {
+            "name": "watch",
+            "description": "watches an input file and recompiles on changes"
+          },
+          {
+            "name": "query",
+            "description": "processes an input file to extract provided metadata"
+          },
+          {
+            "name": "fonts",
+            "description": "lists all discovered fonts in system and custom font paths"
+          },
+          {
+            "name": "update",
+            "description": "self update the Typst CLI (disabled)"
+          },
+          {
+            "name": "help",
+            "description": "print this message or the help of the given subcommand(s)"
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "typst.diagnostic-formats": {
+        "values": [
+          "human",
+          "short"
+        ]
+      },
+      "typst.output-formats": {
+        "values": [
+          "pdf",
+          "png",
+          "svg"
+        ]
+      },
+      "typst.query-formats": {
+        "values": [
+          "json",
+          "yaml"
+        ]
+      }
+    }
+  }
+}
