@@ -1,0 +1,294 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "lsd",
+    "description": "list directories with colors and icons",
+    "options": [
+      {
+        "short": "1",
+        "long": "oneline",
+        "description": "display one entry per line",
+        "inherit": false
+      },
+      {
+        "short": "A",
+        "long": "almost-all",
+        "description": "do not list implied . and",
+        "inherit": false
+      },
+      {
+        "short": "a",
+        "long": "all",
+        "description": "do not ignore entries starting with",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "long": "directory-only",
+        "description": "display directories themselves, and not their contents (recursively when used with --tree)",
+        "inherit": false
+      },
+      {
+        "short": "F",
+        "long": "classify",
+        "description": "append indicator (one of */=>@|) at the end of the file names",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "human-readable",
+        "description": "for ls compatibility purposes ONLY, currently set by default",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "long": "inode",
+        "description": "display the index number of each file",
+        "inherit": false
+      },
+      {
+        "short": "L",
+        "long": "dereference",
+        "description": "when showing file information for a symbolic link, show information for the file the link references rather than for the link itself",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "long": "long",
+        "description": "display the extended file metadata as a table",
+        "inherit": false
+      },
+      {
+        "short": "R",
+        "long": "recursive",
+        "description": "recurse into directories",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "long": "reverse",
+        "description": "reverse the order of the sort",
+        "inherit": false
+      },
+      {
+        "short": "S",
+        "long": "sizesort",
+        "description": "sort by size",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "long": "timesort",
+        "description": "sort by time modified",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "versionsort",
+        "description": "natural sort of (version) numbers within text",
+        "inherit": false
+      },
+      {
+        "long": "classic",
+        "description": "enable classic mode (no colors or icons)",
+        "inherit": false
+      },
+      {
+        "short": "X",
+        "long": "extensionsort",
+        "description": "sort by file extension",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "description": "prints help information",
+        "inherit": false
+      },
+      {
+        "long": "ignore-config",
+        "description": "ignore the configuration file",
+        "inherit": false
+      },
+      {
+        "long": "no-symlink",
+        "description": "do not display symlink target",
+        "inherit": false
+      },
+      {
+        "long": "total-size",
+        "description": "display the total size of directories",
+        "inherit": false
+      },
+      {
+        "long": "tree",
+        "description": "recurse into directories and present the result as a tree",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "prints version information",
+        "inherit": false
+      },
+      {
+        "long": "blocks",
+        "description": "specify the blocks that will be displayed and in what order",
+        "inherit": false,
+        "value": {
+          "name": "blocks",
+          "provider": {
+            "values": [
+              "permission",
+              "user",
+              "group",
+              "size",
+              "date",
+              "name",
+              "inode",
+              "links"
+            ]
+          }
+        }
+      },
+      {
+        "long": "color",
+        "description": "when to use terminal colours",
+        "inherit": false,
+        "value": {
+          "name": "color",
+          "provider": {
+            "values": [
+              "always",
+              "auto",
+              "never"
+            ]
+          }
+        }
+      },
+      {
+        "long": "date",
+        "description": "how to display date",
+        "inherit": false,
+        "value": {
+          "name": "date",
+          "provider": {
+            "values": [
+              "date",
+              "relative",
+              "+date-time-format"
+            ]
+          }
+        }
+      },
+      {
+        "long": "depth",
+        "description": "stop recursing into directories after reaching depth",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "long": "group-dirs",
+        "description": "sort the directories then the files",
+        "inherit": false,
+        "value": {
+          "name": "group-dirs",
+          "provider": {
+            "values": [
+              "none",
+              "first",
+              "last"
+            ]
+          }
+        }
+      },
+      {
+        "long": "icon",
+        "description": "when to print the icons",
+        "inherit": false,
+        "value": {
+          "name": "icon",
+          "provider": {
+            "values": [
+              "always",
+              "auto",
+              "never"
+            ]
+          }
+        }
+      },
+      {
+        "long": "icon-theme",
+        "description": "whether to use fancy or unicode icons",
+        "inherit": false,
+        "value": {
+          "name": "icon-theme",
+          "provider": {
+            "values": [
+              "fancy",
+              "unicode"
+            ]
+          }
+        }
+      },
+      {
+        "long": "ignore-glob",
+        "description": "do not display files/directories with names matching the glob pattern(s). More than one can be specified by repeating the argument",
+        "inherit": false,
+        "value": {
+          "name": "pattern",
+          "repeatable": true
+        }
+      },
+      {
+        "long": "size",
+        "description": "how to display size",
+        "inherit": false,
+        "value": {
+          "name": "size",
+          "provider": {
+            "values": [
+              "default",
+              "short",
+              "bytes"
+            ]
+          }
+        }
+      },
+      {
+        "long": "sort",
+        "description": "sort by WORD instead of name",
+        "inherit": false,
+        "value": {
+          "name": "WORD",
+          "provider": {
+            "values": [
+              "size",
+              "time",
+              "version",
+              "extension"
+            ]
+          }
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "directory",
+          "provider": "builtin.directories",
+          "index": 0,
+          "repeatable": true,
+          "description": "directory to list"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
