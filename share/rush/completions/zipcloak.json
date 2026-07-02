@@ -1,0 +1,78 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "zipcloak",
+    "description": "encrypt entries in a zip archive",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show a short help for zipcloak"
+      },
+      {
+        "long": "decrypt",
+        "short": "d",
+        "description": "decrypt encrypted entries (copy if given wrong password)",
+        "value": {
+          "name": "zipfile",
+          "description": "Zipped file to decrypt entries of",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "license",
+        "short": "L",
+        "description": "show software license"
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "show version information"
+      },
+      {
+        "long": "quiet",
+        "short": "q",
+        "description": "quiet operation. Suppresses some informational messages"
+      },
+      {
+        "long": "output-file",
+        "short": "O",
+        "description": "write output to new archive zipfile, leaving original archive as is",
+        "value": {
+          "name": "zipfile",
+          "description": "New zipfile that will be written to",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "temp-path",
+        "short": "b",
+        "description": "use the directory given by path for the temporary zip file",
+        "value": {
+          "name": "directory",
+          "description": "Directory for the temporary zip file",
+          "provider": "builtin.directories"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "zipfile",
+          "description": "Zipped file to encrypt entries into",
+          "provider": "builtin.files",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
