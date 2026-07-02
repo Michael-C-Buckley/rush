@@ -31,10 +31,13 @@ const semantic_input_cancel = "\x1b]133;D;err=CANCEL\x07";
 const completion_progress_start = "\x1b]9;4;3\x07";
 const completion_progress_stop = "\x1b]9;4;0\x07";
 const completion_progress_delay_ms = 500;
+const clear_screen_cursor_query_timeout_ms = 200;
+const stale_cursor_query_timeout_ms = 1000;
 
 pub const TerminalEvent = terminal.Event;
 pub const ColorScheme = terminal.ColorScheme;
 pub const ColorReport = terminal.ColorReport;
+pub const CursorPosition = terminal.CursorPosition;
 pub const Capability = terminal.Capability;
 pub const TerminalCapabilities = terminal.Capabilities;
 pub const TerminalParser = terminal.Parser;
@@ -429,6 +432,8 @@ pub const TerminalSession = struct {
         var next_completion_flash_clear_ms: ?u64 = null;
         var next_hook_interval_ms = try nextHookIntervalDeadlineMs(read_options, self.io);
         var completion_async_event_active = self.completion.active != null;
+        var pending_clear_screen_deadline_ms: ?u64 = null;
+        var stale_cursor_query_deadline_ms: ?u64 = null;
         read_loop: while (true) {
             while (session.state == .editing or session.state == .history_search) {
                 var render_needed = false;
@@ -441,9 +446,25 @@ pub const TerminalSession = struct {
                     self.completion.debounceWaitMs(wait_now_ms),
                     next_completion_flash_clear_ms,
                     self.completion.progressWaitMs(wait_now_ms),
+                    pending_clear_screen_deadline_ms,
+                    stale_cursor_query_deadline_ms,
                 ));
+                if (stale_cursor_query_deadline_ms != null and
+                    promptRefreshWaitMs(self.io, stale_cursor_query_deadline_ms) == 0)
+                {
+                    self.terminal_parser.cancelCursorPositionReport();
+                    stale_cursor_query_deadline_ms = null;
+                }
                 if (ready.len == 0 and self.completion.progressWaitMs(nowMs(self.io)) == 0) {
                     try self.startCompletionProgress();
+                }
+                if (pending_clear_screen_deadline_ms != null and
+                    promptRefreshWaitMs(self.io, pending_clear_screen_deadline_ms) == 0)
+                {
+                    pending_clear_screen_deadline_ms = null;
+                    stale_cursor_query_deadline_ms = nowMs(self.io) + stale_cursor_query_timeout_ms;
+                    try self.writeClearScreen(null);
+                    render_needed = true;
                 }
                 if (ready.len == 0 and
                     next_hook_interval_ms != null and
@@ -591,6 +612,16 @@ pub const TerminalSession = struct {
                             render_needed = true;
                             session.invalidatePrompt();
                         },
+                        .cursor_position => |position| {
+                            if (pending_clear_screen_deadline_ms != null) {
+                                pending_clear_screen_deadline_ms = null;
+                                stale_cursor_query_deadline_ms = null;
+                                try self.writeClearScreen(position);
+                                render_needed = true;
+                            } else {
+                                stale_cursor_query_deadline_ms = null;
+                            }
+                        },
                         .key_release, .focus_in, .focus_out => {},
                     }
                 }
@@ -619,8 +650,13 @@ pub const TerminalSession = struct {
                             });
                         }
                         if (session.takeClearScreenRequest()) {
-                            self.renderer.reset(self.allocator);
-                            try writeTtyAll(&self.tty, "\x1b[H\x1b[2J");
+                            if (pending_clear_screen_deadline_ms == null) {
+                                self.terminal_parser.expectCursorPositionReport();
+                                try writeTtyAll(&self.tty, vaxis.ctlseqs.cursor_position_request);
+                                pending_clear_screen_deadline_ms =
+                                    nowMs(self.io) + clear_screen_cursor_query_timeout_ms;
+                            }
+                            continue;
                         }
                         const rendered_completion_flash = session.hasCompletionFlash();
                         try renderSession(
@@ -964,6 +1000,13 @@ pub const TerminalSession = struct {
 
     fn clearRenderedRowsAfterFirst(self: *TerminalSession) !void {
         const clear = try self.renderer.clearRowsAfterFirst(self.allocator);
+        defer self.allocator.free(clear);
+        try writeTtyAll(&self.tty, clear);
+    }
+
+    fn writeClearScreen(self: *TerminalSession, cursor_position: ?CursorPosition) !void {
+        self.renderer.reset(self.allocator);
+        const clear = try clearScreenSequence(self.allocator, cursor_position);
         defer self.allocator.free(clear);
         try writeTtyAll(&self.tty, clear);
     }
@@ -1392,6 +1435,13 @@ fn sameWinsize(a: vaxis.Winsize, b: vaxis.Winsize) bool {
         a.y_pixel == b.y_pixel;
 }
 
+fn clearScreenSequence(allocator: std.mem.Allocator, cursor_position: ?CursorPosition) ![]const u8 {
+    const position = cursor_position orelse return allocator.dupe(u8, "\x1b[H\x1b[2J");
+    const lines_above_prompt = position.row -| 1;
+    if (lines_above_prompt == 0) return allocator.dupe(u8, "\x1b[H\x1b[2J");
+    return std.fmt.allocPrint(allocator, "\x1b[{d}S\x1b[H\x1b[2J", .{lines_above_prompt});
+}
+
 fn promptRefreshWaitMs(io: std.Io, next_prompt_refresh_ms: ?u64) ?u64 {
     const next = next_prompt_refresh_ms orelse return null;
     const now = nowMs(io);
@@ -1399,13 +1449,15 @@ fn promptRefreshWaitMs(io: std.Io, next_prompt_refresh_ms: ?u64) ?u64 {
     return next - now;
 }
 
-fn nextWaitMs(io: std.Io, a: ?u64, b: ?u64, c: ?u64, d: ?u64, e: ?u64) ?u64 {
+fn nextWaitMs(io: std.Io, a: ?u64, b: ?u64, c: ?u64, d: ?u64, e: ?u64, f: ?u64, g: ?u64) ?u64 {
     var wait_ms: ?u64 = null;
     if (promptRefreshWaitMs(io, a)) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
     if (promptRefreshWaitMs(io, b)) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
     if (c) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
     if (promptRefreshWaitMs(io, d)) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
     if (e) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
+    if (promptRefreshWaitMs(io, f)) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
+    if (promptRefreshWaitMs(io, g)) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
     return wait_ms;
 }
 
@@ -1598,6 +1650,30 @@ test "raw terminal transitions preserve queued pty input" {
     var buffer: [64]u8 = undefined;
     const read_len = try rawRead(slave, &buffer);
     try std.testing.expectEqualStrings(queued, buffer[0..read_len]);
+}
+
+test "clear screen sequence pushes visible rows into scrollback before erase" {
+    const clear = try clearScreenSequence(
+        std.testing.allocator,
+        .{ .row = 10, .col = 1 },
+    );
+    defer std.testing.allocator.free(clear);
+    try std.testing.expectEqualStrings("\x1b[9S\x1b[H\x1b[2J", clear);
+}
+
+test "clear screen sequence uses erase only when the cursor is already on the first row" {
+    const clear = try clearScreenSequence(
+        std.testing.allocator,
+        .{ .row = 1, .col = 1 },
+    );
+    defer std.testing.allocator.free(clear);
+    try std.testing.expectEqualStrings("\x1b[H\x1b[2J", clear);
+}
+
+test "clear screen sequence falls back to erase without cursor position" {
+    const clear = try clearScreenSequence(std.testing.allocator, null);
+    defer std.testing.allocator.free(clear);
+    try std.testing.expectEqualStrings("\x1b[H\x1b[2J", clear);
 }
 
 test "completion refresh key classification tracks editing keys" {

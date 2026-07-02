@@ -22,7 +22,13 @@ pub const Event = union(enum) {
     capability: Capability,
     color_scheme: ColorScheme,
     color_report: ColorReport,
+    cursor_position: CursorPosition,
     prompt_redraw,
+};
+
+pub const CursorPosition = struct {
+    row: u16,
+    col: u16,
 };
 
 pub const ColorScheme = enum { dark, light, unknown };
@@ -204,6 +210,7 @@ pub const Parser = struct {
     pending: std.ArrayList(u8) = .empty,
     event_text_arena: std.heap.ArenaAllocator,
     saw_invalid_utf8: bool = false,
+    expect_cursor_position_report: bool = false,
 
     pub fn init(allocator: std.mem.Allocator) Parser {
         return .{ .allocator = allocator, .event_text_arena = std.heap.ArenaAllocator.init(allocator) };
@@ -219,14 +226,37 @@ pub const Parser = struct {
         _ = self.event_text_arena.reset(.retain_capacity);
     }
 
+    pub fn expectCursorPositionReport(self: *Parser) void {
+        self.expect_cursor_position_report = true;
+    }
+
+    pub fn cancelCursorPositionReport(self: *Parser) void {
+        self.expect_cursor_position_report = false;
+    }
+
     pub fn feed(self: *Parser, bytes: []const u8, events: *std.ArrayList(Event)) !void {
-        if (self.pending.items.len == 0 and std.mem.eql(u8, bytes, "\x1b")) {
+        if (!self.expect_cursor_position_report and
+            self.pending.items.len == 0 and
+            std.mem.eql(u8, bytes, "\x1b"))
+        {
             try events.append(self.allocator, .{ .key_press = .{ .key = .escape } });
             return;
         }
 
         try self.pending.appendSlice(self.allocator, bytes);
         while (self.pending.items.len != 0) {
+            if (self.expect_cursor_position_report) {
+                switch (parseCursorPositionReport(self.pending.items)) {
+                    .complete => |report| {
+                        self.expect_cursor_position_report = false;
+                        try events.append(self.allocator, .{ .cursor_position = report.position });
+                        self.pending.replaceRange(self.allocator, 0, report.len, "") catch unreachable;
+                        continue;
+                    },
+                    .incomplete => break,
+                    .not_cursor_position => {},
+                }
+            }
             if (incompleteUtf8Prefix(self.pending.items)) break;
             const result = self.parser.parse(self.pending.items, null) catch |err| switch (err) {
                 error.InvalidUTF8 => {
@@ -311,6 +341,46 @@ pub const Parser = struct {
     }
 };
 
+const CursorPositionReport = union(enum) {
+    not_cursor_position,
+    incomplete,
+    complete: struct {
+        position: CursorPosition,
+        len: usize,
+    },
+};
+
+fn parseCursorPositionReport(bytes: []const u8) CursorPositionReport {
+    if (bytes.len == 0) return .incomplete;
+    if (bytes[0] != 0x1b) return .not_cursor_position;
+    if (bytes.len == 1) return .incomplete;
+    if (bytes[1] != '[') return .not_cursor_position;
+
+    var index: usize = 2;
+    if (index == bytes.len) return .incomplete;
+    if (!std.ascii.isDigit(bytes[index])) return .not_cursor_position;
+    const row_start = index;
+    while (index < bytes.len and std.ascii.isDigit(bytes[index])) index += 1;
+    if (index == bytes.len) return .incomplete;
+    if (bytes[index] != ';') return .not_cursor_position;
+    const row_text = bytes[row_start..index];
+    index += 1;
+
+    if (index == bytes.len) return .incomplete;
+    if (!std.ascii.isDigit(bytes[index])) return .not_cursor_position;
+    const col_start = index;
+    while (index < bytes.len and std.ascii.isDigit(bytes[index])) index += 1;
+    if (index == bytes.len) return .incomplete;
+    if (bytes[index] != 'R') return .not_cursor_position;
+    const col_text = bytes[col_start..index];
+    index += 1;
+
+    const row = std.fmt.parseUnsigned(u16, row_text, 10) catch return .not_cursor_position;
+    const col = std.fmt.parseUnsigned(u16, col_text, 10) catch return .not_cursor_position;
+    if (row == 0 or col == 0) return .not_cursor_position;
+    return .{ .complete = .{ .position = .{ .row = row, .col = col }, .len = index } };
+}
+
 pub fn writeAll(tty: *vaxis.tty.PosixTty, bytes: []const u8) !void {
     try tty.writer().writeAll(bytes);
     try tty.writer().flush();
@@ -364,6 +434,7 @@ fn applyTerminalEventsForTest(session: *line_editor.LineSession, events: []const
             .capability,
             .color_scheme,
             .color_report,
+            .cursor_position,
             .prompt_redraw,
             => {},
         }
@@ -486,6 +557,63 @@ test "terminal parser emits modified modern keyboard keys" {
     try std.testing.expect(events.items[1].key_press.modifiers.ctrl);
     try std.testing.expectEqual(line_editor.Key.delete_next_word, events.items[2].key_press.key);
     try std.testing.expect(events.items[2].key_press.modifiers.ctrl);
+}
+
+test "terminal parser emits expected cursor position report" {
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+    var events: std.ArrayList(Event) = .empty;
+    defer events.deinit(std.testing.allocator);
+
+    parser.expectCursorPositionReport();
+    try parser.feed("\x1b[10;42R", &events);
+
+    try std.testing.expectEqual(@as(usize, 1), events.items.len);
+    try std.testing.expectEqual(@as(u16, 10), events.items[0].cursor_position.row);
+    try std.testing.expectEqual(@as(u16, 42), events.items[0].cursor_position.col);
+}
+
+test "terminal parser waits for split expected cursor position report" {
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+    var events: std.ArrayList(Event) = .empty;
+    defer events.deinit(std.testing.allocator);
+
+    parser.expectCursorPositionReport();
+    try parser.feed("\x1b", &events);
+    try std.testing.expectEqual(@as(usize, 0), events.items.len);
+    try parser.feed("[3;4R", &events);
+
+    try std.testing.expectEqual(@as(usize, 1), events.items.len);
+    try std.testing.expectEqual(@as(u16, 3), events.items[0].cursor_position.row);
+    try std.testing.expectEqual(@as(u16, 4), events.items[0].cursor_position.col);
+}
+
+test "terminal parser treats cursor-position-shaped input as F3 unless expected" {
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+    var events: std.ArrayList(Event) = .empty;
+    defer events.deinit(std.testing.allocator);
+
+    try parser.feed("\x1b[1;2R", &events);
+
+    try std.testing.expectEqual(@as(usize, 1), events.items.len);
+    try std.testing.expectEqual(line_editor.Key.text, events.items[0].key_press.key);
+    try std.testing.expect(events.items[0].key_press.modifiers.shift);
+}
+
+test "terminal parser does not hold ordinary input while expecting cursor position" {
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+    var events: std.ArrayList(Event) = .empty;
+    defer events.deinit(std.testing.allocator);
+
+    parser.expectCursorPositionReport();
+    try parser.feed("x", &events);
+
+    try std.testing.expectEqual(@as(usize, 1), events.items.len);
+    try std.testing.expectEqual(line_editor.Key.text, events.items[0].key_press.key);
+    try std.testing.expectEqualStrings("x", events.items[0].key_press.text);
 }
 
 test "terminal parser emits text keys" {
