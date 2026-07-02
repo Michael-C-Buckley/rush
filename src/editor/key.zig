@@ -36,6 +36,8 @@ pub const Key = union(enum) {
     delete_next_argument,
     yank,
     transpose_chars,
+    undo,
+    redo,
     word_left,
     word_right,
 };
@@ -61,6 +63,11 @@ pub fn eventFromVaxis(input: vaxis.Key) Event {
 }
 
 pub fn keyFromVaxis(codepoint: u21, modifiers: Modifiers) Key {
+    if (modifiers.super and (codepoint == 'z' or codepoint == 'Z')) {
+        return if (modifiers.shift) .redo else .undo;
+    }
+    if (modifiers.ctrl and modifiers.shift and (codepoint == 'z' or codepoint == 'Z')) return .redo;
+    if (modifiers.ctrl and (codepoint == '/' or codepoint == '_')) return .undo;
     if (modifiers.alt or modifiers.meta) {
         switch (codepoint) {
             'b' => return .word_left,
@@ -119,6 +126,7 @@ pub fn keyFromVaxis(codepoint: u21, modifiers: Modifiers) Key {
     if (codepoint == 0x14) return .transpose_chars;
     if (codepoint == 0x15) return .delete_to_start;
     if (codepoint == 0x17) return .delete_previous_word;
+    if (codepoint == 0x1f) return .undo;
     if (codepoint == 0x19) return .yank;
     if (codepoint == 0x7f) return .backspace;
     return switch (codepoint) {
@@ -157,6 +165,14 @@ test "key mapping supports readline control keys" {
     try std.testing.expectEqual(Key.delete_next_word, keyFromVaxis(vaxis.Key.delete, ctrl));
     try std.testing.expectEqual(Key.word_left, keyFromVaxis(vaxis.Key.left, ctrl));
     try std.testing.expectEqual(Key.word_right, keyFromVaxis(vaxis.Key.right, ctrl));
+    try std.testing.expectEqual(Key.undo, keyFromVaxis('/', ctrl));
+    try std.testing.expectEqual(Key.undo, keyFromVaxis('_', ctrl));
+}
+
+test "key mapping supports GUI undo and redo keys" {
+    try std.testing.expectEqual(Key.undo, keyFromVaxis('z', .{ .super = true }));
+    try std.testing.expectEqual(Key.redo, keyFromVaxis('z', .{ .super = true, .shift = true }));
+    try std.testing.expectEqual(Key.redo, keyFromVaxis('z', .{ .ctrl = true, .shift = true }));
 }
 
 test "key mapping supports readline meta argument keys" {
@@ -179,5 +195,6 @@ test "key mapping supports raw control bytes" {
     try std.testing.expectEqual(Key.clear_screen, keyFromVaxis(0x0c, .{}));
     try std.testing.expectEqual(Key.transpose_chars, keyFromVaxis(0x14, .{}));
     try std.testing.expectEqual(Key.delete_previous_word, keyFromVaxis(0x17, .{}));
+    try std.testing.expectEqual(Key.undo, keyFromVaxis(0x1f, .{}));
     try std.testing.expectEqual(Key.yank, keyFromVaxis(0x19, .{}));
 }

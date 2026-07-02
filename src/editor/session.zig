@@ -127,6 +127,22 @@ const PendingRemovableSuffix = struct {
     }
 };
 
+const UndoKind = enum {
+    insertion,
+    edit,
+};
+
+const UndoEntry = struct {
+    before: BufferSnapshot,
+    after: BufferSnapshot,
+    kind: UndoKind,
+
+    fn deinit(self: UndoEntry, allocator: std.mem.Allocator) void {
+        self.before.deinit(allocator);
+        self.after.deinit(allocator);
+    }
+};
+
 pub const HistoryRequest = request_mod.HistoryRequest;
 pub const HistoryResult = request_mod.HistoryResult;
 pub const LineRequest = request_mod.LineRequest;
@@ -168,6 +184,8 @@ pub const LineSession = struct {
     paste_depth: usize = 0,
     completion_flash: ?CompletionFlash = null,
     pending_removable_suffix: ?PendingRemovableSuffix = null,
+    undo_stack: std.ArrayList(UndoEntry) = .empty,
+    redo_stack: std.ArrayList(UndoEntry) = .empty,
 
     pub const State = enum {
         editing,
@@ -224,6 +242,9 @@ pub const LineSession = struct {
         self.vi_insert_repeat_ops.deinit(self.allocator);
         self.clearViUndo();
         self.clearViLineUndo();
+        self.clearUndoHistory();
+        self.undo_stack.deinit(self.allocator);
+        self.redo_stack.deinit(self.allocator);
         self.editor.deinit();
         self.allocator.free(self.prompt.bytes);
         self.* = undefined;
@@ -234,6 +255,79 @@ pub const LineSession = struct {
     }
 
     pub fn handleKey(self: *LineSession, event: KeyEvent) !void {
+        const undo_kind = self.undoKindForEvent(event);
+        const before = if (undo_kind != null) try self.snapshotBuffer() else null;
+        errdefer if (before) |snapshot| snapshot.deinit(self.allocator);
+
+        try self.handleKeyInner(event);
+
+        if (before) |snapshot| try self.commitUndo(snapshot, undo_kind.?);
+    }
+
+    fn undoKindForEvent(self: LineSession, event: KeyEvent) ?UndoKind {
+        if (self.state != .editing) return null;
+        if (self.paste_depth != 0) {
+            return switch (event.key) {
+                .text, .enter => .edit,
+                else => null,
+            };
+        }
+        if (self.editing_mode == .vi) return self.viUndoKindForEvent(event);
+        return switch (event.key) {
+            .text => if (event.text.len == 0) null else .insertion,
+            .enter => if (event.modifiers.shift) .insertion else null,
+            .ctrl_c,
+            .ctrl_d,
+            .backspace,
+            .delete,
+            .delete_to_start,
+            .delete_to_end,
+            .delete_previous_word,
+            .delete_next_word,
+            .delete_previous_argument,
+            .delete_next_argument,
+            .yank,
+            .transpose_chars,
+            => .edit,
+            else => null,
+        };
+    }
+
+    fn viUndoKindForEvent(self: LineSession, event: KeyEvent) ?UndoKind {
+        return switch (self.vi_state) {
+            .insert, .replace => switch (event.key) {
+                .text => if (event.text.len == 0) null else .insertion,
+                .enter => if (event.modifiers.shift) .insertion else null,
+                .ctrl_c,
+                .ctrl_d,
+                .backspace,
+                .delete_previous_word,
+                .delete_next_word,
+                .delete_to_start,
+                .delete_previous_argument,
+                .delete_next_argument,
+                => .edit,
+                else => null,
+            },
+            .command => viCommandUndoKind(self.vi_pending, event),
+        };
+    }
+
+    fn viCommandUndoKind(pending: ViPending, event: KeyEvent) ?UndoKind {
+        if (event.key == .ctrl_r or event.key == .undo or event.key == .redo) return null;
+        if (event.key != .text or event.text.len == 0) return null;
+        const command = firstCodepoint(event.text) orelse return null;
+        switch (pending) {
+            .replace, .operator => return .edit,
+            .none, .find, .alias, .history_search => {},
+        }
+        return switch (command) {
+            'r', 'x', 'X', 'D', 'C', 'S', 'd', 'c', 'p', 'P', '~', '_', '.', '#' => .edit,
+            else => null,
+        };
+    }
+
+    fn handleKeyInner(self: *LineSession, event: KeyEvent) !void {
         if (self.state != .editing and self.state != .history_search) return;
         if (self.paste_depth != 0) {
             if (event.key == .text or event.key == .enter) {
@@ -274,6 +368,8 @@ pub const LineSession = struct {
                 }
             },
             .ctrl_r => try self.beginHistorySearch(),
+            .undo => try self.undoEdit(),
+            .redo => try self.redoEdit(),
             .clear_screen => {
                 self.completion_menu.clear(self.allocator);
                 self.requests.put(self.allocator, .clear_screen);
@@ -373,6 +469,8 @@ pub const LineSession = struct {
                 self.clearViInsertRepeatCapture();
                 try self.clearInput();
             },
+            .undo => try self.undoEdit(),
+            .redo => try self.redoEdit(),
             .enter => {
                 if (event.modifiers.shift) {
                     try self.insertLiteralNewline();
@@ -457,6 +555,8 @@ pub const LineSession = struct {
                 self.clearViInsertRepeatCapture();
                 try self.clearInput();
             },
+            .undo => try self.undoEdit(),
+            .redo => try self.redoEdit(),
             .enter => {
                 if (event.modifiers.shift) {
                     try self.insertLiteralNewline();
@@ -505,6 +605,8 @@ pub const LineSession = struct {
             .home => return self.applyViMotionCommand('0'),
             .end => return self.applyViMotionCommand('$'),
             .backspace => return self.applyViMotionCommand('h'),
+            .ctrl_r, .redo => return self.redoEdit(),
+            .undo => return self.undoEdit(),
             .ctrl_d => return,
             .text => {},
             else => return,
@@ -649,7 +751,7 @@ pub const LineSession = struct {
                     try self.setViLastRepeat(.{ .put_before = count });
                 }
             },
-            'u' => try self.restoreViUndo(),
+            'u' => try self.undoEdit(),
             'U' => try self.restoreViLineUndo(),
             '~' => {
                 const count = self.takeViCountOrDefault(1);
@@ -744,8 +846,11 @@ pub const LineSession = struct {
         defer self.allocator.free(replacement);
         if (std.mem.eql(u8, request.word, replacement)) return false;
 
+        const before = try self.snapshotBuffer();
+        errdefer before.deinit(self.allocator);
         try self.saveViUndo();
         try self.editor.buffer.replaceRange(request.replace_start, request.replace_end, replacement);
+        try self.commitUndo(before, .edit);
         self.completion_menu.clear(self.allocator);
         return true;
     }
@@ -1619,6 +1724,66 @@ pub const LineSession = struct {
         };
     }
 
+    fn snapshotsEqual(a: BufferSnapshot, b: BufferSnapshot) bool {
+        return a.cursor_byte == b.cursor_byte and std.mem.eql(u8, a.text, b.text);
+    }
+
+    fn restoreSnapshot(self: *LineSession, snapshot: BufferSnapshot) !void {
+        try self.editor.buffer.replace(snapshot.text);
+        self.editor.buffer.cursor_byte = @min(snapshot.cursor_byte, self.editor.buffer.text().len);
+        self.completion_menu.clear(self.allocator);
+        self.clearPendingRemovableSuffix();
+    }
+
+    fn clearUndoHistory(self: *LineSession) void {
+        for (self.undo_stack.items) |entry| entry.deinit(self.allocator);
+        self.undo_stack.clearRetainingCapacity();
+        self.clearRedoHistory();
+    }
+
+    fn clearRedoHistory(self: *LineSession) void {
+        for (self.redo_stack.items) |entry| entry.deinit(self.allocator);
+        self.redo_stack.clearRetainingCapacity();
+    }
+
+    fn commitUndo(self: *LineSession, before: BufferSnapshot, kind: UndoKind) !void {
+        const after = try self.snapshotBuffer();
+        errdefer after.deinit(self.allocator);
+        if (std.mem.eql(u8, before.text, after.text)) {
+            before.deinit(self.allocator);
+            after.deinit(self.allocator);
+            return;
+        }
+
+        self.clearRedoHistory();
+        if (kind == .insertion and self.undo_stack.items.len != 0) {
+            const last = &self.undo_stack.items[self.undo_stack.items.len - 1];
+            if (last.kind == .insertion and snapshotsEqual(last.after, before)) {
+                last.after.deinit(self.allocator);
+                last.after = after;
+                before.deinit(self.allocator);
+                return;
+            }
+        }
+        try self.undo_stack.append(self.allocator, .{ .before = before, .after = after, .kind = kind });
+    }
+
+    fn undoEdit(self: *LineSession) !void {
+        if (self.undo_stack.items.len == 0) return;
+        const entry = self.undo_stack.pop().?;
+        errdefer entry.deinit(self.allocator);
+        try self.restoreSnapshot(entry.before);
+        try self.redo_stack.append(self.allocator, entry);
+    }
+
+    fn redoEdit(self: *LineSession) !void {
+        if (self.redo_stack.items.len == 0) return;
+        const entry = self.redo_stack.pop().?;
+        errdefer entry.deinit(self.allocator);
+        try self.restoreSnapshot(entry.after);
+        try self.undo_stack.append(self.allocator, entry);
+    }
+
     fn restoreViUndo(self: *LineSession) !void {
         const snapshot = self.vi_undo orelse return;
         try self.editor.buffer.replace(snapshot.text);
@@ -1686,7 +1851,10 @@ pub const LineSession = struct {
     pub fn applyCompletion(self: *LineSession, application: completion.Application) !void {
         switch (application) {
             .edit => |edit| {
+                const before = try self.snapshotBuffer();
+                errdefer before.deinit(self.allocator);
                 try self.editor.buffer.applyCompletionEdit(edit);
+                try self.commitUndo(before, .edit);
                 try self.setPendingRemovableSuffix(edit);
                 self.completion_menu.clear(self.allocator);
                 self.completion_flash = null;
@@ -2163,7 +2331,10 @@ pub const LineSession = struct {
     fn acceptAutosuggestion(self: *LineSession) !bool {
         if (self.autosuggestion) |suggestion| {
             if (!renderableInlineText(suggestion.text)) return false;
+            const before = try self.snapshotBuffer();
+            errdefer before.deinit(self.allocator);
             try self.editor.buffer.replace(suggestion.text);
+            try self.commitUndo(before, .edit);
             self.clearAutosuggestion();
             self.completion_menu.clear(self.allocator);
             return true;
@@ -2224,6 +2395,8 @@ pub const LineSession = struct {
             .removable_suffix = candidate.removable_suffix,
             .append_space = candidate.append_space,
         };
+        const before = try self.snapshotBuffer();
+        errdefer before.deinit(self.allocator);
         try self.editor.buffer.applyCompletionEdit(.{
             .replace_start = candidate.replace_start,
             .replace_end = candidate.replace_end,
@@ -2232,6 +2405,7 @@ pub const LineSession = struct {
             .removable_suffix = candidate.removable_suffix,
             .append_space = candidate.append_space,
         });
+        try self.commitUndo(before, .edit);
         try self.setPendingRemovableSuffix(edit);
         self.completion_menu.clear(self.allocator);
     }
@@ -2532,6 +2706,59 @@ test "line session emacs control keys edit command line" {
     try std.testing.expectEqualStrings("bacd f", session.editor.buffer.text());
     try session.handleKey(.{ .key = keyFromVaxis('u', .{ .ctrl = true }) });
     try std.testing.expectEqualStrings("f", session.editor.buffer.text());
+}
+
+test "line session undo coalesces consecutive text insertions and supports redo" {
+    var session = try LineSession.init(std.testing.allocator, "");
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "a" });
+    try session.handleKey(.{ .key = .text, .text = "b" });
+    try session.handleKey(.{ .key = .text, .text = "c" });
+
+    try std.testing.expectEqualStrings("abc", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .undo });
+    try std.testing.expectEqualStrings("", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .redo });
+    try std.testing.expectEqualStrings("abc", session.editor.buffer.text());
+}
+
+test "line session undo restores completion edits as one step" {
+    var session = try LineSession.init(std.testing.allocator, "");
+    defer session.deinit();
+    try session.editor.buffer.replace("git st");
+
+    try session.applyCompletion(.{ .edit = .{
+        .replace_start = "git ".len,
+        .replace_end = "git st".len,
+        .replacement = "status",
+    } });
+
+    try std.testing.expectEqualStrings("git status", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .undo });
+    try std.testing.expectEqualStrings("git st", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .redo });
+    try std.testing.expectEqualStrings("git status", session.editor.buffer.text());
+}
+
+test "line session undo restores accepted autosuggestions as one step" {
+    var session = try LineSession.init(std.testing.allocator, "");
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "g" });
+    try session.handleKey(.{ .key = .text, .text = "i" });
+    try session.handleKey(.{ .key = .text, .text = "t" });
+    try session.applyAutosuggestionResult("git", .{
+        .id = 1,
+        .text = try std.testing.allocator.dupe(u8, "git status"),
+    });
+
+    try session.handleKey(.{ .key = .right });
+    try std.testing.expectEqualStrings("git status", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .undo });
+    try std.testing.expectEqualStrings("git", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .undo });
+    try std.testing.expectEqualStrings("", session.editor.buffer.text());
 }
 
 test "line session records clear screen requests" {
@@ -3227,6 +3454,10 @@ test "vi line session switches modes and edits in command mode" {
 
     try session.handleKey(.{ .key = .text, .text = "h" });
     try session.handleKey(.{ .key = .text, .text = "x" });
+    try std.testing.expectEqualStrings("ac", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .text, .text = "u" });
+    try std.testing.expectEqualStrings("abc", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .ctrl_r });
     try std.testing.expectEqualStrings("ac", session.editor.buffer.text());
     try session.handleKey(.{ .key = .text, .text = "u" });
     try std.testing.expectEqualStrings("abc", session.editor.buffer.text());

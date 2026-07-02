@@ -198,6 +198,8 @@ pub const Editor = struct {
             .delete_previous_argument,
             .delete_next_argument,
             .yank,
+            .undo,
+            .redo,
             => {},
         }
     }
