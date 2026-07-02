@@ -1,0 +1,919 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ngrok",
+    "description": "Tunnel local ports to public URLs and inspect traffic",
+    "subcommands": [
+      {
+        "name": "help",
+        "description": "Shows a list of commands or help for one command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "provider": {
+                "values": [
+                  {
+                    "value": "authtoken",
+                    "description": "Save authtoken to configuration file"
+                  },
+                  {
+                    "value": "credits",
+                    "description": "Prints author and licensing information"
+                  },
+                  {
+                    "value": "http",
+                    "description": "Start an HTTP tunnel"
+                  },
+                  {
+                    "value": "start",
+                    "description": "Start tunnels by name from the configuration file"
+                  },
+                  {
+                    "value": "tcp",
+                    "description": "Start a TCP tunnel"
+                  },
+                  {
+                    "value": "tls",
+                    "description": "Start a TLS tunnel"
+                  },
+                  {
+                    "value": "update",
+                    "description": "Update ngrok to the latest version"
+                  },
+                  {
+                    "value": "version",
+                    "description": "Print the version string"
+                  },
+                  {
+                    "value": "help",
+                    "description": "Shows a list of commands or help for one command"
+                  }
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "http",
+        "description": "Start an HTTP tunnel",
+        "options": [
+          {
+            "long": "log",
+            "spellings": [
+              "-log"
+            ],
+            "description": "path to log file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": [
+                {
+                  "values": [
+                    "stdout",
+                    "stderr",
+                    "false"
+                  ]
+                },
+                "builtin.files"
+              ]
+            }
+          },
+          {
+            "long": "log-format",
+            "spellings": [
+              "-log-format"
+            ],
+            "description": "log record format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "term",
+                  "logfmt",
+                  "json"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-level",
+            "spellings": [
+              "-log-level"
+            ],
+            "description": "logging level",
+            "inherit": false,
+            "value": {
+              "name": "level",
+              "provider": {
+                "values": [
+                  "crit",
+                  "warn",
+                  "error",
+                  "info",
+                  "debug"
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "spellings": [
+              "-config"
+            ],
+            "description": "config file path",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "region",
+            "spellings": [
+              "-region"
+            ],
+            "description": "ngrok server region",
+            "inherit": false,
+            "value": {
+              "name": "region",
+              "provider": {
+                "values": [
+                  "us",
+                  "eu",
+                  "au",
+                  "ap",
+                  "sa",
+                  "jp",
+                  "in"
+                ]
+              }
+            }
+          },
+          {
+            "long": "authtoken",
+            "spellings": [
+              "-authtoken"
+            ],
+            "description": "ngrok authtoken",
+            "inherit": false,
+            "value": {
+              "name": "authtoken"
+            }
+          },
+          {
+            "long": "hostname",
+            "spellings": [
+              "-hostname"
+            ],
+            "description": "custom hostname",
+            "inherit": false,
+            "value": {
+              "name": "hostname"
+            }
+          },
+          {
+            "long": "subdomain",
+            "spellings": [
+              "-subdomain"
+            ],
+            "description": "custom subdomain",
+            "inherit": false,
+            "value": {
+              "name": "subdomain"
+            }
+          },
+          {
+            "long": "auth",
+            "spellings": [
+              "-auth"
+            ],
+            "description": "Enforce basic auth on tunnel endpoint, 'user:password'",
+            "inherit": false,
+            "value": {
+              "name": "user:password"
+            }
+          },
+          {
+            "long": "bind-tls",
+            "spellings": [
+              "-bind-tls"
+            ],
+            "description": "Listen for http, https or both: true/false/both",
+            "inherit": false,
+            "value": {
+              "name": "true/false/both",
+              "provider": {
+                "values": [
+                  "true",
+                  "false",
+                  "both"
+                ]
+              }
+            }
+          },
+          {
+            "long": "host-header",
+            "spellings": [
+              "-host-header"
+            ],
+            "description": "Set Host header; if 'rewrite' use local address hostname",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  "rewrite"
+                ]
+              }
+            }
+          },
+          {
+            "long": "introspection",
+            "spellings": [
+              "-introspection"
+            ],
+            "description": "Enable/disable http introspection",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  "true",
+                  "false"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "host",
+              "provider": {
+                "values": [
+                  {
+                    "value": "8080",
+                    "description": "Port"
+                  }
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "authtoken",
+        "description": "Save authtoken to configuration file",
+        "arguments": {
+          "states": [
+            {
+              "name": "authtoken",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "log",
+            "spellings": [
+              "-log"
+            ],
+            "description": "path to log file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": [
+                {
+                  "values": [
+                    "stdout",
+                    "stderr",
+                    "false"
+                  ]
+                },
+                "builtin.files"
+              ]
+            }
+          },
+          {
+            "long": "log-format",
+            "spellings": [
+              "-log-format"
+            ],
+            "description": "log record format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "term",
+                  "logfmt",
+                  "json"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-level",
+            "spellings": [
+              "-log-level"
+            ],
+            "description": "logging level",
+            "inherit": false,
+            "value": {
+              "name": "level",
+              "provider": {
+                "values": [
+                  "crit",
+                  "warn",
+                  "error",
+                  "info",
+                  "debug"
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "spellings": [
+              "-config"
+            ],
+            "description": "config file path",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "credits",
+        "description": "Prints author and licensing information"
+      },
+      {
+        "name": "start",
+        "description": "Start tunnels by name from the configuration file",
+        "options": [
+          {
+            "long": "log",
+            "spellings": [
+              "-log"
+            ],
+            "description": "path to log file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": [
+                {
+                  "values": [
+                    "stdout",
+                    "stderr",
+                    "false"
+                  ]
+                },
+                "builtin.files"
+              ]
+            }
+          },
+          {
+            "long": "log-format",
+            "spellings": [
+              "-log-format"
+            ],
+            "description": "log record format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "term",
+                  "logfmt",
+                  "json"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-level",
+            "spellings": [
+              "-log-level"
+            ],
+            "description": "logging level",
+            "inherit": false,
+            "value": {
+              "name": "level",
+              "provider": {
+                "values": [
+                  "crit",
+                  "warn",
+                  "error",
+                  "info",
+                  "debug"
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "spellings": [
+              "-config"
+            ],
+            "description": "config file path",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "region",
+            "spellings": [
+              "-region"
+            ],
+            "description": "ngrok server region",
+            "inherit": false,
+            "value": {
+              "name": "region",
+              "provider": {
+                "values": [
+                  "us",
+                  "eu",
+                  "au",
+                  "ap",
+                  "sa",
+                  "jp",
+                  "in"
+                ]
+              }
+            }
+          },
+          {
+            "long": "authtoken",
+            "spellings": [
+              "-authtoken"
+            ],
+            "description": "ngrok authtoken",
+            "inherit": false,
+            "value": {
+              "name": "authtoken"
+            }
+          },
+          {
+            "long": "all",
+            "spellings": [
+              "-all"
+            ],
+            "description": "Start all tunnels in the configuration file",
+            "inherit": false,
+            "excludes": [
+              "none"
+            ]
+          },
+          {
+            "long": "none",
+            "spellings": [
+              "-none"
+            ],
+            "description": "Start running no tunnels",
+            "inherit": false,
+            "excludes": [
+              "all"
+            ]
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "tunnels",
+              "provider": {
+                "values": [
+                  "dev",
+                  "web",
+                  "blog"
+                ]
+              },
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "tcp",
+        "description": "Start a TCP tunnel",
+        "options": [
+          {
+            "long": "log",
+            "spellings": [
+              "-log"
+            ],
+            "description": "path to log file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": [
+                {
+                  "values": [
+                    "stdout",
+                    "stderr",
+                    "false"
+                  ]
+                },
+                "builtin.files"
+              ]
+            }
+          },
+          {
+            "long": "log-format",
+            "spellings": [
+              "-log-format"
+            ],
+            "description": "log record format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "term",
+                  "logfmt",
+                  "json"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-level",
+            "spellings": [
+              "-log-level"
+            ],
+            "description": "logging level",
+            "inherit": false,
+            "value": {
+              "name": "level",
+              "provider": {
+                "values": [
+                  "crit",
+                  "warn",
+                  "error",
+                  "info",
+                  "debug"
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "spellings": [
+              "-config"
+            ],
+            "description": "config file path",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "region",
+            "spellings": [
+              "-region"
+            ],
+            "description": "ngrok server region",
+            "inherit": false,
+            "value": {
+              "name": "region",
+              "provider": {
+                "values": [
+                  "us",
+                  "eu",
+                  "au",
+                  "ap",
+                  "sa",
+                  "jp",
+                  "in"
+                ]
+              }
+            }
+          },
+          {
+            "long": "authtoken",
+            "spellings": [
+              "-authtoken"
+            ],
+            "description": "ngrok authtoken",
+            "inherit": false,
+            "value": {
+              "name": "authtoken"
+            }
+          },
+          {
+            "long": "remote-addr",
+            "spellings": [
+              "-remote-addr"
+            ],
+            "description": "Bind remote address (requires you reserve an address)",
+            "inherit": false,
+            "value": {
+              "name": "remote-address"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "port",
+              "provider": {
+                "values": [
+                  "22"
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "tls",
+        "description": "Start a TLS tunnel",
+        "options": [
+          {
+            "long": "log",
+            "spellings": [
+              "-log"
+            ],
+            "description": "path to log file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": [
+                {
+                  "values": [
+                    "stdout",
+                    "stderr",
+                    "false"
+                  ]
+                },
+                "builtin.files"
+              ]
+            }
+          },
+          {
+            "long": "log-format",
+            "spellings": [
+              "-log-format"
+            ],
+            "description": "log record format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "term",
+                  "logfmt",
+                  "json"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-level",
+            "spellings": [
+              "-log-level"
+            ],
+            "description": "logging level",
+            "inherit": false,
+            "value": {
+              "name": "level",
+              "provider": {
+                "values": [
+                  "crit",
+                  "warn",
+                  "error",
+                  "info",
+                  "debug"
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "spellings": [
+              "-config"
+            ],
+            "description": "config file path",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "region",
+            "spellings": [
+              "-region"
+            ],
+            "description": "ngrok server region",
+            "inherit": false,
+            "value": {
+              "name": "region",
+              "provider": {
+                "values": [
+                  "us",
+                  "eu",
+                  "au",
+                  "ap",
+                  "sa",
+                  "jp",
+                  "in"
+                ]
+              }
+            }
+          },
+          {
+            "long": "authtoken",
+            "spellings": [
+              "-authtoken"
+            ],
+            "description": "ngrok authtoken",
+            "inherit": false,
+            "value": {
+              "name": "authtoken"
+            }
+          },
+          {
+            "long": "hostname",
+            "spellings": [
+              "-hostname"
+            ],
+            "description": "custom hostname",
+            "inherit": false,
+            "value": {
+              "name": "hostname"
+            }
+          },
+          {
+            "long": "subdomain",
+            "spellings": [
+              "-subdomain"
+            ],
+            "description": "custom subdomain",
+            "inherit": false,
+            "value": {
+              "name": "subdomain"
+            }
+          },
+          {
+            "long": "client-cas",
+            "spellings": [
+              "-client-cas"
+            ],
+            "inherit": false,
+            "value": {
+              "name": "certificate",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "crt",
+            "spellings": [
+              "-crt"
+            ],
+            "inherit": false,
+            "value": {
+              "name": "certificate",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "key",
+            "spellings": [
+              "-key"
+            ],
+            "inherit": false,
+            "value": {
+              "name": "certificate",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "port",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "update",
+        "description": "Update ngrok to the latest version",
+        "options": [
+          {
+            "long": "log",
+            "spellings": [
+              "-log"
+            ],
+            "description": "path to log file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": [
+                {
+                  "values": [
+                    "stdout",
+                    "stderr",
+                    "false"
+                  ]
+                },
+                "builtin.files"
+              ]
+            }
+          },
+          {
+            "long": "log-format",
+            "spellings": [
+              "-log-format"
+            ],
+            "description": "log record format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "term",
+                  "logfmt",
+                  "json"
+                ]
+              }
+            }
+          },
+          {
+            "long": "log-level",
+            "spellings": [
+              "-log-level"
+            ],
+            "description": "logging level",
+            "inherit": false,
+            "value": {
+              "name": "level",
+              "provider": {
+                "values": [
+                  "crit",
+                  "warn",
+                  "error",
+                  "info",
+                  "debug"
+                ]
+              }
+            }
+          },
+          {
+            "long": "config",
+            "spellings": [
+              "-config"
+            ],
+            "description": "config file path",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "channel",
+            "spellings": [
+              "-channel"
+            ],
+            "description": "Update channel (stable, beta)",
+            "inherit": false,
+            "value": {
+              "name": "channel",
+              "provider": {
+                "values": [
+                  "stable",
+                  "beta"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "Print the version string"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
