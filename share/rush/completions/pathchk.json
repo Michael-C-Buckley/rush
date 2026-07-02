@@ -1,0 +1,36 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pathchk",
+    "description": "check pathnames for posix portability",
+    "options": [
+      {
+        "short": "p",
+        "description": "check portable path length and characters",
+        "inherit": false
+      },
+      {
+        "short": "P",
+        "description": "check for empty or hyphen-leading path components",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "pathname",
+          "description": "Pathname(s) to check",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
