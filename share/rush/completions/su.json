@@ -1,0 +1,49 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "su",
+    "description": "switch user identity",
+    "options": [
+      {
+        "short": "f",
+        "description": "skip reading csh startup files",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "description": "start as a login shell",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-"
+        ],
+        "description": "start as a login shell",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "description": "preserve the environment",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "login",
+          "index": 0,
+          "description": "target login",
+          "optional": true
+        },
+        {
+          "name": "argument",
+          "index": 1,
+          "description": "shell argument",
+          "optional": true,
+          "repeatable": true
+        }
+      ]
+    }
+  }
+}
