@@ -1,0 +1,297 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "swagger-typescript-api",
+    "description": "generate TypeScript API clients from Swagger",
+    "options": [
+      {
+        "long": "version",
+        "short": "v",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "long": "path",
+        "short": "p",
+        "description": "set swagger schema path or URL",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "output",
+        "short": "o",
+        "description": "set output directory",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "name",
+        "short": "n",
+        "description": "set output file name",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "templates",
+        "short": "t",
+        "description": "set templates directory",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "default-as-success",
+        "short": "d",
+        "description": "treat default responses as success",
+        "inherit": false
+      },
+      {
+        "long": "responses",
+        "short": "r",
+        "description": "generate response metadata",
+        "inherit": false
+      },
+      {
+        "long": "union-enums",
+        "description": "generate enums as union types",
+        "inherit": false
+      },
+      {
+        "long": "add-readonly",
+        "description": "generate readonly properties",
+        "inherit": false
+      },
+      {
+        "long": "route-types",
+        "description": "generate API route types",
+        "inherit": false
+      },
+      {
+        "long": "no-client",
+        "description": "do not generate an API class",
+        "inherit": false
+      },
+      {
+        "long": "enum-names-as-values",
+        "description": "use x-enumNames values",
+        "inherit": false
+      },
+      {
+        "long": "extract-request-params",
+        "description": "extract request params",
+        "inherit": false
+      },
+      {
+        "long": "extract-request-body",
+        "description": "extract request body types",
+        "inherit": false
+      },
+      {
+        "long": "extract-response-body",
+        "description": "extract response body types",
+        "inherit": false
+      },
+      {
+        "long": "extract-response-error",
+        "description": "extract response error types",
+        "inherit": false
+      },
+      {
+        "long": "modular",
+        "description": "generate modular files",
+        "inherit": false
+      },
+      {
+        "long": "js",
+        "description": "generate JavaScript module",
+        "inherit": false
+      },
+      {
+        "long": "module-name-index",
+        "description": "set route path index",
+        "inherit": false,
+        "value": {
+          "name": "index"
+        }
+      },
+      {
+        "long": "module-name-first-tag",
+        "description": "split routes by first tag",
+        "inherit": false
+      },
+      {
+        "long": "disableStrictSSL",
+        "description": "disable strict SSL",
+        "inherit": false
+      },
+      {
+        "long": "disableProxy",
+        "description": "disable proxy",
+        "inherit": false
+      },
+      {
+        "long": "axios",
+        "description": "generate axios client",
+        "inherit": false
+      },
+      {
+        "long": "unwrap-response-data",
+        "description": "unwrap response data",
+        "inherit": false
+      },
+      {
+        "long": "disable-throw-on-error",
+        "description": "do not throw on non-ok responses",
+        "inherit": false
+      },
+      {
+        "long": "single-http-client",
+        "description": "accept HttpClient in constructor",
+        "inherit": false
+      },
+      {
+        "long": "silent",
+        "description": "only output errors",
+        "inherit": true
+      },
+      {
+        "long": "default-response",
+        "description": "set empty response type",
+        "inherit": false,
+        "value": {
+          "name": "type"
+        }
+      },
+      {
+        "long": "type-prefix",
+        "description": "set type prefix",
+        "inherit": false,
+        "value": {
+          "name": "prefix"
+        }
+      },
+      {
+        "long": "type-suffix",
+        "description": "set type suffix",
+        "inherit": false,
+        "value": {
+          "name": "suffix"
+        }
+      },
+      {
+        "long": "clean-output",
+        "description": "clean output before generating",
+        "inherit": false
+      },
+      {
+        "long": "api-class-name",
+        "description": "set API class name",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "patch",
+        "description": "fix swagger source errors",
+        "inherit": false
+      },
+      {
+        "long": "debug",
+        "description": "show debug information",
+        "inherit": false
+      },
+      {
+        "long": "another-array-type",
+        "description": "generate Array<T> types",
+        "inherit": false
+      },
+      {
+        "long": "sort-types",
+        "description": "sort fields and types",
+        "inherit": false
+      },
+      {
+        "long": "extract-enums",
+        "description": "extract inline enums",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "generate-templates",
+        "description": "generate EJS templates",
+        "options": [
+          {
+            "long": "output",
+            "short": "o",
+            "description": "set output directory",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "modular",
+            "short": "m",
+            "description": "generate modular templates",
+            "inherit": false
+          },
+          {
+            "long": "http-client",
+            "description": "set HTTP client type",
+            "inherit": false,
+            "value": {
+              "name": "http-client",
+              "provider": {
+                "values": [
+                  "fetch",
+                  "axios"
+                ]
+              }
+            }
+          },
+          {
+            "long": "clean-output",
+            "short": "c",
+            "description": "clean output before generating",
+            "priority": -10,
+            "inherit": false
+          },
+          {
+            "long": "rewrite",
+            "short": "r",
+            "description": "rewrite existing templates",
+            "inherit": false
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
