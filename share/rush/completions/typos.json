@@ -1,0 +1,241 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "typos",
+    "description": "source code spelling checker",
+    "options": [
+      {
+        "short": "c",
+        "long": "config",
+        "description": "custom config file",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "isolated",
+        "description": "ignore implicit configuration files",
+        "inherit": false
+      },
+      {
+        "long": "diff",
+        "description": "print a diff of what would change",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "write-changes",
+        "description": "write fixes out",
+        "inherit": false
+      },
+      {
+        "long": "files",
+        "description": "debug: Print each file that would be spellchecked",
+        "inherit": false
+      },
+      {
+        "long": "identifiers",
+        "description": "debug: Print each identifier that would be spellchecked",
+        "inherit": false
+      },
+      {
+        "long": "words",
+        "description": "debug: Print each word that would be spellchecked",
+        "inherit": false
+      },
+      {
+        "long": "dump-config",
+        "description": "write the current configuration to file with `-` for stdout",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": [
+            "builtin.files",
+            "typos.stdin"
+          ]
+        }
+      },
+      {
+        "long": "type-list",
+        "description": "show all supported file types",
+        "inherit": false
+      },
+      {
+        "long": "format",
+        "description": "set the output format",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "provider": "typos.formats"
+        }
+      },
+      {
+        "short": "j",
+        "long": "threads",
+        "description": "the approximate number of threads to use",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "exclude",
+        "description": "ignore files & directories matching the glob",
+        "inherit": false,
+        "value": {
+          "name": "glob"
+        }
+      },
+      {
+        "long": "hidden",
+        "description": "search hidden files and directories",
+        "inherit": false
+      },
+      {
+        "long": "no-ignore",
+        "description": "don't respect ignore files",
+        "inherit": false
+      },
+      {
+        "long": "no-ignore-dot",
+        "description": "don't respect .ignore files",
+        "inherit": false
+      },
+      {
+        "long": "no-ignore-global",
+        "description": "don't respect global ignore files",
+        "inherit": false
+      },
+      {
+        "long": "no-ignore-parent",
+        "description": "don't respect ignore files in parent directories",
+        "inherit": false
+      },
+      {
+        "long": "no-ignore-vcs",
+        "description": "don't respect ignore files in vcs directories",
+        "inherit": false
+      },
+      {
+        "long": "binary",
+        "description": "search binary files",
+        "inherit": false
+      },
+      {
+        "long": "no-check-filenames",
+        "description": "skip verifying spelling in file names",
+        "inherit": false
+      },
+      {
+        "long": "no-check-files",
+        "description": "skip verifying spelling in files",
+        "inherit": false
+      },
+      {
+        "long": "no-unicode",
+        "description": "only allow ASCII characters in identifiers",
+        "inherit": false
+      },
+      {
+        "long": "locale",
+        "description": "set the locale to use",
+        "inherit": false,
+        "value": {
+          "name": "locale",
+          "provider": "typos.locales"
+        }
+      },
+      {
+        "long": "color",
+        "description": "controls when to use color",
+        "inherit": false,
+        "value": {
+          "name": "when",
+          "provider": "typos.colors"
+        }
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "more output per occurrence",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "less output per occurrence",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "print help information",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "print version information",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "path",
+          "provider": [
+            "builtin.files",
+            "builtin.directories",
+            "typos.stdin"
+          ],
+          "index": 0,
+          "repeatable": true,
+          "description": "file or directory"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "typos.formats": {
+        "values": [
+          "silent",
+          "brief",
+          "long",
+          "json"
+        ]
+      },
+      "typos.locales": {
+        "values": [
+          "en",
+          "en-us",
+          "en-gb",
+          "en-ca",
+          "en-au"
+        ]
+      },
+      "typos.colors": {
+        "values": [
+          "auto",
+          "always",
+          "never"
+        ]
+      },
+      "typos.stdin": {
+        "values": [
+          {
+            "value": "-",
+            "description": "stdin"
+          }
+        ]
+      }
+    }
+  }
+}
