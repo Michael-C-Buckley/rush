@@ -1,0 +1,101 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "subl",
+    "description": "open files in Sublime Text",
+    "options": [
+      {
+        "long": "project",
+        "description": "load a project",
+        "inherit": false,
+        "value": {
+          "name": "project",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "command",
+        "description": "run a command",
+        "inherit": false,
+        "value": {
+          "name": "command"
+        }
+      },
+      {
+        "short": "n",
+        "long": "new-window",
+        "description": "open a new window",
+        "inherit": false
+      },
+      {
+        "short": "a",
+        "long": "add",
+        "description": "add folders to the current window",
+        "inherit": false
+      },
+      {
+        "long": "launch-or-new-window",
+        "description": "open a new window only if needed",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "wait",
+        "description": "wait for files to close",
+        "inherit": false
+      },
+      {
+        "short": "b",
+        "long": "background",
+        "description": "do not activate the application",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "stay",
+        "description": "keep the application active",
+        "inherit": false
+      },
+      {
+        "long": "safe-mode",
+        "description": "launch with a clean environment",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "path",
+          "provider": [
+            "builtin.directories",
+            "builtin.files"
+          ],
+          "index": 0,
+          "repeatable": true,
+          "description": "file or directory"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
