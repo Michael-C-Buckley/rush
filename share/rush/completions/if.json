@@ -1,0 +1,22 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "if",
+    "description": "conditionally execute a command",
+    "arguments": {
+      "states": [
+        {
+          "name": "command",
+          "provider": "builtin.executables",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "builtin.executables": {
+        "builtin": "executables"
+      }
+    }
+  }
+}
