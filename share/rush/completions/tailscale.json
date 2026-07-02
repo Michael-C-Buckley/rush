@@ -1,0 +1,536 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "tailscale",
+    "description": "manage Tailscale networking",
+    "options": [
+      {
+        "long": "socket",
+        "description": "set tailscaled socket",
+        "inherit": false,
+        "value": {
+          "name": "socket",
+          "provider": "builtin.files"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "up",
+        "description": "connect to Tailscale",
+        "options": [
+          {
+            "long": "accept-dns",
+            "description": "accept DNS configuration",
+            "inherit": false
+          },
+          {
+            "long": "accept-routes",
+            "description": "accept advertised routes",
+            "inherit": false
+          },
+          {
+            "long": "advertise-exit-node",
+            "description": "offer as an exit node",
+            "inherit": false
+          },
+          {
+            "long": "advertise-routes",
+            "description": "advertise routes",
+            "inherit": false,
+            "value": {
+              "name": "routes"
+            }
+          },
+          {
+            "long": "advertise-tags",
+            "description": "advertise ACL tags",
+            "inherit": false,
+            "value": {
+              "name": "tags"
+            }
+          },
+          {
+            "long": "auth-key",
+            "description": "set auth key",
+            "inherit": false,
+            "value": {
+              "name": "authkey"
+            }
+          },
+          {
+            "long": "exit-node",
+            "description": "set exit node",
+            "inherit": false,
+            "value": {
+              "name": "exitnode"
+            }
+          },
+          {
+            "long": "exit-node-allow-lan-access",
+            "description": "allow LAN access with exit node",
+            "inherit": false
+          },
+          {
+            "long": "force-reauth",
+            "description": "force reauthentication",
+            "inherit": false
+          },
+          {
+            "long": "host-routes",
+            "description": "install host routes",
+            "inherit": false
+          },
+          {
+            "long": "hostname",
+            "description": "set hostname",
+            "inherit": false,
+            "value": {
+              "name": "hostname"
+            }
+          },
+          {
+            "long": "json",
+            "description": "output JSON",
+            "inherit": false
+          },
+          {
+            "long": "login-server",
+            "description": "set login server",
+            "inherit": false,
+            "value": {
+              "name": "server"
+            }
+          },
+          {
+            "long": "operator",
+            "description": "set operator user",
+            "inherit": false,
+            "value": {
+              "name": "username"
+            }
+          },
+          {
+            "long": "qr",
+            "description": "show login QR code",
+            "inherit": false
+          },
+          {
+            "long": "reset",
+            "description": "reset unspecified settings",
+            "inherit": false
+          },
+          {
+            "long": "shields-up",
+            "description": "block incoming connections",
+            "inherit": false
+          },
+          {
+            "long": "ssh",
+            "description": "run Tailscale SSH server",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "down",
+        "description": "disconnect from Tailscale",
+        "options": [
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "logout",
+        "description": "disconnect and expire node key",
+        "options": [
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "netcheck",
+        "description": "analyze network conditions",
+        "options": [
+          {
+            "long": "every",
+            "description": "set report frequency",
+            "inherit": false,
+            "value": {
+              "name": "frequency"
+            }
+          },
+          {
+            "long": "format",
+            "description": "set output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "json",
+                  "json-line",
+                  "human-readable"
+                ]
+              }
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "show verbose logs",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "ip",
+        "description": "show Tailscale IP addresses",
+        "options": [
+          {
+            "long": "1",
+            "description": "print one IP address",
+            "inherit": false
+          },
+          {
+            "long": "4",
+            "description": "print IPv4 address",
+            "inherit": false
+          },
+          {
+            "long": "6",
+            "description": "print IPv6 address",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "host",
+              "description": "host name",
+              "index": 0,
+              "optional": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "status",
+        "description": "show tailscaled status",
+        "options": [
+          {
+            "long": "active",
+            "description": "show active peers only",
+            "inherit": false
+          },
+          {
+            "long": "browser",
+            "description": "open browser in web mode",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "output JSON",
+            "inherit": false
+          },
+          {
+            "long": "listen",
+            "description": "set listen address",
+            "inherit": false,
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "long": "peers",
+            "description": "show peers",
+            "inherit": false
+          },
+          {
+            "long": "self",
+            "description": "show local machine",
+            "inherit": false
+          },
+          {
+            "long": "web",
+            "description": "run status webserver",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "ping",
+        "description": "ping a host over Tailscale",
+        "options": [
+          {
+            "long": "c",
+            "description": "set ping count",
+            "inherit": false,
+            "value": {
+              "name": "count"
+            }
+          },
+          {
+            "long": "timeout",
+            "description": "set timeout",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "tsmp",
+            "description": "use TSMP ping",
+            "inherit": false
+          },
+          {
+            "long": "until-direct",
+            "description": "stop once direct",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "show verbose logs",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "host",
+              "description": "host name or IP",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "nc",
+        "description": "connect to a host and port",
+        "options": [
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "host",
+              "index": 0
+            },
+            {
+              "name": "port",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "ssh",
+        "description": "SSH to a Tailscale machine",
+        "options": [
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "host",
+              "description": "[user@]host",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "version",
+        "description": "show Tailscale version",
+        "options": [
+          {
+            "long": "daemon",
+            "description": "include daemon version",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "web",
+        "description": "run a control web server",
+        "options": [
+          {
+            "long": "cgi",
+            "description": "run as CGI script",
+            "inherit": false
+          },
+          {
+            "long": "listen",
+            "description": "set listen address",
+            "inherit": false,
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "file",
+        "description": "send or receive files",
+        "options": [
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "cp",
+            "description": "copy files to a host",
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "provider": "builtin.files",
+                  "index": 0
+                },
+                {
+                  "name": "target",
+                  "description": "file or host",
+                  "provider": "builtin.files",
+                  "index": 1,
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "get",
+            "description": "move files from inbox",
+            "arguments": {
+              "states": [
+                {
+                  "name": "target-directory",
+                  "provider": "builtin.directories",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "bugreport",
+        "description": "print diagnostic identifier",
+        "options": [
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "note",
+              "index": 0,
+              "optional": true,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "cert",
+        "description": "get TLS certificates",
+        "options": [
+          {
+            "long": "cert-file",
+            "description": "set certificate output file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "key-file",
+            "description": "set key output file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "serve-demo",
+            "description": "serve demo on port 443",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "show help"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
