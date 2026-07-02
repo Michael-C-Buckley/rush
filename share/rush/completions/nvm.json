@@ -1,0 +1,561 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "nvm",
+    "description": "node version manager",
+    "options": [
+      {
+        "long": "help",
+        "description": "Show help page",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "Print out the installed version of nvm",
+        "inherit": false
+      },
+      {
+        "long": "no-colors",
+        "description": "suppress colored output",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "install",
+        "description": "download and install a <version>. Uses .nvmrc if available and version is omitted",
+        "options": [
+          {
+            "short": "s",
+            "description": "Skip binary download, install from source only",
+            "inherit": false
+          },
+          {
+            "long": "reinstall-packages-from",
+            "description": "When installing, reinstall packages installed in <version>",
+            "inherit": false,
+            "value": {
+              "name": "version",
+              "provider": [
+                "nvm.versions",
+                "nvm.aliases",
+                "nvm.version-keywords"
+              ]
+            }
+          },
+          {
+            "long": "skip-default-packages",
+            "description": "When installing, skip the default-packages file if it exists",
+            "inherit": false
+          },
+          {
+            "long": "latest-npm",
+            "description": "After installing, attempt to upgrade to the latest working npm on the given node version",
+            "inherit": false
+          },
+          {
+            "long": "no-progress",
+            "description": "Disable the progress bar on any downloads",
+            "inherit": false
+          },
+          {
+            "long": "alias",
+            "description": "After installing, set the alias specified to the version specified. (same as: nvm alias <name> <version>)",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "default",
+            "description": "After installing, set default alias to the version specified. (same as: nvm alias default <version>)",
+            "inherit": false
+          },
+          {
+            "long": "lts",
+            "description": "use lts versions",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "required": false,
+              "style": "optional"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "node version",
+              "index": 0,
+              "provider": [
+                "nvm.versions",
+                "nvm.aliases",
+                "nvm.version-keywords"
+              ],
+              "required": false
+            }
+          ]
+        }
+      },
+      {
+        "name": "uninstall",
+        "description": "uninstall a version",
+        "options": [
+          {
+            "long": "lts",
+            "description": "use lts versions",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "required": false,
+              "style": "optional"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "node version",
+              "index": 0,
+              "provider": [
+                "nvm.versions",
+                "nvm.aliases",
+                "nvm.version-keywords"
+              ],
+              "required": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "use",
+        "description": "modify PATH to use <version>. Uses .nvmrc if available and version is omitted",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "node version",
+              "index": 0,
+              "provider": [
+                "nvm.versions",
+                "nvm.aliases",
+                "nvm.version-keywords"
+              ],
+              "required": false
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "silent",
+            "description": "silence output",
+            "inherit": false
+          },
+          {
+            "long": "lts",
+            "description": "use lts versions",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "required": false,
+              "style": "optional"
+            }
+          }
+        ]
+      },
+      {
+        "name": "exec",
+        "description": "run <command> on <version>. Uses .nvmrc if available and version is omitted",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "node version",
+              "index": 0,
+              "provider": [
+                "nvm.versions",
+                "nvm.aliases",
+                "nvm.version-keywords"
+              ],
+              "required": false
+            },
+            {
+              "name": "command",
+              "index": 1,
+              "repeatable": true,
+              "rest": "command-line"
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "silent",
+            "description": "silence output",
+            "inherit": false
+          },
+          {
+            "long": "lts",
+            "description": "use lts versions",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "required": false,
+              "style": "optional"
+            }
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "run `node` on <version> with <args> as arguments. Uses .nvmrc if available and version is omitted",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "node version",
+              "index": 0,
+              "provider": [
+                "nvm.versions",
+                "nvm.aliases",
+                "nvm.version-keywords"
+              ],
+              "required": false
+            },
+            {
+              "name": "argument",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "silent",
+            "description": "silence output",
+            "inherit": false
+          },
+          {
+            "long": "lts",
+            "description": "use lts versions",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "required": false,
+              "style": "optional"
+            }
+          }
+        ]
+      },
+      {
+        "name": "current",
+        "description": "display currently activated version of Node"
+      },
+      {
+        "name": "ls",
+        "description": "list installed versions, matching a given <version> if provided",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "node version",
+              "index": 0,
+              "provider": [
+                "nvm.versions",
+                "nvm.aliases",
+                "nvm.version-keywords"
+              ],
+              "required": false
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "no-colors",
+            "description": "suppress colored output",
+            "inherit": false
+          },
+          {
+            "long": "no-alias",
+            "description": "suppress alias output",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "ls-remote",
+        "description": "list remote versions available for install, matching a given <version> if provided",
+        "options": [
+          {
+            "long": "lts",
+            "description": "use lts versions",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "no-colors",
+            "description": "suppress colored output",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "node version",
+              "index": 0,
+              "provider": [
+                "nvm.versions",
+                "nvm.aliases",
+                "nvm.version-keywords"
+              ],
+              "required": false
+            }
+          ]
+        }
+      },
+      {
+        "name": "version",
+        "description": "resolve the given description to a single local version",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "node version",
+              "index": 0,
+              "provider": [
+                "nvm.versions",
+                "nvm.aliases",
+                "nvm.version-keywords"
+              ],
+              "required": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "version-remote",
+        "description": "resolve the given description to a single remote version",
+        "options": [
+          {
+            "long": "lts",
+            "description": "use lts versions",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "required": false,
+              "style": "optional"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "node version",
+              "index": 0,
+              "provider": [
+                "nvm.versions",
+                "nvm.aliases",
+                "nvm.version-keywords"
+              ],
+              "required": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "deactivate",
+        "description": "undo effects of `nvm` on current shell",
+        "options": [
+          {
+            "long": "silent",
+            "description": "silence output",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "alias",
+        "description": "show all aliases beginning with <pattern> or Set an alias named <name> pointing to <version>",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "alias name",
+              "index": 0,
+              "provider": "nvm.aliases"
+            },
+            {
+              "name": "version",
+              "index": 1,
+              "required": false,
+              "provider": [
+                "nvm.versions",
+                "nvm.aliases",
+                "nvm.version-keywords"
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "unalias",
+        "description": "deletes the alias named <name>",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "provider": "nvm.aliases"
+            }
+          ]
+        }
+      },
+      {
+        "name": "install-latest-npm",
+        "description": "attempt to upgrade to the latest working `npm` on the current node version"
+      },
+      {
+        "name": "reinstall-packages",
+        "description": "reinstall global `npm` packages contained in <version> to current version",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "node version",
+              "index": 0,
+              "provider": [
+                "nvm.versions",
+                "nvm.aliases",
+                "nvm.version-keywords"
+              ],
+              "required": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "unload",
+        "description": "unload `nvm` from shell"
+      },
+      {
+        "name": "which",
+        "description": "display path to installed node version. Uses .nvmrc if available and version is omitted",
+        "options": [
+          {
+            "long": "silent",
+            "description": "silence output",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "node version",
+              "index": 0,
+              "provider": [
+                "nvm.versions",
+                "nvm.aliases",
+                "nvm.version-keywords"
+              ],
+              "required": false
+            }
+          ]
+        },
+        "subcommands": [
+          {
+            "name": "current"
+          }
+        ]
+      },
+      {
+        "name": "cache",
+        "arguments": {
+          "states": [
+            {
+              "name": "action",
+              "index": 0,
+              "provider": "nvm.cache-actions"
+            }
+          ]
+        }
+      },
+      {
+        "name": "set-colors",
+        "description": "set five text colors using format \"yMeBg\". Available when supported",
+        "arguments": {
+          "states": [
+            {
+              "name": "color-codes",
+              "description": "five color codes",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "nvm.versions": {
+        "function": "__rush_complete_nvm_versions"
+      },
+      "nvm.aliases": {
+        "function": "__rush_complete_nvm_aliases"
+      },
+      "nvm.cache-actions": {
+        "values": [
+          {
+            "value": "dir",
+            "description": "show cache directory"
+          },
+          {
+            "value": "clear",
+            "description": "empty cache directory"
+          }
+        ]
+      },
+      "nvm.colors": {
+        "values": [
+          "r",
+          "R",
+          "g",
+          "G",
+          "b",
+          "B",
+          "c",
+          "C",
+          "m",
+          "M",
+          "y",
+          "Y",
+          "k",
+          "e",
+          "W"
+        ]
+      },
+      "nvm.version-keywords": {
+        "values": [
+          {
+            "value": "node",
+            "description": "latest node version"
+          },
+          {
+            "value": "iojs",
+            "description": "latest io.js version"
+          },
+          {
+            "value": "system",
+            "description": "system node version"
+          }
+        ]
+      }
+    }
+  }
+}

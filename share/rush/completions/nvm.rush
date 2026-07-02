@@ -1,0 +1,35 @@
+__rush_complete_nvm_dir() {
+  if test -n "$NVM_DIR"; then
+    printf '%s\n' "$NVM_DIR"
+  elif test -d "$HOME/.nvm"; then
+    printf '%s\n' "$HOME/.nvm"
+  fi
+}
+
+__rush_complete_nvm_versions() {
+  nvm_dir=$(__rush_complete_nvm_dir)
+  test -n "$nvm_dir" || return
+  for dir in "$nvm_dir"/versions/node/* "$nvm_dir"/versions/io.js/*; do
+    test -d "$dir" || continue
+    version=${dir##*/}
+    test -n "$version" && rush_complete candidate "$version" --kind plain --description 'installed node version' --priority 45
+  done
+}
+
+__rush_complete_nvm_aliases() {
+  nvm_dir=$(__rush_complete_nvm_dir)
+  test -n "$nvm_dir" || return
+  test -d "$nvm_dir/alias" || return
+  for path in "$nvm_dir"/alias/*; do
+    test -f "$path" || continue
+    name=${path##*/}
+    test "$name" = lts || rush_complete candidate "$name" --kind plain --description 'nvm alias' --priority 35
+  done
+  if test -d "$nvm_dir/alias/lts"; then
+    for path in "$nvm_dir"/alias/lts/*; do
+      test -f "$path" || continue
+      name=${path##*/}
+      rush_complete candidate "lts/$name" --kind plain --description 'nvm lts alias' --priority 35
+    done
+  fi
+}
