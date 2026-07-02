@@ -1,0 +1,1093 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "sanity",
+    "description": "manage Sanity projects",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for sanity",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "help",
+        "description": "displays help information about Sanity",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "build",
+        "description": "builds the current Sanity configuration to a static bundle",
+        "options": [
+          {
+            "long": "source-maps",
+            "description": "enable source maps for built bundles (increases size of bundle)",
+            "inherit": false
+          },
+          {
+            "long": "no-minify",
+            "description": "skip minifying built JavaScript (speeds up build, increases size of bundle)",
+            "inherit": false
+          },
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "use unattended mode, accepting defaults and using only flags for choices",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "codemod",
+        "description": "runs a code modification script",
+        "options": [
+          {
+            "long": "dry",
+            "description": "dry run (no changes are made to files)",
+            "inherit": false
+          },
+          {
+            "long": "extensions",
+            "description": "transform files with these file extensions (comma separated list) (default: js,ts,tsx)",
+            "inherit": false,
+            "value": {
+              "name": "extensions"
+            }
+          },
+          {
+            "long": "no-verify",
+            "description": "skip verification before running codemod",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "configcheck",
+        "description": "checks if the required configuration files for plugins exists and are up to date"
+      },
+      {
+        "name": "cors",
+        "description": "interact with CORS-entries for your project",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "allow a new origin to use your project API through CORS",
+            "options": [
+              {
+                "long": "credentials",
+                "description": "allow credentials (token/cookie) to be sent from this origin",
+                "inherit": false
+              },
+              {
+                "long": "no-credentials",
+                "description": "disallow credentials (token/cookie) to be sent from this origin",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "origin",
+                  "description": "the origin to allow",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete an existing CORS-origin from your project",
+            "arguments": {
+              "states": [
+                {
+                  "name": "origin",
+                  "description": "the origin to delete",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list all origins allowed to access the API for this project"
+          }
+        ]
+      },
+      {
+        "name": "dataset",
+        "description": "interact with datasets in your project",
+        "subcommands": [
+          {
+            "name": "alias",
+            "description": "you can manage your dataset alias using this command",
+            "subcommands": [
+              {
+                "name": "create",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "alias-name",
+                      "index": 0
+                    },
+                    {
+                      "name": "target-dataset",
+                      "index": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "delete",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "alias-name",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "link",
+                "options": [
+                  {
+                    "long": "force",
+                    "description": "skips security prompt and forces link command",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "alias-name",
+                      "index": 0
+                    },
+                    {
+                      "name": "target-dataset",
+                      "index": 1
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "unlink",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "alias-name",
+                      "index": 0
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "copy",
+            "description": "manages dataset copying, including starting a new copy job, listing copy jobs and following the progress of a running copy job",
+            "options": [
+              {
+                "long": "detach",
+                "description": "start the copy without waiting for it to finish",
+                "inherit": false
+              },
+              {
+                "long": "attach",
+                "description": "attach to the running copy process to show progress",
+                "inherit": false,
+                "value": {
+                  "name": "job-id"
+                }
+              },
+              {
+                "long": "skip-history",
+                "description": "don't preserve document history on copy",
+                "inherit": false
+              },
+              {
+                "long": "list",
+                "description": "lists all dataset copy jobs corresponding to a certain criteria",
+                "inherit": false
+              },
+              {
+                "long": "offset",
+                "description": "start position in the list of jobs. Default 0. With --list",
+                "inherit": false,
+                "value": {
+                  "name": "offset"
+                }
+              },
+              {
+                "long": "limit",
+                "description": "maximum number of jobs returned. Default 10. Maximum 1000. With --list",
+                "inherit": false,
+                "value": {
+                  "name": "limit"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "source-dataset",
+                  "index": 0
+                },
+                {
+                  "name": "target-dataset",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "create",
+            "description": "create a new dataset within your project",
+            "options": [
+              {
+                "long": "visibility",
+                "description": "set visibility for this dataset (public/private)",
+                "inherit": false,
+                "value": {
+                  "name": "visibility",
+                  "provider": {
+                    "values": [
+                      "public",
+                      "private"
+                    ]
+                  }
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete a dataset within your project",
+            "arguments": {
+              "states": [
+                {
+                  "name": "datasetName",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "export",
+            "description": "export dataset to local filesystem as a gzipped tarball",
+            "options": [
+              {
+                "long": "raw",
+                "description": "extract only documents, without rewriting asset references",
+                "inherit": false
+              },
+              {
+                "long": "no-assets",
+                "description": "export only non-asset documents and remove references to image assets",
+                "inherit": false
+              },
+              {
+                "long": "no-drafts",
+                "description": "export only published versions of documents",
+                "inherit": false
+              },
+              {
+                "long": "no-compress",
+                "description": "skips compressing tarball entries (still generates a gzip file)",
+                "inherit": false
+              },
+              {
+                "long": "types",
+                "description": "defines which document types to export",
+                "inherit": false,
+                "value": {
+                  "name": "types"
+                }
+              },
+              {
+                "long": "overwrite",
+                "description": "overwrite any file with the same name",
+                "inherit": false
+              },
+              {
+                "long": "asset-concurrency",
+                "description": "concurrent number of asset downloads",
+                "inherit": false,
+                "value": {
+                  "name": "num"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0
+                },
+                {
+                  "name": "destination",
+                  "provider": "builtin.directories",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "import",
+            "description": "import documents to given dataset from ndjson file",
+            "options": [
+              {
+                "long": "missing",
+                "description": "on duplicate document IDs, skip importing document in question",
+                "inherit": false
+              },
+              {
+                "long": "replace",
+                "description": "on duplicate document IDs, replace existing document with imported document",
+                "inherit": false
+              },
+              {
+                "long": "allow-failing-assets",
+                "description": "skip assets that cannot be fetched/uploaded",
+                "inherit": false
+              },
+              {
+                "long": "replace-assets",
+                "description": "skip reuse of existing assets",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "provider": "builtin.files",
+                  "index": 0
+                },
+                {
+                  "name": "target_dataset",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list datasets of your project"
+          },
+          {
+            "name": "visibility",
+            "description": "set visibility of a dataset",
+            "arguments": {
+              "states": [
+                {
+                  "name": "dataset",
+                  "index": 0
+                },
+                {
+                  "name": "mode",
+                  "provider": {
+                    "values": [
+                      "get",
+                      "set"
+                    ]
+                  },
+                  "index": 1
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "debug",
+        "description": "gathers information on Sanity environment",
+        "options": [
+          {
+            "long": "secrets",
+            "description": "include API keys in output",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "deploy",
+        "description": "deploys a statically built Sanity studio",
+        "options": [
+          {
+            "long": "source-maps",
+            "description": "enable source maps for built bundles (increases size of bundle)",
+            "inherit": false
+          },
+          {
+            "long": "no-minify",
+            "description": "skip minifying built JavaScript (speeds up build, increases size of bundle)",
+            "inherit": false
+          },
+          {
+            "long": "no-build",
+            "description": "don't build the studio prior to deploy, instead deploying the version currently in `dist/`",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "source_dir",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "docs",
+        "description": "opens the Sanity documentation"
+      },
+      {
+        "name": "documents",
+        "description": "interact with documents in your project",
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create one or more documents",
+            "options": [
+              {
+                "long": "replace",
+                "description": "on duplicate document IDs, replace existing document with specified document(s)",
+                "inherit": false
+              },
+              {
+                "long": "missing",
+                "description": "on duplicate document IDs, don't modify the target document(s)",
+                "inherit": false
+              },
+              {
+                "long": "watch",
+                "description": "write the documents whenever the target file or buffer changes",
+                "inherit": false
+              },
+              {
+                "long": "json5",
+                "description": "use JSON5 file type to allow a \"simplified\" version of JSON",
+                "inherit": false
+              },
+              {
+                "long": "id",
+                "description": "specify a document ID to use. Will fetch remote document ID and populate editor",
+                "inherit": false,
+                "value": {
+                  "name": "id"
+                }
+              },
+              {
+                "long": "dataset",
+                "description": "nAME to override dataset",
+                "inherit": false,
+                "value": {
+                  "name": "dataset"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "provider": "builtin.files",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete a document by ID",
+            "options": [
+              {
+                "long": "dataset",
+                "description": "nAME to override dataset",
+                "inherit": false,
+                "value": {
+                  "name": "dataset"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "id",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "get",
+            "description": "get and print a document by ID",
+            "options": [
+              {
+                "long": "pretty",
+                "description": "colorized JSON output",
+                "inherit": false
+              },
+              {
+                "long": "dataset",
+                "description": "nAME to override dataset",
+                "inherit": false,
+                "value": {
+                  "name": "dataset"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "document_id",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "query",
+            "description": "query for documents",
+            "options": [
+              {
+                "long": "pretty",
+                "description": "colorized JSON output",
+                "inherit": false
+              },
+              {
+                "long": "dataset",
+                "description": "nAME to override dataset",
+                "inherit": false,
+                "value": {
+                  "name": "dataset"
+                }
+              },
+              {
+                "long": "api-version",
+                "description": "aPI version to use (defaults to `v1`)",
+                "inherit": false,
+                "value": {
+                  "name": "version"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "query",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "exec",
+        "description": "runs a script in Sanity context",
+        "options": [
+          {
+            "long": "with-user-token",
+            "description": "preload access token from CLI config into 'part:@sanity/base/client' part",
+            "inherit": false
+          },
+          {
+            "long": "mock-browser-env",
+            "description": "mocks a browser-like environment using jsdom",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "script",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "graphql",
+        "description": "interact with GraphQL APIs",
+        "subcommands": [
+          {
+            "name": "deploy",
+            "description": "deploy a GraphQL API from the current Sanity schema",
+            "options": [
+              {
+                "long": "dataset",
+                "description": "deploy API for the given dataset",
+                "inherit": false,
+                "value": {
+                  "name": "dataset"
+                }
+              },
+              {
+                "long": "tag",
+                "description": "deploy API to given tag (defaults to 'default')",
+                "inherit": false,
+                "value": {
+                  "name": "tag"
+                }
+              },
+              {
+                "long": "generation",
+                "description": "aPI generation to deploy (defaults to 'gen3')",
+                "inherit": false,
+                "value": {
+                  "name": "generation"
+                }
+              },
+              {
+                "long": "non-null-document-fields",
+                "description": "set document interface fields (_id, _type etc) as non-null",
+                "inherit": false
+              },
+              {
+                "long": "playground",
+                "description": "deploy a GraphQL playground for easily testing queries (public)",
+                "inherit": false
+              },
+              {
+                "long": "no-playground",
+                "description": "skip playground prompt (do not deploy a playground)",
+                "inherit": false
+              },
+              {
+                "long": "force",
+                "description": "deploy API without confirming breaking changes",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "lists all the GraphQL endpoints deployed for this project"
+          },
+          {
+            "name": "undeploy",
+            "description": "remove a deployed GraphQL API",
+            "options": [
+              {
+                "long": "dataset",
+                "description": "delete GraphQL API for the given dataset",
+                "inherit": false,
+                "value": {
+                  "name": "dataset"
+                }
+              },
+              {
+                "long": "tag",
+                "description": "delete GraphQL API for the given tag (defaults to 'default')",
+                "inherit": false,
+                "value": {
+                  "name": "tag"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "hook",
+        "description": "interact with hooks in your project",
+        "subcommands": [
+          {
+            "name": "attempt",
+            "description": "print details of a given webhook delivery attempt",
+            "arguments": {
+              "states": [
+                {
+                  "name": "attempt_id",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "create",
+            "description": "create a new hook for the given dataset"
+          },
+          {
+            "name": "delete",
+            "description": "delete a hook within your project",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list hooks for a given project"
+          },
+          {
+            "name": "logs",
+            "description": "list latest log entries for a given hook",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "initialize a new Sanity project or plugin",
+        "options": [
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "use unattended mode, accepting defaults and using only flags for choices",
+            "inherit": false
+          },
+          {
+            "long": "project",
+            "description": "project ID to use for the studio",
+            "inherit": false,
+            "value": {
+              "name": "projectId"
+            }
+          },
+          {
+            "long": "organization",
+            "description": "organization ID to use for the project",
+            "inherit": false,
+            "value": {
+              "name": "organizationId"
+            }
+          },
+          {
+            "long": "dataset",
+            "description": "dataset name for the studio",
+            "inherit": false,
+            "value": {
+              "name": "dataset"
+            }
+          },
+          {
+            "long": "dataset-default",
+            "description": "set up a project with a public dataset named \"production\"",
+            "inherit": false
+          },
+          {
+            "long": "output-path",
+            "description": "path to write studio project to",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "template",
+            "description": "project template to use [default: \"clean\"]",
+            "inherit": false,
+            "value": {
+              "name": "template"
+            }
+          },
+          {
+            "long": "provider",
+            "description": "login provider to use",
+            "inherit": false,
+            "value": {
+              "name": "provider"
+            }
+          },
+          {
+            "long": "visibility",
+            "description": "visibility mode for dataset (public/private)",
+            "inherit": false,
+            "value": {
+              "name": "mode",
+              "provider": {
+                "values": [
+                  "public",
+                  "private"
+                ]
+              }
+            }
+          },
+          {
+            "long": "create-project",
+            "description": "create a new project with the given name",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "project-plan",
+            "description": "optionally select a plan for a new project",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "coupon",
+            "description": "optionally select a coupon for a new project (cannot be used with --project-plan)",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "reconfigure",
+            "description": "reconfigure Sanity studio in current folder with new project/dataset",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "installs a Sanity plugin to the current Sanity configuration",
+        "arguments": {
+          "states": [
+            {
+              "name": "plugin",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "login",
+        "description": "authenticates against the Sanity.io API (no flag) or a third-party identity provider (with --sso flag)",
+        "options": [
+          {
+            "long": "sso",
+            "description": "authenticate against a third-party identity provider",
+            "inherit": false,
+            "value": {
+              "name": "slug"
+            }
+          }
+        ]
+      },
+      {
+        "name": "logout",
+        "description": "logs out of the Sanity.io session"
+      },
+      {
+        "name": "manage",
+        "description": "opens the Sanity project management UI"
+      },
+      {
+        "name": "projects",
+        "description": "interact with projects connected to your logged in user",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "lists projects connected to your user",
+            "options": [
+              {
+                "long": "sort",
+                "description": "sort output by specified column",
+                "inherit": false,
+                "value": {
+                  "name": "field"
+                }
+              },
+              {
+                "long": "order",
+                "description": "sort output ascending/descending",
+                "inherit": false,
+                "value": {
+                  "name": "order",
+                  "provider": {
+                    "values": [
+                      "asc",
+                      "desc"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "start",
+        "description": "starts a web server for the Content Studio",
+        "options": [
+          {
+            "long": "port",
+            "description": "tCP port to start server on. [default: 3333]",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "host",
+            "description": "the local network interface at which to listen. [default: \"127.0.0.1\"]",
+            "inherit": false,
+            "value": {
+              "name": "host"
+            }
+          }
+        ]
+      },
+      {
+        "name": "undeploy",
+        "description": "removes the deployed studio from <hostname>.sanity.studio"
+      },
+      {
+        "name": "uninstall",
+        "description": "removes a Sanity plugin from the current Sanity configuration",
+        "arguments": {
+          "states": [
+            {
+              "name": "plugin",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "upgrade",
+        "description": "upgrades all (or some) Sanity modules to their latest versions",
+        "options": [
+          {
+            "long": "range",
+            "description": "version range to upgrade to, eg '^2.2.7' or '2.1.x'",
+            "inherit": false,
+            "value": {
+              "name": "range"
+            }
+          },
+          {
+            "long": "tag",
+            "description": "tagged release to upgrade to, eg 'canary' or 'some-feature'",
+            "inherit": false,
+            "value": {
+              "name": "tag"
+            }
+          },
+          {
+            "long": "save-exact",
+            "description": "pin the resolved version numbers in package.json (no ^ prefix)",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "users",
+        "description": "manage users of your project",
+        "subcommands": [
+          {
+            "name": "invite",
+            "description": "invite a new user to the project",
+            "options": [
+              {
+                "long": "role",
+                "description": "role to invite the user as",
+                "inherit": false,
+                "value": {
+                  "name": "role"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "email",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list users of the project",
+            "options": [
+              {
+                "long": "no-invitations",
+                "description": "don't include pending invitations",
+                "inherit": false
+              },
+              {
+                "long": "no-robots",
+                "description": "don't include robots (token users)",
+                "inherit": false
+              },
+              {
+                "long": "sort",
+                "description": "sort users by specified column: id, name, role, date",
+                "inherit": false,
+                "value": {
+                  "name": "field",
+                  "provider": {
+                    "values": [
+                      "id",
+                      "name",
+                      "role",
+                      "date"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "order",
+                "description": "sort output ascending/descending",
+                "inherit": false,
+                "value": {
+                  "name": "order",
+                  "provider": {
+                    "values": [
+                      "asc",
+                      "desc"
+                    ]
+                  }
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "versions",
+        "description": "shows the installed versions of Sanity CLI and core components"
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
