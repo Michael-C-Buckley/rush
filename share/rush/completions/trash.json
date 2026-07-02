@@ -1,0 +1,63 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "trash",
+    "description": "move files and directories to the trash",
+    "options": [
+      {
+        "short": "v",
+        "description": "print verbose output while moving items",
+        "inherit": false
+      },
+      {
+        "short": "F",
+        "description": "use the Finder API to move items to the trash",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "description": "list items in the trash",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "description": "empty the trash",
+        "priority": -10,
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "securely empty the trash with confirmation",
+        "inherit": false
+      },
+      {
+        "short": "y",
+        "description": "skip confirmation for empty operations",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "path",
+          "provider": [
+            "builtin.directories",
+            "builtin.files"
+          ],
+          "index": 0,
+          "repeatable": true,
+          "description": "file or directory"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
