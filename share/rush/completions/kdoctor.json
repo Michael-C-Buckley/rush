@@ -1,0 +1,38 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "kdoctor",
+    "description": "Kotlin Multiplatform environment doctor",
+    "options": [
+      {
+        "long": "version",
+        "description": "report a version of KDoctor",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "short": "v",
+        "description": "report an extended information",
+        "inherit": false
+      },
+      {
+        "long": "all",
+        "short": "a",
+        "description": "run extra diagnostics",
+        "inherit": false
+      },
+      {
+        "long": "team-ids",
+        "description": "report all available Apple dev team ids",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "usage info",
+        "inherit": false
+      }
+    ]
+  }
+}
