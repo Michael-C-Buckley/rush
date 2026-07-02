@@ -1,0 +1,1134 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "task",
+    "description": "run Taskfile tasks or manage Taskwarrior tasks",
+    "options": [
+      {
+        "long": "list-all",
+        "description": "list all tasks",
+        "inherit": false,
+        "short": "a"
+      },
+      {
+        "long": "color",
+        "description": "set colored output",
+        "inherit": false,
+        "short": "c",
+        "value": {
+          "name": "color",
+          "provider": {
+            "values": [
+              "true",
+              "false"
+            ]
+          }
+        }
+      },
+      {
+        "long": "concurrency",
+        "description": "set concurrency limit",
+        "inherit": false,
+        "short": "C",
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "dir",
+        "description": "set execution directory",
+        "inherit": false,
+        "short": "d",
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "dry",
+        "description": "print tasks without executing",
+        "inherit": false
+      },
+      {
+        "long": "force",
+        "description": "force execution",
+        "inherit": false,
+        "short": "f"
+      },
+      {
+        "long": "help",
+        "description": "show help",
+        "inherit": false,
+        "short": "h"
+      },
+      {
+        "long": "init",
+        "description": "create Taskfile.yml",
+        "inherit": false,
+        "short": "i"
+      },
+      {
+        "long": "list",
+        "description": "list tasks",
+        "inherit": false,
+        "short": "l"
+      },
+      {
+        "long": "output",
+        "description": "set output style",
+        "inherit": false,
+        "short": "o",
+        "value": {
+          "name": "style",
+          "provider": {
+            "values": [
+              "interleaved",
+              "group",
+              "prefixed"
+            ]
+          }
+        }
+      },
+      {
+        "long": "parallel",
+        "description": "run tasks in parallel",
+        "inherit": false,
+        "short": "p"
+      },
+      {
+        "long": "silent",
+        "description": "disable echoing",
+        "inherit": false,
+        "short": "s"
+      },
+      {
+        "long": "status",
+        "description": "check task status",
+        "inherit": false
+      },
+      {
+        "long": "summary",
+        "description": "show task summary",
+        "inherit": false
+      },
+      {
+        "long": "taskfile",
+        "description": "choose Taskfile",
+        "inherit": false,
+        "short": "t",
+        "value": {
+          "name": "taskfile",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "verbose",
+        "description": "enable verbose mode",
+        "inherit": false,
+        "short": "v"
+      },
+      {
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "long": "watch",
+        "description": "watch task",
+        "inherit": false,
+        "short": "w"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "task-or-filter",
+          "index": 0,
+          "optional": true,
+          "repeatable": true,
+          "description": "task name or Taskwarrior filter"
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "active",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "all",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "blocked",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "blocking",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "burndown.daily",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "burndown.weekly",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "burndown.monthly",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "calendar",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "commands",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "diagnostics",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "logo",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "news",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "reports",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "completed",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "count",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "export",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ghistory.annual",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ghistory.monthly",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ghistory.weekly",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ghistory.daily",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "show help",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "history.annual",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "history.monthly",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "history.weekly",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "history.daily",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ids",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "uuids",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "udas",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "information",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "long",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ls",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "minimal",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "newest",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "next",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ready",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "oldest",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "overdue",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "projects",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "recurring",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "unblocked",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "waiting",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "stats",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "summary",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "tags",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "timesheet",
+        "description": "Taskwarrior report",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "undo",
+        "description": "undo most recent action",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "version",
+        "description": "show Taskwarrior version",
+        "arguments": {
+          "states": [
+            {
+              "name": "filter",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task filter"
+            }
+          ]
+        }
+      },
+      {
+        "name": "add",
+        "description": "Taskwarrior task action",
+        "arguments": {
+          "states": [
+            {
+              "name": "modifier",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task modifier"
+            }
+          ]
+        }
+      },
+      {
+        "name": "annotate",
+        "description": "Taskwarrior task action",
+        "arguments": {
+          "states": [
+            {
+              "name": "modifier",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task modifier"
+            }
+          ]
+        }
+      },
+      {
+        "name": "append",
+        "description": "Taskwarrior task action",
+        "arguments": {
+          "states": [
+            {
+              "name": "modifier",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task modifier"
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete",
+        "description": "Taskwarrior task action",
+        "arguments": {
+          "states": [
+            {
+              "name": "modifier",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task modifier"
+            }
+          ]
+        },
+        "aliases": [
+          "rm"
+        ]
+      },
+      {
+        "name": "done",
+        "description": "Taskwarrior task action",
+        "arguments": {
+          "states": [
+            {
+              "name": "modifier",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task modifier"
+            }
+          ]
+        }
+      },
+      {
+        "name": "duplicate",
+        "description": "Taskwarrior task action",
+        "arguments": {
+          "states": [
+            {
+              "name": "modifier",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task modifier"
+            }
+          ]
+        }
+      },
+      {
+        "name": "edit",
+        "description": "Taskwarrior task action",
+        "arguments": {
+          "states": [
+            {
+              "name": "modifier",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task modifier"
+            }
+          ]
+        }
+      },
+      {
+        "name": "log",
+        "description": "Taskwarrior task action",
+        "arguments": {
+          "states": [
+            {
+              "name": "modifier",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task modifier"
+            }
+          ]
+        }
+      },
+      {
+        "name": "modify",
+        "description": "Taskwarrior task action",
+        "arguments": {
+          "states": [
+            {
+              "name": "modifier",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task modifier"
+            }
+          ]
+        }
+      },
+      {
+        "name": "prepend",
+        "description": "Taskwarrior task action",
+        "arguments": {
+          "states": [
+            {
+              "name": "modifier",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task modifier"
+            }
+          ]
+        }
+      },
+      {
+        "name": "purge",
+        "description": "Taskwarrior task action",
+        "arguments": {
+          "states": [
+            {
+              "name": "modifier",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task modifier"
+            }
+          ]
+        }
+      },
+      {
+        "name": "start",
+        "description": "Taskwarrior task action",
+        "arguments": {
+          "states": [
+            {
+              "name": "modifier",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task modifier"
+            }
+          ]
+        }
+      },
+      {
+        "name": "stop",
+        "description": "Taskwarrior task action",
+        "arguments": {
+          "states": [
+            {
+              "name": "modifier",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "task modifier"
+            }
+          ]
+        }
+      },
+      {
+        "name": "context",
+        "description": "manage Taskwarrior contexts",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "optional": true,
+              "repeatable": true,
+              "description": "context name"
+            }
+          ]
+        },
+        "subcommands": [
+          {
+            "name": "delete",
+            "description": "delete context",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0,
+                  "optional": true,
+                  "repeatable": false,
+                  "description": "context name"
+                }
+              ]
+            }
+          },
+          {
+            "name": "define",
+            "description": "define context",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0,
+                  "optional": true,
+                  "repeatable": false,
+                  "description": "context name"
+                },
+                {
+                  "name": "filter",
+                  "index": 1,
+                  "optional": true,
+                  "repeatable": true,
+                  "description": "context filter"
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list contexts"
+          },
+          {
+            "name": "none",
+            "description": "clear active context"
+          },
+          {
+            "name": "show",
+            "description": "show active context"
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
