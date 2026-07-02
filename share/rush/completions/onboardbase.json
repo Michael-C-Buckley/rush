@@ -1,0 +1,501 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "onboardbase",
+    "description": "manage app secrets and credentials",
+    "subcommands": [
+      {
+        "name": "build",
+        "description": "Run a command with secrets injected into the environment",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show CLI help",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "project",
+            "description": "name of project",
+            "inherit": false,
+            "value": {
+              "name": "project-name"
+            }
+          },
+          {
+            "short": "e",
+            "long": "environment",
+            "description": "environment to run by default",
+            "inherit": false,
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "short": "c",
+            "long": "command",
+            "description": "command to run",
+            "inherit": false,
+            "value": {
+              "name": "Command-to-Run"
+            }
+          },
+          {
+            "short": "k",
+            "long": "prefix",
+            "description": "prefix",
+            "inherit": false,
+            "value": {
+              "name": "Project-Prefix"
+            }
+          },
+          {
+            "short": "s",
+            "long": "passphrase",
+            "description": "passphrase",
+            "inherit": false,
+            "value": {
+              "name": "Encryption-Passphrase"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0,
+              "rest": "command-line"
+            }
+          ]
+        }
+      },
+      {
+        "name": "config:get-token",
+        "description": "Get all tokens",
+        "options": [
+          {
+            "short": "S",
+            "long": "scope",
+            "description": "scope",
+            "inherit": false,
+            "value": {
+              "name": "project-scope"
+            }
+          }
+        ]
+      },
+      {
+        "name": "config:set",
+        "description": "Update your onboardbase config",
+        "options": [
+          {
+            "short": "s",
+            "long": "scope",
+            "description": "scope",
+            "inherit": false,
+            "value": {
+              "name": "project-scope"
+            }
+          },
+          {
+            "short": "t",
+            "long": "token",
+            "description": "auth Token",
+            "inherit": false,
+            "value": {
+              "name": "Auth-Token"
+            }
+          },
+          {
+            "short": "A",
+            "long": "api-host",
+            "description": "aPI Host",
+            "inherit": false,
+            "value": {
+              "name": "Api-Host"
+            }
+          },
+          {
+            "short": "D",
+            "long": "dashboard-host",
+            "description": "dashboard Host",
+            "inherit": false,
+            "value": {
+              "name": "Dashboard-Host"
+            }
+          }
+        ]
+      },
+      {
+        "name": "config:set-token",
+        "description": "Set up Configuration token manually",
+        "options": [
+          {
+            "short": "S",
+            "long": "scope",
+            "description": "scope",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "token",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "destroy",
+        "description": "Cleanup Onboardbase artifacts including backup and authentication"
+      },
+      {
+        "name": "environment:create",
+        "description": "Create an environment under a project",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show CLI help",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "project",
+            "description": "name of project",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "e",
+            "long": "environment",
+            "description": "environment Title",
+            "inherit": false,
+            "value": {
+              "name": "Environment-Name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "login",
+        "description": "Describe the command here",
+        "options": [
+          {
+            "long": "overwrite",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "logout",
+        "description": "Log out of the CLI"
+      },
+      {
+        "name": "project:create",
+        "description": "Create a project",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show CLI help",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "title",
+            "description": "name of project",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "d",
+            "long": "description",
+            "description": "project description",
+            "inherit": false,
+            "value": {
+              "name": "Project-Description"
+            }
+          },
+          {
+            "short": "e",
+            "long": "environment",
+            "description": "environment to run by default",
+            "inherit": false,
+            "value": {
+              "name": "default-environment"
+            }
+          }
+        ]
+      },
+      {
+        "name": "recommendation:create",
+        "description": "Create a recommendation",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show CLI help",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "project",
+            "description": "name of project",
+            "inherit": false,
+            "value": {
+              "name": "project-name"
+            }
+          },
+          {
+            "short": "n",
+            "long": "note",
+            "description": "note",
+            "inherit": false,
+            "value": {
+              "name": "project-description"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "secrets",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "secrets",
+        "description": "Log secrets in JSON file",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show CLI help",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "project",
+            "description": "name of project",
+            "inherit": false,
+            "value": {
+              "name": "project-name"
+            }
+          },
+          {
+            "short": "e",
+            "long": "environment",
+            "description": "environment to run by default",
+            "inherit": false,
+            "value": {
+              "name": "default-environment"
+            }
+          },
+          {
+            "short": "J",
+            "long": "json",
+            "description": "jSON format",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "secrets:delete",
+        "description": "Update secrets on Onboardbase",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show CLI help",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "project",
+            "description": "name of project",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "e",
+            "long": "environment",
+            "description": "environment to run by default",
+            "inherit": false,
+            "value": {
+              "name": "Environment-to-update"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "secrets",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "secrets:update",
+        "description": "Update secrets on Onboardbase",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show CLI help",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "project",
+            "description": "name of project",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "e",
+            "long": "environment",
+            "description": "environment to run by default",
+            "inherit": false,
+            "value": {
+              "name": "Environment-to-update"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "secrets",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "secrets:upload",
+        "description": "Upload secrets",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show CLI help",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "project",
+            "description": "name of project",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "e",
+            "long": "environment",
+            "description": "environment to run by default",
+            "inherit": false,
+            "value": {
+              "name": "Environment-to-update"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "secrets",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "setup",
+        "description": "Setup the Onboardbase CLI for managing secrets"
+      },
+      {
+        "name": "share",
+        "description": "Share your local onboardbase.yaml secrets with a teammate",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show CLI help",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "project",
+            "description": "project name",
+            "inherit": false,
+            "value": {
+              "name": "project-name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "show command help",
+        "options": [
+          {
+            "long": "all",
+            "description": "see all commands in CLI",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "description": "Command to show help for",
+              "index": 0,
+              "provider": "onboardbase.commands",
+              "required": false
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "onboardbase.commands": {
+        "values": [
+          "build",
+          "config:get-token",
+          "config:set",
+          "config:set-token",
+          "destroy",
+          "environment:create",
+          "login",
+          "logout",
+          "project:create",
+          "recommendation:create",
+          "secrets",
+          "secrets:delete",
+          "secrets:update",
+          "secrets:upload",
+          "setup",
+          "share",
+          "help"
+        ]
+      }
+    }
+  }
+}
