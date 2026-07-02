@@ -1,0 +1,275 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ruff",
+    "description": "lint and format Python code with Ruff",
+    "providers": {
+      "ruff.output-formats": {
+        "values": [
+          { "value": "text" },
+          { "value": "json" }
+        ]
+      },
+      "ruff.check-output-formats": {
+        "values": [
+          { "value": "concise" },
+          { "value": "full" },
+          { "value": "json" },
+          { "value": "json-lines" },
+          { "value": "junit" },
+          { "value": "grouped" },
+          { "value": "github" },
+          { "value": "gitlab" },
+          { "value": "pylint" },
+          { "value": "rdjson" },
+          { "value": "azure" },
+          { "value": "sarif" }
+        ]
+      },
+      "ruff.target-versions": {
+        "values": [
+          { "value": "py37" },
+          { "value": "py38" },
+          { "value": "py39" },
+          { "value": "py310" },
+          { "value": "py311" },
+          { "value": "py312" },
+          { "value": "py313" }
+        ]
+      },
+      "ruff.graph-directions": {
+        "values": [
+          { "value": "dependencies" },
+          { "value": "dependents" }
+        ]
+      },
+      "ruff.rules": {
+        "values": [
+          { "value": "F", "description": "pyflakes rules" },
+          { "value": "E", "description": "pycodestyle error rules" },
+          { "value": "W", "description": "pycodestyle warning rules" },
+          { "value": "C90", "description": "mccabe rules" },
+          { "value": "I", "description": "isort rules" },
+          { "value": "N", "description": "pep8-naming rules" },
+          { "value": "D", "description": "pydocstyle rules" },
+          { "value": "UP", "description": "pyupgrade rules" },
+          { "value": "ANN", "description": "flake8-annotations rules" },
+          { "value": "ASYNC", "description": "flake8-async rules" },
+          { "value": "S", "description": "flake8-bandit rules" },
+          { "value": "BLE", "description": "flake8-blind-except rules" },
+          { "value": "B", "description": "flake8-bugbear rules" },
+          { "value": "A", "description": "flake8-builtins rules" },
+          { "value": "COM", "description": "flake8-commas rules" },
+          { "value": "C4", "description": "flake8-comprehensions rules" },
+          { "value": "DTZ", "description": "flake8-datetimez rules" },
+          { "value": "DJ", "description": "flake8-django rules" },
+          { "value": "EM", "description": "flake8-errmsg rules" },
+          { "value": "EXE", "description": "flake8-executable rules" },
+          { "value": "ISC", "description": "flake8-implicit-str-concat rules" },
+          { "value": "ICN", "description": "flake8-import-conventions rules" },
+          { "value": "LOG", "description": "flake8-logging rules" },
+          { "value": "G", "description": "flake8-logging-format rules" },
+          { "value": "INP", "description": "flake8-no-pep420 rules" },
+          { "value": "PIE", "description": "flake8-pie rules" },
+          { "value": "T20", "description": "flake8-print rules" },
+          { "value": "PYI", "description": "flake8-pyi rules" },
+          { "value": "PT", "description": "flake8-pytest-style rules" },
+          { "value": "Q", "description": "flake8-quotes rules" },
+          { "value": "RET", "description": "flake8-return rules" },
+          { "value": "SLF", "description": "flake8-self rules" },
+          { "value": "SIM", "description": "flake8-simplify rules" },
+          { "value": "TID", "description": "flake8-tidy-imports rules" },
+          { "value": "TC", "description": "flake8-type-checking rules" },
+          { "value": "ARG", "description": "flake8-unused-arguments rules" },
+          { "value": "PTH", "description": "flake8-use-pathlib rules" },
+          { "value": "TD", "description": "flake8-todos rules" },
+          { "value": "FIX", "description": "flake8-fixme rules" },
+          { "value": "ERA", "description": "eradicate rules" },
+          { "value": "PD", "description": "pandas-vet rules" },
+          { "value": "PGH", "description": "pygrep-hooks rules" },
+          { "value": "PLC", "description": "pylint convention rules" },
+          { "value": "PLE", "description": "pylint error rules" },
+          { "value": "PLR", "description": "pylint refactor rules" },
+          { "value": "PLW", "description": "pylint warning rules" },
+          { "value": "TRY", "description": "tryceratops rules" },
+          { "value": "FLY", "description": "flynt rules" },
+          { "value": "NPY", "description": "numpy rules" },
+          { "value": "FAST", "description": "fastapi rules" },
+          { "value": "AIR", "description": "airflow rules" },
+          { "value": "PERF", "description": "perflint rules" },
+          { "value": "FURB", "description": "refurb rules" },
+          { "value": "DOC", "description": "pydoclint rules" },
+          { "value": "RUF", "description": "ruff-specific rules" },
+          { "value": "ALL", "description": "all rules" }
+        ]
+      }
+    },
+    "options": [
+      { "short": "v", "long": "verbose", "description": "enable verbose logging" },
+      { "short": "q", "long": "quiet", "description": "print diagnostics only" },
+      { "short": "s", "long": "silent", "description": "disable logging" },
+      {
+        "long": "config",
+        "description": "use a configuration file",
+        "value": { "name": "config", "provider": "builtin.files" }
+      },
+      { "long": "isolated", "description": "ignore configuration files" },
+      { "long": "help", "description": "show help" }
+    ],
+    "subcommands": [
+      {
+        "name": "check",
+        "description": "run Ruff on files or directories",
+        "options": [
+          { "long": "fix", "description": "apply safe fixes" },
+          { "long": "unsafe-fixes", "description": "include unsafe fixes" },
+          { "long": "show-fixes", "description": "show fixed violations" },
+          { "long": "diff", "description": "show changes without writing files" },
+          { "short": "w", "long": "watch", "description": "rerun when files change" },
+          { "long": "fix-only", "description": "apply fixes without reporting remaining violations" },
+          { "long": "ignore-noqa", "description": "ignore noqa comments" },
+          {
+            "long": "output-format",
+            "description": "set output format",
+            "value": { "name": "format", "provider": "ruff.check-output-formats" }
+          },
+          {
+            "short": "o",
+            "long": "output-file",
+            "description": "write linter output to a file",
+            "value": { "name": "file", "provider": "builtin.files" }
+          },
+          {
+            "long": "target-version",
+            "description": "set minimum supported Python version",
+            "value": { "name": "version", "provider": "ruff.target-versions" }
+          },
+          { "long": "preview", "description": "enable preview rules and fixes" },
+          { "long": "extension", "description": "map file extensions to languages", "value": { "name": "mapping" } },
+          { "long": "statistics", "description": "show violation counts by rule" },
+          { "long": "add-noqa", "description": "add noqa directives automatically" },
+          { "long": "show-files", "description": "show files Ruff will check" },
+          { "long": "show-settings", "description": "show lint settings for a file" },
+          { "short": "h", "long": "help", "description": "show help" },
+          { "long": "select", "description": "enable rule codes", "value": { "name": "rules", "provider": "ruff.rules" } },
+          { "long": "ignore", "description": "disable rule codes", "value": { "name": "rules", "provider": "ruff.rules" } },
+          { "long": "extend-select", "description": "add enabled rule codes", "value": { "name": "rules", "provider": "ruff.rules" } },
+          { "long": "per-file-ignores", "description": "ignore rules for file patterns", "value": { "name": "mapping" } },
+          { "long": "extend-per-file-ignores", "description": "add per-file rule ignores", "value": { "name": "mapping" } },
+          { "long": "fixable", "description": "set fixable rule codes", "value": { "name": "rules", "provider": "ruff.rules" } },
+          { "long": "unfixable", "description": "set unfixable rule codes", "value": { "name": "rules", "provider": "ruff.rules" } },
+          { "long": "extend-fixable", "description": "add fixable rule codes", "value": { "name": "rules", "provider": "ruff.rules" } },
+          { "long": "exclude", "description": "exclude paths", "value": { "name": "path", "provider": "builtin.files" } },
+          { "long": "extend-exclude", "description": "add excluded paths", "value": { "name": "path", "provider": "builtin.files" } },
+          { "long": "respect-gitignore", "description": "respect ignore files" },
+          { "long": "force-exclude", "description": "force exclusions for explicit paths" },
+          { "short": "n", "long": "no-cache", "description": "disable cache reads" },
+          { "long": "cache-dir", "description": "set cache directory", "value": { "name": "directory", "provider": "builtin.directories" } },
+          { "long": "stdin-filename", "description": "set stdin filename", "value": { "name": "file", "provider": "builtin.files" } },
+          { "short": "e", "long": "exit-zero", "description": "exit successfully when violations are found" },
+          { "long": "exit-non-zero-on-fix", "description": "exit unsuccessfully when files are fixed" }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "path", "index": 0, "repeatable": true, "provider": "builtin.files", "description": "file or directory to check" }
+          ]
+        }
+      },
+      {
+        "name": "format",
+        "description": "format Python files",
+        "options": [
+          { "long": "check", "description": "check whether files would change" },
+          { "long": "diff", "description": "show changes without writing files" },
+          { "long": "extension", "description": "map file extensions to languages", "value": { "name": "mapping" } },
+          {
+            "long": "target-version",
+            "description": "set minimum supported Python version",
+            "value": { "name": "version", "provider": "ruff.target-versions" }
+          },
+          { "long": "preview", "description": "enable preview formatting" },
+          { "short": "n", "long": "no-cache", "description": "disable cache reads" },
+          { "long": "cache-dir", "description": "set cache directory", "value": { "name": "directory", "provider": "builtin.directories" } },
+          { "long": "stdin-filename", "description": "set stdin filename", "value": { "name": "file", "provider": "builtin.files" } },
+          { "long": "respect-gitignore", "description": "respect ignore files" },
+          { "long": "exclude", "description": "exclude paths", "value": { "name": "path", "provider": "builtin.files" } },
+          { "long": "force-exclude", "description": "force exclusions for explicit paths" },
+          { "long": "line-length", "description": "set line length", "value": { "name": "columns" } },
+          { "long": "range", "description": "format only a source range", "value": { "name": "range" } }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "path", "index": 0, "repeatable": true, "provider": "builtin.files", "description": "file or directory to format" }
+          ]
+        }
+      },
+      {
+        "name": "rule",
+        "description": "explain a lint rule",
+        "options": [
+          { "long": "all", "description": "explain all rules" },
+          { "long": "output-format", "description": "set output format", "value": { "name": "format", "provider": "ruff.output-formats" } }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "rule", "index": 0, "provider": "ruff.rules", "description": "rule to explain" }
+          ]
+        }
+      },
+      {
+        "name": "config",
+        "description": "list or describe configuration options",
+        "options": [
+          { "long": "output-format", "description": "set output format", "value": { "name": "format", "provider": "ruff.output-formats" } }
+        ]
+      },
+      {
+        "name": "linter",
+        "description": "list supported upstream linters",
+        "options": [
+          { "long": "output-format", "description": "set output format", "value": { "name": "format", "provider": "ruff.output-formats" } }
+        ]
+      },
+      { "name": "clean", "description": "clear Ruff caches" },
+      {
+        "name": "server",
+        "description": "run the language server",
+        "options": [
+          { "long": "preview", "description": "enable preview mode" },
+          { "long": "no-preview", "description": "disable preview mode" }
+        ]
+      },
+      {
+        "name": "analyze",
+        "description": "analyze Python source code",
+        "subcommands": [
+          {
+            "name": "graph",
+            "description": "generate a Python import graph",
+            "options": [
+              { "long": "direction", "description": "set graph direction", "value": { "name": "direction", "provider": "ruff.graph-directions" } },
+              { "long": "detect-string-imports", "description": "detect imports from string literals" },
+              { "long": "preview", "description": "enable preview mode" },
+              { "long": "no-preview", "description": "disable preview mode" },
+              { "long": "target-version", "description": "set minimum supported Python version", "value": { "name": "version", "provider": "ruff.target-versions" } }
+            ],
+            "arguments": {
+              "states": [
+                { "name": "path", "index": 0, "repeatable": true, "provider": "builtin.files", "description": "file or directory to analyze" }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "show Ruff version",
+        "options": [
+          { "long": "output-format", "description": "set output format", "value": { "name": "format", "provider": "ruff.output-formats" } }
+        ]
+      },
+      { "name": "help", "description": "show help for a command" }
+    ]
+  }
+}
