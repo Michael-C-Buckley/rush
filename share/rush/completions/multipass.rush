@@ -1,0 +1,43 @@
+__rush_complete_multipass_list_instances() {
+  state_filter=$1
+  multipass list --format csv 2>/dev/null | while IFS=, read -r name state ipv4 image; do
+    test "$name" = Name && continue
+    test -n "$name" || continue
+    if test -n "$state_filter" && test "$state" != "$state_filter"; then
+      continue
+    fi
+    rush_complete candidate "$name" --kind plain --description "${state:-multipass instance}"
+  done
+}
+
+__rush_complete_multipass_instances() {
+  __rush_complete_multipass_list_instances ""
+}
+
+__rush_complete_multipass_running_instances() {
+  __rush_complete_multipass_list_instances Running
+}
+
+__rush_complete_multipass_stopped_instances() {
+  __rush_complete_multipass_list_instances Stopped
+}
+
+__rush_complete_multipass_deleted_instances() {
+  __rush_complete_multipass_list_instances Deleted
+}
+
+__rush_complete_multipass_instance_targets() {
+  multipass list --format csv 2>/dev/null | while IFS=, read -r name state ipv4 image; do
+    test "$name" = Name && continue
+    test -n "$name" || continue
+    rush_complete candidate "$name:" --kind plain --description "multipass instance path"
+  done
+}
+
+__rush_complete_multipass_images() {
+  multipass find --format csv 2>/dev/null | while IFS=, read -r image aliases version description; do
+    test "$image" = Image && continue
+    test -n "$image" || continue
+    rush_complete candidate "$image" --kind plain --description "${description:-multipass image}"
+  done
+}

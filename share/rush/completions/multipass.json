@@ -1,0 +1,737 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "multipass",
+    "description": "Create, control and connect to Ubuntu instances",
+    "subcommands": [
+      {
+        "name": "alias",
+        "description": "Create an alias",
+        "arguments": {
+          "states": [
+            {
+              "name": "options",
+              "index": 0
+            },
+            {
+              "name": "definition",
+              "description": "Alias definition in the form <instance>:<command>",
+              "index": 1
+            },
+            {
+              "name": "name",
+              "description": "Name given to the alias being defined, defaults to <command>",
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "aliases",
+        "description": "List available aliases",
+        "options": [
+          {
+            "long": "format",
+            "description": "set output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "table",
+                  "json",
+                  "csv",
+                  "yaml"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "delete",
+        "description": "Delete instances",
+        "options": [
+          {
+            "long": "all",
+            "description": "Delete all instances",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "purge",
+            "description": "Purge instances immediately",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "Name of instances to delete",
+              "index": 0,
+              "repeatable": true,
+              "provider": {
+                "function": "__rush_complete_multipass_instances"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "exec",
+        "description": "Run a command on an instance",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "Name of the instance to run the command on",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_multipass_instances"
+              }
+            },
+            {
+              "name": "command",
+              "description": "Command to execute on the instance",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "find",
+        "description": "Display available images to create instances from",
+        "options": [
+          {
+            "long": "format",
+            "description": "set output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "table",
+                  "json",
+                  "csv",
+                  "yaml"
+                ]
+              }
+            }
+          },
+          {
+            "long": "show-unsupported",
+            "description": "Show unsupported cloud images as well",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "string",
+              "description": "An optional value to search for in [<remote:>]<string>",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "get",
+        "description": "Get a configuration setting",
+        "options": [
+          {
+            "long": "raw",
+            "description": "Output in raw format. For now, this affects only the",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "key",
+              "description": "Path to the setting whose configured value should be obtained",
+              "provider": {
+                "values": [
+                  "client.gui.autostart",
+                  "client.gui.hotkey",
+                  "client.primary-name",
+                  "local.bridged-network",
+                  "local.driver",
+                  "local.privileged-mounts"
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "Display help about a command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "description": "Name of command to display help for",
+              "index": 0,
+              "provider": {
+                "values": [
+                  "alias",
+                  "aliases",
+                  "delete",
+                  "exec",
+                  "find",
+                  "get",
+                  "help",
+                  "info",
+                  "launch",
+                  "list",
+                  "mount",
+                  "networks",
+                  "purge",
+                  "recover",
+                  "restart",
+                  "set",
+                  "shell",
+                  "start",
+                  "stop",
+                  "suspend",
+                  "transfer",
+                  "umount",
+                  "unalias",
+                  "version"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "info",
+        "description": "Display information about instances",
+        "options": [
+          {
+            "long": "format",
+            "description": "set output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "table",
+                  "json",
+                  "csv",
+                  "yaml"
+                ]
+              }
+            }
+          },
+          {
+            "long": "all",
+            "description": "Display info for all instances",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "Names of instances to display information about",
+              "index": 0,
+              "repeatable": true,
+              "provider": {
+                "function": "__rush_complete_multipass_instances"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "launch",
+        "description": "Create and start an Ubuntu instance",
+        "options": [
+          {
+            "long": "timeout",
+            "description": "maximum seconds to wait for completion",
+            "inherit": false,
+            "value": {
+              "name": "seconds"
+            }
+          },
+          {
+            "short": "c",
+            "long": "cpus",
+            "description": "Number of CPUs to allocate. Minimum: 1, default: 1",
+            "inherit": false,
+            "value": {
+              "name": "cpus"
+            }
+          },
+          {
+            "short": "d",
+            "long": "disk",
+            "description": "Disk space to allocate. Positive integers, in bytes, or",
+            "inherit": false,
+            "value": {
+              "name": "disk"
+            }
+          },
+          {
+            "short": "m",
+            "long": "mem",
+            "description": "Amount of memory to allocate. Positive integers, in",
+            "inherit": false,
+            "value": {
+              "name": "mem"
+            }
+          },
+          {
+            "short": "n",
+            "long": "name",
+            "description": "Name for the instance. If it is 'primary' (the",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "cloud-init",
+            "description": "Path to a user-data cloud-init configuration, or '-' for",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "network",
+            "description": "Add a network interface to the instance, where <spec> is",
+            "inherit": false,
+            "value": {
+              "name": "spec"
+            }
+          },
+          {
+            "long": "bridged",
+            "description": "Adds one `--network bridged` network",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "image",
+              "description": "image to launch",
+              "index": 0,
+              "required": false,
+              "provider": {
+                "function": "__rush_complete_multipass_images"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "List all available instances",
+        "options": [
+          {
+            "long": "format",
+            "description": "set output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "table",
+                  "json",
+                  "csv",
+                  "yaml"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "mount",
+        "description": "Mount a local directory in the instance",
+        "options": [
+          {
+            "short": "g",
+            "long": "gid-map",
+            "description": "A mapping of group IDs for use in the mount.",
+            "inherit": false,
+            "value": {
+              "name": "host:instance"
+            }
+          },
+          {
+            "short": "u",
+            "long": "uid-map",
+            "description": "A mapping of user IDs for use in the mount.",
+            "inherit": false,
+            "value": {
+              "name": "host:instance"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "source",
+              "description": "Path to the local directory to mount",
+              "provider": {
+                "function": "__rush_complete_multipass_instances"
+              },
+              "index": 0
+            },
+            {
+              "name": "target",
+              "description": "Target mount points, in <name>[:<path>]",
+              "index": 1,
+              "repeatable": true,
+              "provider": {
+                "function": "__rush_complete_multipass_instance_targets"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "networks",
+        "description": "List all available networks interfaces",
+        "options": [
+          {
+            "long": "format",
+            "description": "set output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "table",
+                  "json",
+                  "csv",
+                  "yaml"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "purge",
+        "description": "Purge all deleted instances permanently"
+      },
+      {
+        "name": "recover",
+        "description": "Recover deleted instances",
+        "options": [
+          {
+            "long": "all",
+            "description": "Recover all deleted instances",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "Names of instances to recover",
+              "index": 0,
+              "repeatable": true,
+              "provider": {
+                "function": "__rush_complete_multipass_deleted_instances"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "restart",
+        "description": "Restart instances",
+        "options": [
+          {
+            "long": "timeout",
+            "description": "maximum seconds to wait for completion",
+            "inherit": false,
+            "value": {
+              "name": "seconds"
+            }
+          },
+          {
+            "long": "all",
+            "description": "Restart all instances",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "Names of instances to restart. If omitted, and without",
+              "index": 0,
+              "repeatable": true,
+              "provider": {
+                "function": "__rush_complete_multipass_instances"
+              },
+              "required": false
+            }
+          ]
+        }
+      },
+      {
+        "name": "set",
+        "description": "Set a configuration setting",
+        "arguments": {
+          "states": [
+            {
+              "name": "key=value",
+              "description": "A key-value pair. The key specifies a path to",
+              "provider": {
+                "values": [
+                  "client.gui.autostart=",
+                  "client.gui.hotkey=",
+                  "client.primary-name=",
+                  "local.bridged-network=",
+                  "local.driver=",
+                  "local.privileged-mounts="
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "shell",
+        "description": "Open a shell on a running instance",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "Name of the instance to open a shell on. If omitted,",
+              "index": 0,
+              "repeatable": true,
+              "provider": {
+                "function": "__rush_complete_multipass_instances"
+              },
+              "required": false
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "timeout",
+            "description": "maximum seconds to wait for completion",
+            "inherit": false,
+            "value": {
+              "name": "seconds"
+            }
+          }
+        ]
+      },
+      {
+        "name": "start",
+        "description": "Start instances",
+        "options": [
+          {
+            "long": "timeout",
+            "description": "maximum seconds to wait for completion",
+            "inherit": false,
+            "value": {
+              "name": "seconds"
+            }
+          },
+          {
+            "long": "all",
+            "description": "Start all instances",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "Names of instances to start. If omitted, and without the",
+              "index": 0,
+              "repeatable": true,
+              "provider": {
+                "function": "__rush_complete_multipass_stopped_instances"
+              },
+              "required": false
+            }
+          ]
+        }
+      },
+      {
+        "name": "stop",
+        "description": "Stop running instances",
+        "options": [
+          {
+            "long": "all",
+            "description": "Stop all instances",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "long": "time",
+            "description": "Time from now, in minutes, to delay shutdown of the instance",
+            "inherit": false,
+            "value": {
+              "name": "time"
+            }
+          },
+          {
+            "short": "c",
+            "long": "cancel",
+            "description": "Cancel a pending delayed shutdown",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "Names of instances to stop. If omitted, and without the",
+              "index": 0,
+              "repeatable": true,
+              "provider": {
+                "function": "__rush_complete_multipass_running_instances"
+              },
+              "required": false
+            }
+          ]
+        }
+      },
+      {
+        "name": "suspend",
+        "description": "Suspend running instances",
+        "options": [
+          {
+            "long": "all",
+            "description": "Suspend all instances",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "Names of instances to suspend. If omitted, and without the",
+              "index": 0,
+              "repeatable": true,
+              "provider": {
+                "function": "__rush_complete_multipass_running_instances"
+              },
+              "required": false
+            }
+          ]
+        }
+      },
+      {
+        "name": "transfer",
+        "description": "Transfer files between the host and instances",
+        "arguments": {
+          "states": [
+            {
+              "name": "source",
+              "description": "One or more paths to transfer, prefixed with <name:> for paths",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            },
+            {
+              "name": "destination",
+              "description": "The destination path, prefixed with <name:> for paths inside",
+              "provider": "builtin.files",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "umount",
+        "description": "Unmount a directory from an instance",
+        "arguments": {
+          "states": [
+            {
+              "name": "mount",
+              "description": "Mount points, in <name>[:<path>] format, where <name> are",
+              "index": 0,
+              "repeatable": true,
+              "provider": {
+                "function": "__rush_complete_multipass_instance_targets"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "unalias",
+        "description": "Remove an alias",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "The name of the alias to remove",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "version",
+        "description": "Show version details",
+        "options": [
+          {
+            "long": "format",
+            "description": "set output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "table",
+                  "json",
+                  "csv",
+                  "yaml"
+                ]
+              }
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    },
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": true
+      },
+      {
+        "long": "help-all",
+        "description": "show help including Qt options",
+        "inherit": true
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "increase logging verbosity",
+        "inherit": true,
+        "repeatable": true
+      }
+    ]
+  }
+}
