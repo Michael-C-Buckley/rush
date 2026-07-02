@@ -1,0 +1,392 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "mvn",
+    "description": "build Maven projects",
+    "options": [
+      {
+        "long": "also-make",
+        "spellings": [
+          "-am"
+        ],
+        "description": "Also build projects required by project list",
+        "inherit": false
+      },
+      {
+        "long": "also-make-dependents",
+        "spellings": [
+          "-amd"
+        ],
+        "description": "Also build projects that depend on projects in the project list",
+        "inherit": false
+      },
+      {
+        "long": "batch-mode",
+        "short": "B",
+        "description": "Run in non-interactive (batch)",
+        "inherit": false
+      },
+      {
+        "long": "builder",
+        "short": "b",
+        "description": "Specify the build strategy to use",
+        "inherit": false,
+        "value": {
+          "name": "id-of-build-strategy"
+        }
+      },
+      {
+        "long": "strict-checksums",
+        "short": "C",
+        "description": "Fail if checksums do not match",
+        "inherit": false
+      },
+      {
+        "long": "lax-checksums",
+        "short": "c",
+        "description": "Warn if checksums do not match",
+        "inherit": false
+      },
+      {
+        "long": "color",
+        "description": "Specify the color mode of the output",
+        "inherit": false,
+        "value": {
+          "name": "color-mode",
+          "provider": {
+            "values": [
+              "always",
+              "never",
+              "auto"
+            ]
+          }
+        }
+      },
+      {
+        "long": "check-plugin-updates",
+        "spellings": [
+          "-cpu"
+        ],
+        "description": "Ineffective. Only kept for backward compatibility",
+        "inherit": false
+      },
+      {
+        "long": "define",
+        "short": "D",
+        "description": "Define a system property",
+        "inherit": false,
+        "value": {
+          "name": "system-property"
+        }
+      },
+      {
+        "long": "errors",
+        "short": "e",
+        "description": "Produce execution error messages",
+        "inherit": false
+      },
+      {
+        "long": "encrypt-master-password",
+        "spellings": [
+          "-emp"
+        ],
+        "description": "Encrypt the master security password",
+        "inherit": false,
+        "value": {
+          "name": "master-password"
+        }
+      },
+      {
+        "long": "encrypt-password",
+        "spellings": [
+          "-ep"
+        ],
+        "description": "Encrypt the server password",
+        "inherit": false,
+        "value": {
+          "name": "server-password"
+        }
+      },
+      {
+        "long": "file",
+        "short": "f",
+        "description": "use an alternate POM file or project directory",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ]
+        }
+      },
+      {
+        "long": "fail-at-end",
+        "spellings": [
+          "-fae"
+        ],
+        "description": "Only fail the build afterwards; allow all non-impacted builds to continue",
+        "inherit": false
+      },
+      {
+        "long": "fail-fast",
+        "spellings": [
+          "-ff"
+        ],
+        "description": "Stop at first failure in reactorized builds",
+        "inherit": false
+      },
+      {
+        "long": "fail-never",
+        "spellings": [
+          "-fn"
+        ],
+        "description": "Never fail the build, regardless of project result",
+        "inherit": false
+      },
+      {
+        "long": "global-settings",
+        "spellings": [
+          "-gs"
+        ],
+        "description": "Specify the global settings file to use",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "global-toolchains",
+        "spellings": [
+          "-gt"
+        ],
+        "description": "Specify the global toolchains file to use",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "log-file",
+        "short": "l",
+        "description": "Specify the file to log to",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "legacy-local-repository",
+        "spellings": [
+          "-llr"
+        ],
+        "description": "Use the Maven2 legacy local repository behaviour",
+        "inherit": false
+      },
+      {
+        "long": "non-recursive",
+        "short": "N",
+        "description": "Do not recurse into sub-projects",
+        "inherit": false
+      },
+      {
+        "long": "no-plugin-registry",
+        "spellings": [
+          "-npr"
+        ],
+        "description": "Ineffective. Only kept for backward compatibility",
+        "inherit": false
+      },
+      {
+        "long": "no-plugin-updates",
+        "spellings": [
+          "-npu"
+        ],
+        "description": "Ineffective. Only kept for backward compatibility",
+        "inherit": false
+      },
+      {
+        "long": "no-snapshot-updates",
+        "spellings": [
+          "-nsu"
+        ],
+        "description": "Suppress SNAPSHOT updates",
+        "inherit": false
+      },
+      {
+        "long": "no-transfer-progress",
+        "spellings": [
+          "-ntp"
+        ],
+        "description": "Do not display transfer progress when downloading or uploading",
+        "inherit": false
+      },
+      {
+        "long": "offline",
+        "short": "o",
+        "description": "Work offline",
+        "inherit": false
+      },
+      {
+        "long": "activate-profiles",
+        "short": "P",
+        "description": "Activate the specified profiles (comma delimited)",
+        "inherit": false,
+        "value": {
+          "name": "profiles"
+        }
+      },
+      {
+        "long": "projects",
+        "spellings": [
+          "-pl"
+        ],
+        "description": "Specify the projects to build",
+        "inherit": false,
+        "value": {
+          "name": "project-list"
+        }
+      },
+      {
+        "long": "quiet",
+        "short": "q",
+        "description": "show only errors",
+        "inherit": false
+      },
+      {
+        "long": "resume-from",
+        "spellings": [
+          "-rf"
+        ],
+        "description": "Resume from the specified project",
+        "inherit": false,
+        "value": {
+          "name": "project"
+        }
+      },
+      {
+        "long": "settings",
+        "short": "s",
+        "description": "Specify the user settings file to use",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "toolchains",
+        "short": "t",
+        "description": "Specify the toolchains file to use",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "threads",
+        "short": "T",
+        "description": "Specify the number of threads to use",
+        "inherit": false,
+        "value": {
+          "name": "threads"
+        }
+      },
+      {
+        "long": "update-snapshots",
+        "short": "U",
+        "description": "Forces a check for missing releases and updated snapshots on remote repositories",
+        "inherit": false
+      },
+      {
+        "long": "update-plugins",
+        "spellings": [
+          "-up"
+        ],
+        "description": "Ineffective. Only kept for backward compatibility",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "show version information",
+        "inherit": false
+      },
+      {
+        "long": "show-version",
+        "short": "V",
+        "description": "show version information",
+        "inherit": false
+      },
+      {
+        "long": "debug",
+        "short": "X",
+        "description": "produce debug output",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "goal/phase",
+          "description": "Goal or phase to execute",
+          "provider": {
+            "values": [
+              "pre-clean",
+              "clean",
+              "post-clean",
+              "validate",
+              "initialize",
+              "generate-sources",
+              "process-sources",
+              "generate-resources",
+              "process-resources",
+              "compile",
+              "process-classes",
+              "generate-test-sources",
+              "process-test-sources",
+              "generate-test-resources",
+              "process-test-resources",
+              "test-compile",
+              "process-test-classes",
+              "test",
+              "prepare-package",
+              "package",
+              "pre-integration-test",
+              "integration-test",
+              "post-integration-test",
+              "verify",
+              "install",
+              "deploy",
+              "pre-site",
+              "site",
+              "post-site",
+              "site-deploy"
+            ]
+          },
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
