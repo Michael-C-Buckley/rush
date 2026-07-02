@@ -1,0 +1,184 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pgcli",
+    "options": [
+      {
+        "short": "h",
+        "long": "host",
+        "description": "database host",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "short": "p",
+        "long": "port",
+        "description": "database port",
+        "inherit": false,
+        "value": {
+          "name": "integer"
+        }
+      },
+      {
+        "short": "U",
+        "long": "username",
+        "description": "database user",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "short": "u",
+        "long": "user",
+        "description": "database user",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "short": "W",
+        "long": "password",
+        "description": "force password prompt",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "no-password",
+        "description": "never prompt for password",
+        "inherit": false
+      },
+      {
+        "long": "single-connection",
+        "description": "reuse the main connection for completions",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "long": "dbname",
+        "description": "database name",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "long": "pgclirc",
+        "description": "path to pgclirc file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "D",
+        "long": "dsn",
+        "description": "use a configured DSN alias",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "long": "list-dsn",
+        "description": "list configured DSN aliases",
+        "inherit": false
+      },
+      {
+        "long": "row-limit",
+        "description": "set row limit prompt threshold",
+        "inherit": false,
+        "value": {
+          "name": "integer"
+        }
+      },
+      {
+        "long": "less-chatty",
+        "description": "skip startup and exit messages",
+        "inherit": false
+      },
+      {
+        "long": "prompt",
+        "description": "set prompt format",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "long": "prompt-dsn",
+        "description": "set prompt format for DSN aliases",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "short": "l",
+        "long": "list",
+        "description": "list available databases and exit",
+        "inherit": false
+      },
+      {
+        "long": "auto-vertical-output",
+        "description": "switch to vertical output for wide results",
+        "inherit": false
+      },
+      {
+        "long": "warn",
+        "description": "set destructive-query warning level",
+        "inherit": false,
+        "value": {
+          "name": "choice",
+          "provider": "pgcli.warn-levels"
+        }
+      },
+      {
+        "long": "ssh-tunnel",
+        "description": "open an SSH tunnel for the connection",
+        "inherit": false,
+        "value": {
+          "name": "text"
+        }
+      },
+      {
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "database",
+          "index": 0,
+          "description": "database name or connection URL"
+        }
+      ]
+    },
+    "providers": {
+      "pgcli.warn-levels": {
+        "values": [
+          "all",
+          "moderate",
+          "off"
+        ]
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    },
+    "description": "connect to PostgreSQL from an interactive CLI"
+  }
+}
