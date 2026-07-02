@@ -1,0 +1,76 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "zellij",
+    "description": "terminal workspace with batteries included",
+    "options": [
+      { "short": "c", "long": "config", "description": "use a configuration file", "value": { "name": "config", "provider": "builtin.files" } },
+      { "long": "config-dir", "description": "use a configuration directory", "value": { "name": "directory", "provider": "builtin.directories" } },
+      { "short": "d", "long": "debug", "description": "emit debug information" },
+      { "long": "data-dir", "description": "use a plugin data directory", "value": { "name": "directory", "provider": "builtin.directories" } },
+      { "short": "h", "long": "help", "description": "print help information" },
+      { "short": "l", "long": "layout", "description": "use a predefined layout or layout file", "value": { "name": "layout", "provider": "builtin.files" } },
+      { "long": "max-panes", "description": "set maximum panes on screen", "value": { "name": "count" } },
+      { "short": "n", "long": "new-session-with-layout", "description": "start a new session with a layout", "value": { "name": "layout", "provider": "builtin.files" } },
+      { "short": "s", "long": "session", "description": "set a new session name", "value": { "name": "session" } },
+      { "short": "V", "long": "version", "description": "print version information" }
+    ],
+    "subcommands": [
+      { "name": "action", "aliases": ["ac"], "description": "send actions to a session", "subcommands": [
+        { "name": "clear", "description": "clear focused pane buffers" },
+        { "name": "close-pane", "description": "close the focused pane" },
+        { "name": "close-tab", "description": "close the current tab" },
+        { "name": "dump-layout", "description": "dump current layout" },
+        { "name": "dump-screen", "description": "dump the focused pane to a file", "arguments": { "states": [{ "name": "file", "index": 0, "provider": "builtin.files" }] } },
+        { "name": "edit", "description": "open a file in a new pane" },
+        { "name": "focus-next-pane", "description": "focus the next pane" },
+        { "name": "focus-previous-pane", "description": "focus the previous pane" },
+        { "name": "go-to-next-tab", "description": "go to the next tab" },
+        { "name": "go-to-previous-tab", "description": "go to the previous tab" },
+        { "name": "go-to-tab", "description": "go to tab by index" },
+        { "name": "go-to-tab-name", "description": "go to tab by name" },
+        { "name": "move-focus", "description": "move focused pane direction" },
+        { "name": "move-pane", "description": "move the focused pane" },
+        { "name": "new-pane", "description": "open a new pane" },
+        { "name": "new-tab", "description": "create a new tab" },
+        { "name": "rename-pane", "description": "rename the focused pane" },
+        { "name": "rename-session", "description": "rename the current session" },
+        { "name": "rename-tab", "description": "rename the current tab" },
+        { "name": "resize", "description": "resize the focused pane" },
+        { "name": "scroll-down", "description": "scroll down" },
+        { "name": "scroll-up", "description": "scroll up" },
+        { "name": "switch-mode", "description": "switch input mode" },
+        { "name": "toggle-floating-panes", "description": "toggle floating panes" },
+        { "name": "toggle-fullscreen", "description": "toggle fullscreen" },
+        { "name": "write", "description": "write bytes to the terminal" },
+        { "name": "write-chars", "description": "write characters to the terminal" }
+      ] },
+      { "name": "attach", "aliases": ["a"], "description": "attach to a session", "options": [
+        { "short": "b", "long": "background", "description": "create a detached session if missing" },
+        { "short": "c", "long": "create", "description": "create a session if missing" },
+        { "short": "f", "long": "force-run-commands", "description": "run resurrected commands immediately" },
+        { "long": "index", "description": "session index", "value": { "name": "index" } }
+      ], "arguments": { "states": [{ "name": "session", "index": 0, "provider": "zellij.sessions" }] } },
+      { "name": "convert-config", "description": "convert configuration files", "arguments": { "states": [{ "name": "config", "index": 0, "provider": "builtin.files" }] } },
+      { "name": "convert-layout", "description": "convert layout files", "arguments": { "states": [{ "name": "layout", "index": 0, "provider": "builtin.files" }] } },
+      { "name": "convert-theme", "description": "convert theme files", "arguments": { "states": [{ "name": "theme", "index": 0, "provider": "builtin.files" }] } },
+      { "name": "delete-all-sessions", "aliases": ["da"], "description": "delete all sessions", "options": [{ "short": "f", "long": "force", "description": "kill running sessions first" }, { "short": "y", "long": "yes", "description": "answer yes to prompts" }] },
+      { "name": "delete-session", "aliases": ["d"], "description": "delete a session", "options": [{ "short": "f", "long": "force", "description": "kill running sessions first" }], "arguments": { "states": [{ "name": "session", "index": 0, "provider": "zellij.sessions" }] } },
+      { "name": "edit", "aliases": ["e"], "description": "edit a file in a pane", "arguments": { "states": [{ "name": "file", "index": 0, "provider": "builtin.files" }] }, "options": [{ "long": "cwd", "description": "set working directory", "value": { "name": "directory", "provider": "builtin.directories" } }, { "short": "f", "long": "floating", "description": "open in floating mode" }, { "short": "l", "long": "line-number", "description": "open at line number", "value": { "name": "line" } }] },
+      { "name": "kill-all-sessions", "aliases": ["ka"], "description": "kill all sessions", "options": [{ "short": "y", "long": "yes", "description": "answer yes to prompts" }] },
+      { "name": "kill-session", "aliases": ["k"], "description": "kill a session", "arguments": { "states": [{ "name": "session", "index": 0, "provider": "zellij.sessions" }] } },
+      { "name": "list-sessions", "aliases": ["ls"], "description": "list active sessions", "options": [{ "short": "n", "long": "no-formatting", "description": "disable colors and formatting" }, { "short": "r", "long": "reverse", "description": "list in reverse order" }, { "short": "s", "long": "short", "description": "print only session names" }] },
+      { "name": "pipe", "description": "send data to plugins", "arguments": { "states": [{ "name": "payload", "index": 0 }] }, "options": [{ "short": "n", "long": "name", "description": "pipe name", "value": { "name": "name" } }, { "short": "a", "long": "args", "description": "pipe args", "value": { "name": "args" } }, { "short": "p", "long": "plugin", "description": "plugin URL", "value": { "name": "plugin" } }] },
+      { "name": "plugin", "aliases": ["p"], "description": "load a plugin", "arguments": { "states": [{ "name": "url", "index": 0 }] }, "options": [{ "short": "c", "long": "configuration", "description": "plugin configuration", "value": { "name": "configuration" } }, { "short": "f", "long": "floating", "description": "open in floating mode" }] },
+      { "name": "run", "aliases": ["r"], "description": "run a command in a new pane", "arguments": { "states": [{ "name": "command", "index": 0, "provider": "builtin.executables" }] }, "options": [{ "short": "c", "long": "close-on-exit", "description": "close pane when command exits" }, { "long": "cwd", "description": "set working directory", "value": { "name": "directory", "provider": "builtin.directories" } }, { "short": "f", "long": "floating", "description": "open in floating mode" }, { "short": "n", "long": "name", "description": "set pane name", "value": { "name": "name" } }] },
+      { "name": "setup", "description": "setup zellij and check configuration", "options": [{ "long": "check", "description": "check configuration" }, { "long": "clean", "description": "load defaults without configuration" }, { "long": "dump-config", "description": "dump default configuration" }, { "long": "generate-completion", "description": "generate shell completion", "value": { "name": "shell", "provider": { "values": ["bash", "fish", "zsh"] } } }] }
+    ],
+    "providers": {
+      "builtin.files": { "builtin": "files" },
+      "builtin.directories": { "builtin": "directories" },
+      "builtin.executables": { "builtin": "executables" },
+      "zellij.sessions": { "function": "__rush_complete_zellij_sessions" }
+    }
+  }
+}

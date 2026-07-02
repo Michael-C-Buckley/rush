@@ -1,0 +1,12 @@
+__rush_complete_zellij_sessions() {
+    command -v zellij >/dev/null 2>&1 || return 0
+    zellij list-sessions -n 2>/dev/null | while IFS= read -r line; do
+        [ -n "$line" ] || continue
+        case $line in *'No active zellij sessions found'*) continue ;; esac
+        name=${line%%[*}
+        name=${name%${name##*[![:space:]]}}
+        [ -n "$name" ] || continue
+        description=${line#"$name"}
+        rush_complete candidate "$name" --kind plain --description "$description"
+    done
+}
