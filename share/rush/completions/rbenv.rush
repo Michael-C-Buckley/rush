@@ -1,0 +1,13 @@
+__rush_complete_rbenv_installed_versions() {
+  command -v rbenv >/dev/null 2>&1 || return
+  rbenv versions --bare 2>/dev/null | while IFS= read -r version; do
+    test -n "$version" && rush_complete candidate "$version" --kind value --description 'installed Ruby version'
+  done
+}
+
+__rush_complete_rbenv_installable_versions() {
+  command -v rbenv >/dev/null 2>&1 || return
+  rbenv install -L 2>/dev/null | while IFS= read -r version; do
+    test -n "$version" && rush_complete candidate "$version" --kind value --description 'installable Ruby version'
+  done
+}

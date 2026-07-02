@@ -1,0 +1,169 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "rbenv",
+    "description": "manage Ruby versions with rbenv",
+    "subcommands": [
+      {
+        "name": "commands",
+        "description": "list all available rbenv commands",
+        "options": [
+          {
+            "long": "sh",
+            "inherit": false
+          },
+          {
+            "long": "no-sh",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "global",
+        "description": "set or show the global Ruby version",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "provider": "rbenv.installed-versions",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "unset",
+            "description": "unset the selected Ruby version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "install a Ruby version using ruby-build",
+        "options": [
+          {
+            "long": "version",
+            "description": "show ruby-build version",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "provider": "rbenv.installable-versions",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "local",
+        "description": "set or show the local application-specific Ruby version",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "provider": "rbenv.installed-versions",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "unset",
+            "description": "unset the selected Ruby version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "rehash",
+        "description": "rehash rbenv shims (run this after installing executables)"
+      },
+      {
+        "name": "shell",
+        "description": "set or show the shell-specific Ruby version",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "provider": "rbenv.installed-versions",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "unset",
+            "description": "unset the selected Ruby version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "uninstall",
+        "description": "uninstall a specific Ruby version",
+        "options": [
+          {
+            "short": "f",
+            "description": "if the version does not exist, do not display an error message",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "provider": "rbenv.installed-versions",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "versions",
+        "description": "list installed Ruby versions"
+      },
+      {
+        "name": "whence",
+        "description": "list all Ruby versions that contain the given executable",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "provider": "builtin.executables",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "which",
+        "description": "display the full path to an executable",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "provider": "builtin.executables",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "rbenv.installed-versions": {
+        "function": "__rush_complete_rbenv_installed_versions"
+      },
+      "rbenv.installable-versions": {
+        "function": "__rush_complete_rbenv_installable_versions"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      }
+    }
+  }
+}
