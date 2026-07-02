@@ -36,6 +36,7 @@ pub const Variable = struct {
     value: []const u8,
     exported: bool = false,
     readonly: bool = false,
+    integer: bool = false,
 
     pub fn validate(self: Variable) void {
         std.debug.assert(self.name.len != 0);
@@ -46,10 +47,11 @@ pub const VariableAttributes = struct {
     name: []const u8,
     exported: bool = false,
     readonly: bool = false,
+    integer: bool = false,
 
     pub fn validate(self: VariableAttributes) void {
         std.debug.assert(self.name.len != 0);
-        std.debug.assert(self.exported or self.readonly);
+        std.debug.assert(self.exported or self.readonly or self.integer);
     }
 };
 
@@ -367,6 +369,7 @@ pub const State = struct {
             existing.value = owned_value;
             existing.exported = variable.exported or (attributes != null and attributes.?.exported);
             existing.readonly = variable.readonly or (attributes != null and attributes.?.readonly);
+            existing.integer = existing.integer or variable.integer or (attributes != null and attributes.?.integer);
             self.removeVariableAttributes(variable.name);
             self.clearFunctionAutoloadMissesIfSearchVariable(variable.name);
             return;
@@ -382,6 +385,7 @@ pub const State = struct {
             .value = owned_value,
             .exported = variable.exported or (attributes != null and attributes.?.exported),
             .readonly = variable.readonly or (attributes != null and attributes.?.readonly),
+            .integer = variable.integer or (attributes != null and attributes.?.integer),
         });
         self.removeVariableAttributes(variable.name);
         self.clearFunctionAutoloadMissesIfSearchVariable(variable.name);
@@ -494,11 +498,13 @@ pub const State = struct {
         if (self.variables.getPtr(attributes.name)) |variable| {
             variable.exported = variable.exported or attributes.exported;
             variable.readonly = variable.readonly or attributes.readonly;
+            variable.integer = variable.integer or attributes.integer;
             return;
         }
         if (self.variable_attributes.getPtr(attributes.name)) |existing| {
             existing.exported = existing.exported or attributes.exported;
             existing.readonly = existing.readonly or attributes.readonly;
+            existing.integer = existing.integer or attributes.integer;
             return;
         }
         const owned_name = try self.allocator.dupe(u8, attributes.name);
@@ -507,6 +513,7 @@ pub const State = struct {
             .name = owned_name,
             .exported = attributes.exported,
             .readonly = attributes.readonly,
+            .integer = attributes.integer,
         });
     }
 
@@ -576,6 +583,7 @@ pub const State = struct {
         value: ?[]const u8 = null,
         exported: bool = false,
         readonly: bool = false,
+        integer: bool = false,
     };
 
     pub fn declareLocalWithAttributes(self: *State, declaration: LocalDeclaration) !void {
@@ -592,21 +600,24 @@ pub const State = struct {
                 .value = local_value,
                 .exported = declaration.exported,
                 .readonly = declaration.readonly,
+                .integer = declaration.integer,
             });
         } else if (!frame.assignment_prefixes.contains(name)) {
             self.removeVariable(name);
-            if (declaration.exported or declaration.readonly) {
+            if (declaration.exported or declaration.readonly or declaration.integer) {
                 try self.putVariableAttributes(.{
                     .name = name,
                     .exported = declaration.exported,
                     .readonly = declaration.readonly,
+                    .integer = declaration.integer,
                 });
             }
-        } else if (declaration.exported or declaration.readonly) {
+        } else if (declaration.exported or declaration.readonly or declaration.integer) {
             try self.putVariableAttributes(.{
                 .name = name,
                 .exported = declaration.exported,
                 .readonly = declaration.readonly,
+                .integer = declaration.integer,
             });
         }
     }
@@ -631,6 +642,7 @@ pub const State = struct {
                 .value = owned_value,
                 .exported = existing.exported,
                 .readonly = existing.readonly,
+                .integer = existing.integer,
             };
         } else null;
         errdefer if (variable) |saved_variable| {
@@ -645,6 +657,7 @@ pub const State = struct {
                 .name = owned_attributes_name,
                 .exported = existing.exported,
                 .readonly = existing.readonly,
+                .integer = existing.integer,
             };
         } else null;
         errdefer if (attributes) |saved_attributes| self.allocator.free(saved_attributes.name);

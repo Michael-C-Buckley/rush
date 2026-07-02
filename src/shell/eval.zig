@@ -3336,6 +3336,7 @@ fn staticDeclarationBuiltinName(shell: anytype, word: ast.Word) !?builtin.Id {
 const DeclarationOptions = struct {
     exported: bool = false,
     readonly: bool = false,
+    integer: bool = false,
     array: bool = false,
     print: bool = false,
     global: bool = false,
@@ -3364,13 +3365,15 @@ fn evalDeclarationBuiltin(shell: anytype, id: builtin.Id, words: []const ast.Wor
     var status: result.ExitStatus = 0;
     for (operands) |word| {
         if (try declarationAssignment(shell, word)) |assignment| {
-            const value = try expandAssignmentWordTracking(shell, assignment.value, null);
+            const expanded_value = try expandAssignmentWordTracking(shell, assignment.value, null);
+            const value = try assignmentValueForStorage(shell, assignment.name, expanded_value);
             const existing = shell.state.getVariable(assignment.name);
             shell.state.putVariable(.{
                 .name = assignment.name,
                 .value = value,
                 .exported = id == .export_ or (existing != null and existing.?.exported),
                 .readonly = id == .readonly or (existing != null and existing.?.readonly),
+                .integer = existing != null and existing.?.integer,
             }) catch |err| switch (err) {
                 error.ReadonlyVariable => {
                     try writeReadonlyDiagnostic(shell, assignment.name);
@@ -3384,15 +3387,18 @@ fn evalDeclarationBuiltin(shell: anytype, id: builtin.Id, words: []const ast.Wor
         const names = try expandWordFields(shell, &.{word}, null);
         for (names) |name| {
             if (literalDeclarationAssignment(name)) |assignment| {
+                const expanded_value = switch (assignment.value.data) {
+                    .literal => |literal| literal,
+                    .parts => unreachable,
+                };
+                const value = try assignmentValueForStorage(shell, assignment.name, expanded_value);
                 const existing = shell.state.getVariable(assignment.name);
                 shell.state.putVariable(.{
                     .name = assignment.name,
-                    .value = switch (assignment.value.data) {
-                        .literal => |literal| literal,
-                        .parts => unreachable,
-                    },
+                    .value = value,
                     .exported = id == .export_ or (existing != null and existing.?.exported),
                     .readonly = id == .readonly or (existing != null and existing.?.readonly),
+                    .integer = existing != null and existing.?.integer,
                 }) catch |err| switch (err) {
                     error.ReadonlyVariable => {
                         try writeReadonlyDiagnostic(shell, assignment.name);
@@ -3414,6 +3420,7 @@ fn evalDeclarationBuiltin(shell: anytype, id: builtin.Id, words: []const ast.Wor
                     .value = variable.value,
                     .exported = id == .export_ or variable.exported,
                     .readonly = id == .readonly or variable.readonly,
+                    .integer = variable.integer,
                 }) catch |err| switch (err) {
                     error.ReadonlyVariable => {
                         try writeReadonlyDiagnostic(shell, name);
@@ -3456,6 +3463,10 @@ fn parseDeclarationOptions(shell: anytype, id: builtin.Id, words: []const ast.Wo
             'p' => options.print = true,
             'r' => options.readonly = true,
             'x' => options.exported = true,
+            'i' => {
+                if (id != .declare and id != .typeset) return declarationUsageError(shell, id);
+                options.integer = true;
+            },
             'g' => {
                 if (id != .declare and id != .typeset) return declarationUsageError(shell, id);
                 options.global = true;
@@ -3524,14 +3535,16 @@ fn applyDeclaredVariable(
         try applyDeclaredArrayVariable(shell, name, value, status);
         return;
     }
-    if (applyDynamicVariableAssignment(shell, name, value)) return;
+    const declared_value = try integerDeclarationValue(shell, name, value, options.integer);
+    if (applyDynamicVariableAssignment(shell, name, declared_value)) return;
     const existing = shell.state.getVariable(name);
     if (declareUsesLocalScope(shell, options)) {
         shell.state.declareLocalWithAttributes(.{
             .name = name,
-            .value = value,
+            .value = declared_value,
             .exported = options.exported or (existing != null and existing.?.exported),
             .readonly = options.readonly or (existing != null and existing.?.readonly),
+            .integer = options.integer or (existing != null and existing.?.integer),
         }) catch |err| switch (err) {
             error.ReadonlyVariable => {
                 try writeReadonlyDiagnostic(shell, name);
@@ -3543,9 +3556,10 @@ fn applyDeclaredVariable(
     }
     shell.state.putVariable(.{
         .name = name,
-        .value = value,
+        .value = declared_value,
         .exported = options.exported or (existing != null and existing.?.exported),
         .readonly = options.readonly or (existing != null and existing.?.readonly),
+        .integer = options.integer or (existing != null and existing.?.integer),
     }) catch |err| switch (err) {
         error.ReadonlyVariable => {
             try writeReadonlyDiagnostic(shell, name);
@@ -3571,6 +3585,7 @@ fn applyDeclaredName(
             .name = name,
             .exported = options.exported,
             .readonly = options.readonly,
+            .integer = options.integer,
         }) catch |err| switch (err) {
             error.ReadonlyVariable => {
                 try writeReadonlyDiagnostic(shell, name);
@@ -3586,6 +3601,7 @@ fn applyDeclaredName(
             .value = variable.value,
             .exported = options.exported or variable.exported,
             .readonly = options.readonly or variable.readonly,
+            .integer = options.integer or variable.integer,
         }) catch |err| switch (err) {
             error.ReadonlyVariable => {
                 try writeReadonlyDiagnostic(shell, name);
@@ -3593,13 +3609,25 @@ fn applyDeclaredName(
             },
             else => return err,
         };
-    } else if (options.exported or options.readonly) {
+    } else if (options.exported or options.readonly or options.integer) {
         try shell.state.putVariableAttributes(.{
             .name = name,
             .exported = options.exported,
             .readonly = options.readonly,
+            .integer = options.integer,
         });
     }
+}
+
+fn integerDeclarationValue(shell: anytype, name: []const u8, value: []const u8, force_integer: bool) ![]const u8 {
+    const integer = force_integer or if (shell.state.getVariable(name)) |variable|
+        variable.integer
+    else if (shell.state.getVariableAttributes(name)) |attributes|
+        attributes.integer
+    else
+        false;
+    if (!integer) return value;
+    return integerAssignmentValue(shell, value);
 }
 
 fn applyDeclaredArrayVariable(
@@ -3660,7 +3688,15 @@ fn evalDeclarationList(shell: anytype, id: builtin.Id) !result.EvalResult {
             else => unreachable,
         };
         if (!include) continue;
-        try writeDeclarationEntry(shell, id, attributes.name, null, attributes.exported, attributes.readonly);
+        try writeDeclarationEntry(
+            shell,
+            id,
+            attributes.name,
+            null,
+            attributes.exported,
+            attributes.readonly,
+            attributes.integer,
+        );
     }
 
     var iterator = shell.state.variables.iterator();
@@ -3673,7 +3709,15 @@ fn evalDeclarationList(shell: anytype, id: builtin.Id) !result.EvalResult {
             else => unreachable,
         };
         if (!include) continue;
-        try writeDeclarationEntry(shell, id, variable.name, variable.value, variable.exported, variable.readonly);
+        try writeDeclarationEntry(
+            shell,
+            id,
+            variable.name,
+            variable.value,
+            variable.exported,
+            variable.readonly,
+            variable.integer,
+        );
     }
     if (id == .declare or id == .typeset) {
         var array_iterator = shell.state.arrays.iterator();
@@ -3701,6 +3745,7 @@ fn evalDeclarationPrint(shell: anytype, id: builtin.Id, operands: []const ast.Wo
                     variable.value,
                     variable.exported,
                     variable.readonly,
+                    variable.integer,
                 );
             } else if (shell.state.getArray(name)) |array| {
                 if (id == .declare or id == .typeset) {
@@ -3717,7 +3762,15 @@ fn evalDeclarationPrint(shell: anytype, id: builtin.Id, operands: []const ast.Wo
                     status = 1;
                 }
             } else if (shell.state.getVariableAttributes(name)) |attributes| {
-                try writeDeclarationEntry(shell, id, attributes.name, null, attributes.exported, attributes.readonly);
+                try writeDeclarationEntry(
+                    shell,
+                    id,
+                    attributes.name,
+                    null,
+                    attributes.exported,
+                    attributes.readonly,
+                    attributes.integer,
+                );
             } else {
                 try shell.host.writeAll(
                     .stderr,
@@ -3741,12 +3794,14 @@ fn writeDeclarationEntry(
     value: ?[]const u8,
     exported: bool,
     readonly: bool,
+    integer: bool,
 ) !void {
     if (id == .declare or id == .typeset) {
         try shell.host.writeAll(.stdout, "declare ");
-        if (readonly or exported) {
+        if (readonly or exported or integer) {
             try shell.host.writeAll(.stdout, "-");
             if (readonly) try shell.host.writeAll(.stdout, "r");
+            if (integer) try shell.host.writeAll(.stdout, "i");
             if (exported) try shell.host.writeAll(.stdout, "x");
             try shell.host.writeAll(.stdout, " ");
         } else {
@@ -4667,7 +4722,8 @@ fn applyAssignment(
         return joinValues(shell, expanded, " ");
     }
 
-    const value = try expandAssignmentValue(shell, assignment, substitution_status);
+    const expanded_value = try expandAssignmentValue(shell, assignment, substitution_status);
+    const value = try assignmentValueForStorage(shell, assignment.name, expanded_value);
     if (assignment.index) |index_word| {
         const index = try expandArrayIndex(shell, index_word);
         shell.state.putArrayElement(assignment.name, index, value) catch |err| switch (err) {
@@ -4693,6 +4749,22 @@ fn applyAssignment(
         else => return err,
     };
     return value;
+}
+
+fn assignmentValueForStorage(shell: anytype, name: []const u8, value: []const u8) ![]const u8 {
+    const integer = if (shell.state.getVariable(name)) |variable|
+        variable.integer
+    else if (shell.state.getVariableAttributes(name)) |attributes|
+        attributes.integer
+    else
+        false;
+    if (!integer) return value;
+    return integerAssignmentValue(shell, value);
+}
+
+fn integerAssignmentValue(shell: anytype, value: []const u8) ![]const u8 {
+    const arithmetic_value = try evalArithmeticValue(shell, value);
+    return std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{arithmetic_value});
 }
 
 fn expandArrayAssignmentValues(

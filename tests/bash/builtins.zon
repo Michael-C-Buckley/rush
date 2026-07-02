@@ -344,6 +344,29 @@
             .status = 0,
         },
         .{
+            .name = "declare integer variables evaluate arithmetic assignments",
+            .script =
+            \\declare -i n=1+2
+            \\n=4+5
+            \\x=7
+            \\export n=x+3
+            \\declare -p n
+            \\raw=1+2
+            \\declare -i raw
+            \\printf 'raw=<%s>\n' "$raw"
+            \\declare -i empty
+            \\declare -p empty
+            ,
+            .stdout =
+            \\declare -ix n="10"
+            \\raw=<1+2>
+            \\declare -i empty
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "declare creates and prints indexed arrays",
             .script =
             \\declare -a arr
