@@ -1,0 +1,285 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "sort",
+    "description": "sort lines of text files",
+    "options": [
+      {
+        "long": "help",
+        "description": "shows help message",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "displays the current version of sort",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "long": "check",
+        "spellings": [
+          "-C"
+        ],
+        "description": "check that the single input file is sorted",
+        "inherit": false,
+        "value": {
+          "name": "output",
+          "description": "suppress errors on false check",
+          "required": false,
+          "style": "optional",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "m",
+        "long": "merge",
+        "description": "merge only. The input files are assumed to be pre-sorted. If they are not sorted the output order is undefined",
+        "inherit": false
+      },
+      {
+        "short": "o",
+        "long": "output",
+        "description": "print the output to the output file instead of the standard output",
+        "inherit": false,
+        "value": {
+          "name": "output",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "S",
+        "long": "buffer-size",
+        "description": "use size for the maximum size of the memory buffer",
+        "inherit": false,
+        "value": {
+          "name": "size"
+        }
+      },
+      {
+        "short": "T",
+        "long": "temporary-directory",
+        "description": "store temporary files in the directory dir",
+        "inherit": false,
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "u",
+        "long": "unique",
+        "description": "unique keys. Suppress all lines that have a key that is equal to an already processed one",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "stable sort. This option maintains the original record order of records that have an equal key",
+        "inherit": false
+      },
+      {
+        "short": "b",
+        "long": "ignore-leading-blanks",
+        "description": "ignore leading blank characters when comparing lines",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "long": "dictionary-order",
+        "description": "consider only blank spaces and alphanumeric characters in comparisons",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "long": "ignore-case",
+        "description": "convert all lowercase characters to their upper case equivalent before comparison",
+        "inherit": false
+      },
+      {
+        "short": "g",
+        "long": "general-numeric-sort",
+        "description": "sort by general numerical value",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "human-numeric-sort",
+        "description": "sort by numerical value, but take into account the SI suffix, if present",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "long": "ignore-nonprinting",
+        "description": "ignore all non-printable characters",
+        "inherit": false
+      },
+      {
+        "short": "M",
+        "long": "month-sort",
+        "description": "sort by month abbreviations. Unknown strings are considered smaller than the month names",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "long": "numeric-sort",
+        "description": "sort fields numerically by arithmetic value",
+        "inherit": false
+      },
+      {
+        "short": "R",
+        "long": "random-sort",
+        "description": "sort by a random order",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "long": "reverse",
+        "description": "sort in reverse order",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version-sort",
+        "description": "sort version numbers",
+        "inherit": false
+      },
+      {
+        "short": "k",
+        "long": "key",
+        "description": "define a restricted sort key that has the starting position field1, and optional ending position field2",
+        "inherit": false,
+        "value": [
+          {
+            "name": "field1"
+          },
+          {
+            "name": "field2",
+            "required": false,
+            "style": "optional"
+          }
+        ]
+      },
+      {
+        "short": "t",
+        "long": "field-separator",
+        "description": "use char as a field separator character",
+        "inherit": false,
+        "value": {
+          "name": "char"
+        }
+      },
+      {
+        "short": "z",
+        "long": "zero-terminated",
+        "description": "use NUL as record separator",
+        "inherit": false
+      },
+      {
+        "long": "batch-size",
+        "description": "specify maximum number of files that can be opened by sort at once",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "long": "compress-program",
+        "description": "use PROGRAM to compress temporary files (eg. bzip2)",
+        "inherit": false,
+        "value": {
+          "name": "PROGRAM",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "random-source",
+        "description": "in random sort, the file content is used as the source of the 'seed' data for the hash function choice",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "debug",
+        "description": "print some extra information about the sorting process to the standard output",
+        "inherit": false
+      },
+      {
+        "long": "parallel",
+        "description": "set the maximum number of execution threads. Default number equals to the number of CPUs",
+        "inherit": false
+      },
+      {
+        "long": "files0-from",
+        "description": "take the input file list from the file filename",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "radixsort",
+        "description": "try to use radix sort, if the sort specifications allow",
+        "inherit": false
+      },
+      {
+        "long": "mergesort",
+        "description": "use mergesort. This is a universal algorithm that can always be used, but it is not always the fastest",
+        "inherit": false
+      },
+      {
+        "long": "qsort",
+        "description": "try to use quick sort, if the sort specifications allow. This sort algorithm cannot be used with -u and -s",
+        "inherit": false
+      },
+      {
+        "long": "heapsort",
+        "description": "try to use heap sort, if the sort specifications allow. This sort algorithm cannot be used with -u and -s",
+        "inherit": false
+      },
+      {
+        "long": "mmap",
+        "description": "try to use file memory mapping system call. It may increase speed in some cases",
+        "inherit": false
+      },
+      {
+        "long": "sort",
+        "description": "select how to sort values",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              "general-numeric",
+              "human-numeric",
+              "month",
+              "numeric",
+              "random"
+            ]
+          }
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true,
+          "description": "file to sort"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
