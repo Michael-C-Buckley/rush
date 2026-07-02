@@ -1,0 +1,122 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "shred",
+    "description": "overwrite files to hide contents",
+    "options": [
+      {
+        "long": "force",
+        "short": "f",
+        "description": "change permissions to allow writing if necessary",
+        "inherit": false
+      },
+      {
+        "long": "iterations",
+        "short": "n",
+        "description": "overwrite N times instead of the default (3)",
+        "inherit": false,
+        "value": {
+          "name": "N",
+          "provider": {
+            "values": [
+              "3",
+              "5",
+              "7"
+            ]
+          }
+        }
+      },
+      {
+        "long": "random-source",
+        "description": "get random bytes from FILE",
+        "inherit": false,
+        "value": {
+          "name": "FILE",
+          "provider": {
+            "values": [
+              "/dev/urandom",
+              "/dev/random"
+            ]
+          }
+        }
+      },
+      {
+        "long": "size",
+        "short": "s",
+        "description": "shred this many bytes (suffixes like K, M, G accepted)",
+        "inherit": false,
+        "value": {
+          "name": "N",
+          "provider": {
+            "values": [
+              "1K",
+              "1M",
+              "1G"
+            ]
+          }
+        }
+      },
+      {
+        "long": "remove",
+        "description": "like -u but give control on HOW to delete",
+        "inherit": false,
+        "value": {
+          "name": "HOW",
+          "description": "'unlink' => use a standard unlink call, 'wipe' => also first obfuscate bytes in the name, 'wipesync' => also sync each obfuscated byte to the device",
+          "provider": {
+            "values": [
+              "unlink",
+              "wipe",
+              "wipesync"
+            ]
+          }
+        }
+      },
+      {
+        "long": "verbose",
+        "short": "v",
+        "description": "show progress",
+        "inherit": false
+      },
+      {
+        "long": "exact",
+        "short": "x",
+        "description": "do not round file sizes up to the next full block; this is the default for non-regular files",
+        "inherit": false
+      },
+      {
+        "long": "zero",
+        "short": "z",
+        "description": "add a final overwrite with zeros to hide shredding",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "description": "display this help and exit",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "output version information and exit",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "FILE",
+          "description": "file to shred",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
