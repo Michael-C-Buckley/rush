@@ -1,0 +1,198 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "python3",
+    "description": "run the Python interpreter",
+    "options": [
+      {
+        "short": "c",
+        "description": "execute Python code from the command line",
+        "inherit": false,
+        "value": {
+          "name": "command"
+        }
+      },
+      {
+        "short": "m",
+        "description": "run a library module as a script",
+        "inherit": false,
+        "value": {
+          "name": "module"
+        }
+      },
+      {
+        "short": "?",
+        "long": "help",
+        "spellings": [
+          "-h"
+        ],
+        "description": "print a short description of all command line options",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "print the Python version number and exit",
+        "inherit": false
+      },
+      {
+        "short": "b",
+        "description": "warn about bytes/str comparison issues; repeat for errors",
+        "inherit": false
+      },
+      {
+        "short": "B",
+        "description": "do not write .pyc files on import",
+        "inherit": false
+      },
+      {
+        "long": "check-hash-based-pycs",
+        "description": "control validation of hash-based .pyc files",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              {
+                "value": "default"
+              },
+              {
+                "value": "always"
+              },
+              {
+                "value": "never"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "d",
+        "description": "turn on parser debugging output",
+        "inherit": false
+      },
+      {
+        "short": "E",
+        "description": "ignore PYTHON* environment variables",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "description": "enter interactive mode after executing a script or command",
+        "inherit": false
+      },
+      {
+        "short": "I",
+        "description": "run Python in isolated mode",
+        "inherit": false
+      },
+      {
+        "short": "O",
+        "description": "remove assert statements and __debug__-guarded code",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-OO"
+        ],
+        "description": "remove asserts and discard docstrings",
+        "inherit": false
+      },
+      {
+        "short": "g",
+        "description": "do not display copyright and version messages",
+        "inherit": false
+      },
+      {
+        "short": "R",
+        "description": "turn on hash randomization when PYTHONHASHSEED is 0",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "do not add the user site-packages directory to sys.path",
+        "inherit": false
+      },
+      {
+        "short": "S",
+        "description": "disable importing the site module",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "description": "force stdout and stderr to be unbuffered",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "description": "print module initialization messages",
+        "inherit": false
+      },
+      {
+        "short": "W",
+        "description": "set warning control",
+        "inherit": false,
+        "value": {
+          "name": "warning"
+        }
+      },
+      {
+        "short": "x",
+        "description": "skip the first source line",
+        "inherit": false
+      },
+      {
+        "short": "X",
+        "description": "set implementation-specific options",
+        "inherit": false,
+        "value": {
+          "name": "option",
+          "provider": {
+            "values": [
+              {
+                "value": "faulthandler"
+              },
+              {
+                "value": "showrefcount"
+              },
+              {
+                "value": "tracemalloc"
+              },
+              {
+                "value": "showalloccount"
+              },
+              {
+                "value": "importtime"
+              },
+              {
+                "value": "dev"
+              },
+              {
+                "value": "utf8"
+              },
+              {
+                "value": "pycache_prefix=PATH"
+              }
+            ]
+          }
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "script",
+          "provider": "builtin.files",
+          "index": 0,
+          "description": "python script"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
