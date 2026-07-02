@@ -1,0 +1,407 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "src",
+    "description": "manage sourcegraph src workflows",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for src",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "search",
+        "description": "run a code search",
+        "options": [
+          {
+            "spellings": [
+              "-display"
+            ],
+            "description": "limit the number of results that are displayed. Only supported together with stream flag. Statistics continue to report all results",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-dump-requests"
+            ],
+            "description": "log GraphQL requests and responses to stdout",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-explain-json"
+            ],
+            "description": "explain the JSON output schema and exit",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-get-curl"
+            ],
+            "description": "print the curl command for executing this query and exit. (WARNING: Includes printing your access token!)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-insecure-skip-verify"
+            ],
+            "description": "skip validation of TLD certificates against trusted chains",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-json"
+            ],
+            "description": "whether or not to output results as JSON",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-less"
+            ],
+            "description": "pipe output to `less -R` (only if stdout is terminal, and not json flag)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-stream"
+            ],
+            "description": "consume results as stream. Streaming search only supports a subset of flags and parameters: trace, insecure-skip-verify, display, json",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-trace"
+            ],
+            "description": "log the trace ID for requests",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-user-agent-telemetry"
+            ],
+            "description": "include the operating system and architecture in the User-Agent sent with requests to Sourcegraph",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "api",
+        "description": "sourcegraph API Access",
+        "options": [
+          {
+            "spellings": [
+              "-get-curl"
+            ],
+            "description": "print the curl command for executing this query and exit (WARNING: includes printing your access token!)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-dump-requests"
+            ],
+            "description": "log GraphQL requests and responses to stdout",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-insecure-skip-verify"
+            ],
+            "description": "skip validation of TLS certificates against trusted chains",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-query"
+            ],
+            "description": "graphQL query to execute, e.g. \u2018query { currentUser { username } }\u2019 (stdin otherwise)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-trace"
+            ],
+            "description": "log the trace ID for requests",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-user-agent-telemetry"
+            ],
+            "description": "include the operating system and architecture in the User-Agent sent with requests to Sourcegraph",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-vars"
+            ],
+            "description": "graphQL query variables to include as JSON string, e.g. \u2018{\u201cvar\u201d: \u201cval\u201d, \u201cvar2\u201d: \u201cval2\u201d}\u2019",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "login",
+        "description": "'src login' helps you authenticate 'src' to access a Sourcegraph instance with your user credentials",
+        "options": [
+          {
+            "spellings": [
+              "-dump-requests"
+            ],
+            "description": "log GraphQL requests and responses to stdout",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-get-curl"
+            ],
+            "description": "print the curl command for executing this query and exit (WARNING: includes printing your access token!)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-insecure-skip-verify"
+            ],
+            "description": "skip validation of TLS certificates against trusted chains",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-trace"
+            ],
+            "description": "log the trace ID for requests",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-user-agent-telemetry"
+            ],
+            "description": "include the operating system and architecture in the User-Agent sent with requests to Sourcegraph",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "batch",
+        "description": "'Batch gives you a declarative structure for finding and modifying code across all of your repositories",
+        "subcommands": [
+          {
+            "name": "apply",
+            "description": "apply batch"
+          },
+          {
+            "name": "exec",
+            "description": "execute batch"
+          },
+          {
+            "name": "new",
+            "description": "new batch"
+          },
+          {
+            "name": "preview",
+            "description": "preview batch"
+          },
+          {
+            "name": "repositories",
+            "description": "repositories to batch"
+          },
+          {
+            "name": "validate",
+            "description": "validate batch"
+          }
+        ]
+      },
+      {
+        "name": "config",
+        "description": "'src config' helps you configure 'src'",
+        "subcommands": [
+          {
+            "name": "edit",
+            "description": "edit config"
+          },
+          {
+            "name": "get",
+            "description": "get configs"
+          },
+          {
+            "name": "list",
+            "description": "list configs"
+          }
+        ]
+      },
+      {
+        "name": "extsvc",
+        "description": "edit or view external service configuration on the Sourcegraph instance",
+        "subcommands": [
+          {
+            "name": "edit",
+            "description": "edit external service configuration"
+          },
+          {
+            "name": "list",
+            "description": "list external service configurations"
+          }
+        ]
+      },
+      {
+        "name": "lsif",
+        "description": "upload an LSIF dumps",
+        "subcommands": [
+          {
+            "name": "upload",
+            "description": "upload LSIF dump"
+          }
+        ]
+      },
+      {
+        "name": "orgs",
+        "description": "create, edit, view, or delete organizations and members",
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create an organization"
+          },
+          {
+            "name": "delete",
+            "description": "delete an organization"
+          },
+          {
+            "name": "get",
+            "description": "get an organization"
+          },
+          {
+            "name": "list",
+            "description": "list organizations"
+          },
+          {
+            "name": "members",
+            "description": "list organization members"
+          }
+        ]
+      },
+      {
+        "name": "repos",
+        "description": "view or delete repositories",
+        "subcommands": [
+          {
+            "name": "delete",
+            "description": "delete repository"
+          },
+          {
+            "name": "get",
+            "description": "get repository"
+          },
+          {
+            "name": "list",
+            "description": "list repositories"
+          }
+        ]
+      },
+      {
+        "name": "serve-git",
+        "description": "by default 'src serve-git' will recursively serve your current directory on the address ':3434'",
+        "options": [
+          {
+            "spellings": [
+              "-addr"
+            ],
+            "description": "address on which to server (end with : for unused port)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-list"
+            ],
+            "description": "list found repository names",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "users",
+        "description": "create, edit, view, tag, or delete users",
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create user"
+          },
+          {
+            "name": "delete",
+            "description": "delete user"
+          },
+          {
+            "name": "get",
+            "description": "get user"
+          },
+          {
+            "name": "list",
+            "description": "list users"
+          },
+          {
+            "name": "tag",
+            "description": "tag user"
+          }
+        ]
+      },
+      {
+        "name": "validate",
+        "description": "eXPERIMENTAL: Instance validation provides a quick way to check that a Sourcegraph instance functions properly after a fresh install or an update",
+        "options": [
+          {
+            "spellings": [
+              "-context"
+            ],
+            "description": "comma-separated list of key=value pairs to add to the script execution context",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-dump-requests"
+            ],
+            "description": "log GraphQL requests and responses to stdout",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-get-curl"
+            ],
+            "description": "print the curl command for executing this query and exit (WARNING: includes printing your access token!)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-insecure-skip-verify"
+            ],
+            "description": "skip validation of TLS certificates against trusted chains",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-secrets"
+            ],
+            "description": "path to a file containing key=value lines. The key value pairs will be added to the script context",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-trace"
+            ],
+            "description": "log the trace ID for requests",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-user-agent-telemetry"
+            ],
+            "description": "include the operating system and architecture in the User-Agent sent with requests to Sourcegraph",
+            "inherit": false
+          }
+        ]
+      }
+    ]
+  }
+}
