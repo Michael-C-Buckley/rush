@@ -1,0 +1,163 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "gatsby",
+    "description": "gatsby CLI",
+    "options": [
+      {
+        "short": "v",
+        "long": "version",
+        "description": "view your current Gatsby CLI version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "develop",
+        "description": "start the Gatsby development server",
+        "options": [
+          {
+            "short": "H",
+            "long": "host",
+            "description": "set host",
+            "inherit": false,
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "short": "p",
+            "long": "port",
+            "description": "set port",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "short": "o",
+            "long": "open",
+            "description": "open the site in the default browser",
+            "inherit": false
+          },
+          {
+            "short": "S",
+            "long": "https",
+            "description": "use HTTPS",
+            "inherit": false
+          },
+          {
+            "long": "inspect",
+            "description": "opens a port for debugging",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "build",
+        "description": "compile your application and make it ready for deployment",
+        "options": [
+          {
+            "long": "prefix-paths",
+            "description": "build site with link paths prefixed (set pathPrefix in your config)",
+            "inherit": false
+          },
+          {
+            "long": "no-uglify",
+            "description": "build site without uglifying JS bundles (for debugging)",
+            "inherit": false
+          },
+          {
+            "long": "profile",
+            "description": "build site with react profiling",
+            "inherit": false
+          },
+          {
+            "long": "open-tracing-config-file",
+            "description": "use Tracer configuration file",
+            "inherit": false
+          },
+          {
+            "long": "graphql-tracing",
+            "description": "trace every graphql resolver, may have performance implications",
+            "inherit": false
+          },
+          {
+            "long": "no-color",
+            "aliases": [
+              "no-colors"
+            ],
+            "description": "disables colored terminal output",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "serve",
+        "description": "serve the production build of your site for testing",
+        "options": [
+          {
+            "short": "H",
+            "long": "host",
+            "description": "set host",
+            "inherit": false,
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "short": "p",
+            "long": "port",
+            "description": "set port",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "short": "o",
+            "long": "open",
+            "description": "open the site in the default browser",
+            "inherit": false
+          },
+          {
+            "long": "prefix-paths",
+            "description": "serve site with link paths prefixed",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "clean",
+        "description": "wipe out the cache (.cache folder) and public directories"
+      },
+      {
+        "name": "info",
+        "description": "get helpful environment information",
+        "options": [
+          {
+            "short": "C",
+            "long": "clipboard",
+            "description": "copy environment information to your clipboard",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "plugin",
+        "description": "run commands pertaining to gatsby plugins",
+        "subcommands": [
+          {
+            "name": "docs",
+            "description": "open plugin documentation"
+          }
+        ]
+      },
+      {
+        "name": "repl",
+        "description": "gatsby will prompt you to type in commands and explore"
+      }
+    ]
+  }
+}
