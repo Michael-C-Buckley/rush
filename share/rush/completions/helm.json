@@ -1,0 +1,3027 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "helm",
+    "description": "kubernetes package manager",
+    "options": [
+      {
+        "long": "add-dir-header",
+        "description": "if true, adds the file directory to the header of the log messages",
+        "inherit": true,
+        "hidden": true
+      },
+      {
+        "long": "alsologtostderr",
+        "description": "log to standard error as well as files",
+        "inherit": true,
+        "hidden": true
+      },
+      {
+        "long": "burst-limit",
+        "description": "client-side default throttling limit",
+        "inherit": true,
+        "value": {
+          "name": "burst-limit"
+        }
+      },
+      {
+        "long": "debug",
+        "description": "enable verbose output",
+        "inherit": true
+      },
+      {
+        "long": "kube-apiserver",
+        "description": "the address and the port for the Kubernetes API server",
+        "inherit": true,
+        "value": {
+          "name": "kube-apiserver"
+        }
+      },
+      {
+        "long": "kube-as-group",
+        "description": "group to impersonate for the operation, this flag can be repeated to specify multiple groups",
+        "repeatable": true,
+        "inherit": true,
+        "value": {
+          "name": "kube-as-group"
+        }
+      },
+      {
+        "long": "kube-as-user",
+        "description": "username to impersonate for the operation",
+        "inherit": true,
+        "value": {
+          "name": "kube-as-user"
+        }
+      },
+      {
+        "long": "kube-ca-file",
+        "description": "the certificate authority file for the Kubernetes API server connection",
+        "inherit": true,
+        "value": {
+          "name": "kube-ca-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "kube-context",
+        "description": "name of the kubeconfig context to use",
+        "inherit": true,
+        "value": {
+          "name": "kube-context"
+        }
+      },
+      {
+        "long": "kube-insecure-skip-tls-verify",
+        "description": "if true, the Kubernetes API server's certificate will not be checked for validity. This will make your HTTPS connections insecure",
+        "inherit": true
+      },
+      {
+        "long": "kube-tls-server-name",
+        "description": "server name to use for Kubernetes API server certificate validation. If it is not provided, the hostname used to contact the server is used",
+        "inherit": true,
+        "value": {
+          "name": "kube-tls-server-name"
+        }
+      },
+      {
+        "long": "kube-token",
+        "description": "bearer token used for authentication",
+        "inherit": true,
+        "value": {
+          "name": "kube-token"
+        }
+      },
+      {
+        "long": "kubeconfig",
+        "description": "path to the kubeconfig file",
+        "inherit": true,
+        "value": {
+          "name": "kubeconfig",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "log-backtrace-at",
+        "description": "when logging hits line file:N, emit a stack trace",
+        "inherit": true,
+        "hidden": true,
+        "value": {
+          "name": "log-backtrace-at"
+        }
+      },
+      {
+        "long": "log-dir",
+        "description": "if non-empty, write log files in this directory",
+        "inherit": true,
+        "hidden": true,
+        "value": {
+          "name": "log-dir",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "log-file",
+        "description": "if non-empty, use this log file",
+        "inherit": true,
+        "hidden": true,
+        "value": {
+          "name": "log-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "log-file-max-size",
+        "description": "defines the maximum size a log file can grow to. Unit is megabytes. If the value is 0, the maximum file size is unlimited",
+        "inherit": true,
+        "hidden": true,
+        "value": {
+          "name": "log-file-max-size",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "logtostderr",
+        "description": "log to standard error instead of files",
+        "inherit": true,
+        "hidden": true
+      },
+      {
+        "long": "namespace",
+        "short": "n",
+        "description": "namespace scope for this request",
+        "inherit": true,
+        "value": {
+          "name": "namespace"
+        }
+      },
+      {
+        "long": "one-output",
+        "description": "if true, only write logs to their native severity level (vs also writing to each lower severity level)",
+        "inherit": true,
+        "hidden": true
+      },
+      {
+        "long": "registry-config",
+        "description": "path to the registry config file",
+        "inherit": true,
+        "value": {
+          "name": "registry-config",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "repository-cache",
+        "description": "path to the file containing cached repository indexes",
+        "inherit": true,
+        "value": {
+          "name": "repository-cache",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "repository-config",
+        "description": "path to the file containing repository names and URLs",
+        "inherit": true,
+        "value": {
+          "name": "repository-config",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "skip-headers",
+        "description": "if true, avoid header prefixes in the log messages",
+        "inherit": true,
+        "hidden": true
+      },
+      {
+        "long": "skip-log-headers",
+        "description": "if true, avoid headers when opening log files",
+        "inherit": true,
+        "hidden": true
+      },
+      {
+        "long": "stderrthreshold",
+        "description": "logs at or above this threshold go to stderr",
+        "inherit": true,
+        "hidden": true,
+        "value": {
+          "name": "stderrthreshold"
+        }
+      },
+      {
+        "long": "v",
+        "short": "v",
+        "description": "number for the log level verbosity",
+        "inherit": true,
+        "hidden": true,
+        "value": {
+          "name": "v"
+        }
+      },
+      {
+        "long": "vmodule",
+        "description": "comma-separated list of pattern=N settings for file-filtered logging",
+        "inherit": true,
+        "hidden": true,
+        "value": {
+          "name": "vmodule"
+        }
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "display help",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "completion",
+        "description": "generate autocompletion scripts for the specified shell",
+        "subcommands": [
+          {
+            "name": "bash",
+            "description": "generate autocompletion script for bash",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "fish",
+            "description": "generate autocompletion script for fish",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "powershell",
+            "description": "generate autocompletion script for powershell",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "zsh",
+            "description": "generate autocompletion script for zsh",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "create",
+        "description": "create a new chart with the given name",
+        "options": [
+          {
+            "long": "starter",
+            "short": "p",
+            "description": "the name or absolute path to Helm starter scaffold",
+            "inherit": false,
+            "value": {
+              "name": "starter"
+            }
+          }
+        ]
+      },
+      {
+        "name": "dep",
+        "aliases": [
+          "dependencies",
+          "dependency"
+        ],
+        "description": "manage a chart's dependencies",
+        "subcommands": [
+          {
+            "name": "build",
+            "description": "rebuild the charts/ directory based on the Chart.lock file",
+            "options": [
+              {
+                "long": "keyring",
+                "description": "keyring containing public keys",
+                "inherit": false,
+                "value": {
+                  "name": "keyring",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "skip-refresh",
+                "description": "do not refresh the local repository cache",
+                "inherit": false
+              },
+              {
+                "long": "verify",
+                "description": "verify the packages against signatures",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "ls",
+            "aliases": [
+              "list"
+            ],
+            "description": "list the dependencies for the given chart",
+            "options": [
+              {
+                "long": "max-col-width",
+                "description": "maximum column width for output table",
+                "inherit": false,
+                "value": {
+                  "name": "max-col-width"
+                }
+              }
+            ]
+          },
+          {
+            "name": "up",
+            "aliases": [
+              "update"
+            ],
+            "description": "update charts/ based on the contents of Chart.yaml",
+            "options": [
+              {
+                "long": "keyring",
+                "description": "keyring containing public keys",
+                "inherit": false,
+                "value": {
+                  "name": "keyring",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "skip-refresh",
+                "description": "do not refresh the local repository cache",
+                "inherit": false
+              },
+              {
+                "long": "verify",
+                "description": "verify the packages against signatures",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "env",
+        "description": "helm client environment information"
+      },
+      {
+        "name": "get",
+        "description": "download extended information of a named release",
+        "subcommands": [
+          {
+            "name": "all",
+            "description": "download all information for a named release",
+            "options": [
+              {
+                "long": "revision",
+                "description": "get the named release with revision",
+                "inherit": false,
+                "value": {
+                  "name": "revision"
+                }
+              },
+              {
+                "long": "template",
+                "description": "go template for formatting the output, eg: {{.Release.Name}}",
+                "inherit": false,
+                "value": {
+                  "name": "template"
+                }
+              }
+            ]
+          },
+          {
+            "name": "hooks",
+            "description": "download all hooks for a named release",
+            "options": [
+              {
+                "long": "revision",
+                "description": "get the named release with revision",
+                "inherit": false,
+                "value": {
+                  "name": "revision"
+                }
+              }
+            ]
+          },
+          {
+            "name": "manifest",
+            "description": "download the manifest for a named release",
+            "options": [
+              {
+                "long": "revision",
+                "description": "get the named release with revision",
+                "inherit": false,
+                "value": {
+                  "name": "revision"
+                }
+              }
+            ]
+          },
+          {
+            "name": "notes",
+            "description": "download the notes for a named release",
+            "options": [
+              {
+                "long": "revision",
+                "description": "get the named release with revision",
+                "inherit": false,
+                "value": {
+                  "name": "revision"
+                }
+              }
+            ]
+          },
+          {
+            "name": "values",
+            "description": "download the values file for a named release",
+            "options": [
+              {
+                "long": "all",
+                "short": "a",
+                "description": "dump all (computed) values",
+                "inherit": false
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "prints the output in the specified format. Allowed values: table, json, yaml",
+                "inherit": false,
+                "value": {
+                  "name": "output"
+                }
+              },
+              {
+                "long": "revision",
+                "description": "get the named release with revision",
+                "inherit": false,
+                "value": {
+                  "name": "revision"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "hist",
+        "aliases": [
+          "history"
+        ],
+        "description": "fetch release history",
+        "options": [
+          {
+            "long": "max",
+            "description": "maximum number of revision to include in history",
+            "inherit": false,
+            "value": {
+              "name": "max"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "prints the output in the specified format. Allowed values: table, json, yaml",
+            "inherit": false,
+            "value": {
+              "name": "output"
+            }
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "install a chart",
+        "options": [
+          {
+            "long": "atomic",
+            "description": "if set, the installation process deletes the installation on failure. The --wait flag will be set automatically if --atomic is used",
+            "inherit": false
+          },
+          {
+            "long": "ca-file",
+            "description": "verify certificates of HTTPS-enabled servers using this CA bundle",
+            "inherit": false,
+            "value": {
+              "name": "ca-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-file",
+            "description": "identify HTTPS client using this SSL certificate file",
+            "inherit": false,
+            "value": {
+              "name": "cert-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "create-namespace",
+            "description": "create the release namespace if not present",
+            "inherit": false
+          },
+          {
+            "long": "dependency-update",
+            "description": "update dependencies if they are missing before installing the chart",
+            "inherit": false
+          },
+          {
+            "long": "description",
+            "description": "add a custom description",
+            "inherit": false,
+            "value": {
+              "name": "description"
+            }
+          },
+          {
+            "long": "devel",
+            "description": "use development versions, too. Equivalent to version '>0.0.0-0'. If --version is set, this is ignored",
+            "inherit": false
+          },
+          {
+            "long": "disable-openapi-validation",
+            "description": "if set, the installation process will not validate rendered templates against the Kubernetes OpenAPI Schema",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "simulate an install",
+            "inherit": false
+          },
+          {
+            "long": "generate-name",
+            "short": "g",
+            "description": "generate the name (and omit the NAME parameter)",
+            "inherit": false
+          },
+          {
+            "long": "insecure-skip-tls-verify",
+            "description": "skip tls certificate checks for the chart download",
+            "inherit": false
+          },
+          {
+            "long": "key-file",
+            "description": "identify HTTPS client using this SSL key file",
+            "inherit": false,
+            "value": {
+              "name": "key-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "keyring",
+            "description": "location of public keys used for verification",
+            "inherit": false,
+            "value": {
+              "name": "keyring",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "name-template",
+            "description": "specify template used to name the release",
+            "inherit": false,
+            "value": {
+              "name": "name-template"
+            }
+          },
+          {
+            "long": "no-hooks",
+            "description": "prevent hooks from running during install",
+            "inherit": false
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "prints the output in the specified format. Allowed values: table, json, yaml",
+            "inherit": false,
+            "value": {
+              "name": "output"
+            }
+          },
+          {
+            "long": "pass-credentials",
+            "description": "pass credentials to all domains",
+            "inherit": false
+          },
+          {
+            "long": "password",
+            "description": "chart repository password where to locate the requested chart",
+            "inherit": false,
+            "value": {
+              "name": "password"
+            }
+          },
+          {
+            "long": "post-renderer",
+            "description": "the path to an executable to be used for post rendering. If it exists in $PATH, the binary will be used, otherwise it will try to look for the exec...",
+            "inherit": false,
+            "value": {
+              "name": "post-renderer"
+            }
+          },
+          {
+            "long": "post-renderer-args",
+            "description": "an argument to the post-renderer (can specify multiple)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "post-renderer-args"
+            }
+          },
+          {
+            "long": "render-subchart-notes",
+            "description": "if set, render subchart notes along with the parent",
+            "inherit": false
+          },
+          {
+            "long": "replace",
+            "description": "re-use the given name, only if that name is a deleted release which remains in the history. This is unsafe in production",
+            "inherit": false
+          },
+          {
+            "long": "repo",
+            "description": "chart repository url where to locate the requested chart",
+            "inherit": false,
+            "value": {
+              "name": "repo"
+            }
+          },
+          {
+            "long": "set",
+            "description": "set values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "set"
+            }
+          },
+          {
+            "long": "set-file",
+            "description": "set values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "set-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "set-string",
+            "description": "set STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "set-string"
+            }
+          },
+          {
+            "long": "skip-crds",
+            "description": "if set, no CRDs will be installed. By default, CRDs are installed if not already present",
+            "inherit": false
+          },
+          {
+            "long": "timeout",
+            "description": "time to wait for any individual Kubernetes operation (like Jobs for hooks)",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "username",
+            "description": "chart repository username where to locate the requested chart",
+            "inherit": false,
+            "value": {
+              "name": "username"
+            }
+          },
+          {
+            "long": "values",
+            "short": "f",
+            "description": "specify values in a YAML file or a URL (can specify multiple)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "values",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "verify",
+            "description": "verify the package before using it",
+            "inherit": false
+          },
+          {
+            "long": "version",
+            "description": "specify a version constraint for the chart version to use. This constraint can be a specific tag (e.g. 1.1.1) or it may reference a valid range (e....",
+            "inherit": false,
+            "value": {
+              "name": "version"
+            }
+          },
+          {
+            "long": "wait",
+            "description": "if set, will wait until all Pods, PVCs, Services, and minimum number of Pods of a Deployment, StatefulSet, or ReplicaSet are in a ready state befor...",
+            "inherit": false
+          },
+          {
+            "long": "wait-for-jobs",
+            "description": "if set and --wait enabled, will wait until all Jobs have been completed before marking the release as successful. It will wait for as long as --tim...",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "lint",
+        "description": "examine a chart for possible issues",
+        "options": [
+          {
+            "long": "quiet",
+            "description": "print only warnings and errors",
+            "inherit": false
+          },
+          {
+            "long": "set",
+            "description": "set values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "set"
+            }
+          },
+          {
+            "long": "set-file",
+            "description": "set values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "set-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "set-string",
+            "description": "set STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "set-string"
+            }
+          },
+          {
+            "long": "strict",
+            "description": "fail on lint warnings",
+            "inherit": false
+          },
+          {
+            "long": "values",
+            "short": "f",
+            "description": "specify values in a YAML file or a URL (can specify multiple)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "values",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "with-subcharts",
+            "description": "lint dependent charts",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "ls",
+        "aliases": [
+          "list"
+        ],
+        "description": "list releases",
+        "options": [
+          {
+            "long": "all",
+            "short": "a",
+            "description": "show all releases without any filter applied",
+            "inherit": false
+          },
+          {
+            "long": "all-namespaces",
+            "short": "A",
+            "description": "list releases across all namespaces",
+            "inherit": false
+          },
+          {
+            "long": "date",
+            "short": "d",
+            "description": "sort by release date",
+            "inherit": false
+          },
+          {
+            "long": "deployed",
+            "description": "show deployed releases. If no other is specified, this will be automatically enabled",
+            "inherit": false
+          },
+          {
+            "long": "failed",
+            "description": "show failed releases",
+            "inherit": false
+          },
+          {
+            "long": "filter",
+            "short": "f",
+            "description": "a regular expression (Perl compatible). Any releases that match the expression will be included in the results",
+            "inherit": false,
+            "value": {
+              "name": "filter"
+            }
+          },
+          {
+            "long": "max",
+            "short": "m",
+            "description": "maximum number of releases to fetch",
+            "inherit": false,
+            "value": {
+              "name": "max"
+            }
+          },
+          {
+            "long": "no-headers",
+            "description": "don't print headers when using the default output format",
+            "inherit": false
+          },
+          {
+            "long": "offset",
+            "description": "next release index in the list, used to offset from start value",
+            "inherit": false,
+            "value": {
+              "name": "offset"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "prints the output in the specified format. Allowed values: table, json, yaml",
+            "inherit": false,
+            "value": {
+              "name": "output"
+            }
+          },
+          {
+            "long": "pending",
+            "description": "show pending releases",
+            "inherit": false
+          },
+          {
+            "long": "reverse",
+            "short": "r",
+            "description": "reverse the sort order",
+            "inherit": false
+          },
+          {
+            "long": "selector",
+            "short": "l",
+            "description": "selector (label query) to filter on, supports '=', '==', and '!='.(e.g. -l key1=value1,key2=value2). Works only for secret(default) and configmap s...",
+            "inherit": false,
+            "value": {
+              "name": "selector"
+            }
+          },
+          {
+            "long": "short",
+            "short": "q",
+            "description": "output short (quiet) listing format",
+            "inherit": false
+          },
+          {
+            "long": "superseded",
+            "description": "show superseded releases",
+            "inherit": false
+          },
+          {
+            "long": "time-format",
+            "description": "format time using golang time formatter. Example: --time-format \"2006-01-02 15:04:05Z0700\"",
+            "inherit": false,
+            "value": {
+              "name": "time-format"
+            }
+          },
+          {
+            "long": "uninstalled",
+            "description": "show uninstalled releases (if 'helm uninstall --keep-history' was used)",
+            "inherit": false
+          },
+          {
+            "long": "uninstalling",
+            "description": "show releases that are currently being uninstalled",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "package",
+        "description": "package a chart directory into a chart archive",
+        "options": [
+          {
+            "long": "app-version",
+            "description": "set the appVersion on the chart to this version",
+            "inherit": false,
+            "value": {
+              "name": "app-version"
+            }
+          },
+          {
+            "long": "dependency-update",
+            "short": "u",
+            "description": "update dependencies from \"Chart.yaml\" to dir \"charts/\" before packaging",
+            "inherit": false
+          },
+          {
+            "long": "destination",
+            "short": "d",
+            "description": "location to write the chart",
+            "inherit": false,
+            "value": {
+              "name": "destination",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "key",
+            "description": "name of the key to use when signing. Used if --sign is true",
+            "inherit": false,
+            "value": {
+              "name": "key"
+            }
+          },
+          {
+            "long": "keyring",
+            "description": "location of a public keyring",
+            "inherit": false,
+            "value": {
+              "name": "keyring",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "passphrase-file",
+            "description": "location of a file which contains the passphrase for the signing key. Use \"-\" in order to read from stdin",
+            "inherit": false,
+            "value": {
+              "name": "passphrase-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "sign",
+            "description": "use a PGP private key to sign this package",
+            "inherit": false
+          },
+          {
+            "long": "version",
+            "description": "set the version on the chart to this semver version",
+            "inherit": false,
+            "value": {
+              "name": "version"
+            }
+          }
+        ]
+      },
+      {
+        "name": "plugin",
+        "description": "install, list, or uninstall Helm plugins",
+        "subcommands": [
+          {
+            "name": "add",
+            "aliases": [
+              "install"
+            ],
+            "description": "install one or more Helm plugins",
+            "options": [
+              {
+                "long": "version",
+                "description": "specify a version constraint. If this is not specified, the latest version is installed",
+                "inherit": false,
+                "value": {
+                  "name": "version"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ls",
+            "aliases": [
+              "list"
+            ],
+            "description": "list installed Helm plugins"
+          },
+          {
+            "name": "rm",
+            "aliases": [
+              "remove",
+              "uninstall"
+            ],
+            "description": "uninstall one or more Helm plugins"
+          },
+          {
+            "name": "up",
+            "aliases": [
+              "update"
+            ],
+            "description": "update one or more Helm plugins"
+          }
+        ]
+      },
+      {
+        "name": "fetch",
+        "aliases": [
+          "pull"
+        ],
+        "description": "download a chart from a repository and (optionally) unpack it in local directory",
+        "options": [
+          {
+            "long": "ca-file",
+            "description": "verify certificates of HTTPS-enabled servers using this CA bundle",
+            "inherit": false,
+            "value": {
+              "name": "ca-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-file",
+            "description": "identify HTTPS client using this SSL certificate file",
+            "inherit": false,
+            "value": {
+              "name": "cert-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "destination",
+            "short": "d",
+            "description": "location to write the chart. If this and untardir are specified, untardir is appended to this",
+            "inherit": false,
+            "value": {
+              "name": "destination",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "devel",
+            "description": "use development versions, too. Equivalent to version '>0.0.0-0'. If --version is set, this is ignored",
+            "inherit": false
+          },
+          {
+            "long": "insecure-skip-tls-verify",
+            "description": "skip tls certificate checks for the chart download",
+            "inherit": false
+          },
+          {
+            "long": "key-file",
+            "description": "identify HTTPS client using this SSL key file",
+            "inherit": false,
+            "value": {
+              "name": "key-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "keyring",
+            "description": "location of public keys used for verification",
+            "inherit": false,
+            "value": {
+              "name": "keyring",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "pass-credentials",
+            "description": "pass credentials to all domains",
+            "inherit": false
+          },
+          {
+            "long": "password",
+            "description": "chart repository password where to locate the requested chart",
+            "inherit": false,
+            "value": {
+              "name": "password"
+            }
+          },
+          {
+            "long": "prov",
+            "description": "fetch the provenance file, but don't perform verification",
+            "inherit": false
+          },
+          {
+            "long": "repo",
+            "description": "chart repository url where to locate the requested chart",
+            "inherit": false,
+            "value": {
+              "name": "repo"
+            }
+          },
+          {
+            "long": "untar",
+            "description": "if set to true, will untar the chart after downloading it",
+            "inherit": false
+          },
+          {
+            "long": "untardir",
+            "description": "if untar is specified, this flag specifies the name of the directory into which the chart is expanded",
+            "inherit": false,
+            "value": {
+              "name": "untardir",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "username",
+            "description": "chart repository username where to locate the requested chart",
+            "inherit": false,
+            "value": {
+              "name": "username"
+            }
+          },
+          {
+            "long": "verify",
+            "description": "verify the package before using it",
+            "inherit": false
+          },
+          {
+            "long": "version",
+            "description": "specify a version constraint for the chart version to use. This constraint can be a specific tag (e.g. 1.1.1) or it may reference a valid range (e....",
+            "inherit": false,
+            "value": {
+              "name": "version"
+            }
+          }
+        ]
+      },
+      {
+        "name": "push",
+        "description": "push a chart to remote"
+      },
+      {
+        "name": "registry",
+        "description": "login to or logout from a registry",
+        "subcommands": [
+          {
+            "name": "login",
+            "description": "login to a registry",
+            "options": [
+              {
+                "long": "insecure",
+                "description": "allow connections to TLS registry without certs",
+                "inherit": false
+              },
+              {
+                "long": "password",
+                "short": "p",
+                "description": "registry password or identity token",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              },
+              {
+                "long": "password-stdin",
+                "description": "read password or identity token from stdin",
+                "inherit": false
+              },
+              {
+                "long": "username",
+                "short": "u",
+                "description": "registry username",
+                "inherit": false,
+                "value": {
+                  "name": "username"
+                }
+              }
+            ]
+          },
+          {
+            "name": "logout",
+            "description": "logout from a registry"
+          }
+        ]
+      },
+      {
+        "name": "repo",
+        "description": "add, list, remove, update, and index chart repositories",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add a chart repository",
+            "options": [
+              {
+                "long": "allow-deprecated-repos",
+                "description": "by default, this command will not allow adding official repos that have been permanently deleted. This disables that behavior",
+                "inherit": false
+              },
+              {
+                "long": "ca-file",
+                "description": "verify certificates of HTTPS-enabled servers using this CA bundle",
+                "inherit": false,
+                "value": {
+                  "name": "ca-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-file",
+                "description": "identify HTTPS client using this SSL certificate file",
+                "inherit": false,
+                "value": {
+                  "name": "cert-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "force-update",
+                "description": "replace (overwrite) the repo if it already exists",
+                "inherit": false
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip tls certificate checks for the repository",
+                "inherit": false
+              },
+              {
+                "long": "key-file",
+                "description": "identify HTTPS client using this SSL key file",
+                "inherit": false,
+                "value": {
+                  "name": "key-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "no-update",
+                "description": "ignored. Formerly, it would disabled forced updates. It is deprecated by force-update",
+                "inherit": false
+              },
+              {
+                "long": "pass-credentials",
+                "description": "pass credentials to all domains",
+                "inherit": false
+              },
+              {
+                "long": "password",
+                "description": "chart repository password",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              },
+              {
+                "long": "password-stdin",
+                "description": "read chart repository password from stdin",
+                "inherit": false
+              },
+              {
+                "long": "username",
+                "description": "chart repository username",
+                "inherit": false,
+                "value": {
+                  "name": "username"
+                }
+              }
+            ]
+          },
+          {
+            "name": "index",
+            "description": "generate an index file given a directory containing packaged charts",
+            "options": [
+              {
+                "long": "merge",
+                "description": "merge the generated index into the given index",
+                "inherit": false,
+                "value": {
+                  "name": "merge"
+                }
+              },
+              {
+                "long": "url",
+                "description": "url of chart repository",
+                "inherit": false,
+                "value": {
+                  "name": "url"
+                }
+              }
+            ]
+          },
+          {
+            "name": "ls",
+            "aliases": [
+              "list"
+            ],
+            "description": "list chart repositories",
+            "options": [
+              {
+                "long": "output",
+                "short": "o",
+                "description": "prints the output in the specified format. Allowed values: table, json, yaml",
+                "inherit": false,
+                "value": {
+                  "name": "output"
+                }
+              }
+            ]
+          },
+          {
+            "name": "rm",
+            "aliases": [
+              "remove"
+            ],
+            "description": "remove one or more chart repositories"
+          },
+          {
+            "name": "up",
+            "aliases": [
+              "update"
+            ],
+            "description": "update information of available charts locally from chart repositories",
+            "options": [
+              {
+                "long": "fail-on-repo-update-fail",
+                "description": "update fails if any of the repository updates fail",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "rollback",
+        "description": "roll back a release to a previous revision",
+        "options": [
+          {
+            "long": "cleanup-on-fail",
+            "description": "allow deletion of new resources created in this rollback when rollback fails",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "simulate a rollback",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "description": "force resource update through delete/recreate if needed",
+            "inherit": false
+          },
+          {
+            "long": "history-max",
+            "description": "limit the maximum number of revisions saved per release. Use 0 for no limit",
+            "inherit": false,
+            "value": {
+              "name": "history-max"
+            }
+          },
+          {
+            "long": "no-hooks",
+            "description": "prevent hooks from running during rollback",
+            "inherit": false
+          },
+          {
+            "long": "recreate-pods",
+            "description": "performs pods restart for the resource if applicable",
+            "inherit": false
+          },
+          {
+            "long": "timeout",
+            "description": "time to wait for any individual Kubernetes operation (like Jobs for hooks)",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "wait",
+            "description": "if set, will wait until all Pods, PVCs, Services, and minimum number of Pods of a Deployment, StatefulSet, or ReplicaSet are in a ready state befor...",
+            "inherit": false
+          },
+          {
+            "long": "wait-for-jobs",
+            "description": "if set and --wait enabled, will wait until all Jobs have been completed before marking the release as successful. It will wait for as long as --tim...",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "s3",
+        "description": "manage chart repositories on Amazon S3"
+      },
+      {
+        "name": "search",
+        "description": "search for a keyword in charts",
+        "subcommands": [
+          {
+            "name": "hub",
+            "description": "search for charts in the Artifact Hub or your own hub instance",
+            "options": [
+              {
+                "long": "endpoint",
+                "description": "hub instance to query for charts",
+                "inherit": false,
+                "value": {
+                  "name": "endpoint"
+                }
+              },
+              {
+                "long": "list-repo-url",
+                "description": "print charts repository URL",
+                "inherit": false
+              },
+              {
+                "long": "max-col-width",
+                "description": "maximum column width for output table",
+                "inherit": false,
+                "value": {
+                  "name": "max-col-width"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "prints the output in the specified format. Allowed values: table, json, yaml",
+                "inherit": false,
+                "value": {
+                  "name": "output"
+                }
+              }
+            ]
+          },
+          {
+            "name": "repo",
+            "description": "search repositories for a keyword in charts",
+            "options": [
+              {
+                "long": "devel",
+                "description": "use development versions (alpha, beta, and release candidate releases), too. Equivalent to version '>0.0.0-0'. If --version is set, this is ignored",
+                "inherit": false
+              },
+              {
+                "long": "max-col-width",
+                "description": "maximum column width for output table",
+                "inherit": false,
+                "value": {
+                  "name": "max-col-width"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "prints the output in the specified format. Allowed values: table, json, yaml",
+                "inherit": false,
+                "value": {
+                  "name": "output"
+                }
+              },
+              {
+                "long": "regexp",
+                "short": "r",
+                "description": "use regular expressions for searching repositories you have added",
+                "inherit": false
+              },
+              {
+                "long": "version",
+                "description": "search using semantic versioning constraints on repositories you have added",
+                "inherit": false,
+                "value": {
+                  "name": "version"
+                }
+              },
+              {
+                "long": "versions",
+                "short": "l",
+                "description": "show the long listing, with each version of each chart on its own line, for repositories you have added",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "inspect",
+        "aliases": [
+          "show"
+        ],
+        "description": "show information of a chart",
+        "subcommands": [
+          {
+            "name": "all",
+            "description": "show all information of the chart",
+            "options": [
+              {
+                "long": "ca-file",
+                "description": "verify certificates of HTTPS-enabled servers using this CA bundle",
+                "inherit": false,
+                "value": {
+                  "name": "ca-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-file",
+                "description": "identify HTTPS client using this SSL certificate file",
+                "inherit": false,
+                "value": {
+                  "name": "cert-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "devel",
+                "description": "use development versions, too. Equivalent to version '>0.0.0-0'. If --version is set, this is ignored",
+                "inherit": false
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip tls certificate checks for the chart download",
+                "inherit": false
+              },
+              {
+                "long": "key-file",
+                "description": "identify HTTPS client using this SSL key file",
+                "inherit": false,
+                "value": {
+                  "name": "key-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "keyring",
+                "description": "location of public keys used for verification",
+                "inherit": false,
+                "value": {
+                  "name": "keyring",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "pass-credentials",
+                "description": "pass credentials to all domains",
+                "inherit": false
+              },
+              {
+                "long": "password",
+                "description": "chart repository password where to locate the requested chart",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              },
+              {
+                "long": "repo",
+                "description": "chart repository url where to locate the requested chart",
+                "inherit": false,
+                "value": {
+                  "name": "repo"
+                }
+              },
+              {
+                "long": "username",
+                "description": "chart repository username where to locate the requested chart",
+                "inherit": false,
+                "value": {
+                  "name": "username"
+                }
+              },
+              {
+                "long": "verify",
+                "description": "verify the package before using it",
+                "inherit": false
+              },
+              {
+                "long": "version",
+                "description": "specify a version constraint for the chart version to use. This constraint can be a specific tag (e.g. 1.1.1) or it may reference a valid range (e....",
+                "inherit": false,
+                "value": {
+                  "name": "version"
+                }
+              }
+            ]
+          },
+          {
+            "name": "chart",
+            "description": "show the chart's definition",
+            "options": [
+              {
+                "long": "ca-file",
+                "description": "verify certificates of HTTPS-enabled servers using this CA bundle",
+                "inherit": false,
+                "value": {
+                  "name": "ca-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-file",
+                "description": "identify HTTPS client using this SSL certificate file",
+                "inherit": false,
+                "value": {
+                  "name": "cert-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "devel",
+                "description": "use development versions, too. Equivalent to version '>0.0.0-0'. If --version is set, this is ignored",
+                "inherit": false
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip tls certificate checks for the chart download",
+                "inherit": false
+              },
+              {
+                "long": "key-file",
+                "description": "identify HTTPS client using this SSL key file",
+                "inherit": false,
+                "value": {
+                  "name": "key-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "keyring",
+                "description": "location of public keys used for verification",
+                "inherit": false,
+                "value": {
+                  "name": "keyring",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "pass-credentials",
+                "description": "pass credentials to all domains",
+                "inherit": false
+              },
+              {
+                "long": "password",
+                "description": "chart repository password where to locate the requested chart",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              },
+              {
+                "long": "repo",
+                "description": "chart repository url where to locate the requested chart",
+                "inherit": false,
+                "value": {
+                  "name": "repo"
+                }
+              },
+              {
+                "long": "username",
+                "description": "chart repository username where to locate the requested chart",
+                "inherit": false,
+                "value": {
+                  "name": "username"
+                }
+              },
+              {
+                "long": "verify",
+                "description": "verify the package before using it",
+                "inherit": false
+              },
+              {
+                "long": "version",
+                "description": "specify a version constraint for the chart version to use. This constraint can be a specific tag (e.g. 1.1.1) or it may reference a valid range (e....",
+                "inherit": false,
+                "value": {
+                  "name": "version"
+                }
+              }
+            ]
+          },
+          {
+            "name": "crds",
+            "description": "show the chart's CRDs",
+            "options": [
+              {
+                "long": "ca-file",
+                "description": "verify certificates of HTTPS-enabled servers using this CA bundle",
+                "inherit": false,
+                "value": {
+                  "name": "ca-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-file",
+                "description": "identify HTTPS client using this SSL certificate file",
+                "inherit": false,
+                "value": {
+                  "name": "cert-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "devel",
+                "description": "use development versions, too. Equivalent to version '>0.0.0-0'. If --version is set, this is ignored",
+                "inherit": false
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip tls certificate checks for the chart download",
+                "inherit": false
+              },
+              {
+                "long": "key-file",
+                "description": "identify HTTPS client using this SSL key file",
+                "inherit": false,
+                "value": {
+                  "name": "key-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "keyring",
+                "description": "location of public keys used for verification",
+                "inherit": false,
+                "value": {
+                  "name": "keyring",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "pass-credentials",
+                "description": "pass credentials to all domains",
+                "inherit": false
+              },
+              {
+                "long": "password",
+                "description": "chart repository password where to locate the requested chart",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              },
+              {
+                "long": "repo",
+                "description": "chart repository url where to locate the requested chart",
+                "inherit": false,
+                "value": {
+                  "name": "repo"
+                }
+              },
+              {
+                "long": "username",
+                "description": "chart repository username where to locate the requested chart",
+                "inherit": false,
+                "value": {
+                  "name": "username"
+                }
+              },
+              {
+                "long": "verify",
+                "description": "verify the package before using it",
+                "inherit": false
+              },
+              {
+                "long": "version",
+                "description": "specify a version constraint for the chart version to use. This constraint can be a specific tag (e.g. 1.1.1) or it may reference a valid range (e....",
+                "inherit": false,
+                "value": {
+                  "name": "version"
+                }
+              }
+            ]
+          },
+          {
+            "name": "readme",
+            "description": "show the chart's README",
+            "options": [
+              {
+                "long": "ca-file",
+                "description": "verify certificates of HTTPS-enabled servers using this CA bundle",
+                "inherit": false,
+                "value": {
+                  "name": "ca-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-file",
+                "description": "identify HTTPS client using this SSL certificate file",
+                "inherit": false,
+                "value": {
+                  "name": "cert-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "devel",
+                "description": "use development versions, too. Equivalent to version '>0.0.0-0'. If --version is set, this is ignored",
+                "inherit": false
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip tls certificate checks for the chart download",
+                "inherit": false
+              },
+              {
+                "long": "key-file",
+                "description": "identify HTTPS client using this SSL key file",
+                "inherit": false,
+                "value": {
+                  "name": "key-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "keyring",
+                "description": "location of public keys used for verification",
+                "inherit": false,
+                "value": {
+                  "name": "keyring",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "pass-credentials",
+                "description": "pass credentials to all domains",
+                "inherit": false
+              },
+              {
+                "long": "password",
+                "description": "chart repository password where to locate the requested chart",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              },
+              {
+                "long": "repo",
+                "description": "chart repository url where to locate the requested chart",
+                "inherit": false,
+                "value": {
+                  "name": "repo"
+                }
+              },
+              {
+                "long": "username",
+                "description": "chart repository username where to locate the requested chart",
+                "inherit": false,
+                "value": {
+                  "name": "username"
+                }
+              },
+              {
+                "long": "verify",
+                "description": "verify the package before using it",
+                "inherit": false
+              },
+              {
+                "long": "version",
+                "description": "specify a version constraint for the chart version to use. This constraint can be a specific tag (e.g. 1.1.1) or it may reference a valid range (e....",
+                "inherit": false,
+                "value": {
+                  "name": "version"
+                }
+              }
+            ]
+          },
+          {
+            "name": "values",
+            "description": "show the chart's values",
+            "options": [
+              {
+                "long": "ca-file",
+                "description": "verify certificates of HTTPS-enabled servers using this CA bundle",
+                "inherit": false,
+                "value": {
+                  "name": "ca-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-file",
+                "description": "identify HTTPS client using this SSL certificate file",
+                "inherit": false,
+                "value": {
+                  "name": "cert-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "devel",
+                "description": "use development versions, too. Equivalent to version '>0.0.0-0'. If --version is set, this is ignored",
+                "inherit": false
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip tls certificate checks for the chart download",
+                "inherit": false
+              },
+              {
+                "long": "jsonpath",
+                "description": "supply a JSONPath expression to filter the output",
+                "inherit": false,
+                "value": {
+                  "name": "jsonpath"
+                }
+              },
+              {
+                "long": "key-file",
+                "description": "identify HTTPS client using this SSL key file",
+                "inherit": false,
+                "value": {
+                  "name": "key-file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "keyring",
+                "description": "location of public keys used for verification",
+                "inherit": false,
+                "value": {
+                  "name": "keyring",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "pass-credentials",
+                "description": "pass credentials to all domains",
+                "inherit": false
+              },
+              {
+                "long": "password",
+                "description": "chart repository password where to locate the requested chart",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              },
+              {
+                "long": "repo",
+                "description": "chart repository url where to locate the requested chart",
+                "inherit": false,
+                "value": {
+                  "name": "repo"
+                }
+              },
+              {
+                "long": "username",
+                "description": "chart repository username where to locate the requested chart",
+                "inherit": false,
+                "value": {
+                  "name": "username"
+                }
+              },
+              {
+                "long": "verify",
+                "description": "verify the package before using it",
+                "inherit": false
+              },
+              {
+                "long": "version",
+                "description": "specify a version constraint for the chart version to use. This constraint can be a specific tag (e.g. 1.1.1) or it may reference a valid range (e....",
+                "inherit": false,
+                "value": {
+                  "name": "version"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "status",
+        "description": "display the status of the named release",
+        "options": [
+          {
+            "long": "output",
+            "short": "o",
+            "description": "prints the output in the specified format. Allowed values: table, json, yaml",
+            "inherit": false,
+            "value": {
+              "name": "output"
+            }
+          },
+          {
+            "long": "revision",
+            "description": "if set, display the status of the named release with revision",
+            "inherit": false,
+            "value": {
+              "name": "revision"
+            }
+          },
+          {
+            "long": "show-desc",
+            "description": "if set, display the description message of the named release",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "template",
+        "description": "locally render templates",
+        "options": [
+          {
+            "long": "api-versions",
+            "short": "a",
+            "description": "kubernetes api versions used for Capabilities.APIVersions",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "api-versions"
+            }
+          },
+          {
+            "long": "atomic",
+            "description": "if set, the installation process deletes the installation on failure. The --wait flag will be set automatically if --atomic is used",
+            "inherit": false
+          },
+          {
+            "long": "ca-file",
+            "description": "verify certificates of HTTPS-enabled servers using this CA bundle",
+            "inherit": false,
+            "value": {
+              "name": "ca-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-file",
+            "description": "identify HTTPS client using this SSL certificate file",
+            "inherit": false,
+            "value": {
+              "name": "cert-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "create-namespace",
+            "description": "create the release namespace if not present",
+            "inherit": false
+          },
+          {
+            "long": "dependency-update",
+            "description": "update dependencies if they are missing before installing the chart",
+            "inherit": false
+          },
+          {
+            "long": "description",
+            "description": "add a custom description",
+            "inherit": false,
+            "value": {
+              "name": "description"
+            }
+          },
+          {
+            "long": "devel",
+            "description": "use development versions, too. Equivalent to version '>0.0.0-0'. If --version is set, this is ignored",
+            "inherit": false
+          },
+          {
+            "long": "disable-openapi-validation",
+            "description": "if set, the installation process will not validate rendered templates against the Kubernetes OpenAPI Schema",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "simulate an install",
+            "inherit": false
+          },
+          {
+            "long": "generate-name",
+            "short": "g",
+            "description": "generate the name (and omit the NAME parameter)",
+            "inherit": false
+          },
+          {
+            "long": "include-crds",
+            "description": "include CRDs in the templated output",
+            "inherit": false
+          },
+          {
+            "long": "insecure-skip-tls-verify",
+            "description": "skip tls certificate checks for the chart download",
+            "inherit": false
+          },
+          {
+            "long": "is-upgrade",
+            "description": "set .Release.IsUpgrade instead of .Release.IsInstall",
+            "inherit": false
+          },
+          {
+            "long": "key-file",
+            "description": "identify HTTPS client using this SSL key file",
+            "inherit": false,
+            "value": {
+              "name": "key-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "keyring",
+            "description": "location of public keys used for verification",
+            "inherit": false,
+            "value": {
+              "name": "keyring",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "kube-version",
+            "description": "kubernetes version used for Capabilities.KubeVersion",
+            "inherit": false,
+            "value": {
+              "name": "kube-version"
+            }
+          },
+          {
+            "long": "name-template",
+            "description": "specify template used to name the release",
+            "inherit": false,
+            "value": {
+              "name": "name-template"
+            }
+          },
+          {
+            "long": "no-hooks",
+            "description": "prevent hooks from running during install",
+            "inherit": false
+          },
+          {
+            "long": "output-dir",
+            "description": "writes the executed templates to files in output-dir instead of stdout",
+            "inherit": false,
+            "value": {
+              "name": "output-dir",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "pass-credentials",
+            "description": "pass credentials to all domains",
+            "inherit": false
+          },
+          {
+            "long": "password",
+            "description": "chart repository password where to locate the requested chart",
+            "inherit": false,
+            "value": {
+              "name": "password"
+            }
+          },
+          {
+            "long": "post-renderer",
+            "description": "the path to an executable to be used for post rendering. If it exists in $PATH, the binary will be used, otherwise it will try to look for the exec...",
+            "inherit": false,
+            "value": {
+              "name": "post-renderer"
+            }
+          },
+          {
+            "long": "post-renderer-args",
+            "description": "an argument to the post-renderer (can specify multiple)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "post-renderer-args"
+            }
+          },
+          {
+            "long": "release-name",
+            "description": "use release name in the output-dir path",
+            "inherit": false
+          },
+          {
+            "long": "render-subchart-notes",
+            "description": "if set, render subchart notes along with the parent",
+            "inherit": false
+          },
+          {
+            "long": "replace",
+            "description": "re-use the given name, only if that name is a deleted release which remains in the history. This is unsafe in production",
+            "inherit": false
+          },
+          {
+            "long": "repo",
+            "description": "chart repository url where to locate the requested chart",
+            "inherit": false,
+            "value": {
+              "name": "repo"
+            }
+          },
+          {
+            "long": "set",
+            "description": "set values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "set"
+            }
+          },
+          {
+            "long": "set-file",
+            "description": "set values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "set-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "set-string",
+            "description": "set STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "set-string"
+            }
+          },
+          {
+            "long": "show-only",
+            "short": "s",
+            "description": "only show manifests rendered from the given templates",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "show-only"
+            }
+          },
+          {
+            "long": "skip-crds",
+            "description": "if set, no CRDs will be installed. By default, CRDs are installed if not already present",
+            "inherit": false
+          },
+          {
+            "long": "skip-tests",
+            "description": "skip tests from templated output",
+            "inherit": false
+          },
+          {
+            "long": "timeout",
+            "description": "time to wait for any individual Kubernetes operation (like Jobs for hooks)",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "username",
+            "description": "chart repository username where to locate the requested chart",
+            "inherit": false,
+            "value": {
+              "name": "username"
+            }
+          },
+          {
+            "long": "validate",
+            "description": "validate your manifests against the Kubernetes cluster you are currently pointing at. This is the same validation performed on an install",
+            "inherit": false
+          },
+          {
+            "long": "values",
+            "short": "f",
+            "description": "specify values in a YAML file or a URL (can specify multiple)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "values",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "verify",
+            "description": "verify the package before using it",
+            "inherit": false
+          },
+          {
+            "long": "version",
+            "description": "specify a version constraint for the chart version to use. This constraint can be a specific tag (e.g. 1.1.1) or it may reference a valid range (e....",
+            "inherit": false,
+            "value": {
+              "name": "version"
+            }
+          },
+          {
+            "long": "wait",
+            "description": "if set, will wait until all Pods, PVCs, Services, and minimum number of Pods of a Deployment, StatefulSet, or ReplicaSet are in a ready state befor...",
+            "inherit": false
+          },
+          {
+            "long": "wait-for-jobs",
+            "description": "if set and --wait enabled, will wait until all Jobs have been completed before marking the release as successful. It will wait for as long as --tim...",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "test",
+        "description": "run tests for a release",
+        "options": [
+          {
+            "long": "filter",
+            "description": "specify tests by attribute (currently \"name\") using attribute=value syntax or '!attribute=value' to exclude a test (can specify multiple or separat...",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "filter"
+            }
+          },
+          {
+            "long": "logs",
+            "description": "dump the logs from test pods (this runs after all tests are complete, but before any cleanup)",
+            "inherit": false
+          },
+          {
+            "long": "timeout",
+            "description": "time to wait for any individual Kubernetes operation (like Jobs for hooks)",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          }
+        ]
+      },
+      {
+        "name": "del",
+        "aliases": [
+          "delete",
+          "un",
+          "uninstall"
+        ],
+        "description": "uninstall a release",
+        "options": [
+          {
+            "long": "description",
+            "description": "add a custom description",
+            "inherit": false,
+            "value": {
+              "name": "description"
+            }
+          },
+          {
+            "long": "dry-run",
+            "description": "simulate a uninstall",
+            "inherit": false
+          },
+          {
+            "long": "keep-history",
+            "description": "remove all associated resources and mark the release as deleted, but retain the release history",
+            "inherit": false
+          },
+          {
+            "long": "no-hooks",
+            "description": "prevent hooks from running during uninstallation",
+            "inherit": false
+          },
+          {
+            "long": "timeout",
+            "description": "time to wait for any individual Kubernetes operation (like Jobs for hooks)",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "wait",
+            "description": "if set, will wait until all the resources are deleted before returning. It will wait for as long as --timeout",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "unittest",
+        "description": "unittest for helm charts"
+      },
+      {
+        "name": "upgrade",
+        "description": "upgrade a release",
+        "options": [
+          {
+            "long": "atomic",
+            "description": "if set, upgrade process rolls back changes made in case of failed upgrade. The --wait flag will be set automatically if --atomic is used",
+            "inherit": false
+          },
+          {
+            "long": "ca-file",
+            "description": "verify certificates of HTTPS-enabled servers using this CA bundle",
+            "inherit": false,
+            "value": {
+              "name": "ca-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-file",
+            "description": "identify HTTPS client using this SSL certificate file",
+            "inherit": false,
+            "value": {
+              "name": "cert-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cleanup-on-fail",
+            "description": "allow deletion of new resources created in this upgrade when upgrade fails",
+            "inherit": false
+          },
+          {
+            "long": "create-namespace",
+            "description": "if --install is set, create the release namespace if not present",
+            "inherit": false
+          },
+          {
+            "long": "dependency-update",
+            "description": "update dependencies if they are missing before installing the chart",
+            "inherit": false
+          },
+          {
+            "long": "description",
+            "description": "add a custom description",
+            "inherit": false,
+            "value": {
+              "name": "description"
+            }
+          },
+          {
+            "long": "devel",
+            "description": "use development versions, too. Equivalent to version '>0.0.0-0'. If --version is set, this is ignored",
+            "inherit": false
+          },
+          {
+            "long": "disable-openapi-validation",
+            "description": "if set, the upgrade process will not validate rendered templates against the Kubernetes OpenAPI Schema",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "simulate an upgrade",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "description": "force resource updates through a replacement strategy",
+            "inherit": false
+          },
+          {
+            "long": "history-max",
+            "description": "limit the maximum number of revisions saved per release. Use 0 for no limit",
+            "inherit": false,
+            "value": {
+              "name": "history-max"
+            }
+          },
+          {
+            "long": "insecure-skip-tls-verify",
+            "description": "skip tls certificate checks for the chart download",
+            "inherit": false
+          },
+          {
+            "long": "install",
+            "short": "i",
+            "description": "if a release by this name doesn't already exist, run an install",
+            "inherit": false
+          },
+          {
+            "long": "key-file",
+            "description": "identify HTTPS client using this SSL key file",
+            "inherit": false,
+            "value": {
+              "name": "key-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "keyring",
+            "description": "location of public keys used for verification",
+            "inherit": false,
+            "value": {
+              "name": "keyring",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "no-hooks",
+            "description": "disable pre/post upgrade hooks",
+            "inherit": false
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "prints the output in the specified format. Allowed values: table, json, yaml",
+            "inherit": false,
+            "value": {
+              "name": "output"
+            }
+          },
+          {
+            "long": "pass-credentials",
+            "description": "pass credentials to all domains",
+            "inherit": false
+          },
+          {
+            "long": "password",
+            "description": "chart repository password where to locate the requested chart",
+            "inherit": false,
+            "value": {
+              "name": "password"
+            }
+          },
+          {
+            "long": "post-renderer",
+            "description": "the path to an executable to be used for post rendering. If it exists in $PATH, the binary will be used, otherwise it will try to look for the exec...",
+            "inherit": false,
+            "value": {
+              "name": "post-renderer"
+            }
+          },
+          {
+            "long": "post-renderer-args",
+            "description": "an argument to the post-renderer (can specify multiple)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "post-renderer-args"
+            }
+          },
+          {
+            "long": "recreate-pods",
+            "description": "performs pods restart for the resource if applicable",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "render-subchart-notes",
+            "description": "if set, render subchart notes along with the parent",
+            "inherit": false
+          },
+          {
+            "long": "repo",
+            "description": "chart repository url where to locate the requested chart",
+            "inherit": false,
+            "value": {
+              "name": "repo"
+            }
+          },
+          {
+            "long": "reset-values",
+            "description": "when upgrading, reset the values to the ones built into the chart",
+            "inherit": false
+          },
+          {
+            "long": "reuse-values",
+            "description": "when upgrading, reuse the last release's values and merge in any overrides from the command line via --set and -f. If '--reset-values' is specified...",
+            "inherit": false
+          },
+          {
+            "long": "set",
+            "description": "set values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "set"
+            }
+          },
+          {
+            "long": "set-file",
+            "description": "set values from respective files specified via the command line (can specify multiple or separate values with commas: key1=path1,key2=path2)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "set-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "set-string",
+            "description": "set STRING values on the command line (can specify multiple or separate values with commas: key1=val1,key2=val2)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "set-string"
+            }
+          },
+          {
+            "long": "skip-crds",
+            "description": "if set, no CRDs will be installed when an upgrade is performed with install flag enabled. By default, CRDs are installed if not already present, wh...",
+            "inherit": false
+          },
+          {
+            "long": "timeout",
+            "description": "time to wait for any individual Kubernetes operation (like Jobs for hooks)",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "username",
+            "description": "chart repository username where to locate the requested chart",
+            "inherit": false,
+            "value": {
+              "name": "username"
+            }
+          },
+          {
+            "long": "values",
+            "short": "f",
+            "description": "specify values in a YAML file or a URL (can specify multiple)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "values",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "verify",
+            "description": "verify the package before using it",
+            "inherit": false
+          },
+          {
+            "long": "version",
+            "description": "specify a version constraint for the chart version to use. This constraint can be a specific tag (e.g. 1.1.1) or it may reference a valid range (e....",
+            "inherit": false,
+            "value": {
+              "name": "version"
+            }
+          },
+          {
+            "long": "wait",
+            "description": "if set, will wait until all Pods, PVCs, Services, and minimum number of Pods of a Deployment, StatefulSet, or ReplicaSet are in a ready state befor...",
+            "inherit": false
+          },
+          {
+            "long": "wait-for-jobs",
+            "description": "if set and --wait enabled, will wait until all Jobs have been completed before marking the release as successful. It will wait for as long as --tim...",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "verify",
+        "description": "verify that a chart at the given path has been signed and is valid",
+        "options": [
+          {
+            "long": "keyring",
+            "description": "keyring containing public keys",
+            "inherit": false,
+            "value": {
+              "name": "keyring",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "print the client version information",
+        "options": [
+          {
+            "long": "client",
+            "short": "c",
+            "description": "display client version information",
+            "inherit": false,
+            "hidden": true
+          },
+          {
+            "long": "short",
+            "description": "print the version number",
+            "inherit": false
+          },
+          {
+            "long": "template",
+            "description": "template for version string format",
+            "inherit": false,
+            "value": {
+              "name": "template"
+            }
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "help about any command",
+        "subcommands": [
+          {
+            "name": "completion",
+            "description": "generate autocompletion scripts for the specified shell",
+            "subcommands": [
+              {
+                "name": "bash",
+                "description": "generate autocompletion script for bash"
+              },
+              {
+                "name": "fish",
+                "description": "generate autocompletion script for fish"
+              },
+              {
+                "name": "powershell",
+                "description": "generate autocompletion script for powershell"
+              },
+              {
+                "name": "zsh",
+                "description": "generate autocompletion script for zsh"
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "description": "create a new chart with the given name"
+          },
+          {
+            "name": "dep",
+            "aliases": [
+              "dependencies",
+              "dependency"
+            ],
+            "description": "manage a chart's dependencies",
+            "subcommands": [
+              {
+                "name": "build",
+                "description": "rebuild the charts/ directory based on the Chart.lock file"
+              },
+              {
+                "name": "ls",
+                "aliases": [
+                  "list"
+                ],
+                "description": "list the dependencies for the given chart"
+              },
+              {
+                "name": "up",
+                "aliases": [
+                  "update"
+                ],
+                "description": "update charts/ based on the contents of Chart.yaml"
+              }
+            ]
+          },
+          {
+            "name": "env",
+            "description": "helm client environment information"
+          },
+          {
+            "name": "get",
+            "description": "download extended information of a named release",
+            "subcommands": [
+              {
+                "name": "all",
+                "description": "download all information for a named release"
+              },
+              {
+                "name": "hooks",
+                "description": "download all hooks for a named release"
+              },
+              {
+                "name": "manifest",
+                "description": "download the manifest for a named release"
+              },
+              {
+                "name": "notes",
+                "description": "download the notes for a named release"
+              },
+              {
+                "name": "values",
+                "description": "download the values file for a named release"
+              }
+            ]
+          },
+          {
+            "name": "hist",
+            "aliases": [
+              "history"
+            ],
+            "description": "fetch release history"
+          },
+          {
+            "name": "install",
+            "description": "install a chart"
+          },
+          {
+            "name": "lint",
+            "description": "examine a chart for possible issues"
+          },
+          {
+            "name": "ls",
+            "aliases": [
+              "list"
+            ],
+            "description": "list releases"
+          },
+          {
+            "name": "package",
+            "description": "package a chart directory into a chart archive"
+          },
+          {
+            "name": "plugin",
+            "description": "install, list, or uninstall Helm plugins",
+            "subcommands": [
+              {
+                "name": "add",
+                "aliases": [
+                  "install"
+                ],
+                "description": "install one or more Helm plugins"
+              },
+              {
+                "name": "ls",
+                "aliases": [
+                  "list"
+                ],
+                "description": "list installed Helm plugins"
+              },
+              {
+                "name": "rm",
+                "aliases": [
+                  "remove",
+                  "uninstall"
+                ],
+                "description": "uninstall one or more Helm plugins"
+              },
+              {
+                "name": "up",
+                "aliases": [
+                  "update"
+                ],
+                "description": "update one or more Helm plugins"
+              }
+            ]
+          },
+          {
+            "name": "fetch",
+            "aliases": [
+              "pull"
+            ],
+            "description": "download a chart from a repository and (optionally) unpack it in local directory"
+          },
+          {
+            "name": "push",
+            "description": "push a chart to remote"
+          },
+          {
+            "name": "registry",
+            "description": "login to or logout from a registry",
+            "subcommands": [
+              {
+                "name": "login",
+                "description": "login to a registry"
+              },
+              {
+                "name": "logout",
+                "description": "logout from a registry"
+              }
+            ]
+          },
+          {
+            "name": "repo",
+            "description": "add, list, remove, update, and index chart repositories",
+            "subcommands": [
+              {
+                "name": "add",
+                "description": "add a chart repository"
+              },
+              {
+                "name": "index",
+                "description": "generate an index file given a directory containing packaged charts"
+              },
+              {
+                "name": "ls",
+                "aliases": [
+                  "list"
+                ],
+                "description": "list chart repositories"
+              },
+              {
+                "name": "rm",
+                "aliases": [
+                  "remove"
+                ],
+                "description": "remove one or more chart repositories"
+              },
+              {
+                "name": "up",
+                "aliases": [
+                  "update"
+                ],
+                "description": "update information of available charts locally from chart repositories"
+              }
+            ]
+          },
+          {
+            "name": "rollback",
+            "description": "roll back a release to a previous revision"
+          },
+          {
+            "name": "s3",
+            "description": "manage chart repositories on Amazon S3"
+          },
+          {
+            "name": "search",
+            "description": "search for a keyword in charts",
+            "subcommands": [
+              {
+                "name": "hub",
+                "description": "search for charts in the Artifact Hub or your own hub instance"
+              },
+              {
+                "name": "repo",
+                "description": "search repositories for a keyword in charts"
+              }
+            ]
+          },
+          {
+            "name": "inspect",
+            "aliases": [
+              "show"
+            ],
+            "description": "show information of a chart",
+            "subcommands": [
+              {
+                "name": "all",
+                "description": "show all information of the chart"
+              },
+              {
+                "name": "chart",
+                "description": "show the chart's definition"
+              },
+              {
+                "name": "crds",
+                "description": "show the chart's CRDs"
+              },
+              {
+                "name": "readme",
+                "description": "show the chart's README"
+              },
+              {
+                "name": "values",
+                "description": "show the chart's values"
+              }
+            ]
+          },
+          {
+            "name": "status",
+            "description": "display the status of the named release"
+          },
+          {
+            "name": "template",
+            "description": "locally render templates"
+          },
+          {
+            "name": "test",
+            "description": "run tests for a release"
+          },
+          {
+            "name": "del",
+            "aliases": [
+              "delete",
+              "un",
+              "uninstall"
+            ],
+            "description": "uninstall a release"
+          },
+          {
+            "name": "unittest",
+            "description": "unittest for helm charts"
+          },
+          {
+            "name": "upgrade",
+            "description": "upgrade a release"
+          },
+          {
+            "name": "verify",
+            "description": "verify that a chart at the given path has been signed and is valid"
+          },
+          {
+            "name": "version",
+            "description": "print the client version information"
+          }
+        ]
+      }
+    ]
+  }
+}
