@@ -1,0 +1,664 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "wget",
+    "description": "non-interactive network downloader",
+    "options": [
+      {
+        "short": "V",
+        "long": "version",
+        "description": "display the version of Wget and exit"
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "print this help"
+      },
+      {
+        "short": "b",
+        "long": "background",
+        "description": "go to background after startup"
+      },
+      {
+        "short": "e",
+        "spellings": [
+          "--execute=COMMAND"
+        ],
+        "description": "execute a `.wgetrc'-style command"
+      },
+      {
+        "short": "o",
+        "spellings": [
+          "--output-file=FILE"
+        ],
+        "description": "log messages to FILE"
+      },
+      {
+        "short": "a",
+        "spellings": [
+          "--append-output=FILE"
+        ],
+        "description": "append messages to FILE"
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "quiet (no output)"
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "be verbose (this is the default)"
+      },
+      {
+        "long": "no-verbose",
+        "spellings": [
+          "-nv"
+        ],
+        "description": "turn off verboseness, without being quiet"
+      },
+      {
+        "spellings": [
+          "--report-speed=TYPE"
+        ],
+        "description": "output bandwidth as TYPE. TYPE can be bits"
+      },
+      {
+        "short": "i",
+        "spellings": [
+          "--input-file=FILE"
+        ],
+        "description": "download URLs found in local or external FILE"
+      },
+      {
+        "short": "F",
+        "long": "force-html",
+        "description": "treat input file as HTML"
+      },
+      {
+        "short": "B",
+        "spellings": [
+          "--base=URL"
+        ],
+        "description": "resolves HTML input-file links (-i -F) relative to URL"
+      },
+      {
+        "spellings": [
+          "--config=FILE"
+        ],
+        "description": "specify config file to use"
+      },
+      {
+        "long": "no-config",
+        "description": "do not read any config file"
+      },
+      {
+        "spellings": [
+          "--rejected-log=FILE"
+        ],
+        "description": "log reasons for URL rejection to FILE"
+      },
+      {
+        "short": "t",
+        "spellings": [
+          "--tries=NUMBER"
+        ],
+        "description": "set number of retries to NUMBER (0 unlimits)"
+      },
+      {
+        "long": "retry-connrefused",
+        "description": "retry even if connection is refused"
+      },
+      {
+        "long": "retry-on-http-error",
+        "description": "comma-separated list of HTTP errors to retry"
+      },
+      {
+        "short": "O",
+        "spellings": [
+          "--output-document=FILE"
+        ],
+        "description": "write documents to FILE"
+      },
+      {
+        "long": "no-clobber",
+        "spellings": [
+          "-nc"
+        ],
+        "description": "skip downloads that would download to existing files (overwriting them)"
+      },
+      {
+        "long": "no-netrc",
+        "description": "don't try to obtain credentials from .netrc"
+      },
+      {
+        "short": "c",
+        "long": "continue",
+        "description": "resume getting a partially-downloaded file"
+      },
+      {
+        "spellings": [
+          "--start-pos=OFFSET"
+        ],
+        "description": "start downloading from zero-based position OFFSET"
+      },
+      {
+        "spellings": [
+          "--progress=TYPE"
+        ],
+        "description": "select progress gauge type"
+      },
+      {
+        "long": "show-progress",
+        "description": "display the progress bar in any verbosity mode"
+      },
+      {
+        "short": "N",
+        "long": "timestamping",
+        "description": "don't re-retrieve files unless newer than local"
+      },
+      {
+        "short": "S",
+        "long": "server-response",
+        "description": "print server response"
+      },
+      {
+        "long": "spider",
+        "description": "don't download anything"
+      },
+      {
+        "short": "T",
+        "spellings": [
+          "--timeout=SECONDS"
+        ],
+        "description": "set all timeout values to SECONDS"
+      },
+      {
+        "spellings": [
+          "--dns-timeout=SECS"
+        ],
+        "description": "set the DNS lookup timeout to SECS"
+      },
+      {
+        "spellings": [
+          "--connect-timeout=SECS"
+        ],
+        "description": "set the connect timeout to SECS"
+      },
+      {
+        "spellings": [
+          "--read-timeout=SECS"
+        ],
+        "description": "set the read timeout to SECS"
+      },
+      {
+        "short": "w",
+        "spellings": [
+          "--wait=SECONDS"
+        ],
+        "description": "wait SECONDS between retrievals"
+      },
+      {
+        "spellings": [
+          "--waitretry=SECONDS"
+        ],
+        "description": "wait 1..SECONDS between retries of a retrieval"
+      },
+      {
+        "long": "random-wait",
+        "description": "wait from 0.5*WAIT...1.5*WAIT secs between retrievals"
+      },
+      {
+        "long": "no-proxy",
+        "description": "explicitly turn off proxy"
+      },
+      {
+        "short": "Q",
+        "spellings": [
+          "--quota=NUMBER"
+        ],
+        "description": "set retrieval quota to NUMBER"
+      },
+      {
+        "spellings": [
+          "--bind-address=ADDRESS"
+        ],
+        "description": "bind to ADDRESS (hostname or IP) on local host"
+      },
+      {
+        "spellings": [
+          "--limit-rate=RATE"
+        ],
+        "description": "limit download rate to RATE"
+      },
+      {
+        "long": "no-dns-cache",
+        "description": "disable caching DNS lookups"
+      },
+      {
+        "spellings": [
+          "--restrict-file-names=OS"
+        ],
+        "description": "restrict chars in file names to ones OS allows"
+      },
+      {
+        "long": "ignore-case",
+        "description": "ignore case when matching files/directories"
+      },
+      {
+        "short": "4",
+        "long": "inet4-only",
+        "description": "connect only to IPv4 addresses"
+      },
+      {
+        "short": "6",
+        "long": "inet6-only",
+        "description": "connect only to IPv6 addresses"
+      },
+      {
+        "spellings": [
+          "--user=USER"
+        ],
+        "description": "set both ftp and http user to USER"
+      },
+      {
+        "spellings": [
+          "--password=PASS"
+        ],
+        "description": "set both ftp and http password to PASS"
+      },
+      {
+        "long": "ask-password",
+        "description": "prompt for passwords"
+      },
+      {
+        "long": "no-iri",
+        "description": "turn off IRI support"
+      },
+      {
+        "spellings": [
+          "--local-encoding=ENC"
+        ],
+        "description": "use ENC as the local encoding for IRIs"
+      },
+      {
+        "spellings": [
+          "--remote-encoding=ENC"
+        ],
+        "description": "use ENC as the default remote encoding"
+      },
+      {
+        "long": "unlink",
+        "description": "remove file before clobber"
+      },
+      {
+        "long": "xattr",
+        "description": "turn on storage of metadata in extended file attributes"
+      },
+      {
+        "long": "no-directories",
+        "spellings": [
+          "-nd"
+        ],
+        "description": "don't create directories"
+      },
+      {
+        "short": "x",
+        "long": "force-directories",
+        "description": "force creation of directories"
+      },
+      {
+        "long": "no-host-directories",
+        "spellings": [
+          "-nH"
+        ],
+        "description": "don't create host directories"
+      },
+      {
+        "long": "protocol-directories",
+        "description": "use protocol name in directories"
+      },
+      {
+        "short": "P",
+        "spellings": [
+          "--directory-prefix=PREFIX"
+        ],
+        "description": "save files to PREFIX/"
+      },
+      {
+        "spellings": [
+          "--cut-dirs=NUMBER"
+        ],
+        "description": "ignore NUMBER remote directory components"
+      },
+      {
+        "spellings": [
+          "--http-user=USER"
+        ],
+        "description": "set http user to USER"
+      },
+      {
+        "spellings": [
+          "--http-password=PASS"
+        ],
+        "description": "set http password to PASS"
+      },
+      {
+        "long": "no-cache",
+        "description": "disallow server-cached data"
+      },
+      {
+        "short": "E",
+        "long": "adjust-extension",
+        "description": "save HTML/CSS documents with proper extensions"
+      },
+      {
+        "long": "ignore-length",
+        "description": "ignore 'Content-Length' header field"
+      },
+      {
+        "spellings": [
+          "--header=STRING"
+        ],
+        "description": "insert STRING among the headers"
+      },
+      {
+        "spellings": [
+          "--compression=TYPE"
+        ],
+        "description": "choose compression, one of auto, gzip and none. (default: none)"
+      },
+      {
+        "long": "max-redirect",
+        "description": "maximum redirections allowed per page"
+      },
+      {
+        "spellings": [
+          "--proxy-user=USER"
+        ],
+        "description": "set USER as proxy username"
+      },
+      {
+        "spellings": [
+          "--proxy-password=PASS"
+        ],
+        "description": "set PASS as proxy password"
+      },
+      {
+        "spellings": [
+          "--referer=URL"
+        ],
+        "description": "include 'Referer: URL' header in HTTP request"
+      },
+      {
+        "long": "save-headers",
+        "description": "save the HTTP headers to file"
+      },
+      {
+        "short": "U",
+        "spellings": [
+          "--user-agent=AGENT"
+        ],
+        "description": "identify as AGENT instead of Wget/VERSION"
+      },
+      {
+        "long": "no-http-keep-alive",
+        "description": "disable HTTP keep-alive (persistent connections)"
+      },
+      {
+        "long": "no-cookies",
+        "description": "don't use cookies"
+      },
+      {
+        "spellings": [
+          "--load-cookies=FILE"
+        ],
+        "description": "load cookies from FILE before session"
+      },
+      {
+        "spellings": [
+          "--save-cookies=FILE"
+        ],
+        "description": "save cookies to FILE after session"
+      },
+      {
+        "long": "keep-session-cookies",
+        "description": "load and save session (non-permanent) cookies"
+      },
+      {
+        "spellings": [
+          "--post-data=STRING"
+        ],
+        "description": "use the POST method; send STRING as the data"
+      },
+      {
+        "spellings": [
+          "--post-file=FILE"
+        ],
+        "description": "use the POST method; send contents of FILE"
+      },
+      {
+        "spellings": [
+          "--method=HTTPMethod"
+        ],
+        "description": "use method \"HTTPMethod\" in the request"
+      },
+      {
+        "spellings": [
+          "--body-data=STRING"
+        ],
+        "description": "send STRING as data. --method MUST be set"
+      },
+      {
+        "spellings": [
+          "--body-file=FILE"
+        ],
+        "description": "send contents of FILE. --method MUST be set"
+      },
+      {
+        "long": "content-on-error",
+        "description": "output the received content on server errors"
+      },
+      {
+        "spellings": [
+          "--secure-protocol=PR"
+        ],
+        "description": "choose secure protocol, one of auto, SSLv2,"
+      },
+      {
+        "long": "https-only",
+        "description": "only follow secure HTTPS links"
+      },
+      {
+        "long": "no-check-certificate",
+        "description": "don't validate the server's certificate"
+      },
+      {
+        "spellings": [
+          "--certificate=FILE"
+        ],
+        "description": "client certificate file"
+      },
+      {
+        "spellings": [
+          "--certificate-type=TYPE"
+        ],
+        "description": "client certificate type, PEM or DER"
+      },
+      {
+        "spellings": [
+          "--private-key=FILE"
+        ],
+        "description": "private key file"
+      },
+      {
+        "spellings": [
+          "--private-key-type=TYPE"
+        ],
+        "description": "private key type, PEM or DER"
+      },
+      {
+        "spellings": [
+          "--ca-certificate=FILE"
+        ],
+        "description": "file with the bundle of CAs"
+      },
+      {
+        "spellings": [
+          "--ca-directory=DIR"
+        ],
+        "description": "directory where hash list of CAs is stored"
+      },
+      {
+        "spellings": [
+          "--crl-file=FILE"
+        ],
+        "description": "file with bundle of CRLs"
+      },
+      {
+        "spellings": [
+          "--ciphers=STR"
+        ],
+        "description": "set the priority string (GnuTLS) or cipher list string (OpenSSL) directly"
+      },
+      {
+        "short": "r",
+        "long": "recursive",
+        "description": "specify recursive download"
+      },
+      {
+        "short": "l",
+        "spellings": [
+          "--level=NUMBER"
+        ],
+        "description": "maximum recursion depth (inf or 0 for infinite)"
+      },
+      {
+        "long": "delete-after",
+        "description": "delete files locally after downloading them"
+      },
+      {
+        "short": "k",
+        "long": "convert-links",
+        "description": "make links in downloaded HTML or CSS point to local files"
+      },
+      {
+        "short": "K",
+        "long": "backup-converted",
+        "description": "before converting file X, back up as X.orig"
+      },
+      {
+        "short": "m",
+        "long": "mirror",
+        "description": "shortcut for -N -r -l inf --no-remove-listing"
+      },
+      {
+        "short": "p",
+        "long": "page-requisites",
+        "description": "get all images, etc. needed to display HTML page"
+      },
+      {
+        "short": "A",
+        "spellings": [
+          "--accept=LIST"
+        ],
+        "description": "comma-separated list of accepted extensions"
+      },
+      {
+        "short": "R",
+        "spellings": [
+          "--reject=LIST"
+        ],
+        "description": "comma-separated list of rejected extensions"
+      },
+      {
+        "spellings": [
+          "--accept-regex=REGEX"
+        ],
+        "description": "regex matching accepted URLs"
+      },
+      {
+        "spellings": [
+          "--reject-regex=REGEX"
+        ],
+        "description": "regex matching rejected URLs"
+      },
+      {
+        "spellings": [
+          "--regex-type=TYPE"
+        ],
+        "description": "regex type (posix)"
+      },
+      {
+        "short": "D",
+        "spellings": [
+          "--domains=LIST"
+        ],
+        "description": "comma-separated list of accepted domains"
+      },
+      {
+        "spellings": [
+          "--exclude-domains=LIST"
+        ],
+        "description": "comma-separated list of rejected domains"
+      },
+      {
+        "long": "follow-ftp",
+        "description": "follow FTP links from HTML documents"
+      },
+      {
+        "spellings": [
+          "--follow-tags=LIST"
+        ],
+        "description": "comma-separated list of followed HTML tags"
+      },
+      {
+        "spellings": [
+          "--ignore-tags=LIST"
+        ],
+        "description": "comma-separated list of ignored HTML tags"
+      },
+      {
+        "short": "H",
+        "long": "span-hosts",
+        "description": "go to foreign hosts when recursive"
+      },
+      {
+        "short": "L",
+        "long": "relative",
+        "description": "follow relative links only"
+      },
+      {
+        "short": "I",
+        "spellings": [
+          "--include-directories=LIST"
+        ],
+        "description": "list of allowed directories"
+      },
+      {
+        "short": "X",
+        "spellings": [
+          "--exclude-directories=LIST"
+        ],
+        "description": "list of excluded directories"
+      },
+      {
+        "long": "no-parent",
+        "spellings": [
+          "-np"
+        ],
+        "description": "don't ascend to the parent directory"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "url",
+          "description": "The url(s) to retrieve",
+          "repeatable": true
+        }
+      ]
+    }
+  }
+}
