@@ -1,0 +1,309 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "hop",
+    "description": "interact with Hop from the terminal",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "prints help information",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "prints version information",
+        "inherit": false
+      },
+      {
+        "long": "project",
+        "short": "p",
+        "description": "namespace or ID of the project to use",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "auth",
+        "description": "authenticate with Hop",
+        "subcommands": [
+          {
+            "name": "help",
+            "description": "prints this message or the help of the given subcommand(s)"
+          },
+          {
+            "name": "login",
+            "description": "login to Hop"
+          },
+          {
+            "name": "logout",
+            "description": "logout the current user"
+          }
+        ]
+      },
+      {
+        "name": "deploy",
+        "description": "deploy a new container",
+        "options": [
+          {
+            "long": "type",
+            "short": "t",
+            "description": "type of the container, defaults to `ephemeral`",
+            "inherit": false,
+            "value": {
+              "name": "container-type",
+              "provider": "hop-container-types"
+            }
+          },
+          {
+            "long": "containers",
+            "short": "i",
+            "description": "number of containers to use, defaults to 1 if `scaling` is manual",
+            "inherit": false,
+            "value": {
+              "name": "container-amount",
+              "provider": "hop-container-counts"
+            }
+          },
+          {
+            "long": "cpu",
+            "short": "c",
+            "description": "the number of CPUs to use, defaults to 1",
+            "inherit": false,
+            "value": {
+              "name": "cpu-amount",
+              "provider": "hop-cpu-counts"
+            }
+          },
+          {
+            "long": "env",
+            "short": "e",
+            "description": "environment variables to set, in the form of KEY=VALUE",
+            "inherit": false,
+            "value": {
+              "name": "environment-variable",
+              "provider": "hop-env-examples"
+            }
+          },
+          {
+            "long": "name",
+            "short": "n",
+            "description": "name of the deployment, defaults to the directory name",
+            "inherit": false,
+            "value": {
+              "name": "deployment-name"
+            }
+          },
+          {
+            "long": "project",
+            "short": "p",
+            "description": "namespace or ID of the project to use",
+            "inherit": false,
+            "value": {
+              "name": "project",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "ram",
+            "short": "m",
+            "description": "amount of RAM to use, defaults to 512MB",
+            "inherit": false,
+            "value": {
+              "name": "ram-amount",
+              "provider": "hop-ram-sizes"
+            }
+          },
+          {
+            "long": "scaling",
+            "short": "s",
+            "description": "scaling strategy, defaults to `manual`",
+            "inherit": false,
+            "value": {
+              "name": "scaling-strategy",
+              "provider": "hop-scaling-strategies"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "dir",
+              "description": "directory to deploy, defaults to current directory",
+              "index": 0,
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "prints this message or the help of the given subcommand(s)",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "ignite",
+        "description": "interact with Ignite containers",
+        "subcommands": [
+          {
+            "name": "ls",
+            "description": "list all deployments",
+            "options": [
+              {
+                "long": "project",
+                "short": "p",
+                "description": "namespace or ID of the project to use",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "rm",
+            "description": "delete a deployment",
+            "options": [
+              {
+                "long": "project",
+                "short": "p",
+                "description": "namespace or ID of the project to use",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "link",
+        "description": "link an existing deployment to a hopfile"
+      },
+      {
+        "name": "projects",
+        "description": "interact with projects",
+        "subcommands": [
+          {
+            "name": "info",
+            "description": "get information about a project"
+          },
+          {
+            "name": "ls",
+            "description": "list all projects that you're authorized to"
+          },
+          {
+            "name": "new",
+            "description": "create a new project"
+          },
+          {
+            "name": "rm",
+            "description": "delete a project"
+          },
+          {
+            "name": "switch",
+            "description": "switch to a different project"
+          }
+        ]
+      },
+      {
+        "name": "whoami",
+        "description": "get information about the current user"
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "hop-container-types": {
+        "values": [
+          {
+            "value": "ephemeral"
+          },
+          {
+            "value": "persistent"
+          }
+        ]
+      },
+      "hop-container-counts": {
+        "values": [
+          {
+            "value": "1"
+          },
+          {
+            "value": "2"
+          },
+          {
+            "value": "4"
+          },
+          {
+            "value": "8"
+          },
+          {
+            "value": "10"
+          }
+        ]
+      },
+      "hop-cpu-counts": {
+        "values": [
+          {
+            "value": "1"
+          },
+          {
+            "value": "2"
+          },
+          {
+            "value": "4"
+          },
+          {
+            "value": "8"
+          }
+        ]
+      },
+      "hop-env-examples": {
+        "values": [
+          {
+            "value": "port="
+          }
+        ]
+      },
+      "hop-ram-sizes": {
+        "values": [
+          {
+            "value": "128MB"
+          },
+          {
+            "value": "256MB"
+          },
+          {
+            "value": "512MB"
+          },
+          {
+            "value": "1G"
+          },
+          {
+            "value": "2G"
+          },
+          {
+            "value": "4G"
+          }
+        ]
+      },
+      "hop-scaling-strategies": {
+        "values": [
+          {
+            "value": "manual"
+          },
+          {
+            "value": "autoscale"
+          }
+        ]
+      }
+    }
+  }
+}
