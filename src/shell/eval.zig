@@ -278,10 +278,11 @@ fn evalAndOr(shell: anytype, and_or: ast.AndOr) EvalError!result.EvalResult {
 
 fn evalPipeline(shell: anytype, pipeline: ast.Pipeline) EvalError!result.EvalResult {
     validateAst(pipeline);
-    var evaluated = if (pipeline.stages.len == 1)
-        try evalCommand(shell, pipeline.stages[0])
-    else
-        try evalExternalPipeline(shell, pipeline);
+    var evaluated = if (pipeline.stages.len == 1) evaluated: {
+        const command_result = try evalCommand(shell, pipeline.stages[0]);
+        try shell.state.setLastPipelineStatuses(&.{command_result.status});
+        break :evaluated command_result;
+    } else try evalExternalPipeline(shell, pipeline);
     if (pipeline.negated and evaluated.flow == .normal) evaluated.status = if (evaluated.status == 0) 1 else 0;
     return evaluated;
 }
@@ -303,6 +304,7 @@ fn evalExternalPipeline(shell: anytype, pipeline: ast.Pipeline) EvalError!result
     const scratch = try shell.beginScratchScope();
     defer scratch.end();
     const statuses = try waitForegroundPids(shell, pids);
+    try setPipelineStatusArray(shell, statuses);
     if (pipelineStopped(statuses)) {
         // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
         try shell.state.addBackgroundJobPids(pids, pids[0], try pipelineCommandText(shell, pipeline), shell.state.options.monitor);
@@ -310,6 +312,12 @@ fn evalExternalPipeline(shell: anytype, pipeline: ast.Pipeline) EvalError!result
         return .{ .status = stoppedPipelineStatus(statuses) };
     }
     return .{ .status = pipelineStatus(statuses, pipefail) };
+}
+
+fn setPipelineStatusArray(shell: anytype, statuses: []const host_mod.WaitStatus) !void {
+    const values = try shell.scratchAllocator().alloc(result.ExitStatus, statuses.len);
+    for (statuses, 0..) |status, index| values[index] = status.shellStatus();
+    try shell.state.setLastPipelineStatuses(values);
 }
 
 fn pipelineStopped(statuses: []const host_mod.WaitStatus) bool {
@@ -7066,6 +7074,9 @@ fn parameterCurrentValue(shell: anytype, parameter: ast.Parameter) !?[]const u8 
 }
 
 fn arrayParameterValue(shell: anytype, parameter: ast.ArrayParameter) !?[]const u8 {
+    if (shell.state.options.mode == .bash and std.mem.eql(u8, parameter.name, "PIPESTATUS")) {
+        return pipelineStatusParameterValue(shell, parameter.subscript);
+    }
     const array = shell.state.getArray(parameter.name) orelse return null;
     return switch (parameter.subscript) {
         .index => |word| value: {
@@ -7078,6 +7089,35 @@ fn arrayParameterValue(shell: anytype, parameter: ast.ArrayParameter) !?[]const 
             else => unreachable,
         },
     };
+}
+
+fn pipelineStatusParameterValue(shell: anytype, subscript: ast.ArraySubscript) !?[]const u8 {
+    const statuses = shell.state.last_pipeline_statuses;
+    if (statuses.len == 0) return null;
+    return switch (subscript) {
+        .index => |word| value: {
+            const index = try expandArrayIndex(shell, word);
+            if (index >= statuses.len) break :value null;
+            break :value try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{statuses[index]});
+        },
+        .all => |special| switch (special) {
+            .at => try joinPipelineStatuses(shell, " "),
+            .star => try joinPipelineStatuses(shell, ifsFirstCharacter(shell)),
+            else => unreachable,
+        },
+    };
+}
+
+fn joinPipelineStatuses(shell: anytype, separator: []const u8) ![]const u8 {
+    const statuses = shell.state.last_pipeline_statuses;
+    if (statuses.len == 0) return "";
+    var output: std.Io.Writer.Allocating = .init(shell.scratchAllocator());
+    defer output.deinit();
+    for (statuses, 0..) |status, index| {
+        if (index != 0) try output.writer.writeAll(separator);
+        try output.writer.print("{}", .{status});
+    }
+    return output.toOwnedSlice();
 }
 
 fn parameterExpansionValue(shell: anytype, name: []const u8, span: source_mod.Span) ?[]const u8 {

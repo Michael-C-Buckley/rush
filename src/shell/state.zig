@@ -205,6 +205,7 @@ pub const State = struct {
     background_pids: std.ArrayListUnmanaged(host.Pid) = .empty,
     background_jobs: std.ArrayListUnmanaged(BackgroundJob) = .empty,
     last_status: result.ExitStatus = 0,
+    last_pipeline_statuses: []result.ExitStatus = &.{},
     last_status_errexit_ignored: bool = false,
     last_background_pid: ?host.Pid = null,
     getopts_char_index: usize = 1,
@@ -272,6 +273,7 @@ pub const State = struct {
         self.background_pids.deinit(self.allocator);
         for (self.background_jobs.items) |*job| job.deinit(self.allocator);
         self.background_jobs.deinit(self.allocator);
+        if (self.last_pipeline_statuses.len != 0) self.allocator.free(self.last_pipeline_statuses);
         self.freeOwnedPositionals();
         self.clearExitTrap();
         self.definition_arena.deinit();
@@ -331,6 +333,13 @@ pub const State = struct {
     pub fn secondsValue(self: State, now_ns: i128) i64 {
         const elapsed_ns = @max(now_ns - self.seconds_base_time_ns, 0);
         return self.seconds_offset + @as(i64, @intCast(@divFloor(elapsed_ns, std.time.ns_per_s)));
+    }
+
+    pub fn setLastPipelineStatuses(self: *State, statuses: []const result.ExitStatus) !void {
+        std.debug.assert(statuses.len != 0);
+        const owned = try self.allocator.dupe(result.ExitStatus, statuses);
+        if (self.last_pipeline_statuses.len != 0) self.allocator.free(self.last_pipeline_statuses);
+        self.last_pipeline_statuses = owned;
     }
 
     pub fn putVariable(self: *State, variable: Variable) !void {

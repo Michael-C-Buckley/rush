@@ -122,6 +122,24 @@
             .status = 0,
         },
         .{
+            .name = "PIPESTATUS records foreground pipeline statuses",
+            .script =
+            \\false | true
+            \\printf '<%s>\n' "${PIPESTATUS[0]}" "${PIPESTATUS[1]}" "${PIPESTATUS[*]}"
+            \\! true
+            \\printf 'negated-status=<%s> pipe=<%s>\n' "$?" "${PIPESTATUS[*]}"
+            ,
+            .stdout =
+            \\<1>
+            \\<0>
+            \\<1 0>
+            \\negated-status=<1> pipe=<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "arithmetic expansion error in assignment-only command returns from a function",
             .script =
             \\f() { x=$((1/0)); printf bad; }
