@@ -1,0 +1,199 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "od",
+    "description": "octal, decimal, hex, and ascii dump",
+    "options": [
+      {
+        "short": "A",
+        "inherit": false,
+        "value": {
+          "name": "base",
+          "provider": {
+            "values": [
+              "d",
+              "o",
+              "x",
+              "n"
+            ]
+          }
+        },
+        "description": "set input address base"
+      },
+      {
+        "short": "a",
+        "description": "output named characters. Equivalent to -t a",
+        "inherit": false
+      },
+      {
+        "short": "B",
+        "spellings": [
+          "-o"
+        ],
+        "description": "output octal shorts. Equivalent to -t o2",
+        "inherit": false
+      },
+      {
+        "short": "b",
+        "description": "output octal bytes. Equivalent to -t o1",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "description": "output C-style escaped characters. Equivalent to -t c",
+        "inherit": false
+      },
+      {
+        "short": "D",
+        "description": "output unsigned decimal ints. Equivalent to -t u4",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "description": "output unsigned decimal shorts. Equivalent to -t u2",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "spellings": [
+          "-F"
+        ],
+        "description": "output double-precision floating point numbers. Equivalent to -t fD",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "description": "output single-precision floating point numbers. Equivalent to -t fF",
+        "inherit": false
+      },
+      {
+        "short": "H",
+        "spellings": [
+          "-X"
+        ],
+        "description": "output hexadecimal ints. Equivalent to -t x4",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "spellings": [
+          "-x"
+        ],
+        "description": "output hexadecimal shorts. Equivalent to -t x2",
+        "inherit": false
+      },
+      {
+        "short": "I",
+        "spellings": [
+          "-L",
+          "-l"
+        ],
+        "description": "output signed decimal longs. Equivalent to -t dL",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "description": "output signed decimal ints. Equivalent to -t dI",
+        "inherit": false
+      },
+      {
+        "short": "j",
+        "inherit": false,
+        "value": {
+          "name": "skip"
+        },
+        "description": "skip bytes before dumping"
+      },
+      {
+        "short": "N",
+        "description": "dump at most length bytes of input",
+        "inherit": false,
+        "value": {
+          "name": "length"
+        }
+      },
+      {
+        "short": "O",
+        "description": "output octal ints. Equivalent to -t o4",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "output signed decimal shorts. Equivalent to -t d2",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              "a",
+              "c",
+              "dC",
+              "dS",
+              "dI",
+              "dL",
+              "dn",
+              "oC",
+              "oS",
+              "oI",
+              "oL",
+              "on",
+              "uC",
+              "uS",
+              "uI",
+              "uL",
+              "un",
+              "xC",
+              "xS",
+              "xI",
+              "xL",
+              "xn",
+              "fF",
+              "fD",
+              "fL",
+              "fn"
+            ]
+          }
+        },
+        "description": "set output format"
+      },
+      {
+        "short": "v",
+        "description": "write all input data, instead of replacing lines of duplicate values with a '*'",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "[+]offset[.][Bb]",
+          "description": "Offset",
+          "provider": {
+            "values": [
+              "+0b"
+            ]
+          },
+          "index": 0,
+          "required": false
+        },
+        {
+          "name": "file",
+          "description": "File name",
+          "provider": "builtin.files",
+          "index": 1,
+          "repeatable": true,
+          "required": false
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
