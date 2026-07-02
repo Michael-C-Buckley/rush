@@ -1,0 +1,348 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "watchman",
+    "description": "file watching service",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for watchman"
+      },
+      {
+        "long": "inetd",
+        "description": "spawning from an inetd style supervisor"
+      },
+      {
+        "short": "S",
+        "long": "no-site-spawner",
+        "description": "don't use the site or system spawner"
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version number for watchman"
+      },
+      {
+        "long": "named-pipe-path",
+        "description": "specify alternate named pipe path",
+        "value": {
+          "name": "path",
+          "description": "The alternate named pipe path",
+          "provider": "files",
+          "style": "equals"
+        }
+      },
+      {
+        "short": "u",
+        "description": "specify alternate unix domain socket path",
+        "value": {
+          "name": "path",
+          "description": "The alternate unix domain socket path",
+          "provider": "files"
+        }
+      },
+      {
+        "long": "unix-listener-path",
+        "description": "specify alternate unix domain socket path",
+        "value": {
+          "name": "path",
+          "description": "The alernate unix domain socket path",
+          "provider": "files",
+          "style": "equals"
+        }
+      },
+      {
+        "short": "o",
+        "description": "specify the path to logfile",
+        "value": {
+          "name": "path",
+          "description": "The path to logfile",
+          "provider": "files"
+        }
+      },
+      {
+        "long": "logfile",
+        "description": "specify the path to logfile",
+        "value": {
+          "name": "path",
+          "description": "The path to logfile",
+          "provider": "files",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "log-level",
+        "description": "set the log level",
+        "value": {
+          "name": "level",
+          "description": "The log level",
+          "provider": "logLevels"
+        }
+      },
+      {
+        "long": "pidfile",
+        "description": "specify path to pidfile"
+      },
+      {
+        "short": "p",
+        "long": "persistent",
+        "description": "persist and wait for further responses"
+      },
+      {
+        "short": "n",
+        "long": "no-save-state",
+        "description": "don't save state between invocations"
+      },
+      {
+        "long": "statefile",
+        "description": "specify path to file to hold watch and trigger state",
+        "value": {
+          "name": "path",
+          "description": "The path to file to hold watch and trigger state",
+          "provider": "files"
+        }
+      },
+      {
+        "short": "j",
+        "long": "json-command",
+        "description": "instead of parsing CLI arguments, take a single json object from stdin"
+      },
+      {
+        "long": "output-encoding",
+        "description": "cLI output encoding",
+        "value": {
+          "name": "encoding",
+          "description": "The output encoding",
+          "provider": "encodings",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "server-encoding",
+        "description": "cLI<->server encoding",
+        "value": {
+          "name": "encoding",
+          "description": "The server encoding",
+          "provider": "encodings",
+          "style": "equals"
+        }
+      },
+      {
+        "short": "f",
+        "long": "foreground",
+        "description": "run the service in the foreground"
+      },
+      {
+        "long": "no-pretty",
+        "description": "don't pretty print JSON"
+      },
+      {
+        "long": "no-spawn",
+        "description": "don't try to start the service if it is not available"
+      },
+      {
+        "long": "no-local",
+        "description": "when no-spawn is enabled, don't try to handle request in client mode if service is unavailable"
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "clock",
+        "description": "returns the current clock value for a watched root",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "The path to directory",
+              "provider": "directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "find",
+        "description": "finds all files that match the optional list of patterns under the specified dir",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "The path to directory",
+              "provider": "directories",
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "flush-subscriptions",
+        "description": "this is designed to be used by interactive programs that have a background process or daemon maintaining a subscription to Watchman"
+      },
+      {
+        "name": "get-config",
+        "description": "returns the .watchmanconfig for the root",
+        "subcommands": [
+          {
+            "name": "path",
+            "description": "the path to root"
+          }
+        ]
+      },
+      {
+        "name": "get-sockname",
+        "description": "get socket path"
+      },
+      {
+        "name": "list-capabilities",
+        "description": "returns the full list of supported capabilities offered by the watchman server"
+      },
+      {
+        "name": "log",
+        "description": "generates a log line in the watchman log",
+        "arguments": {
+          "states": [
+            {
+              "name": "level",
+              "description": "The log level",
+              "provider": {
+                "values": [
+                  "debug",
+                  "error",
+                  "off"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "log-level",
+        "description": "changes the log level of your connection to the watchman service",
+        "arguments": {
+          "states": [
+            {
+              "name": "level",
+              "description": "The log level",
+              "provider": {
+                "values": [
+                  "debug",
+                  "error",
+                  "off"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "query",
+        "description": "executes a query against the specified root"
+      },
+      {
+        "name": "shutdown-server",
+        "description": "this causes your watchman service to exit with a normal status code"
+      },
+      {
+        "name": "since",
+        "description": "finds all files that were modified since the specified clockspec that match the optional list of patterns",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "The path to directory",
+              "provider": "directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "state-enter",
+        "description": "this causes a watch to be marked as being in a particular named state"
+      },
+      {
+        "name": "state-leave",
+        "description": "this causes a watch to no longer be marked as being in a particular named state"
+      },
+      {
+        "name": "subscribe",
+        "description": "subscribes to changes against a specified root and requests that they be sent to the client via its connection"
+      },
+      {
+        "name": "trigger",
+        "description": "this will create or replace a trigger",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "The path to directory",
+              "provider": "directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "trigger-del",
+        "description": "deletes a named trigger from the list of registered triggers"
+      },
+      {
+        "name": "trigger-list",
+        "description": "returns the set of registered triggers associated with a root directory"
+      },
+      {
+        "name": "unsubscribe",
+        "description": "cancels a named subscription against the specified root"
+      },
+      {
+        "name": "version",
+        "description": "the version and build information for the currently running watchman service"
+      },
+      {
+        "name": "watch-del",
+        "description": "removes a watch and any associated triggers",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "The path to directory",
+              "provider": "directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "watch-del-all",
+        "description": "removes all watches and associated triggers"
+      },
+      {
+        "name": "watch-list",
+        "description": "returns a list of watched dirs"
+      },
+      {
+        "name": "watch-project",
+        "description": "requests that the project containing the requested dir is watched for changes"
+      }
+    ],
+    "providers": {
+      "files": {
+        "builtin": "files"
+      },
+      "directories": {
+        "builtin": "directories"
+      },
+      "logLevels": {
+        "values": [
+          "0",
+          "1",
+          "2"
+        ]
+      },
+      "encodings": {
+        "values": [
+          "json",
+          "bser"
+        ]
+      }
+    }
+  }
+}
