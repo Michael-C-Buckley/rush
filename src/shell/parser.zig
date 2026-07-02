@@ -847,7 +847,9 @@ const Parser = struct {
         };
         return std.mem.eql(u8, literal, "declare") or
             std.mem.eql(u8, literal, "typeset") or
-            std.mem.eql(u8, literal, "local");
+            std.mem.eql(u8, literal, "local") or
+            std.mem.eql(u8, literal, "export") or
+            std.mem.eql(u8, literal, "readonly");
     }
 
     fn parseRedirectionList(self: *Parser) ParserError![]const ast.Redirection {

@@ -413,6 +413,35 @@
             .status = 0,
         },
         .{
+            .name = "declaration builtins preserve indexed array attributes",
+            .script =
+            \\arr=(a)
+            \\declare -rx arr
+            \\declare -p arr
+            \\declare -ix iarr=(1+2)
+            \\iarr[1]=3+4
+            \\declare -p iarr
+            \\readonly -a ro=(x y)
+            \\(ro[0]=z)
+            \\printf 'readonly_status=<%s>\n' "$?"
+            \\declare -p ro
+            \\readonly -a pending
+            \\export -a exported
+            \\declare -p pending exported
+            ,
+            .stdout =
+            \\declare -arx arr=([0]="a")
+            \\declare -aix iarr=([0]="3" [1]="7")
+            \\readonly_status=<1>
+            \\declare -ar ro=([0]="x" [1]="y")
+            \\declare -r pending
+            \\declare -x exported
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
             .name = "declare uses function local scope unless global is requested",
             .script =
             \\value=global

@@ -72,6 +72,9 @@ pub const ArrayElement = struct {
 pub const ArrayVariable = struct {
     name: []const u8,
     elements: []ArrayElement,
+    exported: bool = false,
+    readonly: bool = false,
+    integer: bool = false,
 
     pub fn validate(self: ArrayVariable) void {
         std.debug.assert(self.name.len != 0);
@@ -93,6 +96,12 @@ pub const ArrayVariable = struct {
         for (self.elements) |element| allocator.free(element.value);
         allocator.free(self.elements);
     }
+};
+
+pub const ArrayAttributes = struct {
+    exported: bool = false,
+    readonly: bool = false,
+    integer: bool = false,
 };
 
 const SavedLocalBinding = struct {
@@ -418,29 +427,69 @@ pub const State = struct {
     }
 
     pub fn putArray(self: *State, name: []const u8, values: []const []const u8) !void {
+        try self.putArrayWithAttributes(name, values, .{});
+    }
+
+    pub fn putArrayWithAttributes(
+        self: *State,
+        name: []const u8,
+        values: []const []const u8,
+        declared: ArrayAttributes,
+    ) !void {
         std.debug.assert(name.len != 0);
         if (self.getVariableAttributes(name)) |attributes| if (attributes.readonly) return error.ReadonlyVariable;
         if (self.getVariable(name)) |variable| if (variable.readonly) return error.ReadonlyVariable;
+        const existing_array = self.getArray(name);
+        if (existing_array) |array| if (array.readonly) return error.ReadonlyVariable;
+        const attributes = self.getVariableAttributes(name);
 
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
         const owned_elements = try self.dupeArrayValues(values);
         errdefer freeArrayElements(self.allocator, owned_elements);
 
+        const exported = (existing_array != null and existing_array.?.exported) or
+            (attributes != null and attributes.?.exported) or declared.exported;
+        const readonly = (existing_array != null and existing_array.?.readonly) or
+            (attributes != null and attributes.?.readonly) or declared.readonly;
+        const integer = (existing_array != null and existing_array.?.integer) or
+            (attributes != null and attributes.?.integer) or declared.integer;
+
         self.removeVariable(name);
         self.removeArray(name);
-        try self.arrays.put(self.allocator, owned_name, .{ .name = owned_name, .elements = owned_elements });
+        try self.arrays.put(self.allocator, owned_name, .{
+            .name = owned_name,
+            .elements = owned_elements,
+            .exported = exported,
+            .readonly = readonly,
+            .integer = integer,
+        });
         self.removeVariableAttributes(name);
         self.clearFunctionAutoloadMissesIfSearchVariable(name);
     }
 
     pub fn putArrayElements(self: *State, name: []const u8, elements: []const ArrayElement) !void {
+        try self.putArrayElementsWithAttributes(name, elements, .{});
+    }
+
+    pub fn putArrayElementsWithAttributes(
+        self: *State,
+        name: []const u8,
+        elements: []const ArrayElement,
+        declared: ArrayAttributes,
+    ) !void {
         std.debug.assert(name.len != 0);
         if (self.getVariableAttributes(name)) |attributes| if (attributes.readonly) return error.ReadonlyVariable;
         if (self.getVariable(name)) |variable| if (variable.readonly) return error.ReadonlyVariable;
 
-        try self.putArray(name, &.{});
+        try self.putArrayWithAttributes(name, &.{}, .{
+            .exported = declared.exported,
+            .integer = declared.integer,
+        });
         for (elements) |element| try self.putArrayElement(name, element.index, element.value);
+        if (declared.readonly) {
+            try self.putVariableAttributes(.{ .name = name, .readonly = true });
+        }
     }
 
     pub fn appendArrayElements(self: *State, name: []const u8, elements: []const ArrayElement) !void {
@@ -458,6 +507,9 @@ pub const State = struct {
         std.debug.assert(name.len != 0);
         if (self.getVariableAttributes(name)) |attributes| if (attributes.readonly) return error.ReadonlyVariable;
         if (self.getVariable(name)) |variable| if (variable.readonly) return error.ReadonlyVariable;
+        if (self.getArray(name)) |array| if (array.readonly) return error.ReadonlyVariable;
+        const attributes = self.getVariableAttributes(name);
+        const variable = self.getVariable(name);
 
         const owned_value = try self.allocator.dupe(u8, value);
         var value_transferred = false;
@@ -476,9 +528,27 @@ pub const State = struct {
         errdefer self.allocator.free(elements);
         elements[0] = .{ .index = index, .value = owned_value };
         value_transferred = true;
-        try self.arrays.put(self.allocator, owned_name, .{ .name = owned_name, .elements = elements });
+        try self.arrays.put(self.allocator, owned_name, .{
+            .name = owned_name,
+            .elements = elements,
+            .exported = (attributes != null and attributes.?.exported) or (variable != null and variable.?.exported),
+            .integer = (attributes != null and attributes.?.integer) or (variable != null and variable.?.integer),
+        });
         self.removeVariableAttributes(name);
         self.clearFunctionAutoloadMissesIfSearchVariable(name);
+    }
+
+    pub fn putArrayAttributes(self: *State, attributes: VariableAttributes) !void {
+        attributes.validate();
+        if (self.arrays.getPtr(attributes.name)) |array| {
+            array.exported = array.exported or attributes.exported;
+            array.readonly = array.readonly or attributes.readonly;
+            array.integer = array.integer or attributes.integer;
+            self.removeVariableAttributes(attributes.name);
+            self.clearFunctionAutoloadMissesIfSearchVariable(attributes.name);
+            return;
+        }
+        try self.putVariableAttributes(attributes);
     }
 
     fn putExistingArrayElement(self: *State, array: *ArrayVariable, index: usize, owned_value: []const u8) !void {
@@ -567,6 +637,12 @@ pub const State = struct {
             variable.exported = variable.exported or attributes.exported;
             variable.readonly = variable.readonly or attributes.readonly;
             variable.integer = variable.integer or attributes.integer;
+            return;
+        }
+        if (self.arrays.getPtr(attributes.name)) |array| {
+            array.exported = array.exported or attributes.exported;
+            array.readonly = array.readonly or attributes.readonly;
+            array.integer = array.integer or attributes.integer;
             return;
         }
         if (self.variable_attributes.getPtr(attributes.name)) |existing| {
@@ -704,12 +780,21 @@ pub const State = struct {
     }
 
     pub fn declareLocalArray(self: *State, name: []const u8, values: []const []const u8) !void {
+        try self.declareLocalArrayWithAttributes(name, values, .{});
+    }
+
+    pub fn declareLocalArrayWithAttributes(
+        self: *State,
+        name: []const u8,
+        values: []const []const u8,
+        declared: ArrayAttributes,
+    ) !void {
         std.debug.assert(name.len != 0);
         if (self.getVariable(name)) |variable| if (variable.readonly) return error.ReadonlyVariable;
         if (self.getVariableAttributes(name)) |attributes| if (attributes.readonly) return error.ReadonlyVariable;
         const frame = self.currentLocalFrame();
         try self.saveLocalBinding(frame, name);
-        try self.putArray(name, values);
+        try self.putArrayWithAttributes(name, values, declared);
     }
 
     fn currentLocalFrame(self: *State) *LocalFrame {
@@ -756,6 +841,9 @@ pub const State = struct {
             break :array ArrayVariable{
                 .name = try self.allocator.dupe(u8, existing.name),
                 .elements = try self.dupeArrayElements(existing.elements),
+                .exported = existing.exported,
+                .readonly = existing.readonly,
+                .integer = existing.integer,
             };
         } else null;
         errdefer if (array) |saved_array| saved_array.deinit(self.allocator);

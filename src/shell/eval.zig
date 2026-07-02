@@ -3498,7 +3498,9 @@ fn evalDeclarationBuiltin(shell: anytype, id: builtin.Id, words: []const ast.Wor
     if (options.print) return evalDeclarationPrint(shell, id, operands);
     if (operands.len == 0) return evalDeclarationList(shell, id);
 
-    if (id == .declare or id == .typeset or id == .local) {
+    if (id == .declare or id == .typeset or id == .local or
+        (shell.state.options.mode == .bash and (options.array or operandsContainDeclarationArrayAssignment(operands))))
+    {
         return evalDeclareOperands(shell, id, options, operands);
     }
 
@@ -3582,6 +3584,11 @@ fn evalDeclarationBuiltin(shell: anytype, id: builtin.Id, words: []const ast.Wor
     return .{ .status = status, .flow = if (fatal) .{ .fatal = status } else .normal };
 }
 
+fn operandsContainDeclarationArrayAssignment(operands: []const ast.Word) bool {
+    for (operands) |word| if (word.data == .declaration_array_assignment) return true;
+    return false;
+}
+
 fn parseDeclarationOptions(shell: anytype, id: builtin.Id, words: []const ast.Word) !DeclarationOptions {
     var options: DeclarationOptions = switch (id) {
         .export_ => .{ .exported = true },
@@ -3598,7 +3605,9 @@ fn parseDeclarationOptions(shell: anytype, id: builtin.Id, words: []const ast.Wo
         if (literal.len < 2 or literal[0] != '-') break;
         for (literal[1..]) |option| switch (option) {
             'a' => {
-                if (id != .declare and id != .typeset and id != .local) return declarationUsageError(shell, id);
+                const can_declare_array = id == .declare or id == .typeset or id == .local;
+                const can_mark_array = shell.state.options.mode == .bash and (id == .export_ or id == .readonly);
+                if (!can_declare_array and !can_mark_array) return declarationUsageError(shell, id);
                 options.array = true;
             },
             'p' => {
@@ -3663,7 +3672,7 @@ fn evalDeclareOperands(
                 status = 1;
                 continue;
             }
-            try applyDeclaredName(shell, name, options, &status);
+            try applyDeclaredName(shell, id, name, options, &status);
         }
     }
     return .{ .status = status };
@@ -3681,7 +3690,8 @@ fn applyDeclaredArrayAssignment(
     }
     const append_start = if (assignment.append) compoundArrayAppendStart(shell, assignment.name) else 0;
     const expanded = try expandArrayAssignmentElements(shell, assignment.values, append_start, null);
-    try applyDeclaredArrayElements(shell, assignment.name, expanded, assignment.append, options, status);
+    const stored = try arrayElementValuesForStorage(shell, assignment.name, expanded, options.integer);
+    try applyDeclaredArrayElements(shell, assignment.name, stored, assignment.append, options, status);
 }
 
 fn declareUsesLocalScope(shell: anytype, options: DeclarationOptions) bool {
@@ -3735,12 +3745,22 @@ fn applyDeclaredVariable(
 
 fn applyDeclaredName(
     shell: anytype,
+    id: builtin.Id,
     name: []const u8,
     options: DeclarationOptions,
     status: *result.ExitStatus,
 ) !void {
     if (options.array) {
-        try applyDeclaredArrayName(shell, name, options, status);
+        if (id == .declare or id == .typeset or id == .local) {
+            try applyDeclaredArrayName(shell, name, options, status);
+        } else if (options.exported or options.readonly or options.integer) {
+            try shell.state.putVariableAttributes(.{
+                .name = name,
+                .exported = options.exported,
+                .readonly = options.readonly,
+                .integer = options.integer,
+            });
+        }
         return;
     }
     const existing = shell.state.getVariable(name);
@@ -3786,6 +3806,8 @@ fn applyDeclaredName(
 fn integerDeclarationValue(shell: anytype, name: []const u8, value: []const u8, force_integer: bool) ![]const u8 {
     const integer = force_integer or if (shell.state.getVariable(name)) |variable|
         variable.integer
+    else if (shell.state.getArray(name)) |array|
+        array.integer
     else if (shell.state.getVariableAttributes(name)) |attributes|
         attributes.integer
     else
@@ -3829,10 +3851,11 @@ fn applyDeclaredArrayValues(
     status: *result.ExitStatus,
 ) !void {
     const uses_local_scope = declareUsesLocalScope(shell, options);
+    const attributes = declarationArrayAttributes(options);
     const applied = if (uses_local_scope)
-        shell.state.declareLocalArray(name, values)
+        shell.state.declareLocalArrayWithAttributes(name, values, attributes)
     else
-        shell.state.putArray(name, values);
+        shell.state.putArrayWithAttributes(name, values, attributes);
     applied catch |err| switch (err) {
         error.ReadonlyVariable => {
             try writeReadonlyDiagnostic(shell, name);
@@ -3851,24 +3874,54 @@ fn applyDeclaredArrayElements(
     status: *result.ExitStatus,
 ) !void {
     const uses_local_scope = declareUsesLocalScope(shell, options);
+    const attributes = declarationArrayAttributes(options);
     const applied = if (append)
         shell.state.appendArrayElements(name, elements)
     else if (uses_local_scope)
-        applyLocalArrayElements(shell, name, elements)
+        applyLocalArrayElements(shell, name, elements, attributes)
     else
-        shell.state.putArrayElements(name, elements);
+        shell.state.putArrayElementsWithAttributes(name, elements, attributes);
+    var applied_ok = true;
     applied catch |err| switch (err) {
         error.ReadonlyVariable => {
             try writeReadonlyDiagnostic(shell, name);
             status.* = 1;
+            applied_ok = false;
         },
         else => return err,
     };
+    if (applied_ok and append and (options.exported or options.readonly or options.integer)) {
+        try shell.state.putVariableAttributes(.{
+            .name = name,
+            .exported = options.exported,
+            .readonly = options.readonly,
+            .integer = options.integer,
+        });
+    }
 }
 
-fn applyLocalArrayElements(shell: anytype, name: []const u8, elements: []const state_mod.ArrayElement) !void {
-    try shell.state.declareLocalArray(name, &.{});
+fn declarationArrayAttributes(options: DeclarationOptions) state_mod.ArrayAttributes {
+    return .{
+        .exported = options.exported,
+        .readonly = options.readonly,
+        .integer = options.integer,
+    };
+}
+
+fn applyLocalArrayElements(
+    shell: anytype,
+    name: []const u8,
+    elements: []const state_mod.ArrayElement,
+    attributes: state_mod.ArrayAttributes,
+) !void {
+    try shell.state.declareLocalArrayWithAttributes(name, &.{}, .{
+        .exported = attributes.exported,
+        .integer = attributes.integer,
+    });
     try shell.state.putArrayElements(name, elements);
+    if (attributes.readonly) {
+        try shell.state.putVariableAttributes(.{ .name = name, .readonly = true });
+    }
 }
 
 fn applyDeclaredArrayName(
@@ -3877,7 +3930,17 @@ fn applyDeclaredArrayName(
     options: DeclarationOptions,
     status: *result.ExitStatus,
 ) !void {
-    if (shell.state.getArray(name) != null) return;
+    if (shell.state.getArray(name) != null) {
+        if (options.exported or options.readonly or options.integer) {
+            try shell.state.putVariableAttributes(.{
+                .name = name,
+                .exported = options.exported,
+                .readonly = options.readonly,
+                .integer = options.integer,
+            });
+        }
+        return;
+    }
     if (shell.state.getVariable(name)) |variable| {
         try applyDeclaredArrayVariable(shell, name, variable.value, options, status);
         return;
@@ -4058,7 +4121,11 @@ fn writeDeclarationEntry(
 
 fn writeArrayDeclarationEntry(shell: anytype, id: builtin.Id, array: state_mod.ArrayVariable) !void {
     std.debug.assert(id == .declare or id == .typeset);
-    try shell.host.writeAll(.stdout, "declare -a ");
+    try shell.host.writeAll(.stdout, "declare -a");
+    if (array.readonly) try shell.host.writeAll(.stdout, "r");
+    if (array.integer) try shell.host.writeAll(.stdout, "i");
+    if (array.exported) try shell.host.writeAll(.stdout, "x");
+    try shell.host.writeAll(.stdout, " ");
     try shell.host.writeAll(.stdout, array.name);
     if (array.elements.len != 0) {
         try shell.host.writeAll(.stdout, "=(");
@@ -4982,10 +5049,11 @@ fn applyAssignment(
     if (assignment.array_values) |values| {
         const append_start = if (assignment.append) compoundArrayAppendStart(shell, assignment.name) else 0;
         const expanded = try expandArrayAssignmentElements(shell, values, append_start, substitution_status);
+        const stored = try arrayElementValuesForStorage(shell, assignment.name, expanded, false);
         const applied = if (assignment.append)
-            shell.state.appendArrayElements(assignment.name, expanded)
+            shell.state.appendArrayElements(assignment.name, stored)
         else
-            shell.state.putArrayElements(assignment.name, expanded);
+            shell.state.putArrayElements(assignment.name, stored);
         applied catch |err| switch (err) {
             error.ReadonlyVariable => {
                 try writeReadonlyDiagnostic(shell, assignment.name);
@@ -4993,7 +5061,7 @@ fn applyAssignment(
             },
             else => return err,
         };
-        return joinArrayElementValues(shell, expanded, " ");
+        return joinArrayElementValues(shell, stored, " ");
     }
 
     const expanded_value = try expandAssignmentValue(shell, assignment, substitution_status);
@@ -5028,12 +5096,40 @@ fn applyAssignment(
 fn assignmentValueForStorage(shell: anytype, name: []const u8, value: []const u8) ![]const u8 {
     const integer = if (shell.state.getVariable(name)) |variable|
         variable.integer
+    else if (shell.state.getArray(name)) |array|
+        array.integer
     else if (shell.state.getVariableAttributes(name)) |attributes|
         attributes.integer
     else
         false;
     if (!integer) return value;
     return integerAssignmentValue(shell, value);
+}
+
+fn arrayElementValuesForStorage(
+    shell: anytype,
+    name: []const u8,
+    elements: []const state_mod.ArrayElement,
+    force_integer: bool,
+) ![]const state_mod.ArrayElement {
+    const integer = force_integer or if (shell.state.getArray(name)) |array|
+        array.integer
+    else if (shell.state.getVariable(name)) |variable|
+        variable.integer
+    else if (shell.state.getVariableAttributes(name)) |attributes|
+        attributes.integer
+    else
+        false;
+    if (!integer) return elements;
+
+    const stored = try shell.scratchAllocator().alloc(state_mod.ArrayElement, elements.len);
+    for (elements, 0..) |element, index| {
+        stored[index] = .{
+            .index = element.index,
+            .value = try integerAssignmentValue(shell, element.value),
+        };
+    }
+    return stored;
 }
 
 fn integerAssignmentValue(shell: anytype, value: []const u8) ![]const u8 {
