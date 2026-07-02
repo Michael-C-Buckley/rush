@@ -1,0 +1,53 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "zed",
+    "description": "collaborative code editor",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "print help information"
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "print Zed's version and the app path"
+      },
+      {
+        "short": "w",
+        "long": "wait",
+        "description": "wait for all of the given paths to be closed before exiting"
+      },
+      {
+        "short": "b",
+        "long": "bundle-path",
+        "description": "custom Zed.app path",
+        "value": {
+          "name": "bundle_path",
+          "provider": "builtin.directories"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "path",
+          "description": "A sequence of space-separated paths that you want to open",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
