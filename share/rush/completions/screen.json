@@ -1,0 +1,498 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "screen",
+    "description": "manage terminal sessions with GNU Screen",
+    "options": [
+      {
+        "short": "a",
+        "description": "force all capabilities into each window's termcap",
+        "inherit": false
+      },
+      {
+        "short": "A",
+        "description": "adapt all windows to the new display width & height",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "description": "read configuration file instead of '.screenrc'",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "e",
+        "description": "change command characters",
+        "inherit": false,
+        "value": {
+          "name": "xy",
+          "description": "specifies the command character to be x and the character generating a literal command character to y"
+        }
+      },
+      {
+        "short": "f",
+        "description": "flow control on",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-fn"
+        ],
+        "description": "flow control off",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-fa"
+        ],
+        "description": "flow control automatic",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "description": "set the size of the scrollback history buffer",
+        "inherit": false,
+        "value": {
+          "name": "h",
+          "description": "lines"
+        }
+      },
+      {
+        "short": "i",
+        "description": "interrupt output sooner when flow control is on",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-list",
+          "-ls"
+        ],
+        "description": "do nothing, just list our SockDir",
+        "inherit": false
+      },
+      {
+        "short": "L",
+        "description": "turn on output logging",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "description": "ignore $STY variable, do create a new screen session",
+        "inherit": false
+      },
+      {
+        "short": "O",
+        "description": "choose optimal output rather than exact vt100 emulation",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "description": "preselect the named window if it exists",
+        "inherit": false,
+        "value": {
+          "name": "window"
+        }
+      },
+      {
+        "short": "q",
+        "description": "quiet startup. Exits with non-zero return code if unsuccessful",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "shell to execute rather than $SHELL",
+        "inherit": false,
+        "value": {
+          "name": "shell",
+          "provider": "builtin.executables"
+        }
+      },
+      {
+        "short": "S",
+        "description": "name this session <pid>.sockname instead of <pid>.<tty>.<host>",
+        "inherit": false,
+        "value": {
+          "name": "sockname"
+        }
+      },
+      {
+        "short": "t",
+        "description": "set title. (window's name)",
+        "inherit": false,
+        "value": {
+          "name": "title"
+        }
+      },
+      {
+        "short": "T",
+        "description": "use term as $TERM for windows, rather than 'screen'",
+        "inherit": false,
+        "value": {
+          "name": "term"
+        }
+      },
+      {
+        "short": "U",
+        "description": "tell screen to use UTF-8 encoding",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "description": "print 'Screen version 4.00.03 (FAU) 23-Oct-06'",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-wipe"
+        ],
+        "description": "do nothing, just clean up SockDir",
+        "inherit": false,
+        "value": {
+          "name": "match",
+          "description": "screen session to match",
+          "required": false,
+          "style": "optional",
+          "provider": {
+            "values": [
+              "sessionowner/[pid.tty.host]"
+            ]
+          }
+        }
+      },
+      {
+        "short": "x",
+        "description": "attach to a not detached screen. (Multi display mode)",
+        "inherit": false
+      },
+      {
+        "short": "X",
+        "description": "execute <cmd> as a screen command in the specified session",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "cmd",
+          "description": "command to invoke",
+          "index": 0,
+          "provider": "builtin.executables"
+        },
+        {
+          "name": "args",
+          "description": "arguments to pass",
+          "index": 1,
+          "repeatable": true
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "-d",
+        "description": "does not start screen, but detaches the elsewhere running screen session",
+        "subcommands": [
+          {
+            "name": "-r",
+            "description": "reattach a session and if necessary detach it first",
+            "arguments": {
+              "states": [
+                {
+                  "name": "identifier",
+                  "index": 0,
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "pid"
+                      },
+                      {
+                        "value": "pid.tty"
+                      },
+                      {
+                        "value": "pid.tty.host"
+                      },
+                      {
+                        "value": "sessionowner/pid"
+                      },
+                      {
+                        "value": "sessionowner/pid.tty"
+                      },
+                      {
+                        "value": "sessionowner/pid.tty.host"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "-R",
+            "description": "reattach a session and if necessary detach or even create it first",
+            "arguments": {
+              "states": [
+                {
+                  "name": "identifier",
+                  "index": 0,
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "pid"
+                      },
+                      {
+                        "value": "pid.tty"
+                      },
+                      {
+                        "value": "pid.tty.host"
+                      },
+                      {
+                        "value": "sessionowner/pid"
+                      },
+                      {
+                        "value": "sessionowner/pid.tty"
+                      },
+                      {
+                        "value": "sessionowner/pid.tty.host"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "-RR",
+            "description": "reattach a session and if necessary detach or create it. Use the first session if more than one session is available",
+            "arguments": {
+              "states": [
+                {
+                  "name": "identifier",
+                  "index": 0,
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "pid"
+                      },
+                      {
+                        "value": "pid.tty"
+                      },
+                      {
+                        "value": "pid.tty.host"
+                      },
+                      {
+                        "value": "sessionowner/pid"
+                      },
+                      {
+                        "value": "sessionowner/pid.tty"
+                      },
+                      {
+                        "value": "sessionowner/pid.tty.host"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "-D",
+        "description": "does not start screen, but detaches the elsewhere running screen session",
+        "subcommands": [
+          {
+            "name": "-r",
+            "description": "reattach a session. If necessary detach and logout remotely first",
+            "arguments": {
+              "states": [
+                {
+                  "name": "identifier",
+                  "index": 0,
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "pid"
+                      },
+                      {
+                        "value": "pid.tty"
+                      },
+                      {
+                        "value": "pid.tty.host"
+                      },
+                      {
+                        "value": "sessionowner/pid"
+                      },
+                      {
+                        "value": "sessionowner/pid.tty"
+                      },
+                      {
+                        "value": "sessionowner/pid.tty.host"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "-R",
+            "description": "attach here and now. In detail this means: If a session is running, then reattach. If necessary detach and logout remotely first",
+            "arguments": {
+              "states": [
+                {
+                  "name": "identifier",
+                  "index": 0,
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "pid"
+                      },
+                      {
+                        "value": "pid.tty"
+                      },
+                      {
+                        "value": "pid.tty.host"
+                      },
+                      {
+                        "value": "sessionowner/pid"
+                      },
+                      {
+                        "value": "sessionowner/pid.tty"
+                      },
+                      {
+                        "value": "sessionowner/pid.tty.host"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          },
+          {
+            "name": "-RR",
+            "description": "attach here and now. Whatever that means, just do it",
+            "arguments": {
+              "states": [
+                {
+                  "name": "identifier",
+                  "index": 0,
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "pid"
+                      },
+                      {
+                        "value": "pid.tty"
+                      },
+                      {
+                        "value": "pid.tty.host"
+                      },
+                      {
+                        "value": "sessionowner/pid"
+                      },
+                      {
+                        "value": "sessionowner/pid.tty"
+                      },
+                      {
+                        "value": "sessionowner/pid.tty.host"
+                      }
+                    ]
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "-r",
+        "description": "resumes a detached screen session",
+        "arguments": {
+          "states": [
+            {
+              "name": "identifier",
+              "index": 0,
+              "provider": {
+                "values": [
+                  {
+                    "value": "pid"
+                  },
+                  {
+                    "value": "pid.tty"
+                  },
+                  {
+                    "value": "pid.tty.host"
+                  },
+                  {
+                    "value": "sessionowner/pid"
+                  },
+                  {
+                    "value": "sessionowner/pid.tty"
+                  },
+                  {
+                    "value": "sessionowner/pid.tty.host"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-R",
+        "description": "attempts to resume the first detached screen session it finds",
+        "arguments": {
+          "states": [
+            {
+              "name": "identifier",
+              "index": 0,
+              "provider": {
+                "values": [
+                  {
+                    "value": "pid"
+                  },
+                  {
+                    "value": "pid.tty"
+                  },
+                  {
+                    "value": "pid.tty.host"
+                  },
+                  {
+                    "value": "sessionowner/pid"
+                  },
+                  {
+                    "value": "sessionowner/pid.tty"
+                  },
+                  {
+                    "value": "sessionowner/pid.tty.host"
+                  }
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-dmS",
+        "description": "start as daemon: Screen session in detached mode",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "name of the screen session",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
