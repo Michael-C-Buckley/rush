@@ -1,0 +1,162 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "omz",
+    "description": "oh my zsh",
+    "subcommands": [
+      {
+        "name": "help",
+        "description": "Print the help message"
+      },
+      {
+        "name": "changelog",
+        "description": "Print the changelog"
+      },
+      {
+        "name": "plugin",
+        "description": "Manage plugins",
+        "subcommands": [
+          {
+            "name": "disable",
+            "description": "Disable plugin(s)",
+            "arguments": {
+              "states": [
+                {
+                  "name": "plugin",
+                  "index": 0,
+                  "provider": "omz.plugins",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "enable",
+            "description": "Enable plugin(s)",
+            "arguments": {
+              "states": [
+                {
+                  "name": "plugin",
+                  "index": 0,
+                  "provider": "omz.plugins",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "info",
+            "description": "Get information of a plugin",
+            "arguments": {
+              "states": [
+                {
+                  "name": "plugin",
+                  "index": 0,
+                  "provider": "omz.plugins",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "List all available Oh My Zsh plugins"
+          },
+          {
+            "name": "load",
+            "description": "Load plugin(s)",
+            "arguments": {
+              "states": [
+                {
+                  "name": "plugin",
+                  "index": 0,
+                  "provider": "omz.plugins",
+                  "repeatable": true
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "pr",
+        "description": "Manage Oh My Zsh Pull Requests",
+        "subcommands": [
+          {
+            "name": "clean",
+            "description": "Delete all PR branches (ohmyzsh/pull-*)"
+          },
+          {
+            "name": "test",
+            "description": "Fetch PR #NUMBER and rebase against master",
+            "arguments": {
+              "states": [
+                {
+                  "name": "PR_number_or_URL",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "reload",
+        "description": "Reload the current zsh session"
+      },
+      {
+        "name": "theme",
+        "description": "Manage themes",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "List all available Oh My Zsh themes"
+          },
+          {
+            "name": "set",
+            "description": "Set a theme in your .zshrc file",
+            "arguments": {
+              "states": [
+                {
+                  "name": "theme",
+                  "index": 0,
+                  "provider": "omz.themes"
+                }
+              ]
+            }
+          },
+          {
+            "name": "use",
+            "description": "Load a theme",
+            "arguments": {
+              "states": [
+                {
+                  "name": "theme",
+                  "index": 0,
+                  "provider": "omz.themes"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "update",
+        "description": "Update Oh My Zsh"
+      },
+      {
+        "name": "version",
+        "description": "Show the version"
+      }
+    ],
+    "providers": {
+      "omz.plugins": {
+        "function": "__rush_complete_omz_plugins"
+      },
+      "omz.themes": {
+        "function": "__rush_complete_omz_themes"
+      }
+    }
+  }
+}

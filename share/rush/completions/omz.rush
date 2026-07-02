@@ -1,0 +1,28 @@
+__rush_complete_omz_root() {
+  if test -n "$ZSH"; then
+    printf '%s\n' "$ZSH"
+  elif test -d "$HOME/.oh-my-zsh"; then
+    printf '%s\n' "$HOME/.oh-my-zsh"
+  fi
+}
+
+__rush_complete_omz_plugins() {
+  root=$(__rush_complete_omz_root)
+  test -n "$root" || return
+  for dir in "$root"/plugins/* "$root"/custom/plugins/*; do
+    test -d "$dir" || continue
+    name=${dir##*/}
+    rush_complete candidate "$name" --kind plain --description 'oh my zsh plugin' --priority 35
+  done
+}
+
+__rush_complete_omz_themes() {
+  root=$(__rush_complete_omz_root)
+  test -n "$root" || return
+  for file in "$root"/themes/*.zsh-theme "$root"/custom/themes/*.zsh-theme; do
+    test -f "$file" || continue
+    name=${file##*/}
+    name=${name%.zsh-theme}
+    rush_complete candidate "$name" --kind plain --description 'oh my zsh theme' --priority 35
+  done
+}
