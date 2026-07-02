@@ -1,0 +1,1072 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "gpg",
+    "description": "encrypt and sign data",
+    "options": [
+      {
+        "long": "homedir",
+        "description": "set the name of the home directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "options",
+        "description": "read options from file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "a",
+        "long": "armour",
+        "description": "create ASCII armored output",
+        "inherit": false
+      },
+      {
+        "short": "o",
+        "long": "output",
+        "description": "write output to file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "u",
+        "long": "local-user",
+        "description": "use name as the user ID to sign",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "default-key",
+        "description": "use name as default user ID for signatures",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "short": "r",
+        "long": "recipient",
+        "description": "encrypt for user id name",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "default-recipient",
+        "description": "use name as default recipient",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "default-recipient-self",
+        "description": "use the default key as default recipient",
+        "inherit": false
+      },
+      {
+        "long": "no-default-recipient",
+        "description": "reset --default-recipient and --default-recipient-self",
+        "inherit": false
+      },
+      {
+        "long": "encrypt-to",
+        "description": "same as --recipient but this one is intended for in the options file",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "no-encrypt-to",
+        "description": "disable the use of all --encrypt-to keys",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "give more information during processing",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "try to be as quiet as possible",
+        "inherit": false
+      },
+      {
+        "short": "Z",
+        "description": "set compression level to n",
+        "inherit": false,
+        "value": {
+          "name": "n",
+          "provider": {
+            "values": [
+              "0",
+              "1",
+              "2",
+              "3",
+              "4",
+              "5",
+              "6"
+            ]
+          }
+        }
+      },
+      {
+        "short": "t",
+        "long": "textmode",
+        "description": "use canonical text mode",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "long": "dry-run",
+        "description": "don't make any changes",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "long": "interactive",
+        "description": "prompt before overwriting any files",
+        "inherit": false
+      },
+      {
+        "long": "batch",
+        "description": "use batch mode",
+        "inherit": false
+      },
+      {
+        "long": "no-tty",
+        "description": "make sure that the TTY is never used for any output",
+        "inherit": false
+      },
+      {
+        "long": "no-batch",
+        "description": "disable batch mode",
+        "inherit": false
+      },
+      {
+        "long": "yes",
+        "description": "assume \"yes\" on most questions",
+        "inherit": false
+      },
+      {
+        "long": "no",
+        "description": "assume \"no\" on most questions",
+        "inherit": false
+      },
+      {
+        "long": "always-trust",
+        "description": "skip key validation",
+        "inherit": false
+      },
+      {
+        "long": "keyserver",
+        "description": "use name to lookup keys which are not yet in your keyring",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "no-auto-key-retrieve",
+        "description": "disables the automatic retrieving of keys",
+        "inherit": false
+      },
+      {
+        "long": "honor-http-proxy",
+        "description": "try to access the keyserver over the proxy",
+        "inherit": false
+      },
+      {
+        "long": "keyring",
+        "description": "add file to the list of keyrings",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "secret-keyring",
+        "description": "same as --keyring but for the secret keyrings",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "charset",
+        "description": "set the name of the native character set",
+        "inherit": false,
+        "value": {
+          "name": "name",
+          "provider": {
+            "values": [
+              {
+                "value": "iso-8859-1",
+                "description": "this is the default Latin 1 set"
+              },
+              {
+                "value": "iso-8859-2",
+                "description": "the Latin 2 set"
+              },
+              {
+                "value": "koi8-r",
+                "description": "the usual Russian set (rfc1489)"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "utf8-strings",
+        "description": "assume that the arguments are already given as UTF8",
+        "inherit": false
+      },
+      {
+        "long": "no-utf8-strings",
+        "inherit": false
+      },
+      {
+        "long": "no-options",
+        "description": "shortcut for \"--options /dev/null\"",
+        "inherit": false
+      },
+      {
+        "long": "load-extension",
+        "description": "load an extension module",
+        "inherit": false,
+        "value": {
+          "name": "name",
+          "description": "if name does not contain a slash it is searched in \"/usr/local/lib/gnupg\""
+        }
+      },
+      {
+        "long": "debug",
+        "description": "set debugging flags",
+        "inherit": false,
+        "value": {
+          "name": "flags"
+        }
+      },
+      {
+        "long": "debug-all",
+        "description": "set all useful debugging flags",
+        "inherit": false
+      },
+      {
+        "long": "status-fd",
+        "description": "write special status strings to the file descriptor n",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        }
+      },
+      {
+        "long": "logger-fd",
+        "description": "write log output to file descriptor n and not to stderr",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        }
+      },
+      {
+        "long": "no-comment",
+        "description": "do not write comment packets",
+        "inherit": false
+      },
+      {
+        "long": "comment",
+        "description": "use string as comment string in clear text signatures",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "default-comment",
+        "description": "force to write the standard comment string",
+        "inherit": false
+      },
+      {
+        "long": "no-version",
+        "description": "omit the version string in clear text signatures",
+        "inherit": false
+      },
+      {
+        "long": "emit-version",
+        "description": "force to write the version string",
+        "inherit": false
+      },
+      {
+        "short": "N",
+        "long": "notation-data",
+        "description": "put the name value pair into the signature as notation data",
+        "inherit": false,
+        "value": {
+          "name": "name=value"
+        }
+      },
+      {
+        "long": "set-policy-url",
+        "description": "use string as Policy URL for signatures (rfc2440:5.2.3.19)",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "set-filename",
+        "description": "use string as the name of file which is stored in messages",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "use-embedded-filename",
+        "description": "try to create a file with a name as embedded in the data",
+        "inherit": false
+      },
+      {
+        "long": "completes-needed",
+        "description": "number of completely trusted users to introduce a new key signer",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        }
+      },
+      {
+        "long": "marginals-needed",
+        "description": "number of marginally trusted users to introduce a new key signer",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        }
+      },
+      {
+        "long": "max-cert-depth",
+        "description": "maximum depth of a certification chain",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        }
+      },
+      {
+        "long": "cipher-algo",
+        "description": "use name as cipher algorithm",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "digest-algo",
+        "description": "use name as message digest algorithm",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "s2k-cipher-algo",
+        "description": "use name as the cipher algorithm used to protect secret keys",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "s2k-digest-algo",
+        "description": "use name as the digest algorithm used to mangle the passphrases",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "s2k-mode",
+        "description": "selects how passphrases are mangled",
+        "inherit": false,
+        "value": {
+          "name": "n",
+          "provider": {
+            "values": [
+              {
+                "value": "0",
+                "description": "a plain passphrase (which is not recommended) will be used"
+              },
+              {
+                "value": "1",
+                "description": "adds a salt to the passphrase"
+              },
+              {
+                "value": "3",
+                "description": "iterates the whole process a couple of times"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "compress-algo",
+        "description": "use compress algorithm n",
+        "inherit": false,
+        "value": {
+          "name": "n",
+          "provider": {
+            "values": [
+              {
+                "value": "1",
+                "description": "use the old zlib version (RFC1951) which is used by PGP"
+              },
+              {
+                "value": "2",
+                "description": "rFC1950 compression"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "disable-cipher-algo",
+        "description": "never allow the use of name as cipher algorithm",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "disable-pubkey-algo",
+        "description": "never allow the use of name as public key algorithm",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "throw-keyid",
+        "description": "do not put the keyid into encrypted packets",
+        "inherit": false
+      },
+      {
+        "long": "not-dash-escaped",
+        "description": "makes signatures usable for patch files",
+        "inherit": false
+      },
+      {
+        "long": "escape-from-lines",
+        "description": "handle \"<From\" in emails",
+        "inherit": false
+      },
+      {
+        "long": "passphrase-fd",
+        "description": "read the passphrase from file descriptor n",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        }
+      },
+      {
+        "long": "command-fd",
+        "description": "this is a replacement for the depreciated shared-memory IPC mode",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        }
+      },
+      {
+        "long": "rfc1991",
+        "description": "try to be more RFC1991 (PGP 2.x) compliant",
+        "inherit": false
+      },
+      {
+        "long": "openpgp",
+        "description": "reset all packet, cipher and digest options to OpenPGP",
+        "inherit": false
+      },
+      {
+        "long": "force-v3-sigs",
+        "description": "forces v3 signatures for signatures on data",
+        "inherit": false
+      },
+      {
+        "long": "force-mdc",
+        "description": "force encryption with appended manipulation code",
+        "inherit": false
+      },
+      {
+        "long": "allow-non-selfsigned-uid",
+        "description": "allow non self-signed user IDs",
+        "inherit": false
+      },
+      {
+        "long": "allow-freeform-uid",
+        "description": "disable all checks on the form of the user ID",
+        "inherit": false
+      },
+      {
+        "long": "ignore-time-conflict",
+        "description": "makes time checks just a warning",
+        "inherit": false
+      },
+      {
+        "long": "lock-once",
+        "description": "do not release the lock until the process terminates",
+        "inherit": false
+      },
+      {
+        "long": "lock-multiple",
+        "description": "release the locks every time one is no longer needed",
+        "inherit": false
+      },
+      {
+        "long": "lock-never",
+        "description": "disable locking entirely",
+        "inherit": false
+      },
+      {
+        "long": "no-random-seed-file",
+        "description": "disable random pool cache",
+        "inherit": false
+      },
+      {
+        "long": "no-verbose",
+        "description": "reset verbose level to 0",
+        "inherit": false
+      },
+      {
+        "long": "no-greeting",
+        "description": "suppress the initial copyright message",
+        "inherit": false
+      },
+      {
+        "long": "no-secmem-warning",
+        "description": "suppress the \"using insecure memory\" warning",
+        "inherit": false
+      },
+      {
+        "long": "no-armor",
+        "description": "assume the input data is not in ASCII armored format",
+        "inherit": false
+      },
+      {
+        "long": "no-default-keyring",
+        "description": "do not add the keyrings to the list of keyrings",
+        "inherit": false
+      },
+      {
+        "long": "skip-verify",
+        "description": "skip the signature verification step",
+        "inherit": false
+      },
+      {
+        "long": "with-colons",
+        "description": "print key listings delimited by colons",
+        "inherit": false
+      },
+      {
+        "long": "with-key-data",
+        "description": "--with-colons with the public key data",
+        "inherit": false
+      },
+      {
+        "long": "with-fingerprint",
+        "description": "--fingerprint with a different format",
+        "inherit": false
+      },
+      {
+        "long": "fast-list-mode",
+        "description": "changes the list commands to work faster",
+        "inherit": false
+      },
+      {
+        "long": "list-only",
+        "description": "skip the decryption pass",
+        "inherit": false
+      },
+      {
+        "long": "no-literal",
+        "description": "this is not for normal use",
+        "inherit": false
+      },
+      {
+        "long": "set-filesize",
+        "description": "this is not for normal use",
+        "inherit": false
+      },
+      {
+        "long": "emulate-md-encode-bug",
+        "description": "enables workaround to check faulty signatures",
+        "inherit": false
+      },
+      {
+        "long": "show-session-key",
+        "description": "display the session key used for one message",
+        "inherit": false
+      },
+      {
+        "long": "override-session-key",
+        "description": "don't use the public key but the session key string",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "long": "merge-only",
+        "description": "don't insert new keys into the keyrings",
+        "inherit": false
+      },
+      {
+        "long": "try-all-secrets",
+        "description": "try all secret keys in turn to find the right one",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "-s",
+        "aliases": [],
+        "description": "make a signature"
+      },
+      {
+        "name": "--clearsign",
+        "description": "make a clear text signature"
+      },
+      {
+        "name": "-b",
+        "aliases": [],
+        "description": "make a detached signature"
+      },
+      {
+        "name": "-e",
+        "aliases": [],
+        "description": "encrypt data"
+      },
+      {
+        "name": "-c",
+        "aliases": [],
+        "description": "encrypt with symmetric cipher only"
+      },
+      {
+        "name": "--store",
+        "description": "store only (make a simple RFC1991 packet)"
+      },
+      {
+        "name": "--decrypt",
+        "description": "decrypt file (or stdin if no file is specified) and write it to stdout",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "--verify",
+        "description": "assume that sigfile is a signature and verify it without generating any output",
+        "arguments": {
+          "states": [
+            {
+              "name": "sigfile",
+              "provider": "builtin.files",
+              "index": 0
+            },
+            {
+              "name": "signed-files",
+              "provider": "builtin.files",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--verify-files",
+        "description": "special version of --verify which does not work with detached signatures",
+        "arguments": {
+          "states": [
+            {
+              "name": "files",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--list-keys",
+        "aliases": [],
+        "description": "list all keys from public keyrings, or just the ones given on the command line",
+        "arguments": {
+          "states": [
+            {
+              "name": "names",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--list-secret-keys",
+        "description": "list all keys from secret keyrings, or just the ones given on the command line",
+        "arguments": {
+          "states": [
+            {
+              "name": "names",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--list-sigs",
+        "description": "same as --list-keys, but the signatures are listed too",
+        "arguments": {
+          "states": [
+            {
+              "name": "names",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--check-sigs",
+        "description": "same as --list-sigs, but the signatures are verified",
+        "arguments": {
+          "states": [
+            {
+              "name": "names",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--fingerprint",
+        "description": "list all keys with their fingerprints",
+        "arguments": {
+          "states": [
+            {
+              "name": "names",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--list-packets",
+        "description": "list only the sequence of packets"
+      },
+      {
+        "name": "--gen-key",
+        "description": "generate a new key pair"
+      },
+      {
+        "name": "--edit-key",
+        "description": "present a menu which enables you to do all key related tasks",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "--sign-key",
+        "description": "sign a public key with you secret key",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "--lsign-key",
+        "description": "sign a public key with you secret key but mark it as non-exportable",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "--trusted-key",
+        "description": "assume that the specified key is as trustworthy as one of your own secret keys",
+        "arguments": {
+          "states": [
+            {
+              "name": "long-key-ID",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "--delete-key",
+        "description": "remove key from the public keyring",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "--delete-secret-key",
+        "description": "remove key from the secret and public keyring",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "--gen-revoke",
+        "description": "generate a revocation certificate for the complete key"
+      },
+      {
+        "name": "--export",
+        "description": "either export all keys from all keyrings or those of the given names",
+        "arguments": {
+          "states": [
+            {
+              "name": "names",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--send-keys",
+        "description": "same as --export but sends the keys to a keyserver",
+        "arguments": {
+          "states": [
+            {
+              "name": "names",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--export-all",
+        "description": "same as --export, but also exports keys which are not compatible to OpenPGP",
+        "arguments": {
+          "states": [
+            {
+              "name": "names",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--export-secret-keys",
+        "description": "same as --export, but exports the secret keys",
+        "arguments": {
+          "states": [
+            {
+              "name": "names",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--export-secret-subkeys",
+        "description": "same as --export, but exports the secret subkeys",
+        "arguments": {
+          "states": [
+            {
+              "name": "names",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--import",
+        "description": "import/merge keys. This adds the given keys to the keyring",
+        "arguments": {
+          "states": [
+            {
+              "name": "files",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--fast-import",
+        "description": "--import but does not build the trustdb",
+        "arguments": {
+          "states": [
+            {
+              "name": "files",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--recv-keys",
+        "description": "import the keys with the given key IDs from a HKP keyserver",
+        "arguments": {
+          "states": [
+            {
+              "name": "key-IDs",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--export-ownertrust",
+        "description": "list the ownertrust values in ASCII format"
+      },
+      {
+        "name": "--import-ownertrust",
+        "description": "update the trustdb with the ownertrust values stored in files",
+        "arguments": {
+          "states": [
+            {
+              "name": "files",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--print-md",
+        "description": "print message digest of algorithm ALGO for all given files of stdin",
+        "arguments": {
+          "states": [
+            {
+              "name": "algo",
+              "index": 0
+            },
+            {
+              "name": "files",
+              "provider": "builtin.files",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--gen-random",
+        "description": "emit COUNT random bytes of the given quality level",
+        "arguments": {
+          "states": [
+            {
+              "name": "0|1|2",
+              "provider": {
+                "values": [
+                  "0",
+                  "1",
+                  "2"
+                ]
+              },
+              "index": 0
+            },
+            {
+              "name": "files",
+              "provider": "builtin.files",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--gen-prime",
+        "description": "generate prime numbers",
+        "arguments": {
+          "states": [
+            {
+              "name": "mode",
+              "index": 0
+            },
+            {
+              "name": "bits",
+              "index": 1
+            },
+            {
+              "name": "qbits",
+              "index": 2,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "--version",
+        "description": "print version information"
+      },
+      {
+        "name": "--warranty",
+        "description": "print warranty information"
+      },
+      {
+        "name": "-h",
+        "aliases": [],
+        "description": "print usage information"
+      }
+    ]
+  }
+}
