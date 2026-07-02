@@ -1,0 +1,257 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "mkinitcpio",
+    "description": "create an initial ramdisk environment",
+    "options": [
+      {
+        "long": "help",
+        "description": "show help for mkinitcpio",
+        "inherit": false,
+        "short": "h"
+      },
+      {
+        "long": "version",
+        "description": "show version information",
+        "inherit": false,
+        "short": "V"
+      },
+      {
+        "long": "addhooks",
+        "description": "add additional hooks to the image",
+        "inherit": false,
+        "short": "A",
+        "value": {
+          "name": "hooks",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "config",
+        "description": "use config file to generate the ramdisk",
+        "inherit": false,
+        "short": "c",
+        "value": {
+          "name": "config",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "generatedir",
+        "description": "set the initramfs build directory",
+        "inherit": false,
+        "short": "d",
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "hookdir",
+        "description": "directory to search for hooks",
+        "inherit": false,
+        "short": "D",
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "generate",
+        "description": "generate a cpio image as filename",
+        "inherit": false,
+        "short": "g",
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "hookhelp",
+        "description": "show help for hook",
+        "inherit": false,
+        "short": "H",
+        "value": {
+          "name": "hook",
+          "provider": "mkinitcpio.hooks"
+        }
+      },
+      {
+        "long": "kernel",
+        "description": "use a specific kernel version",
+        "inherit": false,
+        "short": "k",
+        "value": {
+          "name": "kernelversion"
+        }
+      },
+      {
+        "long": "listhooks",
+        "description": "list all available hooks",
+        "inherit": false,
+        "short": "L"
+      },
+      {
+        "long": "automods",
+        "description": "display modules found by autodetection",
+        "inherit": false,
+        "short": "M"
+      },
+      {
+        "long": "nocolor",
+        "description": "disable color output",
+        "inherit": false,
+        "short": "n"
+      },
+      {
+        "long": "uefi",
+        "description": "generate a UEFI executable as filename",
+        "inherit": false,
+        "short": "U",
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "allpresets",
+        "description": "process all presets in /etc/mkinitcpio.d",
+        "inherit": false,
+        "short": "P"
+      },
+      {
+        "long": "preset",
+        "description": "build images according to a preset",
+        "inherit": false,
+        "short": "p",
+        "value": {
+          "name": "preset",
+          "provider": {
+            "function": "__rush_complete_mkinitcpio_presets"
+          }
+        }
+      },
+      {
+        "long": "moduleroot",
+        "description": "root directory to find modules in",
+        "inherit": false,
+        "short": "r",
+        "value": {
+          "name": "root",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "skiphooks",
+        "description": "skip hooks when generating the image",
+        "inherit": false,
+        "short": "S",
+        "value": {
+          "name": "hooks",
+          "provider": "mkinitcpio.hooks"
+        }
+      },
+      {
+        "long": "save",
+        "description": "save the initial ramdisk build directory",
+        "inherit": false,
+        "short": "s"
+      },
+      {
+        "long": "builddir",
+        "description": "use a temporary build directory",
+        "inherit": false,
+        "short": "t",
+        "value": {
+          "name": "tmpdir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "verbose",
+        "description": "enable verbose output",
+        "inherit": false,
+        "short": "v"
+      },
+      {
+        "long": "compress",
+        "description": "override the compression program",
+        "inherit": false,
+        "short": "z",
+        "value": {
+          "name": "program",
+          "provider": "builtin.executables"
+        }
+      },
+      {
+        "long": "cmdline",
+        "description": "use kernel command line file for UEFI output",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "splash",
+        "description": "use bitmap splash file for UEFI output",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "uefistub",
+        "description": "use UEFI stub image for executable generation",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "kernelimage",
+        "description": "include a kernel image in UEFI output",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "microcode",
+        "description": "include microcode in UEFI output",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "osrelease",
+        "description": "include an os-release file in UEFI output",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "mkinitcpio.hooks": {
+        "function": "__rush_complete_mkinitcpio_hooks"
+      }
+    }
+  }
+}

@@ -1,0 +1,20 @@
+__rush_complete_mkinitcpio_presets() {
+  test -d /etc/mkinitcpio.d || return 0
+  for preset in /etc/mkinitcpio.d/*.preset; do
+    test -e "$preset" || continue
+    name=${preset##*/}
+    name=${name%.preset}
+    rush_complete candidate "$name" --kind plain --description "mkinitcpio preset"
+  done
+}
+
+__rush_complete_mkinitcpio_hooks() {
+  for dir in /usr/lib/initcpio/hooks /etc/initcpio/hooks; do
+    test -d "$dir" || continue
+    for hook in "$dir"/*; do
+      test -f "$hook" || continue
+      name=${hook##*/}
+      rush_complete candidate "$name" --kind plain --description "mkinitcpio hook"
+    done
+  done
+}
