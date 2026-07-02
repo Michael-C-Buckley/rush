@@ -1,0 +1,31 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "nr",
+    "description": "run package scripts with the detected package manager",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "script",
+          "description": "package script",
+          "provider": "nr.scripts",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "nr.scripts": {
+        "function": "__rush_complete_nr_scripts"
+      }
+    }
+  }
+}

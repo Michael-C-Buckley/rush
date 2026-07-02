@@ -1,0 +1,28 @@
+__rush_complete_nr_scripts() {
+  dir=$PWD
+  while test "$dir" != /; do
+    if test -f "$dir/package.json"; then
+      command -v node >/dev/null 2>&1 || return
+      node -e '
+const fs = require("fs");
+let pkg;
+try {
+  pkg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+} catch (_) {
+  process.exit(0);
+}
+for (const [name, script] of Object.entries(pkg.scripts || {})) {
+  console.log(`${name}\t${script}`);
+}
+' "$dir/package.json" 2>/dev/null | while IFS= read -r line; do
+        script=${line%%$(printf '\t')*}
+        description=${line#*$(printf '\t')}
+        test "$description" = "$line" && description='package script'
+        test -n "$script" && rush_complete candidate "$script" --kind plain --description "$description" --priority 45
+      done
+      return
+    fi
+    dir=${dir%/*}
+    test -n "$dir" || dir=/
+  done
+}
