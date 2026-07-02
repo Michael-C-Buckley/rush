@@ -1,0 +1,103 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "wasm-pack",
+    "description": "Rust WebAssembly package tool",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for wasm-pack or for the given subcommand(s)"
+      },
+      {
+        "long": "quiet",
+        "short": "q",
+        "description": "suppress output from stdout"
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "show version for wasm-pack"
+      },
+      {
+        "long": "verbose",
+        "short": "v",
+        "description": "log verbosity is based off the number of v used"
+      },
+      {
+        "long": "log-level",
+        "short": "l",
+        "description": "the maximum level of messages that should be logged by wasm-pack",
+        "value": {
+          "name": "log-level",
+          "provider": "logLevels"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "build",
+        "description": "build an npm package"
+      },
+      {
+        "name": "help",
+        "description": "prints this message or the help of the given subcommand(s)",
+        "arguments": {
+          "states": [
+            {
+              "name": "subcommand",
+              "provider": "commands"
+            }
+          ]
+        }
+      },
+      {
+        "name": "login",
+        "aliases": [
+          "adduser",
+          "add-user"
+        ],
+        "description": "add an npm registry user account"
+      },
+      {
+        "name": "new",
+        "description": "create a new project with a template"
+      },
+      {
+        "name": "pack",
+        "description": "create a tarball of the npm package (does not publish)"
+      },
+      {
+        "name": "publish",
+        "description": "pack and publish a package to npm"
+      },
+      {
+        "name": "test",
+        "description": "run tests for WebAssembly module"
+      }
+    ],
+    "providers": {
+      "logLevels": {
+        "values": [
+          "info",
+          "warn",
+          "error"
+        ]
+      },
+      "commands": {
+        "values": [
+          "build",
+          "help",
+          "login",
+          "adduser",
+          "add-user",
+          "new",
+          "pack",
+          "publish",
+          "test"
+        ]
+      }
+    }
+  }
+}
