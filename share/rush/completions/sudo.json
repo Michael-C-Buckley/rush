@@ -1,0 +1,49 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "sudo",
+    "description": "execute a command as another user",
+    "options": [
+      {
+        "short": "g",
+        "long": "group",
+        "description": "run as a group",
+        "inherit": false,
+        "value": {
+          "name": "group"
+        }
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "long": "user",
+        "description": "run as a user",
+        "inherit": false,
+        "value": {
+          "name": "user"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "command",
+          "description": "command to run",
+          "provider": "builtin.executables",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "builtin.executables": {
+        "builtin": "executables"
+      }
+    }
+  }
+}
