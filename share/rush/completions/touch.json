@@ -1,0 +1,77 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "touch",
+    "description": "change file access and modification times",
+    "options": [
+      {
+        "short": "A",
+        "description": "adjust the access and modification time stamps for the file by the specified value",
+        "inherit": false,
+        "value": {
+          "name": "time",
+          "description": "[-][[hh]mm]SS"
+        }
+      },
+      {
+        "short": "a",
+        "description": "change the access time of the file",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "description": "do not create the file if it does not exist",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "description": "attempt to force the update, even if the file permissions do not currently permit it",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "description": "if the file is a symbolic link, change the times of the link itself rather than the file that the link points to",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "description": "change the modification time of the file",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "description": "use the access and modifications times from the specified file instead of the current time of day",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "t",
+        "description": "change the access and modification times to the specified time instead of the current time of day",
+        "inherit": false,
+        "value": {
+          "name": "timestamp",
+          "description": "[[CC]YY]MMDDhhmm[.SS]"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
