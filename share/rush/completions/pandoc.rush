@@ -1,0 +1,18 @@
+__rush_complete_pandoc_input_formats() {
+  command -v pandoc >/dev/null 2>&1 || return
+  pandoc --list-input-formats 2>/dev/null | while IFS= read -r format; do
+    test -n "$format" && rush_complete candidate "$format" --kind plain --description 'input format' --priority 35
+  done
+}
+
+__rush_complete_pandoc_output_formats() {
+  command -v pandoc >/dev/null 2>&1 || return
+  pandoc --list-output-formats 2>/dev/null | while IFS= read -r format; do
+    test -n "$format" && rush_complete candidate "$format" --kind plain --description 'output format' --priority 35
+  done
+}
+
+__rush_complete_pandoc_formats() {
+  __rush_complete_pandoc_input_formats
+  __rush_complete_pandoc_output_formats
+}

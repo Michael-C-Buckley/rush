@@ -1,0 +1,842 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pandoc",
+    "description": "A universal document converter",
+    "options": [
+      {
+        "short": "f",
+        "long": "from",
+        "aliases": [
+          "read"
+        ],
+        "spellings": [
+          "-r"
+        ],
+        "description": "Specify input format",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "provider": "pandoc.input-formats"
+        }
+      },
+      {
+        "short": "t",
+        "long": "to",
+        "aliases": [
+          "write"
+        ],
+        "spellings": [
+          "-w"
+        ],
+        "description": "Specify output format",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "provider": "pandoc.output-formats"
+        }
+      },
+      {
+        "short": "o",
+        "long": "output",
+        "description": "Write output to FILE instead of stdout",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "data-dir",
+        "description": "Specify the user data directory to search for pandoc data files",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "d",
+        "long": "defaults",
+        "description": "Specify a set of default option settings",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "bash-completion",
+        "description": "Generate a bash completion script",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "description": "Give verbose debugging output",
+        "inherit": false
+      },
+      {
+        "long": "quiet",
+        "description": "Suppress warning messages",
+        "inherit": false
+      },
+      {
+        "long": "fail-if-warnings",
+        "description": "Exit with error status if there are any warnings",
+        "inherit": false
+      },
+      {
+        "long": "log",
+        "description": "Write log messages in machine-readable JSON format to FILE",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "list-input-formats",
+        "description": "List supported input formats, one per line",
+        "inherit": false
+      },
+      {
+        "long": "list-output-formats",
+        "description": "List supported output formats, one per line",
+        "inherit": false
+      },
+      {
+        "long": "list-extensions",
+        "description": "List supported extensions for FORMAT, one per line, preceded by a + or - indicating whether it is enabled by default in FORMAT",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "required": false,
+          "style": "optional",
+          "provider": "pandoc.formats"
+        }
+      },
+      {
+        "long": "list-highlight-languages",
+        "description": "List supported languages for syntax highlighting, one per line",
+        "inherit": false
+      },
+      {
+        "long": "list-highlight-styles",
+        "description": "List supported styles for syntax highlighting, one per line",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "Print version",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "Show usage message",
+        "inherit": false
+      },
+      {
+        "long": "shift-heading-level-by",
+        "description": "Shift heading levels by a positive or negative integer",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "indented-code-classes",
+        "description": "Specify classes to use for indented code blocks\u2013for example, perl,numberLines or haskell. Multiple classes may be separated by spaces or commas",
+        "inherit": false,
+        "value": {
+          "name": "classes"
+        }
+      },
+      {
+        "long": "default-image-extension",
+        "description": "Specify a default extension to use when image paths/URLs have no extension. This allows you to use the same source for formats that require different kinds of i",
+        "inherit": false,
+        "value": {
+          "name": "extension"
+        }
+      },
+      {
+        "long": "file-scope",
+        "description": "Parse each file individually before combining for multifile documents. This will allow footnotes in different files with the same identifiers to work as expecte",
+        "inherit": false
+      },
+      {
+        "short": "F",
+        "long": "filter",
+        "description": "Specify an executable to be used as a filter transforming the pandoc AST after the input is parsed and before the output is written",
+        "inherit": false,
+        "value": {
+          "name": "executable",
+          "provider": "builtin.executables"
+        }
+      },
+      {
+        "short": "L",
+        "long": "lua-filter",
+        "description": "Transform the document in a similar fashion as JSON filters, but use pandoc\u2019s built-in Lua filtering system",
+        "inherit": false,
+        "value": {
+          "name": "script",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "M",
+        "long": "metadata",
+        "description": "Set the metadata field KEY to the value VAL",
+        "inherit": false,
+        "value": [
+          {
+            "name": "key"
+          },
+          {
+            "name": "value",
+            "required": false,
+            "style": "optional"
+          }
+        ]
+      },
+      {
+        "long": "metadata-file",
+        "description": "Read metadata from the supplied YAML (or JSON) file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "p",
+        "long": "preserve-tabs",
+        "description": "Preserve tabs instead of converting them to spaces",
+        "inherit": false
+      },
+      {
+        "long": "tab-stop",
+        "description": "Specify the number of spaces per tab",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "track-changes",
+        "description": "Specifies what to do with insertions, deletions, and comments produced by the MS Word `Track Changes` feature",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              {
+                "value": "accept",
+                "description": "Processes all the insertions and deletions and ignores comments"
+              },
+              {
+                "value": "reject",
+                "description": "Ignores all the insertions and deletions and ignores comments"
+              },
+              {
+                "value": "all",
+                "description": "Includes all insertions, deletions, and comments, wrapped in spans with insertion, deletion, comment-start, and comment-end classes, respectively"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "extract-media",
+        "description": "Extract images and other media contained in or linked from the source document to the path DIR, creating it if necessary, and adjust the images references in th",
+        "inherit": false,
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "abbreviations",
+        "description": "Specifies a custom abbreviations file, with abbreviations one to a line. If this option is not specified, pandoc will read the data file abbreviations from the ",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "s",
+        "long": "standalone",
+        "description": "Produce output with an appropriate header and footer (e.g. a standalone HTML, LaTeX, TEI, or RTF file, not a fragment). This option is set automatically for pdf",
+        "inherit": false
+      },
+      {
+        "long": "template",
+        "description": "Use the specified file as a custom template for the generated document",
+        "inherit": false,
+        "value": {
+          "name": "file-or-URL",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "V",
+        "long": "variable",
+        "description": "Set the template variable KEY to the value VAL when rendering the document in standalone mode. If no VAL is specified, the key will be given the value true",
+        "inherit": false,
+        "value": [
+          {
+            "name": "key"
+          },
+          {
+            "name": "value",
+            "required": false,
+            "style": "optional"
+          }
+        ]
+      },
+      {
+        "short": "D",
+        "long": "print-default-template",
+        "description": "Print the system default template for an output FORMAT. Templates in the user data directory are ignored",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "print-default-data-file",
+        "description": "Print a system default data file. Files in the user data directory are ignored",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "eol",
+        "description": "Manually specify line endings: crlf (Windows), lf (macOS/Linux/UNIX), or native (line endings appropriate to the OS on which pandoc is being run). The default i",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              {
+                "value": "crlf",
+                "description": "Windows"
+              },
+              {
+                "value": "lf",
+                "description": "MacOS/Linux/UNIX"
+              },
+              {
+                "value": "native",
+                "description": "Line endings appropriate to the OS on which Pandoc is being run"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "dpi",
+        "description": "Specify the default dpi (dots per inch) value for conversion from pixels to inch/centimeters and vice versa",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "wrap",
+        "description": "Determine how text is wrapped in the output (the source code, not the rendered version)",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              {
+                "value": "auto",
+                "description": "Attempts to wrap lines to the column width specified by --columns (default 72)"
+              },
+              {
+                "value": "none",
+                "description": "Will not wrap lines at all"
+              },
+              {
+                "value": "preserve",
+                "description": "Attempts to preserve the wrapping from the source document"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "columns",
+        "description": "Specify length of lines in characters. This affects text wrapping in the generated source code",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "toc",
+        "aliases": [
+          "table-of-contents"
+        ],
+        "description": "Include an automatically generated table of contents (or, in the case of latex, context, docx, odt, opendocument, rst, or ms, an instruction to create one) in t",
+        "inherit": false
+      },
+      {
+        "long": "toc-depth",
+        "description": "Specify the number of section levels to include in the table of contents",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "strip-comments",
+        "description": "Strip out HTML comments in the Markdown or Textile source, rather than passing them on to Markdown, Textile or HTML output as raw HTML. This does not apply to H",
+        "inherit": false
+      },
+      {
+        "long": "no-highlight",
+        "description": "Disables syntax highlighting for code blocks and inlines, even when a language attribute is given",
+        "inherit": false
+      },
+      {
+        "long": "highlight-style",
+        "description": "Specifies the coloring style to be used in highlighted source code",
+        "inherit": false
+      },
+      {
+        "long": "print-highlight-style",
+        "description": "Prints a JSON version of a highlighting style, which can be modified, saved with a .theme extension, and used with --highlight-style",
+        "inherit": false
+      },
+      {
+        "long": "syntax-definition",
+        "description": "Instructs pandoc to load a KDE XML syntax definition file, which will be used for syntax highlighting of appropriately marked code blocks",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "H",
+        "long": "include-in-header",
+        "description": "Include contents of FILE, verbatim, at the end of the header",
+        "inherit": false,
+        "value": {
+          "name": "FILE|URL",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "B",
+        "long": "include-before-body",
+        "description": "Include contents of FILE, verbatim, at the beginning of the document body",
+        "inherit": false,
+        "value": {
+          "name": "FILE|URL",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "A",
+        "long": "include-after-body",
+        "description": "Include contents of FILE, verbatim, at the end of the document body",
+        "inherit": false,
+        "value": {
+          "name": "FILE|URL",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "resource-path",
+        "description": "List of paths to search for images and other resources. If --resource-path is not specified, the default resource path is the working directory",
+        "inherit": false,
+        "value": {
+          "name": "search-path",
+          "description": "The paths should be separated by : on Linux, UNIX, and macOS systems, and by ; on Windows",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "request-header",
+        "description": "Set the request header NAME to the value VAL when making HTTP requests. If you\u2019re behind a proxy, you also need to set the environment variable http_proxy to ht",
+        "inherit": false,
+        "value": {
+          "name": "NAME:VAL"
+        }
+      },
+      {
+        "long": "no-check-certificate",
+        "description": "Disable the certificate verification to allow access to unsecure HTTP resources",
+        "inherit": false
+      },
+      {
+        "long": "self-contained",
+        "description": "Produce a standalone HTML file with no external dependencies, using data: URIs to incorporate the contents of linked scripts, stylesheets, images, and videos",
+        "inherit": false
+      },
+      {
+        "long": "html-q-tags",
+        "description": "Use <q> tags for quotes in HTML. This option only has an effect if the smart extension is enabled",
+        "inherit": false
+      },
+      {
+        "long": "ascii",
+        "description": "Use only ASCII characters in output. Currently supported for XML, HTML formats, CommonMark, gfm, Markdown, roff ms , and to a limited degree LaTeX, roff man out",
+        "inherit": false
+      },
+      {
+        "long": "reference-links",
+        "description": "Use reference-style links, rather than inline links, in writing Markdown or reStructuredText",
+        "inherit": false
+      },
+      {
+        "long": "reference-location",
+        "description": "Specify whether footnotes (and references, if reference-links is set) are placed at the end of the current (top-level) block, the current section, or the docume",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              "block",
+              "section",
+              "document"
+            ]
+          }
+        }
+      },
+      {
+        "long": "markdown-headings",
+        "description": "Specify whether to use ATX-style (#-prefixed) or Setext-style (underlined) headings for level 1 and 2 headings in Markdown output",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              "setext",
+              "atx"
+            ]
+          }
+        }
+      },
+      {
+        "long": "atx-headers",
+        "description": "Deprecated synonym for --markdown-headings=atx",
+        "inherit": false
+      },
+      {
+        "long": "top-level-division",
+        "description": "Treat top-level headings as the given division type in LaTeX, ConTeXt, DocBook, and TEI output",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "default",
+              "section",
+              "chapter",
+              "part"
+            ]
+          }
+        }
+      },
+      {
+        "short": "N",
+        "long": "number-sections",
+        "description": "Number section headings in LaTeX, ConTeXt, HTML, Docx, ms, or EPUB output. By default, sections are not numbered",
+        "inherit": false
+      },
+      {
+        "long": "number-offset",
+        "description": "Offset for section headings in HTML output (ignored in other output formats)",
+        "inherit": false,
+        "value": {
+          "name": "number",
+          "description": "The first number is added to the section number for top-level headings, the second for second-level headings, and so on"
+        }
+      },
+      {
+        "long": "listings",
+        "description": "Use the listings package for LaTeX code blocks. The package does not support multi-byte encoding for source code. To handle UTF-8 you would need to use a custom",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "long": "incremental",
+        "description": "Make list items in slide shows display incrementally",
+        "inherit": false
+      },
+      {
+        "long": "slide-level",
+        "description": "Specifies that headings with the specified level create slides (for beamer, s5, slidy, slideous, dzslides). Headings above this level in the hierarchy are used ",
+        "inherit": false,
+        "value": {
+          "name": "level",
+          "description": "Number"
+        }
+      },
+      {
+        "long": "section-divs",
+        "description": "Wrap sections in <section> tags (or <div> tags for html4), and attach identifiers to the enclosing <section> (or <div>) rather than the heading itself",
+        "inherit": false
+      },
+      {
+        "long": "email-obfuscation",
+        "description": "Specify a method for obfuscating mailto: links in HTML documents references . The default is none",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": {
+            "values": [
+              {
+                "value": "none",
+                "description": "Leaves mailto: links as they are"
+              },
+              {
+                "value": "javascript",
+                "description": "Obfuscates mailto: links using JavaScript"
+              },
+              {
+                "value": "references",
+                "description": "Obfuscates mailto: links by printing their letters as decimal or hexadecimal character references"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "id-prefix",
+        "description": "Specify a prefix to be added to all identifiers and internal links in HTML and DocBook output, and to footnote numbers in Markdown and Haddock output",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "short": "T",
+        "long": "title-prefix",
+        "description": "Specify STRING as a prefix at the beginning of the title that appears in the HTML header (but not in the title as it appears at the beginning of the HTML body)",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "short": "c",
+        "long": "css",
+        "description": "Link to a CSS style sheet. This option can be used repeatedly to include multiple files. They will be included in the order specified",
+        "inherit": false,
+        "value": {
+          "name": "URL"
+        }
+      },
+      {
+        "long": "reference-doc",
+        "description": "Use the specified file as a style reference in producing a docx or ODT file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "epub-cover-image",
+        "description": "Use the specified image as the EPUB cover. It is recommended that the image be less than 1000px in width and height. Note that in a Markdown source document you",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "epub-metadata",
+        "description": "Look in the specified XML file for metadata for the EPUB. The file should contain a series of Dublin Core elements",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "epub-embed-font",
+        "description": "Embed the specified font in the EPUB. This option can be repeated to embed multiple fonts. Wildcards can also be used",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "pdf-engine",
+        "description": "Use the specified engine when producing PDF output",
+        "inherit": false,
+        "value": {
+          "name": "program",
+          "provider": {
+            "values": [
+              "pdflatex",
+              "lualatex",
+              "xelatex",
+              "latexmk",
+              "tectonic",
+              "wkhtmltopdf",
+              "weasyprint",
+              "prince",
+              "context",
+              "pdfroff"
+            ]
+          }
+        }
+      },
+      {
+        "long": "pdf-engine-opt",
+        "description": "Use the given string as a command-line argument to the pdf-engine",
+        "inherit": false,
+        "value": {
+          "name": "string"
+        }
+      },
+      {
+        "short": "C",
+        "long": "citeproc",
+        "description": "Process the citations in the file, replacing them with rendered citations and adding a bibliography. Citation processing will not take place unless bibliographi",
+        "inherit": false
+      },
+      {
+        "long": "bibliography",
+        "description": "Set the bibliography field in the document\u2019s metadata to FILE, overriding any value set in the metadata. If you supply this argument multiple times, each FILE w",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "csl",
+        "description": "Set the csl field in the document\u2019s metadata to FILE, overriding any value set in the metadata. (This is equivalent to --metadata csl=FILE.) If FILE is a URL, i",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "citation-abbreviations",
+        "description": "Set the citation-abbreviations field in the document\u2019s metadata to FILE, overriding any value set in the metadata. If FILE is a URL, it will be fetched via HTTP",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "natbib",
+        "description": "Use natbib for citations in LaTeX output. It is intended for use in producing a LaTeX file that can be processed with bibtex",
+        "inherit": false
+      },
+      {
+        "long": "biblatex",
+        "description": "Use biblatex for citations in LaTeX output. It is intended for use in producing a LaTeX file that can be processed with bibtex or biber",
+        "inherit": false
+      },
+      {
+        "long": "mathjax",
+        "description": "Use MathJax to display embedded TeX math in HTML output. TeX math will be put between (...) (for inline math) or [...] (for display math) and wrapped in <span> ",
+        "inherit": false,
+        "value": {
+          "name": "URL"
+        }
+      },
+      {
+        "long": "mathml",
+        "description": "Convert TeX math to MathML (in epub3, docbook4, docbook5, jats, html4 and html5). This is the default in odt output. Note that currently only Firefox and Safari",
+        "inherit": false
+      },
+      {
+        "long": "webtex",
+        "description": "Convert TeX formulas to <img> tags that link to an external script that converts formulas to images. The formula will be URL-encoded and concatenated with the U",
+        "inherit": false,
+        "value": {
+          "name": "URL"
+        }
+      },
+      {
+        "long": "katex",
+        "description": "Use KaTeX to display embedded TeX math in HTML output. The URL is the base URL for the KaTeX library. That directory should contain a katex.min.js and a katex.m",
+        "inherit": false,
+        "value": {
+          "name": "URL"
+        }
+      },
+      {
+        "long": "gladtex",
+        "description": "Enclose TeX math in <eq> tags in HTML output. The resulting HTML can then be processed by GladTeX to produce SVG images of the typeset formulas and an HTML file",
+        "inherit": false
+      },
+      {
+        "long": "dump-args",
+        "description": "Print information about command-line arguments to stdout, then exit. This option is intended primarily for use in wrapper scripts",
+        "inherit": false
+      },
+      {
+        "long": "ignore-args",
+        "description": "Ignore command-line arguments (for use in wrapper scripts). Regular pandoc options are not ignored",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "input-file(s)",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true,
+          "required": false
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "pandoc.input-formats": {
+        "function": "__rush_complete_pandoc_input_formats"
+      },
+      "pandoc.output-formats": {
+        "function": "__rush_complete_pandoc_output_formats"
+      },
+      "pandoc.formats": {
+        "function": "__rush_complete_pandoc_formats"
+      },
+      "pandoc.highlight-styles": {
+        "values": [
+          "pygments",
+          "kate",
+          "monochrome",
+          "breezeDark",
+          "espresso",
+          "zenburn",
+          "haddock",
+          "tango"
+        ]
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      }
+    }
+  }
+}
