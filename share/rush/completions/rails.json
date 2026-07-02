@@ -1,0 +1,726 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "rails",
+    "description": "use the Ruby on Rails CLI",
+    "subcommands": [
+      {
+        "name": "new",
+        "description": "create a new Rails application",
+        "options": [
+          {
+            "spellings": [
+              "-skip-namespace"
+            ],
+            "description": "skip namespace",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "ruby",
+            "short": "r",
+            "description": "path to the Ruby binary",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "m",
+            "description": "application template path or URL",
+            "inherit": false,
+            "value": {
+              "name": "template"
+            }
+          },
+          {
+            "short": "d",
+            "description": "preconfigure a database",
+            "inherit": false,
+            "value": {
+              "name": "database",
+              "provider": {
+                "values": [
+                  "mysql",
+                  "postgresql",
+                  "sqlite3",
+                  "oracle",
+                  "frontbase",
+                  "ibm_db",
+                  "sqlserver",
+                  "jdbcmysql",
+                  "jdbcsqlite3",
+                  "jdbcpostgresql",
+                  "jdbc"
+                ]
+              }
+            }
+          },
+          {
+            "long": "skip-gemfile",
+            "description": "don't create a Gemfile",
+            "inherit": false
+          },
+          {
+            "short": "G",
+            "description": "skip .gitignore",
+            "inherit": false
+          },
+          {
+            "long": "skip-keeps",
+            "description": "skip .keep files",
+            "inherit": false
+          },
+          {
+            "short": "M",
+            "description": "skip Action Mailer",
+            "inherit": false
+          },
+          {
+            "long": "skip-action-mailbox",
+            "description": "skip Action Mailbox",
+            "inherit": false
+          },
+          {
+            "long": "skip-action-text",
+            "description": "skip Action Text",
+            "inherit": false
+          },
+          {
+            "short": "O",
+            "description": "skip Active Record",
+            "inherit": false
+          },
+          {
+            "long": "skip-active-storage",
+            "description": "skip Active Storage",
+            "inherit": false
+          },
+          {
+            "short": "P",
+            "description": "skip Puma",
+            "inherit": false
+          },
+          {
+            "short": "C",
+            "description": "skip Action Cable",
+            "inherit": false
+          },
+          {
+            "short": "S",
+            "description": "skip Sprockets",
+            "inherit": false
+          },
+          {
+            "long": "skip-spring",
+            "description": "skip Spring",
+            "inherit": false
+          },
+          {
+            "long": "skip-listen",
+            "description": "skip listen configuration",
+            "inherit": false
+          },
+          {
+            "short": "J",
+            "description": "skip JavaScript",
+            "inherit": false
+          },
+          {
+            "long": "skip-turbolinks",
+            "description": "skip Turbolinks",
+            "inherit": false
+          },
+          {
+            "short": "T",
+            "description": "skip tests",
+            "inherit": false
+          },
+          {
+            "long": "skip-system-test",
+            "description": "skip system tests",
+            "inherit": false
+          },
+          {
+            "long": "skip-bootsnap",
+            "description": "skip Bootsnap",
+            "inherit": false
+          },
+          {
+            "long": "dev",
+            "description": "use a local Rails checkout",
+            "inherit": false
+          },
+          {
+            "long": "edge",
+            "description": "use the Rails repository",
+            "inherit": false
+          },
+          {
+            "long": "rc",
+            "description": "extra railsrc configuration file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "no-rc",
+            "description": "skip .railsrc",
+            "inherit": false
+          },
+          {
+            "long": "api",
+            "description": "generate an API-only app",
+            "inherit": false
+          },
+          {
+            "short": "B",
+            "description": "don't run bundle install",
+            "inherit": false
+          },
+          {
+            "long": "webpacker",
+            "description": "preconfigure Webpack",
+            "inherit": false,
+            "value": {
+              "name": "framework",
+              "provider": {
+                "values": [
+                  "react",
+                  "vue",
+                  "angular",
+                  "elm",
+                  "stimulus"
+                ]
+              }
+            }
+          },
+          {
+            "long": "skip-webpack-install",
+            "description": "don't run Webpack install",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "short": "f",
+            "description": "overwrite existing files",
+            "inherit": false
+          },
+          {
+            "long": "pretend",
+            "short": "p",
+            "description": "run without making changes",
+            "inherit": false
+          },
+          {
+            "long": "quiet",
+            "short": "q",
+            "description": "suppress status output",
+            "inherit": false
+          },
+          {
+            "long": "skip",
+            "short": "s",
+            "description": "skip existing files",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "long": "version",
+            "short": "v",
+            "description": "show Rails version",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "application directory",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": [
+          "c",
+          "console"
+        ],
+        "description": "open a Rails console",
+        "options": [
+          {
+            "long": "sandbox",
+            "short": "s",
+            "description": "rollback database changes on exit",
+            "inherit": false
+          },
+          {
+            "long": "environment",
+            "short": "e",
+            "description": "environment to run under",
+            "inherit": false,
+            "value": {
+              "name": "environment"
+            }
+          }
+        ]
+      },
+      {
+        "name": "server",
+        "description": "start the Rails web server",
+        "options": [
+          {
+            "long": "environment",
+            "short": "e",
+            "description": "environment to run under",
+            "inherit": false,
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "port",
+            "short": "p",
+            "description": "server port",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "binding",
+            "short": "b",
+            "description": "IP address to bind",
+            "inherit": false,
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "rackup configuration file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "daemon",
+            "short": "d",
+            "description": "run as a daemon",
+            "inherit": false
+          },
+          {
+            "long": "using",
+            "short": "u",
+            "description": "Rack server to use",
+            "inherit": false,
+            "value": {
+              "name": "server"
+            }
+          },
+          {
+            "long": "pid",
+            "short": "P",
+            "description": "PID file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "dev-caching",
+            "short": "C",
+            "description": "toggle development caching",
+            "inherit": false
+          },
+          {
+            "long": "early-hints",
+            "description": "enable HTTP/2 early hints",
+            "inherit": false
+          },
+          {
+            "long": "log-to-stdout",
+            "description": "log to stdout",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "db:create",
+        "description": "create the database",
+        "options": [
+          {
+            "long": "backtrace",
+            "description": "enable full backtrace",
+            "inherit": false
+          },
+          {
+            "long": "comments",
+            "description": "show commented tasks only",
+            "inherit": false
+          },
+          {
+            "long": "rules",
+            "description": "trace rule resolution",
+            "inherit": false
+          },
+          {
+            "long": "all",
+            "short": "A",
+            "description": "show all tasks",
+            "inherit": false
+          },
+          {
+            "long": "describe",
+            "short": "D",
+            "description": "describe tasks",
+            "inherit": false,
+            "value": {
+              "name": "pattern"
+            }
+          },
+          {
+            "long": "rakefile",
+            "short": "f",
+            "description": "use a rakefile",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "jobs",
+            "short": "j",
+            "description": "number of parallel tasks",
+            "inherit": false,
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "long": "dry-run",
+            "short": "n",
+            "description": "show actions without executing",
+            "inherit": false
+          },
+          {
+            "long": "quiet",
+            "short": "q",
+            "description": "do not log messages",
+            "inherit": false
+          },
+          {
+            "long": "trace",
+            "short": "t",
+            "description": "turn on tracing",
+            "inherit": false
+          },
+          {
+            "long": "tasks",
+            "short": "T",
+            "description": "display tasks",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "log messages",
+            "inherit": false
+          },
+          {
+            "long": "version",
+            "short": "V",
+            "description": "display version",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "display help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "db:migrate",
+        "description": "run pending database migrations",
+        "options": [
+          {
+            "long": "backtrace",
+            "description": "enable full backtrace",
+            "inherit": false
+          },
+          {
+            "long": "comments",
+            "description": "show commented tasks only",
+            "inherit": false
+          },
+          {
+            "long": "rules",
+            "description": "trace rule resolution",
+            "inherit": false
+          },
+          {
+            "long": "all",
+            "short": "A",
+            "description": "show all tasks",
+            "inherit": false
+          },
+          {
+            "long": "describe",
+            "short": "D",
+            "description": "describe tasks",
+            "inherit": false,
+            "value": {
+              "name": "pattern"
+            }
+          },
+          {
+            "long": "rakefile",
+            "short": "f",
+            "description": "use a rakefile",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "jobs",
+            "short": "j",
+            "description": "number of parallel tasks",
+            "inherit": false,
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "long": "dry-run",
+            "short": "n",
+            "description": "show actions without executing",
+            "inherit": false
+          },
+          {
+            "long": "quiet",
+            "short": "q",
+            "description": "do not log messages",
+            "inherit": false
+          },
+          {
+            "long": "trace",
+            "short": "t",
+            "description": "turn on tracing",
+            "inherit": false
+          },
+          {
+            "long": "tasks",
+            "short": "T",
+            "description": "display tasks",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "log messages",
+            "inherit": false
+          },
+          {
+            "long": "version",
+            "short": "V",
+            "description": "display version",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "display help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "dbconsole",
+        "description": "open a database console",
+        "options": [
+          {
+            "short": "e",
+            "description": "environment to run under",
+            "inherit": false,
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "mode",
+            "description": "sqlite output mode",
+            "inherit": false,
+            "value": {
+              "name": "mode",
+              "provider": {
+                "values": [
+                  "html",
+                  "list",
+                  "line",
+                  "column"
+                ]
+              }
+            }
+          },
+          {
+            "short": "p",
+            "description": "provide password from database.yml",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "description": "connection to use",
+            "inherit": false,
+            "value": {
+              "name": "connection"
+            }
+          },
+          {
+            "long": "database",
+            "spellings": [
+              "-db"
+            ],
+            "description": "database to use",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "notes",
+        "description": "list code annotations",
+        "options": [
+          {
+            "long": "annotations",
+            "short": "a",
+            "description": "filter annotations",
+            "inherit": false,
+            "value": {
+              "name": "annotations"
+            }
+          }
+        ]
+      },
+      {
+        "name": "generate",
+        "description": "generate Rails resources",
+        "options": [
+          {
+            "short": "h",
+            "description": "show generator help",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "description": "run without changes",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "description": "overwrite files",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "description": "skip existing files",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "description": "suppress status output",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "generator",
+              "provider": {
+                "values": [
+                  "model",
+                  "resource",
+                  "scaffold",
+                  "controller",
+                  "migration"
+                ]
+              },
+              "index": 0
+            },
+            {
+              "name": "args",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "routes",
+        "description": "list application routes",
+        "options": [
+          {
+            "short": "c",
+            "description": "filter by controller",
+            "inherit": false,
+            "value": {
+              "name": "controller"
+            }
+          },
+          {
+            "short": "g",
+            "description": "grep routes by pattern",
+            "inherit": false,
+            "value": {
+              "name": "pattern"
+            }
+          },
+          {
+            "short": "E",
+            "description": "print expanded routes",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "test",
+        "description": "run the test suite",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "description": "Ruby test file",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
