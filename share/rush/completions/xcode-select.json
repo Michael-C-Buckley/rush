@@ -1,0 +1,48 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "xcode-select",
+    "description": "manage the active Xcode developer directory",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "help message"
+      },
+      {
+        "short": "p",
+        "long": "print-path",
+        "description": "display path to active developer directory"
+      },
+      {
+        "short": "s",
+        "long": "switch",
+        "description": "set path to active developer directory",
+        "value": {
+          "name": "path",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "install",
+        "description": "install Xcode command line tools"
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "display version"
+      },
+      {
+        "short": "r",
+        "long": "reset",
+        "description": "reset to the default CLT path"
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
