@@ -392,11 +392,13 @@
             \\arr[5]=xyz
             \\printf 'count=<%s>:<%s> elem=<%s> unset=<%s>\n' \
             \\    "${#arr[@]}" "${#arr[*]}" "${#arr[2]}" "${#missing[@]}"
+            \\printf 'negative=<%s>:<%s>\n' "${arr[-1]}" "${#arr[-4]}"
             \\f() { printf 'stack=<%s>:<%s>\n' "${#FUNCNAME[@]}" "${#BASH_SOURCE[@]}"; }
             \\f
             ,
             .stdout =
             \\count=<2>:<2> elem=<1> unset=<0>
+            \\negative=<xyz>:<1>
             \\stack=<1>:<1>
             \\
             ,

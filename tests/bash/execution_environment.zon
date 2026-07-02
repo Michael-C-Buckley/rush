@@ -72,12 +72,23 @@
             \\arr[3]+=D
             \\i=2
             \\printf '<%s>\n' "${arr[0]}" "${arr[1]}" "${arr[$i]}" "${arr[3]}"
+            \\arr[-1]=last
+            \\arr[-2]+=plus
+            \\printf 'negative=<%s>\n' "${arr[@]}"
+            \\scalar=base
+            \\scalar[-1]+=suffix
+            \\printf 'scalar=<%s>\n' "${scalar[0]}"
             ,
             .stdout =
             \\<a>
             \\<B>
             \\<d>
             \\<D>
+            \\negative=<a>
+            \\negative=<B>
+            \\negative=<dplus>
+            \\negative=<last>
+            \\scalar=<basesuffix>
             \\
             ,
             .stderr = "",

@@ -4999,7 +4999,7 @@ fn applyAssignment(
     const expanded_value = try expandAssignmentValue(shell, assignment, substitution_status);
     const value = try assignmentValueForStorage(shell, assignment.name, expanded_value);
     if (assignment.index) |index_word| {
-        const index = try expandArrayIndex(shell, index_word);
+        const index = try expandArrayIndexForName(shell, assignment.name, index_word);
         shell.state.putArrayElement(assignment.name, index, value) catch |err| switch (err) {
             error.ReadonlyVariable => {
                 try writeReadonlyDiagnostic(shell, assignment.name);
@@ -5112,18 +5112,54 @@ fn expandAssignmentValue(
     const value = try expandAssignmentWordTracking(shell, assignment.value, substitution_status);
     if (!assignment.append) return value;
     const existing = if (assignment.index) |index_word| existing: {
-        const index = try expandArrayIndex(shell, index_word);
-        const array = shell.state.getArray(assignment.name) orelse break :existing "";
+        const index = try expandArrayIndexForName(shell, assignment.name, index_word);
+        const array = shell.state.getArray(assignment.name) orelse {
+            if (index == 0) if (shell.state.getVariable(assignment.name)) |variable| break :existing variable.value;
+            break :existing "";
+        };
         break :existing array.elementValue(index) orelse "";
     } else if (shell.state.getVariable(assignment.name)) |variable| variable.value else "";
     return std.mem.concat(shell.scratchAllocator(), u8, &.{ existing, value });
 }
 
+fn expandArrayIndexForName(shell: anytype, name: []const u8, word: ast.Word) !usize {
+    const value = try expandArrayIndexValue(shell, word);
+    if (value >= 0) return @intCast(value);
+    return resolveNegativeArrayIndex(value, shell.state.getArray(name), shell.state.getVariable(name) != null);
+}
+
+fn expandArrayIndexForArray(shell: anytype, word: ast.Word, array: state_mod.ArrayVariable) !usize {
+    const value = try expandArrayIndexValue(shell, word);
+    if (value >= 0) return @intCast(value);
+    return resolveNegativeArrayIndex(value, array, false);
+}
+
+fn resolveNegativeArrayIndex(value: i64, maybe_array: ?state_mod.ArrayVariable, scalar_is_set: bool) !usize {
+    std.debug.assert(value < 0);
+    const max_index = if (maybe_array) |array| max: {
+        if (array.elements.len == 0) return error.InvalidArithmetic;
+        break :max array.elements[array.elements.len - 1].index;
+    } else if (scalar_is_set)
+        0
+    else
+        return error.InvalidArithmetic;
+    const magnitude: u64 = if (value == std.math.minInt(i64))
+        @as(u64, 1) << 63
+    else
+        @intCast(-value);
+    if (magnitude > max_index + 1) return error.InvalidArithmetic;
+    return max_index + 1 - @as(usize, @intCast(magnitude));
+}
+
 fn expandArrayIndex(shell: anytype, word: ast.Word) !usize {
-    const text = try expandWord(shell, word);
-    const value = try parseArithmeticValue(shell, text);
+    const value = try expandArrayIndexValue(shell, word);
     if (value < 0) return error.InvalidArithmetic;
     return @intCast(value);
+}
+
+fn expandArrayIndexValue(shell: anytype, word: ast.Word) !i64 {
+    const text = try expandWord(shell, word);
+    return parseArithmeticValue(shell, text);
 }
 
 fn assignmentExported(shell: anytype, name: []const u8) bool {
@@ -7721,7 +7757,7 @@ fn arrayParameterValue(shell: anytype, parameter: ast.ArrayParameter) !?[]const 
     const array = shell.state.getArray(parameter.name) orelse return null;
     return switch (parameter.subscript) {
         .index => |word| value: {
-            const index = try expandArrayIndex(shell, word);
+            const index = try expandArrayIndexForArray(shell, word, array);
             break :value array.elementValue(index);
         },
         .all => |special| if (array.elements.len == 0) null else switch (special) {
