@@ -1,0 +1,68 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "rm",
+    "description": "remove files or directories",
+    "options": [
+      {
+        "short": "r",
+        "spellings": [
+          "-R"
+        ],
+        "description": "remove directories and their contents recursively",
+        "priority": -10,
+        "inherit": false
+      },
+      {
+        "short": "P",
+        "description": "overwrite regular files before deleting them",
+        "priority": -10,
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "description": "attempt to remove directories as well as other types of files",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "description": "remove without prompting for confirmation",
+        "priority": -10,
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "description": "request confirmation before attempting to remove each file",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "description": "be verbose when deleting files",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "path",
+          "provider": [
+            "builtin.directories",
+            "builtin.files"
+          ],
+          "index": 0,
+          "repeatable": true,
+          "description": "file or directory to remove"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
