@@ -1,0 +1,253 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "quasar",
+    "description": "use the Quasar Framework CLI",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "output usage information",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "create",
+        "description": "create a new Quasar project",
+        "options": [
+          {
+            "long": "kit",
+            "short": "k",
+            "description": "use specific starter kit",
+            "inherit": false,
+            "value": {
+              "name": "kit"
+            }
+          },
+          {
+            "long": "branch",
+            "short": "b",
+            "description": "use specific branch of the starter kit",
+            "inherit": false,
+            "value": {
+              "name": "branch"
+            }
+          },
+          {
+            "long": "clone",
+            "short": "c",
+            "description": "use git clone",
+            "inherit": false
+          },
+          {
+            "long": "offline",
+            "short": "o",
+            "description": "use a cached starter kit",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "project-name",
+              "description": "name of the project",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "info",
+        "description": "gather environment information for issue reporting",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "upgrade",
+        "description": "upgrade Quasar Framework packages",
+        "options": [
+          {
+            "long": "install",
+            "short": "i",
+            "description": "also perform package upgrades",
+            "inherit": false
+          },
+          {
+            "long": "prerelease",
+            "short": "p",
+            "description": "allow pre-release versions (alpha/beta)",
+            "inherit": false
+          },
+          {
+            "long": "major",
+            "short": "m",
+            "description": "allow newer major versions (breaking changes)",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "serve",
+        "description": "start development server",
+        "options": [
+          {
+            "long": "port",
+            "short": "p",
+            "description": "port to use",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "hostname",
+            "short": "H",
+            "description": "address to use",
+            "inherit": false,
+            "value": {
+              "name": "hostname"
+            }
+          },
+          {
+            "long": "gzip",
+            "short": "g",
+            "description": "compress content",
+            "inherit": false
+          },
+          {
+            "long": "silent",
+            "short": "s",
+            "description": "suppress log message",
+            "inherit": false
+          },
+          {
+            "long": "colors",
+            "description": "log messages with colors",
+            "inherit": false
+          },
+          {
+            "long": "open",
+            "short": "o",
+            "description": "open browser window after starting",
+            "inherit": false
+          },
+          {
+            "long": "cache",
+            "short": "c",
+            "description": "cache time (max-age) in seconds",
+            "inherit": false,
+            "value": {
+              "name": "cache"
+            }
+          },
+          {
+            "long": "micro",
+            "short": "m",
+            "description": "use micro-cache",
+            "inherit": false,
+            "value": {
+              "name": "micro"
+            }
+          },
+          {
+            "long": "history",
+            "description": "use history api fallback",
+            "inherit": false
+          },
+          {
+            "long": "index",
+            "short": "i",
+            "description": "history mode (only!) index url path",
+            "inherit": false,
+            "value": {
+              "name": "index"
+            }
+          },
+          {
+            "long": "https",
+            "description": "enable HTTPS",
+            "inherit": false
+          },
+          {
+            "long": "cert",
+            "short": "C",
+            "description": "path to SSL cert file (Optional)",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "key",
+            "short": "K",
+            "description": "path to SSL key file (Optional)",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "proxy",
+            "description": "proxy specific requests defined in file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cors",
+            "description": "enable CORS for all requests",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "path to serve",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
