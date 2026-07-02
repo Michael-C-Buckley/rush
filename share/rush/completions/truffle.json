@@ -1,0 +1,615 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "truffle",
+    "description": "ethereum smart contract development framework",
+    "subcommands": [
+      {
+        "name": "build",
+        "description": "execute build pipeline (if configuration present)"
+      },
+      {
+        "name": "compile",
+        "description": "compile contract source files",
+        "options": [
+          {
+            "long": "list",
+            "description": "list all recent stable releases from solc-bin. If filter is specified then it will display only that type of release or docker tags",
+            "inherit": false,
+            "value": {
+              "name": "filter",
+              "description": "the filter parameter must be one of the following: prereleases, releases, latestRelease or docker",
+              "provider": "truffle.solc-release-types"
+            }
+          },
+          {
+            "long": "all",
+            "description": "compile all contracts instead of only the contracts changed since last compile",
+            "inherit": false
+          },
+          {
+            "long": "quiet",
+            "description": "suppress all compilation output",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "config",
+        "description": "set user-level configuration options",
+        "options": [
+          {
+            "long": "enable-analytics",
+            "description": "enable Truffle to send usage data to Google Analytics",
+            "inherit": false
+          },
+          {
+            "long": "disable-analytics",
+            "description": "disable Truffle's ability to send usage data to Google Analytics",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "get",
+            "description": "get a Truffle configuration option value",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "set",
+            "description": "set a Truffle configuration option value",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "index": 0
+                },
+                {
+                  "name": "value-for-set",
+                  "index": 1
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "console",
+        "description": "run a console with contract abstractions and commands available",
+        "options": [
+          {
+            "long": "network",
+            "description": "specify the network to use",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "description": "network name must exist in the configuration"
+            }
+          },
+          {
+            "long": "verbose-rpc",
+            "description": "log communication between Truffle and the Ethereum client",
+            "inherit": false
+          },
+          {
+            "long": "require",
+            "short": "r",
+            "description": "preload console environment from required JavaScript file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "description": "the default export must be an object with named keys that will be used to populate the console environment. For example, if your JavaScript is module.exports =",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "require-none",
+            "description": "do not load any user-defined JavaScript into the console environment. This option takes precedence over --require, -r, and values provided for console.require i",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "create",
+        "description": "helper to create new contracts, migrations and tests",
+        "arguments": {
+          "states": [
+            {
+              "name": "artifact_type",
+              "description": "create a new artifact where artifact_type is one of the following: contract, migration, test or all. The new artifact is created along with one(or all) of the f",
+              "provider": "truffle.artifacts",
+              "index": 0
+            },
+            {
+              "name": "ArtifactName",
+              "description": "name of new artifact. (required)",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "debug",
+        "description": "interactively debug any transaction on the blockchain",
+        "options": [
+          {
+            "long": "network",
+            "description": "the network to connect to",
+            "inherit": false,
+            "value": {
+              "name": "network"
+            }
+          },
+          {
+            "long": "fetch-external",
+            "short": "x",
+            "description": "allows the debugger to download source from source verification services to debug transactions involving external contracts. When used, a transaction hash is re",
+            "inherit": false
+          },
+          {
+            "long": "compile-tests",
+            "description": "allows the debugger to compile Solidity test contracts. Implies --compile-all",
+            "inherit": false
+          },
+          {
+            "long": "compile-all",
+            "description": "forces the debugger to recompile all contracts, even when it would otherwise judge doing so unnecessary. Compilation results are not saved",
+            "inherit": false
+          },
+          {
+            "long": "compile-none",
+            "description": "skip recompilation even when it may be needed",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "transaction_hash",
+              "description": "transaction ID to use for debugging. You can omit this to simply start the debugger and then load a transaction later",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "deploy",
+        "description": "alias for migrate. See migrate for details"
+      },
+      {
+        "name": "develop",
+        "description": "open a console with a development blockchain",
+        "options": [
+          {
+            "long": "log",
+            "description": "start/Connect to a Truffle develop session and log all RPC activity. See the Log RPC Activity docs for more information about using this option",
+            "inherit": false,
+            "value": {
+              "name": "network"
+            }
+          },
+          {
+            "long": "require",
+            "short": "r",
+            "description": "preload console environment from required JavaScript file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "description": "the default export must be an object with named keys that will be used to populate the console environment. For example, if your JavaScript is module.exports =",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "require-none",
+            "description": "do not load any user-defined JavaScript into the console environment. This option takes precedence over --require, -r, and values provided for console.require i",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "exec",
+        "description": "execute a JS module within the Truffle environment",
+        "options": [
+          {
+            "long": "network",
+            "description": "specify the network to use, using artifacts specific to that network",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "description": "network name must exist in the configuration"
+            }
+          },
+          {
+            "long": "compile",
+            "description": "compile contracts before executing the script",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "script.js",
+              "description": "javaScript file to be executed. Can include path information if the script does not exist in the current directory. (required)",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "display a list of all commands or information about a specific command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "description": "display usage information about the specified command",
+              "index": 0,
+              "provider": "truffle.commands"
+            }
+          ]
+        }
+      },
+      {
+        "name": "init",
+        "description": "initialize new and empty Ethereum project",
+        "options": [
+          {
+            "long": "force",
+            "description": "initialize project regardless of the current working directory's state. Be careful, this could overwrite existing files that have name conflicts",
+            "priority": -10,
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "install a package from the Ethereum Package Registry",
+        "arguments": {
+          "states": [
+            {
+              "name": "package_name",
+              "description": "name of the package as listed in the Ethereum Package Registry. (required)",
+              "index": 0
+            },
+            {
+              "name": "@version",
+              "description": "when specified, will install a specific version of the package, otherwise will install the latest version",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "networks",
+        "description": "show addresses for deployed contracts on each network",
+        "options": [
+          {
+            "long": "clean",
+            "description": "remove all network artifacts that aren't associated with a named network",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "obtain",
+        "description": "fetch and cache a specified compiler",
+        "options": [
+          {
+            "long": "solc",
+            "description": "download and cache a version of the solc compiler. (required)",
+            "inherit": false,
+            "value": {
+              "name": "version"
+            }
+          }
+        ]
+      },
+      {
+        "name": "opcode",
+        "description": "print the compiled opcodes for a given contract",
+        "arguments": {
+          "states": [
+            {
+              "name": "contract_name",
+              "description": "name of the contract to print opcodes for. Must be a contract name, not a file name. (required)",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "publish",
+        "description": "publish a package to the Ethereum Package Registry"
+      },
+      {
+        "name": "run",
+        "description": "run a third-party plugin command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "description": "name of a command defined by an installed plugin. (required)",
+              "index": 0,
+              "provider": "truffle.commands"
+            }
+          ]
+        }
+      },
+      {
+        "name": "version",
+        "description": "show version number and exit"
+      },
+      {
+        "name": "watch",
+        "description": "watch filesystem for changes and rebuild the project automatically"
+      },
+      {
+        "name": "preserve",
+        "description": "save data to decentralized storage platforms like IPFS and Filecoin",
+        "options": [
+          {
+            "long": "environment",
+            "description": "environment name, as defined in truffle-config `environments` object",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "ipfs",
+            "description": "preserve to IPFS",
+            "inherit": false
+          },
+          {
+            "long": "filecoin",
+            "description": "preserve to Filecoin",
+            "inherit": false
+          },
+          {
+            "long": "buckets",
+            "description": "preserve to Textile Buckets",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "migrate",
+        "description": "run migrations to deploy contracts",
+        "options": [
+          {
+            "long": "reset",
+            "description": "run all migrations from the beginning, instead of running from the last completed migration",
+            "inherit": false
+          },
+          {
+            "long": "f",
+            "description": "run contracts from a specific migration",
+            "inherit": false,
+            "value": {
+              "name": "number",
+              "description": "the number refers to the prefix of the migration file"
+            }
+          },
+          {
+            "long": "to",
+            "description": "run contracts to a specific migration",
+            "inherit": false,
+            "value": {
+              "name": "number",
+              "description": "the number refers to the prefix of the migration file"
+            }
+          },
+          {
+            "long": "network",
+            "description": "specify the network to use, saving artifacts specific to that network",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "description": "network name must exist in the configuration"
+            }
+          },
+          {
+            "long": "compile-all",
+            "description": "compile all contracts instead of intelligently choosing which contracts need to be compiled",
+            "inherit": false
+          },
+          {
+            "long": "verbose-rpc",
+            "description": "log communication between Truffle and the Ethereum client",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "fork the network specified and only perform a test migration",
+            "inherit": false
+          },
+          {
+            "long": "skip-dry-run",
+            "description": "skip the test migration performed before the real migration",
+            "inherit": false
+          },
+          {
+            "long": "interactive",
+            "description": "prompt to confirm that the user wants to proceed after the dry run",
+            "inherit": false
+          },
+          {
+            "long": "describe-json",
+            "description": "prints additional status messages",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "unbox",
+        "description": "download a Truffle Box, a pre-built Truffle project",
+        "options": [
+          {
+            "long": "force",
+            "description": "unbox project in the current directory regardless of its state. Be careful, this will potentially overwrite files that exist in the directory",
+            "priority": -10,
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "box_name",
+              "description": "name of the Truffle Box. (required)",
+              "index": 0
+            },
+            {
+              "name": "path",
+              "index": 1,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "test",
+        "description": "run JavaScript and Solidity tests",
+        "options": [
+          {
+            "long": "compile-all",
+            "description": "compile all contracts instead of intelligently choosing which contracts need to be compiled",
+            "inherit": false
+          },
+          {
+            "long": "compile-all-debug",
+            "description": "like --compile-all, but compiles contracts in debug mode for extra information. Has no effect on Solidity <0.6.3",
+            "inherit": false
+          },
+          {
+            "long": "network",
+            "description": "specify the network to use, using artifacts specific to that network",
+            "inherit": false,
+            "value": {
+              "name": "name",
+              "description": "network name must exist in the configuration"
+            }
+          },
+          {
+            "long": "verbose-rpc",
+            "description": "log communication between Truffle and the Ethereum client",
+            "inherit": false
+          },
+          {
+            "long": "show-events",
+            "description": "log all contract events",
+            "inherit": false
+          },
+          {
+            "long": "debug",
+            "description": "provides global debug() function for in-test debugging. Usable with Javascript tests only; implies --compile-all",
+            "inherit": false
+          },
+          {
+            "long": "debug-global",
+            "description": "allows one to rename the debug() function to something else",
+            "inherit": false,
+            "value": {
+              "name": "identifier"
+            }
+          },
+          {
+            "long": "bail",
+            "short": "b",
+            "description": "bail after the first test failure. May be abbreviated -b",
+            "inherit": false
+          },
+          {
+            "long": "stacktrace",
+            "short": "t",
+            "description": "enable mixed JavaScript and Solidity stack traces",
+            "inherit": false
+          },
+          {
+            "long": "stacktrace-extra",
+            "description": "shortcut for --stacktrace --compile-all-debug",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "test_file",
+              "description": "name of the test file to be run. Can include path information if the file does not exist in the current directory",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "truffle.commands": {
+        "values": [
+          "build",
+          "compile",
+          "config",
+          "console",
+          "create",
+          "debug",
+          "deploy",
+          "develop",
+          "exec",
+          "help",
+          "init",
+          "install",
+          "networks",
+          "obtain",
+          "opcode",
+          "publish",
+          "run",
+          "version",
+          "watch",
+          "preserve",
+          "migrate",
+          "unbox",
+          "test"
+        ]
+      },
+      "truffle.artifacts": {
+        "values": [
+          "contract",
+          "migration",
+          "test",
+          "all"
+        ]
+      },
+      "truffle.solc-release-types": {
+        "values": [
+          "prereleases",
+          "releases",
+          "latestRelease",
+          "docker"
+        ]
+      }
+    }
+  }
+}
