@@ -1,0 +1,4538 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "flyctl",
+    "description": "manage Fly.io applications",
+    "options": [
+      {
+        "long": "access-token",
+        "short": "t",
+        "description": "fly API Access Token",
+        "inherit": true,
+        "value": {
+          "name": "access-token"
+        }
+      },
+      {
+        "long": "builtinsfile",
+        "description": "load builtins from named file",
+        "inherit": true,
+        "hidden": true,
+        "value": {
+          "name": "builtinsfile"
+        }
+      },
+      {
+        "long": "json",
+        "short": "j",
+        "description": "json output",
+        "inherit": true
+      },
+      {
+        "long": "verbose",
+        "description": "verbose output",
+        "inherit": true
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "display help",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "agent",
+        "description": "commands that manage the Fly agent, a background process that manages flyctl wireguard connections",
+        "subcommands": [
+          {
+            "name": "ping",
+            "description": "ping the Fly agent"
+          },
+          {
+            "name": "restart",
+            "description": "restart the Fly agent"
+          },
+          {
+            "name": "daemon-start",
+            "aliases": [
+              "run"
+            ],
+            "description": "run the Fly agent in the foreground"
+          },
+          {
+            "name": "start",
+            "description": "start the Fly agent"
+          },
+          {
+            "name": "stop",
+            "description": "stop the Fly agent"
+          }
+        ]
+      },
+      {
+        "name": "apps",
+        "description": "manage apps",
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create a new application",
+            "options": [
+              {
+                "long": "generate-name",
+                "description": "generate a name for the app",
+                "inherit": false
+              },
+              {
+                "long": "name",
+                "description": "the app name to use",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "network",
+                "description": "specify custom network id",
+                "inherit": false,
+                "value": {
+                  "name": "network"
+                }
+              },
+              {
+                "long": "org",
+                "short": "o",
+                "description": "the organization to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "org"
+                }
+              }
+            ]
+          },
+          {
+            "name": "destroy",
+            "description": "permanently destroys an app",
+            "options": [
+              {
+                "long": "yes",
+                "short": "y",
+                "description": "accept all confirmations",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "list applications"
+          },
+          {
+            "name": "move",
+            "description": "move an app to another organization",
+            "options": [
+              {
+                "long": "org",
+                "short": "o",
+                "description": "the organization to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "org"
+                }
+              },
+              {
+                "long": "yes",
+                "short": "y",
+                "description": "accept all confirmations",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "open",
+            "description": "open browser to current deployed application",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "application name",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to application configuration file",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "releases",
+            "description": "list app releases",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "application name",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to application configuration file",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "image",
+                "description": "display the Docker image reference of the release",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "restart",
+            "description": "restart an application",
+            "options": [
+              {
+                "short": "f",
+                "long": "force",
+                "description": "will issue a restart against each Machine even if there are errors. ( Machines only )",
+                "inherit": false
+              },
+              {
+                "long": "skip-health-checks",
+                "description": "restarts app without waiting for health checks. ( Machines only )",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "app",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "auth",
+        "description": "manage authentication",
+        "subcommands": [
+          {
+            "name": "docker",
+            "description": "authenticate docker"
+          },
+          {
+            "name": "login",
+            "description": "log in a user",
+            "options": [
+              {
+                "long": "email",
+                "description": "login email",
+                "inherit": false,
+                "value": {
+                  "name": "email"
+                }
+              },
+              {
+                "long": "interactive",
+                "short": "i",
+                "description": "log in with an email and password interactively",
+                "inherit": false
+              },
+              {
+                "long": "otp",
+                "description": "one time password",
+                "inherit": false,
+                "value": {
+                  "name": "otp"
+                }
+              },
+              {
+                "long": "password",
+                "description": "login password",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              }
+            ]
+          },
+          {
+            "name": "logout",
+            "description": "logs out the currently logged in user"
+          },
+          {
+            "name": "signup",
+            "description": "create a new fly account"
+          },
+          {
+            "name": "token",
+            "description": "show the current auth token"
+          },
+          {
+            "name": "whoami",
+            "description": "displays the users email address/service identity currently authenticated and in use"
+          }
+        ]
+      },
+      {
+        "name": "autoscale",
+        "description": "autoscaling app resources",
+        "options": [
+          {
+            "long": "app",
+            "short": "a",
+            "description": "app name to operate on",
+            "inherit": false,
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "path to an app config file or directory containing one",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "balanced",
+            "description": "configure a traffic balanced app with params (min=int max=int)",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "disable",
+            "description": "disable autoscaling",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "set",
+            "description": "set current models autoscaling parameters",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "show",
+            "description": "show current autoscaling configuration",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "standard",
+            "description": "configure a standard balanced app with params (min=int max=int)",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "builds",
+        "description": "manage application builds",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list builds",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "application name",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to application configuration file",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "certs",
+        "description": "manage certificates",
+        "options": [
+          {
+            "long": "app",
+            "short": "a",
+            "description": "app name to operate on",
+            "inherit": false,
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "path to an app config file or directory containing one",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "create",
+            "aliases": [
+              "add"
+            ],
+            "description": "add a certificate for an app",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "check",
+            "description": "checks DNS configuration",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "list certificates for an app",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "aliases": [
+              "remove"
+            ],
+            "description": "removes a certificate from an app",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "yes",
+                "short": "y",
+                "description": "accept all confirmations",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "show",
+            "description": "shows certificate information",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "checks",
+        "description": "manage health checks",
+        "subcommands": [
+          {
+            "name": "handlers",
+            "description": "manage health check handlers",
+            "subcommands": [
+              {
+                "name": "create",
+                "description": "create a health check handler",
+                "options": [
+                  {
+                    "long": "organization",
+                    "short": "o",
+                    "description": "the organization to add the handler to",
+                    "inherit": false,
+                    "value": {
+                      "name": "organization"
+                    }
+                  },
+                  {
+                    "long": "type",
+                    "description": "the type of handler to create, can be slack or pagerduty",
+                    "inherit": false,
+                    "value": {
+                      "name": "type"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "delete",
+                "description": "delete a health check handler"
+              },
+              {
+                "name": "list",
+                "description": "list health check handlers"
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "list app health checks",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "check-name",
+                "description": "filter checks by name",
+                "inherit": false,
+                "value": {
+                  "name": "check-name"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "completion",
+        "description": "generate the autocompletion script for the specified shell",
+        "subcommands": [
+          {
+            "name": "bash",
+            "description": "generate the autocompletion script for bash",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "fish",
+            "description": "generate the autocompletion script for fish",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "powershell",
+            "description": "generate the autocompletion script for powershell",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "zsh",
+            "description": "generate the autocompletion script for zsh",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "disable completion descriptions",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "config",
+        "description": "manage an app's configuration",
+        "options": [
+          {
+            "long": "app",
+            "short": "a",
+            "description": "app name to operate on",
+            "inherit": false,
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "path to an app config file or directory containing one",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "display",
+            "description": "display an app's configuration",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "env",
+            "description": "display an app's runtime environment variables",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "save",
+            "description": "save an app's config file",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "validate",
+            "description": "validate an app's config file",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "create",
+        "description": "create a new application",
+        "options": [
+          {
+            "long": "generate-name",
+            "description": "generate a name for the app",
+            "inherit": false
+          },
+          {
+            "long": "name",
+            "description": "the app name to use",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "network",
+            "description": "specify custom network id",
+            "inherit": false,
+            "value": {
+              "name": "network"
+            }
+          },
+          {
+            "long": "org",
+            "short": "o",
+            "description": "the organization to operate on",
+            "inherit": false,
+            "value": {
+              "name": "org"
+            }
+          }
+        ]
+      },
+      {
+        "name": "curl",
+        "description": "run a performance test against a URL"
+      },
+      {
+        "name": "dash",
+        "aliases": [
+          "dashboard"
+        ],
+        "description": "open web browser on Fly Web UI for this app",
+        "options": [
+          {
+            "long": "app",
+            "short": "a",
+            "description": "app name to operate on",
+            "inherit": false,
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "path to an app config file or directory containing one",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "metrics",
+            "description": "open web browser on Fly Web UI for this app's metrics",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "deploy",
+        "description": "deploy Fly applications",
+        "options": [
+          {
+            "long": "app",
+            "short": "a",
+            "description": "application name",
+            "inherit": false,
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "build-arg",
+            "description": "set of build time variables in the form of NAME=VALUE pairs. Can be specified multiple times",
+            "inherit": false,
+            "value": {
+              "name": "build-arg"
+            }
+          },
+          {
+            "long": "build-only",
+            "description": "build but do not deploy",
+            "inherit": false
+          },
+          {
+            "long": "build-target",
+            "description": "set the target build stage to build if the Dockerfile has more than one stage",
+            "inherit": false,
+            "value": {
+              "name": "build-target"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "path to application configuration file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "detach",
+            "description": "return immediately instead of monitoring deployment progress",
+            "inherit": false
+          },
+          {
+            "long": "dockerfile",
+            "description": "path to a Dockerfile. Defaults to the Dockerfile in the working directory",
+            "inherit": false,
+            "value": {
+              "name": "dockerfile"
+            }
+          },
+          {
+            "long": "env",
+            "short": "e",
+            "description": "set of environment variables in the form of NAME=VALUE pairs. Can be specified multiple times",
+            "inherit": false,
+            "value": {
+              "name": "env"
+            }
+          },
+          {
+            "long": "image",
+            "short": "i",
+            "description": "the image tag or ID to deploy",
+            "inherit": false,
+            "value": {
+              "name": "image"
+            }
+          },
+          {
+            "long": "image-label",
+            "description": "image label to use when tagging and pushing to the fly registry. Defaults to \"deployment-{timestamp}\"",
+            "inherit": false,
+            "value": {
+              "name": "image-label"
+            }
+          },
+          {
+            "long": "local-only",
+            "description": "only perform builds locally using the local docker daemon",
+            "inherit": false
+          },
+          {
+            "long": "nix",
+            "description": "build with Nix",
+            "inherit": false
+          },
+          {
+            "long": "no-cache",
+            "description": "do not use the build cache when building the image",
+            "inherit": false
+          },
+          {
+            "long": "now",
+            "description": "deploy now without confirmation",
+            "inherit": false
+          },
+          {
+            "long": "push",
+            "description": "push image to registry after build is complete",
+            "inherit": false
+          },
+          {
+            "long": "region",
+            "short": "r",
+            "description": "the region to operate on",
+            "inherit": false,
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "remote-only",
+            "description": "perform builds on a remote builder instance instead of using the local docker daemon",
+            "inherit": false
+          },
+          {
+            "long": "strategy",
+            "description": "the strategy for replacing running instances. Options are canary, rolling, bluegreen, or immediate. Default is canary, or rolling when max-per-region is set",
+            "inherit": false,
+            "value": {
+              "name": "strategy"
+            }
+          }
+        ]
+      },
+      {
+        "name": "destroy",
+        "description": "permanently destroys an app",
+        "options": [
+          {
+            "long": "yes",
+            "short": "y",
+            "description": "accept all confirmations",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "dig",
+        "description": "make DNS requests against Fly.io's internal DNS server",
+        "options": [
+          {
+            "long": "app",
+            "short": "a",
+            "description": "application name",
+            "inherit": false,
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "path to application configuration file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "org",
+            "short": "o",
+            "description": "the organization to operate on",
+            "inherit": false,
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "short",
+            "short": "s",
+            "description": "just print the answers, not DNS record details",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "dns-records",
+        "description": "manage DNS records",
+        "subcommands": [
+          {
+            "name": "export",
+            "description": "export DNS records",
+            "options": [
+              {
+                "long": "overwrite",
+                "description": "",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "import",
+            "description": "import DNS records"
+          },
+          {
+            "name": "list",
+            "description": "list DNS records"
+          }
+        ]
+      },
+      {
+        "name": "docs",
+        "description": "view Fly documentation"
+      },
+      {
+        "name": "doctor",
+        "description": "the DOCTOR command allows you to debug your Fly environment",
+        "options": [
+          {
+            "long": "app",
+            "short": "a",
+            "description": "application name",
+            "inherit": false,
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "path to application configuration file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "diag",
+            "description": "send diagnostic information about your applications back to Fly.io",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "application name",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to application configuration file",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "force",
+                "description": "send diagnostics even if we can't find your local Fly.io app",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "domains",
+        "description": "manage domains",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add a domain"
+          },
+          {
+            "name": "list",
+            "description": "list domains"
+          },
+          {
+            "name": "register",
+            "description": "register a domain"
+          },
+          {
+            "name": "show",
+            "description": "show domain"
+          }
+        ]
+      },
+      {
+        "name": "history",
+        "description": "list an app's change history",
+        "options": [
+          {
+            "long": "app",
+            "short": "a",
+            "description": "application name",
+            "inherit": false,
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "path to application configuration file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "img",
+        "aliases": [
+          "image"
+        ],
+        "description": "manage app image",
+        "subcommands": [
+          {
+            "name": "show",
+            "description": "show image details",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "application name",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to application configuration file",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "update",
+            "description": "updates the app's image to the latest available version. (Fly Postgres only)",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "application name",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to application configuration file",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "detach",
+                "description": "return immediately instead of monitoring update progress",
+                "inherit": false
+              },
+              {
+                "long": "yes",
+                "short": "y",
+                "description": "accept all confirmations",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "info",
+        "description": "show detailed app information",
+        "options": [
+          {
+            "long": "app",
+            "short": "a",
+            "description": "app name to operate on",
+            "inherit": false,
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "path to an app config file or directory containing one",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "host",
+            "description": "returns just the hostname",
+            "inherit": false
+          },
+          {
+            "long": "name",
+            "short": "n",
+            "description": "returns just the appname",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "ips",
+        "description": "manage IP addresses for apps",
+        "options": [
+          {
+            "long": "app",
+            "short": "a",
+            "description": "app name to operate on",
+            "inherit": false,
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "path to an app config file or directory containing one",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "allocate-v4",
+            "description": "allocate an IPv4 address",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "region",
+                "description": "the region where the address should be allocated",
+                "inherit": false,
+                "value": {
+                  "name": "region"
+                }
+              }
+            ]
+          },
+          {
+            "name": "allocate-v6",
+            "description": "allocate an IPv6 address",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "region",
+                "description": "the region where the address should be allocated",
+                "inherit": false,
+                "value": {
+                  "name": "region"
+                }
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "list allocated IP addresses",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "private",
+            "description": "list instances private IP addresses",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "release",
+            "description": "release an IP address",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "launch",
+        "description": "launch a new app",
+        "options": [
+          {
+            "long": "copy-config",
+            "description": "use the configuration file if present without prompting",
+            "inherit": false
+          },
+          {
+            "long": "dockerfile",
+            "description": "path to a Dockerfile. Defaults to the Dockerfile in the working directory",
+            "inherit": false,
+            "value": {
+              "name": "dockerfile"
+            }
+          },
+          {
+            "long": "generate-name",
+            "description": "always generate a name for the app",
+            "inherit": false
+          },
+          {
+            "long": "image",
+            "description": "the image to launch",
+            "inherit": false,
+            "value": {
+              "name": "image"
+            }
+          },
+          {
+            "long": "name",
+            "description": "the name of the new app",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "no-deploy",
+            "description": "do not prompt for deployment",
+            "inherit": false
+          },
+          {
+            "long": "now",
+            "description": "deploy now without confirmation",
+            "inherit": false
+          },
+          {
+            "long": "org",
+            "description": "the organization that will own the app",
+            "inherit": false,
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "path",
+            "description": "path to app code and where a fly.toml file will be saved",
+            "inherit": false,
+            "value": {
+              "name": "path"
+            }
+          },
+          {
+            "long": "region",
+            "description": "the region to launch the new app in",
+            "inherit": false,
+            "value": {
+              "name": "region"
+            }
+          },
+          {
+            "long": "remote-only",
+            "description": "perform builds remotely without using the local docker daemon",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "logs",
+        "description": "view app logs",
+        "options": [
+          {
+            "long": "app",
+            "short": "a",
+            "description": "application name",
+            "inherit": false,
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "path to application configuration file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "instance",
+            "short": "i",
+            "description": "filter by instance ID",
+            "inherit": false,
+            "value": {
+              "name": "instance"
+            }
+          },
+          {
+            "long": "region",
+            "short": "r",
+            "description": "the region to operate on",
+            "inherit": false,
+            "value": {
+              "name": "region"
+            }
+          }
+        ]
+      },
+      {
+        "name": "machines",
+        "aliases": [
+          "m",
+          "machine"
+        ],
+        "description": "commands that manage machines",
+        "subcommands": [
+          {
+            "name": "clone",
+            "description": "clones a Fly Machine",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "application name",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to application configuration file",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "detach",
+                "short": "d",
+                "description": "detach from the machine's logs",
+                "inherit": false
+              },
+              {
+                "long": "name",
+                "short": "n",
+                "description": "the name of the new machine",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "org",
+                "short": "o",
+                "description": "the organization to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "org"
+                }
+              },
+              {
+                "long": "region",
+                "short": "r",
+                "description": "the region to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "region"
+                }
+              }
+            ]
+          },
+          {
+            "name": "kill",
+            "description": "kill (SIGKILL) a Fly machine",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "application name",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to application configuration file",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "list Fly machines",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "application name",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to application configuration file",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "quiet",
+                "short": "q",
+                "description": "only list machine ids",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "rm",
+            "aliases": [
+              "remove"
+            ],
+            "description": "remove a Fly machine",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "application name",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to application configuration file",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "force",
+                "short": "f",
+                "description": "force kill machine if it's running",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "run",
+            "description": "run a machine",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "application name",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "build-arg",
+                "description": "set of build time variables in the form of NAME=VALUE pairs. Can be specified multiple times",
+                "inherit": false,
+                "value": {
+                  "name": "build-arg"
+                }
+              },
+              {
+                "long": "build-local-only",
+                "description": "only perform builds locally using the local docker daemon",
+                "inherit": false
+              },
+              {
+                "long": "build-only",
+                "description": "",
+                "inherit": false
+              },
+              {
+                "long": "build-remote-only",
+                "description": "perform builds remotely without using the local docker daemon",
+                "inherit": false
+              },
+              {
+                "long": "build-target",
+                "description": "set the target build stage to build if the Dockerfile has more than one stage",
+                "inherit": false,
+                "value": {
+                  "name": "build-target"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to application configuration file",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cpu-kind",
+                "description": "kind of CPU to use (shared, dedicated)",
+                "inherit": false,
+                "value": {
+                  "name": "cpu-kind"
+                }
+              },
+              {
+                "long": "cpus",
+                "description": "number of CPUs",
+                "inherit": false,
+                "value": {
+                  "name": "cpus"
+                }
+              },
+              {
+                "long": "detach",
+                "short": "d",
+                "description": "detach from the machine's logs",
+                "inherit": false
+              },
+              {
+                "long": "dockerfile",
+                "description": "path to a Dockerfile. Defaults to the Dockerfile in the working directory",
+                "inherit": false,
+                "value": {
+                  "name": "dockerfile"
+                }
+              },
+              {
+                "long": "entrypoint",
+                "description": "eNTRYPOINT replacement",
+                "inherit": false,
+                "value": {
+                  "name": "entrypoint"
+                }
+              },
+              {
+                "long": "env",
+                "short": "e",
+                "description": "set of environment variables in the form of NAME=VALUE pairs. Can be specified multiple times",
+                "inherit": false,
+                "value": {
+                  "name": "env"
+                }
+              },
+              {
+                "long": "id",
+                "description": "machine ID, if previously known",
+                "inherit": false,
+                "value": {
+                  "name": "id"
+                }
+              },
+              {
+                "long": "image-label",
+                "description": "image label to use when tagging and pushing to the fly registry. Defaults to \"deployment-{timestamp}\"",
+                "inherit": false,
+                "value": {
+                  "name": "image-label"
+                }
+              },
+              {
+                "long": "memory",
+                "description": "memory (in megabytes) to attribute to the machine",
+                "inherit": false,
+                "value": {
+                  "name": "memory"
+                }
+              },
+              {
+                "long": "name",
+                "short": "n",
+                "description": "machine name, will be generated if missing",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "no-build-cache",
+                "description": "do not use the cache when building the image",
+                "inherit": false
+              },
+              {
+                "long": "org",
+                "description": "the organization that will own the app",
+                "inherit": false,
+                "value": {
+                  "name": "org"
+                }
+              },
+              {
+                "long": "port",
+                "short": "p",
+                "description": "exposed port mappings (format: edgePort[:machinePort]/[protocol[:handler]])",
+                "inherit": false,
+                "value": {
+                  "name": "port"
+                }
+              },
+              {
+                "long": "region",
+                "short": "r",
+                "description": "the region to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "region"
+                }
+              },
+              {
+                "long": "size",
+                "short": "s",
+                "description": "preset guest cpu and memory for a machine",
+                "inherit": false,
+                "value": {
+                  "name": "size"
+                }
+              },
+              {
+                "long": "volume",
+                "short": "v",
+                "description": "volumes to mount in the form of <volume_id_or_name>:/path/inside/machine[:<options>]",
+                "inherit": false,
+                "value": {
+                  "name": "volume"
+                }
+              }
+            ]
+          },
+          {
+            "name": "start",
+            "description": "start a Fly machine",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "application name",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to application configuration file",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "status",
+            "description": "show current status of a running machine",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "application name",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to application configuration file",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "stop",
+            "description": "stop a Fly machine",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "application name",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to application configuration file",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "signal",
+                "short": "s",
+                "description": "signal to stop the machine with (default: SIGINT)",
+                "inherit": false,
+                "value": {
+                  "name": "signal"
+                }
+              },
+              {
+                "long": "time",
+                "description": "seconds to wait before killing the machine",
+                "inherit": false,
+                "value": {
+                  "name": "time"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "monitor",
+        "description": "monitor currently running application deployments",
+        "options": [
+          {
+            "long": "app",
+            "short": "a",
+            "description": "application name",
+            "inherit": false,
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "path to application configuration file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "move",
+        "description": "move an app to another organization",
+        "options": [
+          {
+            "long": "org",
+            "short": "o",
+            "description": "the organization to operate on",
+            "inherit": false,
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "yes",
+            "short": "y",
+            "description": "accept all confirmations",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "open",
+        "description": "open browser to current deployed application",
+        "options": [
+          {
+            "long": "app",
+            "short": "a",
+            "description": "application name",
+            "inherit": false,
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "path to application configuration file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "orgs",
+        "description": "commands for managing Fly organizations",
+        "subcommands": [
+          {
+            "name": "builder",
+            "description": "manage remote builder",
+            "subcommands": [
+              {
+                "name": "show",
+                "description": "show details about an organization's remote builder image"
+              },
+              {
+                "name": "update",
+                "description": "update an organization's remote builder image"
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "description": "create an organization"
+          },
+          {
+            "name": "delete",
+            "description": "delete an organization",
+            "options": [
+              {
+                "long": "yes",
+                "short": "y",
+                "description": "accept all confirmations",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "invite",
+            "description": "invite user (by email) to organization"
+          },
+          {
+            "name": "list",
+            "description": "lists organizations for current user"
+          },
+          {
+            "name": "remove",
+            "description": "remove a user from an organization"
+          },
+          {
+            "name": "show",
+            "description": "show information about an organization"
+          }
+        ]
+      },
+      {
+        "name": "ping",
+        "description": "test connectivity with ICMP ping messages",
+        "options": [
+          {
+            "long": "app",
+            "short": "a",
+            "description": "application name",
+            "inherit": false,
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "path to application configuration file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "count",
+            "short": "n",
+            "description": "number of probes to send (0=indefinite)",
+            "inherit": false,
+            "value": {
+              "name": "count"
+            }
+          },
+          {
+            "long": "interval",
+            "short": "i",
+            "description": "interval between ping probes",
+            "inherit": false,
+            "value": {
+              "name": "interval"
+            }
+          },
+          {
+            "long": "org",
+            "short": "o",
+            "description": "the organization to operate on",
+            "inherit": false,
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "size",
+            "short": "s",
+            "description": "size of probe to send (not including headers)",
+            "inherit": false,
+            "value": {
+              "name": "size"
+            }
+          }
+        ]
+      },
+      {
+        "name": "platform",
+        "description": "fly platform information",
+        "subcommands": [
+          {
+            "name": "regions",
+            "description": "list regions"
+          },
+          {
+            "name": "status",
+            "description": "show current platform status"
+          },
+          {
+            "name": "vm-sizes",
+            "description": "list VM Sizes"
+          }
+        ]
+      },
+      {
+        "name": "pg",
+        "aliases": [
+          "postgres"
+        ],
+        "description": "manage postgres clusters",
+        "subcommands": [
+          {
+            "name": "attach",
+            "description": "attach a postgres cluster to an app",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "database-name",
+                "description": "database to use, defaults to a new database with the same name as the app",
+                "inherit": false,
+                "value": {
+                  "name": "database-name"
+                }
+              },
+              {
+                "long": "database-user",
+                "description": "the database user to create, defaults to creating a user with the same name as the consuming app",
+                "inherit": false,
+                "value": {
+                  "name": "database-user"
+                }
+              },
+              {
+                "long": "postgres-app",
+                "description": "the postgres cluster to attach to the app",
+                "inherit": false,
+                "value": {
+                  "name": "postgres-app"
+                }
+              },
+              {
+                "long": "variable-name",
+                "description": "the env variable name that will be added to the app. Defaults to DATABASE_URL",
+                "inherit": false,
+                "value": {
+                  "name": "variable-name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "connect",
+            "description": "connect to the Postgres console",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "database",
+                "description": "the postgres database to connect to",
+                "inherit": false,
+                "value": {
+                  "name": "database"
+                }
+              },
+              {
+                "long": "password",
+                "description": "the postgres user password",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              },
+              {
+                "long": "user",
+                "description": "the postgres user to connect with",
+                "inherit": false,
+                "value": {
+                  "name": "user"
+                }
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "description": "create a postgres cluster",
+            "options": [
+              {
+                "long": "image-ref",
+                "description": "",
+                "inherit": false,
+                "hidden": true,
+                "value": {
+                  "name": "image-ref"
+                }
+              },
+              {
+                "long": "initial-cluster-size",
+                "description": "the size of the initial postgres cluster",
+                "inherit": false,
+                "value": {
+                  "name": "initial-cluster-size"
+                }
+              },
+              {
+                "long": "name",
+                "description": "the name of the new app",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "organization",
+                "description": "the organization that will own the app",
+                "inherit": false,
+                "value": {
+                  "name": "organization"
+                }
+              },
+              {
+                "long": "password",
+                "description": "the superuser password. one will be generated for you if you leave this blank",
+                "inherit": false,
+                "value": {
+                  "name": "password"
+                }
+              },
+              {
+                "long": "region",
+                "description": "the region to launch the new app in",
+                "inherit": false,
+                "value": {
+                  "name": "region"
+                }
+              },
+              {
+                "long": "snapshot-id",
+                "description": "creates the volume with the contents of the snapshot",
+                "inherit": false,
+                "value": {
+                  "name": "snapshot-id"
+                }
+              },
+              {
+                "long": "vm-size",
+                "description": "the size of the VM",
+                "inherit": false,
+                "value": {
+                  "name": "vm-size"
+                }
+              },
+              {
+                "long": "volume-size",
+                "description": "the size in GB for volumes",
+                "inherit": false,
+                "value": {
+                  "name": "volume-size"
+                }
+              }
+            ]
+          },
+          {
+            "name": "db",
+            "description": "manage databases in a cluster",
+            "subcommands": [
+              {
+                "name": "list",
+                "description": "list databases in a cluster",
+                "options": [
+                  {
+                    "long": "app",
+                    "short": "a",
+                    "description": "app name to operate on",
+                    "inherit": false,
+                    "value": {
+                      "name": "app"
+                    }
+                  },
+                  {
+                    "long": "config",
+                    "short": "c",
+                    "description": "path to an app config file or directory containing one",
+                    "inherit": false,
+                    "value": {
+                      "name": "config",
+                      "provider": "builtin.files"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "detach",
+            "description": "detach a postgres cluster from an app",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "postgres-app",
+                "description": "the postgres cluster to detach from the app",
+                "inherit": false,
+                "value": {
+                  "name": "postgres-app"
+                }
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "list postgres clusters"
+          },
+          {
+            "name": "users",
+            "description": "manage users in a cluster",
+            "subcommands": [
+              {
+                "name": "list",
+                "description": "list users in a cluster",
+                "options": [
+                  {
+                    "long": "app",
+                    "short": "a",
+                    "description": "app name to operate on",
+                    "inherit": false,
+                    "value": {
+                      "name": "app"
+                    }
+                  },
+                  {
+                    "long": "config",
+                    "short": "c",
+                    "description": "path to an app config file or directory containing one",
+                    "inherit": false,
+                    "value": {
+                      "name": "config",
+                      "provider": "builtin.files"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "proxy",
+        "description": "proxies connections to a fly VM",
+        "options": [
+          {
+            "long": "app",
+            "short": "a",
+            "description": "application name",
+            "inherit": false,
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "path to application configuration file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "org",
+            "short": "o",
+            "description": "the organization to operate on",
+            "inherit": false,
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "select",
+            "short": "s",
+            "description": "prompt to select from available instances from the current application",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "regions",
+        "description": "manage regions",
+        "options": [
+          {
+            "long": "app",
+            "short": "a",
+            "description": "app name to operate on",
+            "inherit": false,
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "path to an app config file or directory containing one",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "allow the app to run in the provided regions",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "group",
+                "description": "the process group to add the region to",
+                "inherit": false,
+                "value": {
+                  "name": "group"
+                }
+              }
+            ]
+          },
+          {
+            "name": "backup",
+            "description": "sets the backup region pool with provided regions",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "shows the list of regions the app is allowed to run in",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "remove",
+            "description": "prevent the app from running in the provided regions",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "group",
+                "description": "the process group to remove the region from",
+                "inherit": false,
+                "value": {
+                  "name": "group"
+                }
+              }
+            ]
+          },
+          {
+            "name": "set",
+            "description": "sets the region pool with provided regions",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "group",
+                "description": "the process group to set regions for",
+                "inherit": false,
+                "value": {
+                  "name": "group"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "releases",
+        "description": "list app releases",
+        "options": [
+          {
+            "long": "app",
+            "short": "a",
+            "description": "application name",
+            "inherit": false,
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "path to application configuration file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "image",
+            "description": "display the Docker image reference of the release",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "restart",
+        "description": "restart an application",
+        "hidden": true
+      },
+      {
+        "name": "resume",
+        "description": "resume an application"
+      },
+      {
+        "name": "scale",
+        "description": "scale app resources",
+        "options": [
+          {
+            "long": "app",
+            "short": "a",
+            "description": "app name to operate on",
+            "inherit": false,
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "path to an app config file or directory containing one",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "count",
+            "description": "change an app's VM count to the given value",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "max-per-region",
+                "description": "max number of VMs per region",
+                "inherit": false,
+                "value": {
+                  "name": "max-per-region"
+                }
+              }
+            ]
+          },
+          {
+            "name": "memory",
+            "description": "set VM memory",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "group",
+                "description": "the process group to apply the memory size to",
+                "inherit": false,
+                "value": {
+                  "name": "group"
+                }
+              }
+            ]
+          },
+          {
+            "name": "show",
+            "description": "show current resources",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "vm",
+            "description": "change an app's VM to a named size (eg. shared-cpu-1x, dedicated-cpu-1x, dedicated-cpu-2x...)",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "group",
+                "description": "the process group to apply the VM size to",
+                "inherit": false,
+                "value": {
+                  "name": "group"
+                }
+              },
+              {
+                "long": "memory",
+                "description": "memory in MB for the VM",
+                "inherit": false,
+                "value": {
+                  "name": "memory"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "secrets",
+        "description": "manage app secrets",
+        "options": [
+          {
+            "long": "app",
+            "short": "a",
+            "description": "app name to operate on",
+            "inherit": false,
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "path to an app config file or directory containing one",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "import",
+            "description": "read secrets in name=value from stdin",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "detach",
+                "description": "return immediately instead of monitoring deployment progress",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "lists the secrets available to the app",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "set",
+            "description": "set one or more encrypted secrets for an app",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "detach",
+                "description": "return immediately instead of monitoring deployment progress",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "unset",
+            "description": "remove encrypted secrets from an app",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "detach",
+                "description": "return immediately instead of monitoring deployment progress",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "ssh",
+        "description": "commands that manage SSH credentials",
+        "subcommands": [
+          {
+            "name": "console",
+            "description": "connect to a running instance of the current app",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "command",
+                "short": "C",
+                "description": "command to run on SSH session",
+                "inherit": false,
+                "value": {
+                  "name": "command"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "probe",
+                "short": "p",
+                "description": "test WireGuard connection after establishing",
+                "inherit": false
+              },
+              {
+                "long": "region",
+                "short": "r",
+                "description": "region to create WireGuard connection in",
+                "inherit": false,
+                "value": {
+                  "name": "region"
+                }
+              },
+              {
+                "long": "select",
+                "short": "s",
+                "description": "select available instances",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "establish",
+            "description": "create a root SSH certificate for your organization"
+          },
+          {
+            "name": "issue",
+            "description": "issue a new SSH credential",
+            "options": [
+              {
+                "long": "agent",
+                "description": "add key to SSH agent",
+                "inherit": false
+              },
+              {
+                "long": "dotssh",
+                "short": "d",
+                "description": "store keys in ~/.ssh, like normal keys",
+                "inherit": false
+              },
+              {
+                "long": "hours",
+                "description": "expiration, in hours (<72)",
+                "inherit": false,
+                "value": {
+                  "name": "hours"
+                }
+              },
+              {
+                "long": "overwrite",
+                "short": "o",
+                "description": "overwrite existing SSH keys in same location, if we generated them",
+                "inherit": false
+              },
+              {
+                "long": "username",
+                "short": "u",
+                "description": "unix username for SSH cert",
+                "inherit": false,
+                "value": {
+                  "name": "username"
+                }
+              }
+            ]
+          },
+          {
+            "name": "log",
+            "description": "log of all issued certs"
+          }
+        ]
+      },
+      {
+        "name": "status",
+        "description": "show app status",
+        "options": [
+          {
+            "long": "all",
+            "description": "show completed instances",
+            "inherit": false
+          },
+          {
+            "long": "app",
+            "short": "a",
+            "description": "application name",
+            "inherit": false,
+            "value": {
+              "name": "app"
+            }
+          },
+          {
+            "long": "config",
+            "short": "c",
+            "description": "path to application configuration file",
+            "inherit": false,
+            "value": {
+              "name": "config",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "deployment",
+            "description": "always show deployment status",
+            "inherit": false
+          },
+          {
+            "long": "rate",
+            "description": "refresh Rate for --watch",
+            "inherit": false,
+            "value": {
+              "name": "rate"
+            }
+          },
+          {
+            "long": "watch",
+            "description": "refresh details",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "instance",
+            "description": "show instance status",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "application name",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to application configuration file",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "suspend",
+        "description": "suspend an application"
+      },
+      {
+        "name": "turboku",
+        "description": "launches heroku apps",
+        "options": [
+          {
+            "long": "heroku-token",
+            "description": "heroku API token",
+            "inherit": false,
+            "value": {
+              "name": "heroku-token"
+            }
+          },
+          {
+            "long": "keep",
+            "description": "keep the app directory after deployment",
+            "inherit": false
+          },
+          {
+            "long": "name",
+            "description": "the name of the new app",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "now",
+            "description": "deploy now without confirmation",
+            "inherit": false
+          },
+          {
+            "long": "org",
+            "description": "the organization that will own the app",
+            "inherit": false,
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "long": "region",
+            "description": "the region to launch the new app in",
+            "inherit": false,
+            "value": {
+              "name": "region"
+            }
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "show version information for the flyctl command",
+        "options": [
+          {
+            "long": "saveinstall",
+            "short": "s",
+            "description": "save parameter in config",
+            "inherit": false,
+            "value": {
+              "name": "saveinstall"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "update",
+            "description": "checks for available updates and automatically updates"
+          }
+        ]
+      },
+      {
+        "name": "vm",
+        "description": "commands that manage VM instances",
+        "subcommands": [
+          {
+            "name": "restart",
+            "description": "restart a VM",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "status",
+            "description": "show a VM's status",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "stop",
+            "description": "stop a VM",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "app name to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to an app config file or directory containing one",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "vol",
+        "aliases": [
+          "volumes"
+        ],
+        "description": "volume management commands",
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create new volume for app",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "application name",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to application configuration file",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "no-encryption",
+                "description": "do not encrypt the volume contents",
+                "inherit": false
+              },
+              {
+                "long": "region",
+                "short": "r",
+                "description": "the region to operate on",
+                "inherit": false,
+                "value": {
+                  "name": "region"
+                }
+              },
+              {
+                "long": "require-unique-zone",
+                "description": "require volume to be placed in separate hardware zone from existing volumes",
+                "inherit": false
+              },
+              {
+                "long": "size",
+                "short": "s",
+                "description": "size of volume in gigabytes",
+                "inherit": false,
+                "value": {
+                  "name": "size"
+                }
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "delete a volume from the app",
+            "options": [
+              {
+                "long": "yes",
+                "short": "y",
+                "description": "accept all confirmations",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "list the volumes for app",
+            "options": [
+              {
+                "long": "app",
+                "short": "a",
+                "description": "application name",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "config",
+                "short": "c",
+                "description": "path to application configuration file",
+                "inherit": false,
+                "value": {
+                  "name": "config",
+                  "provider": "builtin.files"
+                }
+              }
+            ]
+          },
+          {
+            "name": "show",
+            "description": "show details of an app's volume"
+          },
+          {
+            "name": "snaps",
+            "aliases": [
+              "snapshots"
+            ],
+            "description": "manage volume snapshots",
+            "subcommands": [
+              {
+                "name": "list",
+                "description": "list snapshots"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "wg",
+        "aliases": [
+          "wireguard"
+        ],
+        "description": "commands that manage WireGuard peer connections",
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "add a WireGuard peer connection"
+          },
+          {
+            "name": "list",
+            "description": "list all WireGuard peer connections"
+          },
+          {
+            "name": "remove",
+            "description": "remove a WireGuard peer connection"
+          },
+          {
+            "name": "reset",
+            "description": "reset WireGuard peer connection for an organization"
+          },
+          {
+            "name": "status",
+            "description": "get status a WireGuard peer connection"
+          },
+          {
+            "name": "token",
+            "description": "commands that managed WireGuard delegated access tokens",
+            "subcommands": [
+              {
+                "name": "create",
+                "description": "create a new WireGuard token"
+              },
+              {
+                "name": "delete",
+                "description": "delete a WireGuard token; token is name:<name> or token:<token>"
+              },
+              {
+                "name": "list",
+                "description": "list all WireGuard tokens"
+              },
+              {
+                "name": "start",
+                "description": "start a new WireGuard peer connection associated with a token (set FLY_WIREGUARD_TOKEN)"
+              },
+              {
+                "name": "update",
+                "description": "rekey a WireGuard peer connection associated with a token (set FLY_WIREGUARD_TOKEN)"
+              }
+            ]
+          },
+          {
+            "name": "websockets",
+            "description": "enable or disable WireGuard tunneling over WebSockets"
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "help about any command",
+        "subcommands": [
+          {
+            "name": "Use",
+            "description": "short"
+          },
+          {
+            "name": "agent",
+            "description": "commands that manage the Fly agent, a background process that manages flyctl wireguard connections",
+            "subcommands": [
+              {
+                "name": "ping",
+                "description": "ping the Fly agent"
+              },
+              {
+                "name": "restart",
+                "description": "restart the Fly agent"
+              },
+              {
+                "name": "daemon-start",
+                "aliases": [
+                  "run"
+                ],
+                "description": "run the Fly agent in the foreground"
+              },
+              {
+                "name": "start",
+                "description": "start the Fly agent"
+              },
+              {
+                "name": "stop",
+                "description": "stop the Fly agent"
+              }
+            ]
+          },
+          {
+            "name": "apps",
+            "description": "manage apps",
+            "subcommands": [
+              {
+                "name": "create",
+                "description": "create a new application"
+              },
+              {
+                "name": "destroy",
+                "description": "permanently destroys an app"
+              },
+              {
+                "name": "list",
+                "description": "list applications"
+              },
+              {
+                "name": "move",
+                "description": "move an app to another organization"
+              },
+              {
+                "name": "open",
+                "description": "open browser to current deployed application"
+              },
+              {
+                "name": "releases",
+                "description": "list app releases"
+              },
+              {
+                "name": "restart",
+                "description": "restart an application"
+              }
+            ]
+          },
+          {
+            "name": "auth",
+            "description": "manage authentication",
+            "subcommands": [
+              {
+                "name": "docker",
+                "description": "authenticate docker"
+              },
+              {
+                "name": "login",
+                "description": "log in a user"
+              },
+              {
+                "name": "logout",
+                "description": "logs out the currently logged in user"
+              },
+              {
+                "name": "signup",
+                "description": "create a new fly account"
+              },
+              {
+                "name": "token",
+                "description": "show the current auth token"
+              },
+              {
+                "name": "whoami",
+                "description": "displays the users email address/service identity currently authenticated and in use"
+              }
+            ]
+          },
+          {
+            "name": "autoscale",
+            "description": "autoscaling app resources",
+            "subcommands": [
+              {
+                "name": "balanced",
+                "description": "configure a traffic balanced app with params (min=int max=int)"
+              },
+              {
+                "name": "disable",
+                "description": "disable autoscaling"
+              },
+              {
+                "name": "set",
+                "description": "set current models autoscaling parameters"
+              },
+              {
+                "name": "show",
+                "description": "show current autoscaling configuration"
+              },
+              {
+                "name": "standard",
+                "description": "configure a standard balanced app with params (min=int max=int)"
+              }
+            ]
+          },
+          {
+            "name": "builds",
+            "description": "manage application builds",
+            "subcommands": [
+              {
+                "name": "list",
+                "description": "list builds"
+              }
+            ]
+          },
+          {
+            "name": "certs",
+            "description": "manage certificates",
+            "subcommands": [
+              {
+                "name": "create",
+                "aliases": [
+                  "add"
+                ],
+                "description": "add a certificate for an app"
+              },
+              {
+                "name": "check",
+                "description": "checks DNS configuration"
+              },
+              {
+                "name": "list",
+                "description": "list certificates for an app"
+              },
+              {
+                "name": "delete",
+                "aliases": [
+                  "remove"
+                ],
+                "description": "removes a certificate from an app"
+              },
+              {
+                "name": "show",
+                "description": "shows certificate information"
+              }
+            ]
+          },
+          {
+            "name": "checks",
+            "description": "manage health checks",
+            "subcommands": [
+              {
+                "name": "handlers",
+                "description": "manage health check handlers",
+                "subcommands": [
+                  {
+                    "name": "create",
+                    "description": "create a health check handler"
+                  },
+                  {
+                    "name": "delete",
+                    "description": "delete a health check handler"
+                  },
+                  {
+                    "name": "list",
+                    "description": "list health check handlers"
+                  }
+                ]
+              },
+              {
+                "name": "list",
+                "description": "list app health checks"
+              }
+            ]
+          },
+          {
+            "name": "completion",
+            "description": "generate the autocompletion script for the specified shell",
+            "subcommands": [
+              {
+                "name": "bash",
+                "description": "generate the autocompletion script for bash"
+              },
+              {
+                "name": "fish",
+                "description": "generate the autocompletion script for fish"
+              },
+              {
+                "name": "powershell",
+                "description": "generate the autocompletion script for powershell"
+              },
+              {
+                "name": "zsh",
+                "description": "generate the autocompletion script for zsh"
+              }
+            ]
+          },
+          {
+            "name": "config",
+            "description": "manage an app's configuration",
+            "subcommands": [
+              {
+                "name": "display",
+                "description": "display an app's configuration"
+              },
+              {
+                "name": "env",
+                "description": "display an app's runtime environment variables"
+              },
+              {
+                "name": "save",
+                "description": "save an app's config file"
+              },
+              {
+                "name": "validate",
+                "description": "validate an app's config file"
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "description": "create a new application"
+          },
+          {
+            "name": "curl",
+            "description": "run a performance test against a URL"
+          },
+          {
+            "name": "dash",
+            "aliases": [
+              "dashboard"
+            ],
+            "description": "open web browser on Fly Web UI for this app",
+            "subcommands": [
+              {
+                "name": "metrics",
+                "description": "open web browser on Fly Web UI for this app's metrics"
+              }
+            ]
+          },
+          {
+            "name": "deploy",
+            "description": "deploy Fly applications"
+          },
+          {
+            "name": "destroy",
+            "description": "permanently destroys an app"
+          },
+          {
+            "name": "dig",
+            "description": "make DNS requests against Fly.io's internal DNS server"
+          },
+          {
+            "name": "dns-records",
+            "description": "manage DNS records",
+            "subcommands": [
+              {
+                "name": "export",
+                "description": "export DNS records"
+              },
+              {
+                "name": "import",
+                "description": "import DNS records"
+              },
+              {
+                "name": "list",
+                "description": "list DNS records"
+              }
+            ]
+          },
+          {
+            "name": "docs",
+            "description": "view Fly documentation"
+          },
+          {
+            "name": "doctor",
+            "description": "the DOCTOR command allows you to debug your Fly environment",
+            "subcommands": [
+              {
+                "name": "diag",
+                "description": "send diagnostic information about your applications back to Fly.io"
+              }
+            ]
+          },
+          {
+            "name": "domains",
+            "description": "manage domains",
+            "subcommands": [
+              {
+                "name": "add",
+                "description": "add a domain"
+              },
+              {
+                "name": "list",
+                "description": "list domains"
+              },
+              {
+                "name": "register",
+                "description": "register a domain"
+              },
+              {
+                "name": "show",
+                "description": "show domain"
+              }
+            ]
+          },
+          {
+            "name": "history",
+            "description": "list an app's change history"
+          },
+          {
+            "name": "img",
+            "aliases": [
+              "image"
+            ],
+            "description": "manage app image",
+            "subcommands": [
+              {
+                "name": "show",
+                "description": "show image details"
+              },
+              {
+                "name": "update",
+                "description": "updates the app's image to the latest available version. (Fly Postgres only)"
+              }
+            ]
+          },
+          {
+            "name": "info",
+            "description": "show detailed app information"
+          },
+          {
+            "name": "ips",
+            "description": "manage IP addresses for apps",
+            "subcommands": [
+              {
+                "name": "allocate-v4",
+                "description": "allocate an IPv4 address"
+              },
+              {
+                "name": "allocate-v6",
+                "description": "allocate an IPv6 address"
+              },
+              {
+                "name": "list",
+                "description": "list allocated IP addresses"
+              },
+              {
+                "name": "private",
+                "description": "list instances private IP addresses"
+              },
+              {
+                "name": "release",
+                "description": "release an IP address"
+              }
+            ]
+          },
+          {
+            "name": "launch",
+            "description": "launch a new app"
+          },
+          {
+            "name": "ls",
+            "aliases": [
+              "list"
+            ],
+            "description": "lists your Fly resources",
+            "subcommands": [
+              {
+                "name": "apps",
+                "description": "lists all your apps"
+              },
+              {
+                "name": "orgs",
+                "description": "list all your organizations"
+              }
+            ]
+          },
+          {
+            "name": "logs",
+            "description": "view app logs"
+          },
+          {
+            "name": "machines",
+            "aliases": [
+              "m",
+              "machine"
+            ],
+            "description": "commands that manage machines",
+            "subcommands": [
+              {
+                "name": "clone",
+                "description": "clones a Fly Machine"
+              },
+              {
+                "name": "kill",
+                "description": "kill (SIGKILL) a Fly machine"
+              },
+              {
+                "name": "list",
+                "description": "list Fly machines"
+              },
+              {
+                "name": "rm",
+                "aliases": [
+                  "remove"
+                ],
+                "description": "remove a Fly machine"
+              },
+              {
+                "name": "run",
+                "description": "run a machine"
+              },
+              {
+                "name": "start",
+                "description": "start a Fly machine"
+              },
+              {
+                "name": "status",
+                "description": "show current status of a running machine"
+              },
+              {
+                "name": "stop",
+                "description": "stop a Fly machine"
+              }
+            ]
+          },
+          {
+            "name": "monitor",
+            "description": "monitor currently running application deployments"
+          },
+          {
+            "name": "move",
+            "description": "move an app to another organization"
+          },
+          {
+            "name": "open",
+            "description": "open browser to current deployed application"
+          },
+          {
+            "name": "orgs",
+            "description": "commands for managing Fly organizations",
+            "subcommands": [
+              {
+                "name": "builder",
+                "description": "manage remote builder",
+                "subcommands": [
+                  {
+                    "name": "show",
+                    "description": "show details about an organization's remote builder image"
+                  },
+                  {
+                    "name": "update",
+                    "description": "update an organization's remote builder image"
+                  }
+                ]
+              },
+              {
+                "name": "create",
+                "description": "create an organization"
+              },
+              {
+                "name": "delete",
+                "description": "delete an organization"
+              },
+              {
+                "name": "invite",
+                "description": "invite user (by email) to organization"
+              },
+              {
+                "name": "list",
+                "description": "lists organizations for current user"
+              },
+              {
+                "name": "remove",
+                "description": "remove a user from an organization"
+              },
+              {
+                "name": "show",
+                "description": "show information about an organization"
+              }
+            ]
+          },
+          {
+            "name": "ping",
+            "description": "test connectivity with ICMP ping messages"
+          },
+          {
+            "name": "platform",
+            "description": "fly platform information",
+            "subcommands": [
+              {
+                "name": "regions",
+                "description": "list regions"
+              },
+              {
+                "name": "status",
+                "description": "show current platform status"
+              },
+              {
+                "name": "vm-sizes",
+                "description": "list VM Sizes"
+              }
+            ]
+          },
+          {
+            "name": "pg",
+            "aliases": [
+              "postgres"
+            ],
+            "description": "manage postgres clusters",
+            "subcommands": [
+              {
+                "name": "attach",
+                "description": "attach a postgres cluster to an app"
+              },
+              {
+                "name": "connect",
+                "description": "connect to the Postgres console"
+              },
+              {
+                "name": "create",
+                "description": "create a postgres cluster"
+              },
+              {
+                "name": "db",
+                "description": "manage databases in a cluster",
+                "subcommands": [
+                  {
+                    "name": "list",
+                    "description": "list databases in a cluster"
+                  }
+                ]
+              },
+              {
+                "name": "detach",
+                "description": "detach a postgres cluster from an app"
+              },
+              {
+                "name": "list",
+                "description": "list postgres clusters"
+              },
+              {
+                "name": "users",
+                "description": "manage users in a cluster",
+                "subcommands": [
+                  {
+                    "name": "list",
+                    "description": "list users in a cluster"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "proxy",
+            "description": "proxies connections to a fly VM"
+          },
+          {
+            "name": "regions",
+            "description": "manage regions",
+            "subcommands": [
+              {
+                "name": "add",
+                "description": "allow the app to run in the provided regions"
+              },
+              {
+                "name": "backup",
+                "description": "sets the backup region pool with provided regions"
+              },
+              {
+                "name": "list",
+                "description": "shows the list of regions the app is allowed to run in"
+              },
+              {
+                "name": "remove",
+                "description": "prevent the app from running in the provided regions"
+              },
+              {
+                "name": "set",
+                "description": "sets the region pool with provided regions"
+              }
+            ]
+          },
+          {
+            "name": "releases",
+            "description": "list app releases"
+          },
+          {
+            "name": "restart",
+            "description": "restart an application"
+          },
+          {
+            "name": "resume",
+            "description": "resume an application"
+          },
+          {
+            "name": "scale",
+            "description": "scale app resources",
+            "subcommands": [
+              {
+                "name": "count",
+                "description": "change an app's VM count to the given value"
+              },
+              {
+                "name": "memory",
+                "description": "set VM memory"
+              },
+              {
+                "name": "show",
+                "description": "show current resources"
+              },
+              {
+                "name": "vm",
+                "description": "change an app's VM to a named size (eg. shared-cpu-1x, dedicated-cpu-1x, dedicated-cpu-2x...)"
+              }
+            ]
+          },
+          {
+            "name": "secrets",
+            "description": "manage app secrets",
+            "subcommands": [
+              {
+                "name": "import",
+                "description": "read secrets in name=value from stdin"
+              },
+              {
+                "name": "list",
+                "description": "lists the secrets available to the app"
+              },
+              {
+                "name": "set",
+                "description": "set one or more encrypted secrets for an app"
+              },
+              {
+                "name": "unset",
+                "description": "remove encrypted secrets from an app"
+              }
+            ]
+          },
+          {
+            "name": "ssh",
+            "description": "commands that manage SSH credentials",
+            "subcommands": [
+              {
+                "name": "console",
+                "description": "connect to a running instance of the current app"
+              },
+              {
+                "name": "establish",
+                "description": "create a root SSH certificate for your organization"
+              },
+              {
+                "name": "issue",
+                "description": "issue a new SSH credential"
+              },
+              {
+                "name": "log",
+                "description": "log of all issued certs"
+              }
+            ]
+          },
+          {
+            "name": "status",
+            "description": "show app status",
+            "subcommands": [
+              {
+                "name": "instance",
+                "description": "show instance status"
+              }
+            ]
+          },
+          {
+            "name": "suspend",
+            "description": "suspend an application"
+          },
+          {
+            "name": "turboku",
+            "description": "launches heroku apps"
+          },
+          {
+            "name": "version",
+            "description": "show version information for the flyctl command",
+            "subcommands": [
+              {
+                "name": "update",
+                "description": "checks for available updates and automatically updates"
+              }
+            ]
+          },
+          {
+            "name": "vm",
+            "description": "commands that manage VM instances",
+            "subcommands": [
+              {
+                "name": "restart",
+                "description": "restart a VM"
+              },
+              {
+                "name": "status",
+                "description": "show a VM's status"
+              },
+              {
+                "name": "stop",
+                "description": "stop a VM"
+              }
+            ]
+          },
+          {
+            "name": "vol",
+            "aliases": [
+              "volumes"
+            ],
+            "description": "volume management commands",
+            "subcommands": [
+              {
+                "name": "create",
+                "description": "create new volume for app"
+              },
+              {
+                "name": "delete",
+                "description": "delete a volume from the app"
+              },
+              {
+                "name": "list",
+                "description": "list the volumes for app"
+              },
+              {
+                "name": "show",
+                "description": "show details of an app's volume"
+              },
+              {
+                "name": "snaps",
+                "aliases": [
+                  "snapshots"
+                ],
+                "description": "manage volume snapshots",
+                "subcommands": [
+                  {
+                    "name": "list",
+                    "description": "list snapshots"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "wg",
+            "aliases": [
+              "wireguard"
+            ],
+            "description": "commands that manage WireGuard peer connections",
+            "subcommands": [
+              {
+                "name": "create",
+                "description": "add a WireGuard peer connection"
+              },
+              {
+                "name": "list",
+                "description": "list all WireGuard peer connections"
+              },
+              {
+                "name": "remove",
+                "description": "remove a WireGuard peer connection"
+              },
+              {
+                "name": "reset",
+                "description": "reset WireGuard peer connection for an organization"
+              },
+              {
+                "name": "status",
+                "description": "get status a WireGuard peer connection"
+              },
+              {
+                "name": "token",
+                "description": "commands that managed WireGuard delegated access tokens",
+                "subcommands": [
+                  {
+                    "name": "create",
+                    "description": "create a new WireGuard token"
+                  },
+                  {
+                    "name": "delete",
+                    "description": "delete a WireGuard token; token is name:<name> or token:<token>"
+                  },
+                  {
+                    "name": "list",
+                    "description": "list all WireGuard tokens"
+                  },
+                  {
+                    "name": "start",
+                    "description": "start a new WireGuard peer connection associated with a token (set FLY_WIREGUARD_TOKEN)"
+                  },
+                  {
+                    "name": "update",
+                    "description": "rekey a WireGuard peer connection associated with a token (set FLY_WIREGUARD_TOKEN)"
+                  }
+                ]
+              },
+              {
+                "name": "websockets",
+                "description": "enable or disable WireGuard tunneling over WebSockets"
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
