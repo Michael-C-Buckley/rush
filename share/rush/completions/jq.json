@@ -1,0 +1,226 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "jq",
+    "description": "command-line JSON processor",
+    "options": [
+      {
+        "inherit": false,
+        "long": "version",
+        "description": "print jq version"
+      },
+      {
+        "inherit": false,
+        "long": "seq",
+        "description": "use JSON sequence input and output"
+      },
+      {
+        "inherit": false,
+        "long": "stream",
+        "description": "parse input in streaming fashion"
+      },
+      {
+        "inherit": false,
+        "long": "slurp",
+        "short": "s",
+        "description": "read all input into an array"
+      },
+      {
+        "inherit": false,
+        "long": "raw-input",
+        "short": "R",
+        "description": "read input as raw strings"
+      },
+      {
+        "inherit": false,
+        "long": "null-input",
+        "short": "n",
+        "description": "run filter once with null input"
+      },
+      {
+        "inherit": false,
+        "long": "compact-output",
+        "short": "c",
+        "description": "compact output"
+      },
+      {
+        "inherit": false,
+        "long": "tab",
+        "description": "indent with tabs"
+      },
+      {
+        "inherit": false,
+        "long": "indent",
+        "description": "set indentation width",
+        "value": {
+          "name": "n"
+        }
+      },
+      {
+        "inherit": false,
+        "long": "color-output",
+        "short": "C",
+        "description": "force color output"
+      },
+      {
+        "inherit": false,
+        "long": "monochrome-output",
+        "short": "M",
+        "description": "disable color"
+      },
+      {
+        "inherit": false,
+        "long": "ascii-output",
+        "short": "a",
+        "description": "escape non-ASCII output"
+      },
+      {
+        "inherit": false,
+        "long": "unbuffered",
+        "description": "flush after each JSON object"
+      },
+      {
+        "inherit": false,
+        "long": "sort-keys",
+        "short": "S",
+        "description": "sort object keys"
+      },
+      {
+        "inherit": false,
+        "long": "raw-output",
+        "short": "r",
+        "description": "write strings without JSON quoting"
+      },
+      {
+        "inherit": false,
+        "long": "join-output",
+        "short": "j",
+        "description": "write raw strings without trailing newline"
+      },
+      {
+        "inherit": false,
+        "long": "from-file",
+        "short": "f",
+        "description": "read filter from file",
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "inherit": false,
+        "short": "L",
+        "description": "prepend module search directory",
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "inherit": false,
+        "long": "exit-status",
+        "short": "e",
+        "description": "set exit status from final output"
+      },
+      {
+        "inherit": false,
+        "long": "arg",
+        "description": "bind string variable",
+        "value": [
+          {
+            "name": "name"
+          },
+          {
+            "name": "value"
+          }
+        ]
+      },
+      {
+        "inherit": false,
+        "long": "argjson",
+        "description": "bind JSON variable",
+        "value": [
+          {
+            "name": "name"
+          },
+          {
+            "name": "json-text"
+          }
+        ]
+      },
+      {
+        "inherit": false,
+        "long": "slurpfile",
+        "description": "bind an array from JSON file",
+        "value": [
+          {
+            "name": "variable-name"
+          },
+          {
+            "name": "filename",
+            "provider": "builtin.files"
+          }
+        ]
+      },
+      {
+        "inherit": false,
+        "long": "rawfile",
+        "description": "bind raw file contents",
+        "value": [
+          {
+            "name": "variable-name"
+          },
+          {
+            "name": "filename",
+            "provider": "builtin.files"
+          }
+        ]
+      },
+      {
+        "inherit": false,
+        "long": "args",
+        "description": "treat remaining arguments as strings"
+      },
+      {
+        "inherit": false,
+        "long": "jsonargs",
+        "description": "treat remaining arguments as JSON"
+      },
+      {
+        "inherit": false,
+        "long": "run-tests",
+        "description": "run tests from file or stdin",
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files",
+          "required": false,
+          "style": "optional"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "filter",
+          "description": "jq filter",
+          "index": 0
+        },
+        {
+          "name": "file",
+          "provider": "builtin.files",
+          "index": 1,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
