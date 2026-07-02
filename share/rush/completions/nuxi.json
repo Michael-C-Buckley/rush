@@ -1,0 +1,117 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "nuxi",
+    "description": "nuxt cli",
+    "providers": {
+      "builtin.directories": { "builtin": "directories" },
+      "builtin.files": { "builtin": "files" },
+      "nuxi.templates": { "values": ["component", "composable", "layout", "plugin", "page", "middleware", "api"] }
+    },
+    "options": [
+      { "long": "help", "description": "show help", "inherit": false }
+    ],
+    "subcommands": [
+      {
+        "name": "info",
+        "description": "show nuxt project information",
+        "arguments": { "states": [{ "name": "rootDir", "description": "target application directory", "provider": "builtin.directories", "index": 0, "required": false }] }
+      },
+      {
+        "name": "init",
+        "aliases": ["create"],
+        "description": "initialize a fresh nuxt project",
+        "arguments": { "states": [{ "name": "directory", "description": "install directory", "index": 0 }] },
+        "options": [
+          { "short": "v", "long": "verbose", "description": "log installation details", "inherit": false },
+          { "short": "t", "long": "template", "description": "git template repository", "inherit": false, "value": { "name": "template" } },
+          { "long": "force", "description": "clone into an existing directory", "inherit": false },
+          { "long": "prefer-offline", "description": "try local cache before downloading templates", "inherit": false },
+          { "long": "shell", "description": "open a shell in the cloned directory", "inherit": false }
+        ]
+      },
+      {
+        "name": "add",
+        "aliases": ["new"],
+        "description": "generate a nuxt file",
+        "arguments": { "states": [
+          { "name": "template", "description": "file template", "provider": "nuxi.templates", "index": 0 },
+          { "name": "name", "description": "file name", "index": 1 }
+        ] },
+        "options": [
+          { "long": "cwd", "description": "target application directory", "inherit": false, "value": { "name": "directory", "provider": "builtin.directories" } },
+          { "long": "force", "description": "overwrite existing files", "inherit": false }
+        ]
+      },
+      {
+        "name": "analyze",
+        "description": "build and analyze the production bundle",
+        "arguments": { "states": [{ "name": "rootDir", "provider": "builtin.directories", "index": 0, "required": false }] }
+      },
+      {
+        "name": "build",
+        "description": "build the application for production",
+        "arguments": { "states": [{ "name": "rootDir", "provider": "builtin.directories", "index": 0, "required": false }] },
+        "options": [
+          { "long": "dotenv", "description": "env file to load", "inherit": false, "value": { "name": "file", "provider": "builtin.files" } },
+          { "long": "prerender", "description": "prerender every route", "inherit": false }
+        ]
+      },
+      {
+        "name": "dev",
+        "description": "start a development server",
+        "arguments": { "states": [{ "name": "rootDir", "provider": "builtin.directories", "index": 0, "required": false }] },
+        "options": [
+          { "long": "dotenv", "description": "env file to load", "inherit": false, "value": { "name": "file", "provider": "builtin.files" } },
+          { "long": "clipboard", "description": "copy url to clipboard", "inherit": false },
+          { "short": "o", "long": "open", "description": "open url in browser", "inherit": false },
+          { "long": "no-clear", "description": "do not clear console output", "inherit": false },
+          { "short": "p", "long": "port", "description": "port to listen on", "inherit": false, "value": { "name": "port" } },
+          { "short": "h", "long": "host", "description": "host to listen on", "inherit": false, "value": { "name": "host" } },
+          { "long": "https", "description": "listen with https", "inherit": false },
+          { "long": "ssl-cert", "description": "https certificate", "inherit": false, "value": { "name": "file", "provider": "builtin.files" } },
+          { "long": "ssl-key", "description": "https key", "inherit": false, "value": { "name": "file", "provider": "builtin.files" } }
+        ]
+      },
+      { "name": "prepare", "description": "generate .nuxt files and types" },
+      {
+        "name": "preview",
+        "description": "preview a built nuxt application",
+        "arguments": { "states": [{ "name": "rootDir", "provider": "builtin.directories", "index": 0, "required": false }] },
+        "options": [{ "long": "dotenv", "description": "env file to load", "inherit": false, "value": { "name": "file", "provider": "builtin.files" } }]
+      },
+      {
+        "name": "generate",
+        "description": "build and prerender static routes",
+        "arguments": { "states": [{ "name": "rootDir", "provider": "builtin.directories", "index": 0, "required": false }] }
+      },
+      {
+        "name": "clean",
+        "aliases": ["cleanup"],
+        "description": "remove generated nuxt files and caches",
+        "arguments": { "states": [{ "name": "rootDir", "provider": "builtin.directories", "index": 0, "required": false }] }
+      },
+      {
+        "name": "test",
+        "description": "run nuxt tests",
+        "arguments": { "states": [{ "name": "rootDir", "provider": "builtin.directories", "index": 0, "required": false }] },
+        "options": [
+          { "long": "dev", "description": "run tests in development mode", "inherit": false },
+          { "long": "watch", "description": "watch for changes", "inherit": false }
+        ]
+      },
+      {
+        "name": "upgrade",
+        "description": "upgrade nuxt to the latest version",
+        "options": [{ "short": "f", "long": "force", "description": "remove node_modules and lock files before upgrading", "inherit": false }]
+      },
+      {
+        "name": "typecheck",
+        "description": "run vue-tsc type checks",
+        "arguments": { "states": [{ "name": "rootDir", "provider": "builtin.directories", "index": 0, "required": false }] }
+      },
+      { "name": "usage", "description": "show nuxt cli usage" }
+    ]
+  }
+}
