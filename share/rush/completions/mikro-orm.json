@@ -1,0 +1,365 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "mikro-orm",
+    "description": "manage MikroORM projects",
+    "options": [
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version number",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "cache:clear",
+        "description": "clear metadata cache"
+      },
+      {
+        "name": "cache:generate",
+        "description": "generate metadata cache for production"
+      },
+      {
+        "name": "generate-entities",
+        "description": "generate entities based on current database schema",
+        "options": [
+          {
+            "short": "s",
+            "long": "save",
+            "description": "saves entities to directory defined by --path",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "dump",
+            "description": "dumps all entities to console",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "path",
+            "description": "sets path to directory where to save entities",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "schema",
+            "description": "generates entities only for given schema",
+            "inherit": false,
+            "value": {
+              "name": "schema"
+            }
+          }
+        ]
+      },
+      {
+        "name": "database:create",
+        "description": "create your database if it does not exist"
+      },
+      {
+        "name": "database:import",
+        "description": "imports the SQL file to the database",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "seeder:run",
+        "description": "seed the database using the seeder class"
+      },
+      {
+        "name": "seeder:create",
+        "description": "create a new seeder class",
+        "options": [
+          {
+            "long": "class",
+            "description": "seeder class to run",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "schema:create",
+        "description": "create database schema based on current metadata",
+        "options": [
+          {
+            "short": "r",
+            "long": "run",
+            "description": "runs queries",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "dump",
+            "description": "dumps all queries to console",
+            "inherit": false
+          },
+          {
+            "long": "fk-checks",
+            "description": "do not skip foreign key checks",
+            "inherit": false
+          },
+          {
+            "long": "schema",
+            "description": "set the current schema for wildcard schema entities",
+            "inherit": false,
+            "value": {
+              "name": "schema"
+            }
+          },
+          {
+            "long": "seed",
+            "description": "allows to seed the database on create or drop and recreate",
+            "inherit": false,
+            "value": {
+              "name": "seed"
+            }
+          }
+        ]
+      },
+      {
+        "name": "schema:drop",
+        "description": "drop database schema based on current metadata",
+        "options": [
+          {
+            "short": "r",
+            "long": "run",
+            "description": "runs queries",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "dump",
+            "description": "dumps all queries to console",
+            "inherit": false
+          },
+          {
+            "long": "fk-checks",
+            "description": "do not skip foreign key checks",
+            "inherit": false
+          },
+          {
+            "long": "schema",
+            "description": "set the current schema for wildcard schema entities",
+            "inherit": false,
+            "value": {
+              "name": "schema"
+            }
+          },
+          {
+            "long": "drop-migrations-table",
+            "description": "drop also migrations table",
+            "inherit": false
+          },
+          {
+            "long": "drop-db",
+            "description": "drop the whole database",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "schema:update",
+        "description": "update database schema based on current metadata",
+        "options": [
+          {
+            "short": "r",
+            "long": "run",
+            "description": "runs queries",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "dump",
+            "description": "dumps all queries to console",
+            "inherit": false
+          },
+          {
+            "long": "fk-checks",
+            "description": "do not skip foreign key checks",
+            "inherit": false
+          },
+          {
+            "long": "schema",
+            "description": "set the current schema for wildcard schema entities",
+            "inherit": false,
+            "value": {
+              "name": "schema"
+            }
+          },
+          {
+            "long": "safe",
+            "description": "allows to disable table and column dropping",
+            "inherit": false
+          },
+          {
+            "long": "drop-tables",
+            "description": "allows to disable table dropping",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "schema:fresh",
+        "description": "drop and recreate database schema based on current metadata",
+        "options": [
+          {
+            "short": "r",
+            "long": "run",
+            "description": "runs queries",
+            "inherit": false
+          },
+          {
+            "long": "schema",
+            "description": "set the current schema for wildcard schema entities",
+            "inherit": false,
+            "value": {
+              "name": "schema"
+            }
+          },
+          {
+            "long": "seed",
+            "description": "allows to seed the database on create or drop and recreate",
+            "inherit": false,
+            "value": {
+              "name": "seed"
+            }
+          }
+        ]
+      },
+      {
+        "name": "migration:create",
+        "description": "create new migration with current schema diff",
+        "options": [
+          {
+            "short": "b",
+            "long": "blank",
+            "description": "create blank migration",
+            "inherit": false
+          },
+          {
+            "short": "i",
+            "long": "initial",
+            "description": "create initial migration",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "dump",
+            "description": "dumps all queries to console",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "path",
+            "description": "sets path to directory where to save entities",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          }
+        ]
+      },
+      {
+        "name": "migration:up",
+        "description": "migrate up to the latest version",
+        "options": [
+          {
+            "short": "t",
+            "long": "to",
+            "description": "migrate up to specific version",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "from",
+            "description": "start migration from specific version",
+            "inherit": false
+          },
+          {
+            "short": "o",
+            "long": "only",
+            "description": "migrate only specified versions",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "migration:down",
+        "description": "migrate one step down",
+        "options": [
+          {
+            "short": "t",
+            "long": "to",
+            "description": "migrate down to specific version",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "from",
+            "description": "start migration from specific version",
+            "inherit": false
+          },
+          {
+            "short": "o",
+            "long": "only",
+            "description": "migrate only specified versions",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "migration:list",
+        "description": "list all executed migrations"
+      },
+      {
+        "name": "migration:pending",
+        "description": "list all pending migrations"
+      },
+      {
+        "name": "migration:fresh",
+        "description": "clear the database and rerun all migrations",
+        "options": [
+          {
+            "long": "seed",
+            "description": "allows to seed the database on create or drop and recreate",
+            "inherit": false,
+            "value": {
+              "name": "seed"
+            }
+          }
+        ]
+      },
+      {
+        "name": "debug",
+        "description": "debug CLI configuration"
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
