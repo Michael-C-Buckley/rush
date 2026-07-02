@@ -1,0 +1,58 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "yank",
+    "description": "copy terminal output to the clipboard",
+    "options": [
+      {
+        "short": "i",
+        "description": "ignore case differences between pattern and the input"
+      },
+      {
+        "short": "l",
+        "description": "use the default delimiters except for space"
+      },
+      {
+        "short": "x",
+        "description": "use alternate screen"
+      },
+      {
+        "short": "v",
+        "description": "print the version"
+      },
+      {
+        "short": "d",
+        "description": "all input characters not present in delim will be recognized as fields",
+        "value": {
+          "name": "delim",
+          "description": "Custom delimiters"
+        }
+      },
+      {
+        "short": "g",
+        "description": "use pattern to recognize fields",
+        "value": {
+          "name": "pattern",
+          "description": "Pattern to recognize fields"
+        }
+      },
+      {
+        "spellings": [
+          "--"
+        ],
+        "description": "use a command as the yank command",
+        "value": {
+          "name": "command",
+          "description": "Command to use as the yank command",
+          "provider": "builtin.executables"
+        }
+      }
+    ],
+    "providers": {
+      "builtin.executables": {
+        "builtin": "executables"
+      }
+    }
+  }
+}
