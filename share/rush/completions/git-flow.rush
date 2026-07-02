@@ -1,0 +1,32 @@
+__rush_complete_git_flow_type_branches() {
+  type=$1
+  default_prefix=$2
+  prefix=$(git config --get "gitflow.prefix.$type" 2>/dev/null)
+  test -n "$prefix" || prefix=$default_prefix
+
+  git --no-optional-locks branch -a --no-color --sort=-committerdate 2>/dev/null |
+  while IFS= read -r line; do
+    set -- $line
+    case "$1" in '*'|'+') branch=$2 ;; *) branch=$1 ;; esac
+    branch=${branch#remotes/}
+    case "$branch" in
+      "$prefix"*)
+        name=${branch#"$prefix"}
+        test -n "$name" || continue
+        rush_complete candidate "$name" --kind plain --description "$type branch"
+        ;;
+    esac
+  done
+}
+
+__rush_complete_git_flow_feature_branches() {
+  __rush_complete_git_flow_type_branches feature feature/
+}
+
+__rush_complete_git_flow_release_branches() {
+  __rush_complete_git_flow_type_branches release release/
+}
+
+__rush_complete_git_flow_hotfix_branches() {
+  __rush_complete_git_flow_type_branches hotfix hotfix/
+}

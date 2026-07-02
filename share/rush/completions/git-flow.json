@@ -1,0 +1,186 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "git-flow",
+    "description": "high-level git-flow branching operations",
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "initialize a new git repo with support for the branching model",
+        "options": [
+          {
+            "short": "d",
+            "description": "use default branch naming conventions",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "description": "force setting of gitflow branches, even if already configured",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "feature",
+        "description": "list all feature branches",
+        "subcommands": [
+          {
+            "name": "start",
+            "description": "create a new feature branch",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "the name of the new feature branch",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "finish",
+            "description": "merge a feature branch into develop",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "the name of the feature branch to finish",
+                  "index": 0,
+                  "provider": "git-flow.feature-branches"
+                }
+              ]
+            }
+          },
+          {
+            "name": "publish",
+            "description": "push a feature branch to the remote repository",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "the name of the feature branch to publish",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "pull",
+            "description": "pull a feature branch from the remote repository",
+            "arguments": {
+              "states": [
+                {
+                  "name": "origin",
+                  "description": "the name of the remote feature branch",
+                  "index": 0
+                },
+                {
+                  "name": "name",
+                  "description": "the name of the local feature branch",
+                  "index": 1
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "release",
+        "description": "list all release branches",
+        "subcommands": [
+          {
+            "name": "start",
+            "description": "create a new release branch",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "the name of the new release branch",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "finish",
+            "description": "merge a release branch into develop",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "the name of the release branch to finish",
+                  "index": 0,
+                  "provider": "git-flow.release-branches"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "hotfix",
+        "description": "list all hotfix branches",
+        "subcommands": [
+          {
+            "name": "start",
+            "description": "create a new hotfix branch",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "the name of the new hotfix branch",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "finish",
+            "description": "merge a hotfix branch into develop",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "the name of the hotfix branch to finish",
+                  "index": 0,
+                  "provider": "git-flow.hotfix-branches"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "support",
+        "description": "list all support branches",
+        "subcommands": [
+          {
+            "name": "start",
+            "description": "create a new support branch",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "the name of the new support branch",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "git-flow.feature-branches": {
+        "function": "__rush_complete_git_flow_feature_branches"
+      },
+      "git-flow.release-branches": {
+        "function": "__rush_complete_git_flow_release_branches"
+      },
+      "git-flow.hotfix-branches": {
+        "function": "__rush_complete_git_flow_hotfix_branches"
+      }
+    }
+  }
+}
