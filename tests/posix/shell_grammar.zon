@@ -472,5 +472,65 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "complete commands run before a later syntax error",
+            .script =
+            \\printf 'ran\n'
+            \\)
+            \\printf 'unreachable\n'
+            ,
+            .stdout =
+            \\ran
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "trailing blank lines preserve the last command status",
+            .script =
+            \\false
+            \\
+            \\
+            ,
+            .stdout = "",
+            .stderr = "",
+            .status = 1,
+        },
+        .{
+            .name = "here-document delimited by end of input has an empty body",
+            .script = "cat <<EOF",
+            .stdout = "",
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "unalias takes effect for later complete commands",
+            .script =
+            \\alias greet='printf aliased\n'
+            \\unalias greet
+            \\greet
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status = 127,
+        },
+        .{
+            .name = "alias value opening a compound command spans following lines",
+            .script =
+            \\alias begin='if true'
+            \\begin
+            \\then printf 'inside\n'
+            \\fi
+            \\printf 'after\n'
+            ,
+            .stdout =
+            \\inside
+            \\after
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }

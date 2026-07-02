@@ -120,7 +120,7 @@ fn aliasExpandedSource(
     return expanded;
 }
 
-fn aliasesEnabled(shell_state: state_mod.State) bool {
+pub fn aliasesEnabled(shell_state: state_mod.State) bool {
     return shell_state.options.mode == .posix or shell_state.options.interactive or shell_state.options.expand_aliases;
 }
 

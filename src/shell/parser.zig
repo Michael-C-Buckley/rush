@@ -93,6 +93,83 @@ fn parseWithAliasStateOptions(
     return parser.parseProgram();
 }
 
+/// Incremental parser that yields one newline-terminated complete command
+/// per call, so callers can evaluate each command before later input is
+/// parsed. Command boundaries include any here-document bodies that follow
+/// the terminating newline.
+pub const Incremental = struct {
+    parser: Parser,
+    started: bool = false,
+
+    pub fn init(
+        allocator: std.mem.Allocator,
+        src: source_mod.Source,
+        tokens: []const token.Token,
+        shell_state: state_mod.State,
+    ) Incremental {
+        src.validate();
+        std.debug.assert(tokens.len != 0);
+        return .{ .parser = .{
+            .allocator = allocator,
+            .source = src,
+            .tokens = tokens,
+            .alias_state = shell_state,
+        } };
+    }
+
+    /// Parses and returns the next complete command, or null when only
+    /// separators remain before end of input.
+    // ziglint-ignore: Z015 matches the existing public parse API error set exposure
+    pub fn next(self: *Incremental) ParserError!?ast.Program {
+        const p = &self.parser;
+        // Leading separators are skipped once, mirroring parseList; between
+        // commands only the newlines consumed after each terminator are
+        // allowed, so a stray leading semicolon still errors.
+        if (!self.started) {
+            self.started = true;
+            p.skipSeparators();
+        }
+        if (p.at(.eof)) return null;
+
+        var entries: std.ArrayList(ast.ListEntry) = .empty;
+        errdefer entries.deinit(p.allocator);
+
+        while (!p.at(.eof)) {
+            const and_or = try p.parseAndOr();
+            var terminator: ?ast.ListTerminator = null;
+            if (p.eat(.semicolon) != null) terminator = .sequence;
+            if (p.eat(.ampersand) != null) terminator = .background;
+            var complete = false;
+            if (p.eat(.newline)) |newline| {
+                if (terminator == null) terminator = .sequence;
+                try p.parsePendingHereDocs(newline.span.end);
+                while (p.eat(.newline) != null) {}
+                complete = true;
+            }
+            try entries.append(p.allocator, .{ .and_or = and_or, .terminator = terminator });
+            if (complete) break;
+        }
+        // Here-document bodies delimited by end of input (no trailing
+        // newline): parse them now so no redirection is left without a body.
+        if (p.pending_here_docs.items.len != 0) try p.parsePendingHereDocs(p.source.text.len);
+
+        const program: ast.Program = .{
+            .source_id = p.source.id,
+            .body = .{ .entries = try entries.toOwnedSlice(p.allocator) },
+        };
+        program.validate();
+        return program;
+    }
+
+    /// Source text offset where the next unparsed command starts.
+    pub fn nextOffset(self: *const Incremental) usize {
+        const p = &self.parser;
+        std.debug.assert(p.index < p.tokens.len);
+        if (p.tokens[p.index].kind == .eof) return p.source.text.len;
+        return p.tokens[p.index].span.start;
+    }
+};
+
 const Parser = struct {
     allocator: std.mem.Allocator,
     source: source_mod.Source,
@@ -112,6 +189,9 @@ const Parser = struct {
     fn parseProgram(self: *Parser) !ast.Program {
         const body = try self.parseList(.eof);
         try self.expect(.eof);
+        // Here-document bodies delimited by end of input (no trailing
+        // newline): parse them now so no redirection is left without a body.
+        if (self.pending_here_docs.items.len != 0) try self.parsePendingHereDocs(self.source.text.len);
         const program: ast.Program = .{ .source_id = self.source.id, .body = body };
         program.validate();
         return program;
@@ -1694,4 +1774,74 @@ test "parser builds command substitution word parts" {
     const substitution = assignment.value.data.parts[0].command_substitution;
     try std.testing.expectEqualStrings("exit 7", substitution.source_text);
     try std.testing.expect(substitution.parsed != null);
+}
+
+test "incremental parser yields one complete command per call" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var shell_state = state_mod.State.init(std.testing.allocator, .{});
+    defer shell_state.deinit();
+
+    const src: source_mod.Source = .{
+        .id = 1,
+        .kind = .script_file,
+        .name = "test",
+        .text = "echo one; echo two\nif true\nthen echo three\nfi\necho four\n",
+    };
+    const tokens = try lexer.lex(allocator, src);
+    var incremental: Incremental = .init(allocator, src, tokens, shell_state);
+
+    const first = (try incremental.next()).?;
+    try std.testing.expectEqual(@as(usize, 2), first.body.entries.len);
+    try std.testing.expectEqual(std.mem.indexOf(u8, src.text, "if").?, incremental.nextOffset());
+
+    const second = (try incremental.next()).?;
+    try std.testing.expectEqual(@as(usize, 1), second.body.entries.len);
+    try std.testing.expectEqual(std.mem.indexOf(u8, src.text, "echo four").?, incremental.nextOffset());
+
+    const third = (try incremental.next()).?;
+    try std.testing.expectEqual(@as(usize, 1), third.body.entries.len);
+    try std.testing.expectEqual(src.text.len, incremental.nextOffset());
+
+    try std.testing.expectEqual(@as(?ast.Program, null), try incremental.next());
+}
+
+test "incremental parser consumes here-document bodies within command boundaries" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var shell_state = state_mod.State.init(std.testing.allocator, .{});
+    defer shell_state.deinit();
+
+    const src: source_mod.Source = .{
+        .id = 1,
+        .kind = .script_file,
+        .name = "test",
+        .text = "cat <<E\nbody\nE\necho after\n",
+    };
+    const tokens = try lexer.lex(allocator, src);
+    var incremental: Incremental = .init(allocator, src, tokens, shell_state);
+
+    const first = (try incremental.next()).?;
+    const redirection = first.body.entries[0].and_or.pipelines[0].pipeline.stages[0].simple.redirections[0];
+    try std.testing.expectEqualStrings("body\n", redirection.here_doc.?.body);
+    try std.testing.expectEqual(std.mem.indexOf(u8, src.text, "echo after").?, incremental.nextOffset());
+
+    const second = (try incremental.next()).?;
+    try std.testing.expectEqual(@as(usize, 1), second.body.entries.len);
+    try std.testing.expectEqual(@as(?ast.Program, null), try incremental.next());
+}
+
+test "parser accepts here-document delimited by end of input" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = "cat <<E" };
+    const tokens = try lexer.lex(allocator, src);
+    const program = try parse(allocator, src, tokens);
+    const redirection = program.body.entries[0].and_or.pipelines[0].pipeline.stages[0].simple.redirections[0];
+
+    try std.testing.expectEqualStrings("", redirection.here_doc.?.body);
 }

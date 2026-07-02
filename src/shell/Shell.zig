@@ -2,6 +2,7 @@
 
 const std = @import("std");
 
+const ast = @import("ast.zig");
 const builtin = @import("builtin.zig");
 const eval = @import("eval.zig");
 const history = @import("../history.zig");
@@ -155,6 +156,10 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
             return self.evalSourceWithReset(src, false);
         }
 
+        /// Evaluates the source one complete command at a time, so each
+        /// command runs before later text is parsed. Commands that mutate
+        /// alias state therefore affect the lexing of every following
+        /// command, with no heuristics about which sources need it.
         fn evalSourceWithReset(self: *Self, src: source.Source, reset_chunks: bool) !result.EvalResult {
             src.validate();
             const previous_root_kind = self.state.root_source_kind;
@@ -166,34 +171,38 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
                 self.state.root_source_kind = previous_root_kind;
             };
 
-            // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-            if (!self.sourceNeedsAliasAwareEvaluation(src)) return self.evalSourceChunk(src, src.text, reset_chunks, false);
-            if (src.text.len == 0) return self.evalSourceChunk(src, src.text, reset_chunks, false);
+            if (reset_chunks) self.resetForTopLevelCommand();
+            if (src.text.len == 0) return .{};
+
+            const ast_allocator = self.astAllocator();
+            const tokens = try lexer.lex(ast_allocator, src);
+            var incremental = parser.Incremental.init(ast_allocator, src, tokens, self.state);
+            var boundaries_failed = false;
 
             var start: usize = 0;
-            var end: usize = 0;
             var last: result.EvalResult = .{};
             while (start < src.text.len) {
-                end = nextLineEnd(src.text, end);
-                const require_complete_here_docs = end < src.text.len;
-                const evaluated = self.evalSourceChunk(
-                    src,
-                    src.text[start..end],
-                    reset_chunks,
-                    require_complete_here_docs,
-                ) catch |err| switch (err) {
-                    error.ExpectedCommand,
-                    error.ExpectedRedirectionTarget,
-                    error.IncompleteHereDoc,
-                    error.UnclosedCommandSubstitution,
-                    error.UnclosedQuote,
-                    error.UnexpectedToken,
-                    => {
-                        if (end < src.text.len) continue;
-                        return err;
-                    },
-                    else => return err,
-                };
+                var end: usize = undefined;
+                var direct_program: ?ast.Program = null;
+                if (boundaries_failed) {
+                    end = src.text.len;
+                } else if (incremental.next()) |maybe_program| {
+                    const program = maybe_program orelse break;
+                    direct_program = program;
+                    end = incremental.nextOffset();
+                } else |err| {
+                    // Unexpanded text may only parse after alias expansion
+                    // (an alias value can open a construct); retry the rest
+                    // of the input through the alias-aware path.
+                    if (!self.aliasesMayRewrite()) return err;
+                    boundaries_failed = true;
+                    end = src.text.len;
+                }
+
+                const evaluated = if (direct_program != null and !self.aliasesMayRewrite())
+                    try eval.evalProgram(Host, self, direct_program.?)
+                else
+                    try self.evalAliasAwareCommand(src, &incremental, &boundaries_failed, start, &end);
 
                 last = evaluated;
                 if (last.flow != .normal) {
@@ -210,15 +219,43 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
             return last;
         }
 
+        /// Evaluates one command's original text through the alias-rewriting
+        /// path, extending the chunk to the next command boundary when alias
+        /// expansion leaves it incomplete (an alias value can open a
+        /// construct that later lines close).
+        fn evalAliasAwareCommand(
+            self: *Self,
+            src: source.Source,
+            incremental: *parser.Incremental,
+            boundaries_failed: *bool,
+            start: usize,
+            end: *usize,
+        ) !result.EvalResult {
+            while (true) {
+                const require_complete = end.* < src.text.len;
+                return self.evalSourceChunk(src, src.text[start..end.*], require_complete) catch |err| switch (err) {
+                    error.ExpectedCommand,
+                    error.ExpectedRedirectionTarget,
+                    error.IncompleteHereDoc,
+                    error.UnclosedCommandSubstitution,
+                    error.UnclosedQuote,
+                    error.UnexpectedToken,
+                    => {
+                        if (end.* >= src.text.len) return err;
+                        end.* = nextBoundaryEnd(src, incremental, boundaries_failed);
+                        continue;
+                    },
+                    else => return err,
+                };
+            }
+        }
+
         fn evalSourceChunk(
             self: *Self,
             src: source.Source,
             text: []const u8,
-            reset: bool,
             require_complete_here_docs: bool,
         ) !result.EvalResult {
-            if (reset) self.resetForTopLevelCommand();
-
             const chunk_src: source.Source = .{ .id = src.id, .kind = src.kind, .name = src.name, .text = text };
 
             const ast_allocator = self.astAllocator();
@@ -232,25 +269,24 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
             return eval.evalProgram(Host, self, program);
         }
 
-        fn sourceNeedsAliasAwareEvaluation(self: *Self, src: source.Source) bool {
-            // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-            return self.state.options.mode == .bash or self.state.options.interactive or self.state.aliases.count() != 0 or
-                std.mem.indexOf(u8, src.text, "alias") != null or
-                (self.state.options.mode == .bash and std.mem.indexOf(u8, src.text, "shopt") != null);
+        fn aliasesMayRewrite(self: *Self) bool {
+            return self.state.aliases.count() != 0 and lexer.aliasesEnabled(self.state);
         }
     };
 }
 
-fn nextLineEnd(text: []const u8, start: usize) usize {
-    std.debug.assert(start < text.len);
-    var cursor = start;
-    while (cursor < text.len) {
-        const newline_index = std.mem.indexOfScalar(u8, text[cursor..], '\n') orelse return text.len;
-        const end = cursor + newline_index + 1;
-        if (end < 2 or text[end - 2] != '\\') return end;
-        cursor = end;
-    }
-    return text.len;
+fn nextBoundaryEnd(
+    src: source.Source,
+    incremental: *parser.Incremental,
+    boundaries_failed: *bool,
+) usize {
+    if (boundaries_failed.*) return src.text.len;
+    const maybe_program = incremental.next() catch {
+        boundaries_failed.* = true;
+        return src.text.len;
+    };
+    if (maybe_program == null) return src.text.len;
+    return incremental.nextOffset();
 }
 
 test "Shell caches exec environment pointer array" {
