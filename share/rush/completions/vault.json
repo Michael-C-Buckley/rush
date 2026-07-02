@@ -1,0 +1,926 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "vault",
+    "description": "interact with HashiCorp Vault",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "value": {
+          "name": "command",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "address",
+        "description": "set Vault server address",
+        "value": {
+          "name": "address"
+        }
+      },
+      {
+        "long": "ca-cert",
+        "description": "set CA certificate path",
+        "value": {
+          "name": "file",
+          "provider": {
+            "builtin": "files"
+          }
+        }
+      },
+      {
+        "long": "ca-path",
+        "description": "set CA certificate directory",
+        "value": {
+          "name": "directory",
+          "provider": {
+            "builtin": "directories"
+          }
+        }
+      },
+      {
+        "long": "client-cert",
+        "description": "set client certificate path",
+        "value": {
+          "name": "file",
+          "provider": {
+            "builtin": "files"
+          }
+        }
+      },
+      {
+        "long": "client-key",
+        "description": "set client key path",
+        "value": {
+          "name": "file",
+          "provider": {
+            "builtin": "files"
+          }
+        }
+      },
+      {
+        "long": "tls-server-name",
+        "description": "set TLS server name",
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "tls-skip-verify",
+        "description": "skip TLS certificate verification"
+      },
+      {
+        "long": "namespace",
+        "description": "set Vault namespace",
+        "value": {
+          "name": "namespace"
+        }
+      },
+      {
+        "long": "format",
+        "description": "set output format",
+        "value": {
+          "name": "format",
+          "provider": "formats"
+        }
+      },
+      {
+        "long": "field",
+        "description": "print a single field",
+        "value": {
+          "name": "field"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "read",
+        "description": "reads data from Vault at the given path",
+        "arguments": {
+          "states": [
+            {
+              "name": "path"
+            }
+          ]
+        }
+      },
+      {
+        "name": "write",
+        "description": "writes data from Vault at the given path",
+        "arguments": {
+          "states": [
+            {
+              "name": "path"
+            },
+            {
+              "name": "data",
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete",
+        "description": "deletes secrets and configuration from Vault at the given path",
+        "arguments": {
+          "states": [
+            {
+              "name": "path"
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "force",
+            "description": "continue without confirmation"
+          }
+        ]
+      },
+      {
+        "name": "list",
+        "description": "lists data from Vault at the given path",
+        "arguments": {
+          "states": [
+            {
+              "name": "path"
+            }
+          ]
+        }
+      },
+      {
+        "name": "login",
+        "description": "authenticates users or machines to Vault using the provided arguments",
+        "arguments": {
+          "states": [
+            {
+              "name": "path"
+            }
+          ]
+        }
+      },
+      {
+        "name": "agent",
+        "description": "this command starts a Vault agent that can perform automatic authentication in certain environments"
+      },
+      {
+        "name": "server",
+        "description": "this command starts a Vault server that responds to API requests. By default, Vault will start in a 'sealed' state. The Vault cluster must be initialized before"
+      },
+      {
+        "name": "status",
+        "description": "prints the current state of Vault including whether it is sealed and if HA mode is enabled. This command prints regardless of whether the Vault is sealed"
+      },
+      {
+        "name": "unwrap",
+        "description": "unwraps a wrapped secret from Vault by the given token. The result is the same as the 'vault read' operation on the non-wrapped secret. If no token is given, th",
+        "arguments": {
+          "states": [
+            {
+              "name": "token"
+            }
+          ]
+        }
+      },
+      {
+        "name": "audit",
+        "description": "this command groups subcommands for interacting with Vault's audit devices. Users can list, enable, and disable audit devices",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "lists the enabled audit devices in the Vault server. The output lists the enabled audit devices and the options for those devices"
+          },
+          {
+            "name": "disable",
+            "description": "disables an audit device. Once an audit device is disabled, no future audit logs are dispatched to it. The data associated with the audit device is not affected",
+            "arguments": {
+              "states": [
+                {
+                  "name": "PATH",
+                  "description": "Disable the audit device enabled at this path",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "long": "force",
+                "description": "continue without confirmation"
+              }
+            ]
+          },
+          {
+            "name": "enable",
+            "description": "enables an audit device at a given path"
+          }
+        ]
+      },
+      {
+        "name": "debug",
+        "description": "probes a specific Vault server node for a specified period of time, recording information about the node, its cluster, and its host environment"
+      },
+      {
+        "name": "kv",
+        "description": "this command has subcommands for interacting with Vault's key-value store. Here are some simple examples, and more detailed examples are available in the subcom",
+        "subcommands": [
+          {
+            "name": "delete",
+            "description": "deletes the data for the provided version and path in the key-value store. The versioned data will not be fully removed, but marked as deleted and will no longe",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key"
+                }
+              ]
+            },
+            "options": [
+              {
+                "long": "force",
+                "description": "continue without confirmation"
+              }
+            ]
+          },
+          {
+            "name": "destroy",
+            "description": "permanently removes the specified versions' data from the key-value store. If no key exists at the path, no action is taken",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key"
+                }
+              ]
+            },
+            "options": [
+              {
+                "long": "force",
+                "description": "continue without confirmation"
+              }
+            ]
+          },
+          {
+            "name": "enable-versioning",
+            "description": "this command turns on versioning for the backend at the provided path"
+          },
+          {
+            "name": "get",
+            "description": "retrieves the value from Vault's key-value store at the given key name. If no key exists with that name, an error is returned. If a key exists with that name bu",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key"
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "lists data from Vault's key-value store at the given path"
+          },
+          {
+            "name": "metadata",
+            "description": "this command has subcommands for interacting with the metadata endpoint in Vault's key-value store. Here are some simple examples, and more detailed examples ar",
+            "subcommands": [
+              {
+                "name": "delete",
+                "description": "deletes all versions and metadata for the provided key",
+                "options": [
+                  {
+                    "long": "force",
+                    "description": "continue without confirmation"
+                  }
+                ]
+              },
+              {
+                "name": "get",
+                "description": "retrieves the metadata from Vault's key-value store at the given key name. If no key exists with that name, an error is returned"
+              },
+              {
+                "name": "patch",
+                "description": "this command can be used to create a blank key in the key-value store or to update key configuration for a specified key"
+              },
+              {
+                "name": "put",
+                "description": "this command can be used to create a blank key in the key-value store or to update key configuration for a specified key"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "key"
+                }
+              ]
+            }
+          },
+          {
+            "name": "patch",
+            "description": "writes the data to the given path in the key-value store. The data can be of any type",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key"
+                },
+                {
+                  "name": "data",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "put",
+            "description": "writes the data to the given path in the key-value store. The data can be of any type",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key"
+                },
+                {
+                  "name": "data",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "rollback",
+            "description": "restores a given previous version to the current version at the given path. The value is written as a new version; for instance, if the current version is 5 and",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key"
+                }
+              ]
+            }
+          },
+          {
+            "name": "undelete",
+            "description": "undeletes the data for the provided version and path in the key-value store. This restores the data, allowing it to be returned on get requests",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "lease",
+        "description": "this command groups subcommands for interacting with leases. Users can revoke or renew leases",
+        "subcommands": [
+          {
+            "name": "lookup",
+            "description": "lookup the lease information of a secret",
+            "arguments": {
+              "states": [
+                {
+                  "name": "id"
+                }
+              ]
+            }
+          },
+          {
+            "name": "renew",
+            "description": "renews the lease on a secret, extending the time that it can be used before it is revoked by Vault",
+            "arguments": {
+              "states": [
+                {
+                  "name": "id"
+                }
+              ]
+            }
+          },
+          {
+            "name": "revoke",
+            "description": "revokes secrets by their lease ID. This command can revoke a single secret or multiple secrets based on a path-matched prefix",
+            "arguments": {
+              "states": [
+                {
+                  "name": "id"
+                }
+              ]
+            },
+            "options": [
+              {
+                "long": "force",
+                "description": "continue without confirmation"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "monitor",
+        "description": "stream log messages of a Vault server. The monitor command lets you listen for log levels that may be filtered out of the server logs. For example, the server m"
+      },
+      {
+        "name": "namespace",
+        "description": "this command groups subcommands for interacting with Vault namespaces. These subcommands operate in the context of the namespace that the currently logged in to",
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create a child namespace. The namespace created will be relative to the namespace provided in either the VAULT_NAMESPACE environment variable or -namespace CLI "
+          },
+          {
+            "name": "delete",
+            "description": "delete an existing namespace. The namespace deleted will be relative to the namespace provided in either the VAULT_NAMESPACE environment variable or -namespace ",
+            "options": [
+              {
+                "long": "force",
+                "description": "continue without confirmation"
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "lists the enabled child namespaces"
+          },
+          {
+            "name": "lock",
+            "description": "lock the current namespace, and all descendants"
+          },
+          {
+            "name": "lookup",
+            "description": "get information about the namespace of the locally authenticated token"
+          },
+          {
+            "name": "unlock",
+            "description": "unlock the current namespace, and all descendants, with unlock key"
+          }
+        ]
+      },
+      {
+        "name": "operator",
+        "description": "this command groups subcommands for operators interacting with Vault. Most users will not need to interact with these commands. Here are a few examples of the o",
+        "subcommands": [
+          {
+            "name": "diagnose",
+            "description": "this command troubleshoots Vault startup issues, such as TLS configuration or auto-unseal. It should be run using the same environment variables and configurati"
+          },
+          {
+            "name": "generate-root",
+            "description": "generates a new root token by combining a quorum of share holders. Must provide either '-otp' or '-pgp-key'"
+          },
+          {
+            "name": "init",
+            "description": "initializes a Vault server. Initialization is the process by which Vault's storage backend is prepared to receive data. Since Vault servers share the same stora"
+          },
+          {
+            "name": "key-status",
+            "description": "provides information about the active encryption key. Specifically, the current key term and the key installation time"
+          },
+          {
+            "name": "members",
+            "description": "provides the details of all the nodes in the cluster"
+          },
+          {
+            "name": "migrate",
+            "description": "this command starts a storage backend migration process to copy all data from one backend to another. This operates directly on encrypted data and does not requ"
+          },
+          {
+            "name": "raft",
+            "description": "this command groups subcommands for operators interacting with the Vault raft storage backend. Most users will not need to interact with these commands. Here ar",
+            "subcommands": [
+              {
+                "name": "autopilot",
+                "description": "raft auto pilot",
+                "subcommands": [
+                  {
+                    "name": "get-config",
+                    "description": "returns the configuration of the autopilot subsystem under integrated storage"
+                  },
+                  {
+                    "name": "set-config",
+                    "description": "modify the configuration of the autopilot subsystem under integrated storage"
+                  },
+                  {
+                    "name": "state",
+                    "description": "displays the state of the raft cluster under integrated storage as seen by autopilot"
+                  }
+                ]
+              },
+              {
+                "name": "join",
+                "description": "joins a node to the Raft cluster",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "leader-api-addr|auto-join-configuration",
+                      "provider": {
+                        "values": [
+                          "http://127.0.0.2:8200",
+                          "provider=aws region=eu-west-1 ..."
+                        ]
+                      },
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "list-peers",
+                "description": "returns the Raft peer set"
+              },
+              {
+                "name": "remove-peer",
+                "description": "removes a node from the Raft cluster",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "server_id",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "snapshot",
+                "description": "restores and saves snapshots from the Raft cluster",
+                "subcommands": [
+                  {
+                    "name": "restore",
+                    "description": "installs the provided snapshot, returning the cluster to the state defined in it",
+                    "arguments": {
+                      "states": [
+                        {
+                          "name": "snapshot_file",
+                          "description": "Save snapshot to this file",
+                          "provider": "builtin.files",
+                          "index": 0
+                        }
+                      ]
+                    }
+                  },
+                  {
+                    "name": "save",
+                    "description": "saves a snapshot of the current state of the Raft cluster into a file",
+                    "arguments": {
+                      "states": [
+                        {
+                          "name": "snapshot_file",
+                          "description": "Restore snapshot from this file",
+                          "provider": "builtin.files",
+                          "index": 0
+                        }
+                      ]
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "rekey",
+            "description": "generates a new set of unseal keys. This can optionally change the total number of key shares or the required threshold of those key shares to reconstruct the r",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "description": "An unseal key may be provided directly on the command line as an argument to the command. If key is specified as '-', the command will read from stdin. If a TTY",
+                  "provider": {
+                    "values": [
+                      "-"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "rotate",
+            "description": "rotates the underlying encryption key which is used to secure data written to the storage backend. This installs a new key in the key ring. This new key is used"
+          },
+          {
+            "name": "seal",
+            "description": "seals the Vault server. Sealing tells the Vault server to stop responding to any operations until it is unsealed. When sealed, the Vault server discards its in-"
+          },
+          {
+            "name": "step-down",
+            "description": "forces the Vault server at the given address to step down from active duty. While the affected node will have a delay before attempting to acquire the leader lo"
+          },
+          {
+            "name": "unseal",
+            "description": "provide a portion of the root key to unseal a Vault server. Vault starts in a sealed state. It cannot perform operations until it is unsealed. This command acce",
+            "arguments": {
+              "states": [
+                {
+                  "name": "key",
+                  "description": "The unseal key can be supplied as an argument to the command, but this is not recommended as the unseal key will be available in your history",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "usage",
+            "description": "list the client counts for the default reporting period"
+          }
+        ]
+      },
+      {
+        "name": "path-help",
+        "description": "retrieves API help for paths. All endpoints in Vault provide built-in help in markdown format. This includes system paths, secret engines, and auth methods",
+        "arguments": {
+          "states": [
+            {
+              "name": "path"
+            }
+          ]
+        }
+      },
+      {
+        "name": "plugin",
+        "description": "this command groups subcommands for interacting with Vault's plugins and the plugin catalog. The plugin catalog is divided into three types: 'auth', 'database',",
+        "subcommands": [
+          {
+            "name": "deregister",
+            "description": "deregister an existing plugin in the catalog. If the plugin does not exist, no action is taken (the command is idempotent). The argument of type takes 'auth', '",
+            "arguments": {
+              "states": [
+                {
+                  "name": "type",
+                  "description": "Plugin type",
+                  "provider": {
+                    "values": [
+                      "auth",
+                      "database",
+                      "secret"
+                    ]
+                  },
+                  "index": 0
+                },
+                {
+                  "name": "name",
+                  "description": "Plugin name",
+                  "index": 1
+                }
+              ]
+            },
+            "options": [
+              {
+                "long": "force",
+                "description": "continue without confirmation"
+              }
+            ]
+          },
+          {
+            "name": "info",
+            "description": "displays information about a plugin in the catalog with the given name. If the plugin does not exist, an error is returned. The argument of type takes 'auth', '",
+            "arguments": {
+              "states": [
+                {
+                  "name": "type",
+                  "provider": "pluginTypes"
+                },
+                {
+                  "name": "name"
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "lists available plugins registered in the catalog. This does not list whether plugins are in use, but rather just their availability. The last argument of type "
+          },
+          {
+            "name": "register",
+            "description": "registers a new plugin in the catalog. The plugin binary must exist in Vault's configured plugin directory. The argument of type takes 'auth', 'database', or 's",
+            "arguments": {
+              "states": [
+                {
+                  "name": "type",
+                  "provider": "pluginTypes"
+                },
+                {
+                  "name": "name"
+                }
+              ]
+            }
+          },
+          {
+            "name": "reload",
+            "description": "reloads mounted plugins. Either the plugin name or the desired plugin mount(s) must be provided, but not both. In case the plugin name is provided, all of its c"
+          },
+          {
+            "name": "reload-status",
+            "description": "retrieves the status of a recent cluster plugin reload. The reload id must be provided"
+          }
+        ]
+      },
+      {
+        "name": "policy",
+        "subcommands": [
+          {
+            "name": "delete",
+            "description": "deletes the policy named NAME in the Vault server. Once the policy is deleted, all tokens associated with the policy are affected immediately",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name"
+                }
+              ]
+            },
+            "options": [
+              {
+                "long": "force",
+                "description": "continue without confirmation"
+              }
+            ]
+          },
+          {
+            "name": "fmt",
+            "description": "formats a local policy file to the policy specification. This command will overwrite the file at the given PATH with the properly-formatted policy file contents"
+          },
+          {
+            "name": "list",
+            "description": "lists the names of the policies that are installed on the Vault server"
+          },
+          {
+            "name": "read",
+            "description": "prints the contents and metadata of the Vault policy named NAME. If the policy does not exist, an error is returned",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name"
+                }
+              ]
+            }
+          },
+          {
+            "name": "write",
+            "description": "uploads a policy with name NAME from the contents of a local file PATH or stdin. If PATH is '-', the policy is read from stdin. Otherwise, it is loaded from the",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "file",
+                  "provider": {
+                    "builtin": "files"
+                  }
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "print",
+        "description": "this command groups subcommands for interacting with Vault's runtime values",
+        "subcommands": [
+          {
+            "name": "token",
+            "description": "prints the value of the Vault token that will be used for commands, after taking into account the configured token-helper and the environment"
+          }
+        ]
+      },
+      {
+        "name": "secrets",
+        "description": "this command groups subcommands for interacting with Vault's secrets engines. Each secret engine behaves differently. Please see the documentation for more info",
+        "subcommands": [
+          {
+            "name": "disable",
+            "description": "disables a secrets engine at the given PATH. The argument corresponds to the enabled PATH of the engine, not the TYPE! All secrets created by this engine are re",
+            "arguments": {
+              "states": [
+                {
+                  "name": "path"
+                }
+              ]
+            },
+            "options": [
+              {
+                "long": "force",
+                "description": "continue without confirmation"
+              }
+            ]
+          },
+          {
+            "name": "enable",
+            "description": "enables a secrets engine. By default, secrets engines are enabled at the path corresponding to their TYPE, but users can customize the path using the -path opti",
+            "arguments": {
+              "states": [
+                {
+                  "name": "path"
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "lists the enabled secret engines on the Vault server. This command also outputs information about the enabled path including configured TTLs and human-friendly "
+          },
+          {
+            "name": "move",
+            "description": "moves an existing secrets engine to a new path. Any leases from the old secrets engine are revoked, but all configuration associated with the engine is preserve"
+          },
+          {
+            "name": "tune",
+            "description": "tunes the configuration options for the secrets engine at the given PATH. The argument corresponds to the PATH where the secrets engine is enabled, not the TYPE",
+            "arguments": {
+              "states": [
+                {
+                  "name": "path"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "ssh",
+        "description": "establishes an SSH connection with the target machine"
+      },
+      {
+        "name": "token",
+        "description": "this command groups subcommands for interacting with tokens. Users can create, lookup, renew, and revoke tokens",
+        "subcommands": [
+          {
+            "name": "capabilities",
+            "description": "fetches the capabilities of a token for a given path. If a TOKEN is provided as an argument, the '/sys/capabilities' endpoint and permission is used. If no TOKE"
+          },
+          {
+            "name": "create",
+            "description": "creates a new token that can be used for authentication. This token will be created as a child of the currently authenticated token. The generated token will in"
+          },
+          {
+            "name": "lookup",
+            "description": "displays information about a token or accessor. If a TOKEN is not provided, the locally authenticated token is use",
+            "arguments": {
+              "states": [
+                {
+                  "name": "token"
+                }
+              ]
+            }
+          },
+          {
+            "name": "renew",
+            "description": "renews a token's lease, extending the amount of time it can be used. If a TOKEN is not provided, the locally authenticated token is used. A token accessor can b",
+            "arguments": {
+              "states": [
+                {
+                  "name": "token"
+                }
+              ]
+            }
+          },
+          {
+            "name": "revoke",
+            "description": "revokes authentication tokens and their children. If a TOKEN is not provided, the locally authenticated token is used. The '-mode' flag can be used to control t",
+            "arguments": {
+              "states": [
+                {
+                  "name": "token"
+                }
+              ]
+            },
+            "options": [
+              {
+                "long": "force",
+                "description": "continue without confirmation"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "version-history",
+        "description": "prints the version history of the target Vault server"
+      }
+    ],
+    "providers": {
+      "formats": {
+        "values": [
+          "table",
+          "json",
+          "yaml",
+          "pretty",
+          "raw"
+        ]
+      },
+      "methods": {
+        "values": [
+          "GET",
+          "POST",
+          "PUT",
+          "DELETE",
+          "LIST"
+        ]
+      },
+      "pluginTypes": {
+        "values": [
+          "auth",
+          "database",
+          "secret"
+        ]
+      }
+    }
+  }
+}
