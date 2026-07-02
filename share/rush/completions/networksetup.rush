@@ -1,0 +1,59 @@
+__rush_complete_networksetup_hardware_ports() {
+  networksetup -listallhardwareports 2>/dev/null | awk '
+    /^Hardware Port:/ { port = substr($0, 16) }
+    /^Device:/ { print port "\tInterface: " substr($0, 9) }
+  ' | while IFS='	' read -r port desc; do
+    test -n "$port" || continue
+    rush_complete candidate "$port" --kind plain --description "$desc"
+  done
+}
+
+__rush_complete_networksetup_interfaces() {
+  networksetup -listallhardwareports 2>/dev/null | awk '
+    /^Hardware Port:/ { port = substr($0, 16) }
+    /^Device:/ { print substr($0, 9) "\tHardware port: " port }
+  ' | while IFS='	' read -r device desc; do
+    test -n "$device" || continue
+    rush_complete candidate "$device" --kind plain --description "$desc"
+  done
+}
+
+__rush_complete_networksetup_wireless_interfaces() {
+  networksetup -listallhardwareports 2>/dev/null | awk '
+    /^Hardware Port:/ { port = substr($0, 16) }
+    /^Device:/ && port == "Wi-Fi" { print substr($0, 9) }
+  ' | while IFS= read -r device; do
+    test -n "$device" || continue
+    rush_complete candidate "$device" --kind plain --description "Wi-Fi interface"
+  done
+}
+
+__rush_complete_networksetup_services() {
+  networksetup -listallnetworkservices 2>/dev/null | while IFS= read -r service; do
+    case "$service" in ''|'An asterisk (*) denotes'*) continue ;; esac
+    desc="network service"
+    case "$service" in \**) service=${service#\* }; desc="disabled network service" ;; esac
+    rush_complete candidate "$service" --kind plain --description "$desc"
+  done
+}
+
+__rush_complete_networksetup_bonds() {
+  networksetup -listBonds 2>/dev/null | awk -F': ' '/^user-defined-name:/ { print $2 }' | while IFS= read -r bond; do
+    test -n "$bond" || continue
+    rush_complete candidate "$bond" --kind plain --description "bond"
+  done
+}
+
+__rush_complete_networksetup_pppoe_services() {
+  networksetup -listpppoeservices 2>/dev/null | while IFS= read -r service; do
+    test -n "$service" || continue
+    rush_complete candidate "$service" --kind plain --description "PPPoE service"
+  done
+}
+
+__rush_complete_networksetup_locations() {
+  networksetup -listlocations 2>/dev/null | while IFS= read -r location; do
+    test -n "$location" || continue
+    rush_complete candidate "$location" --kind plain --description "network location"
+  done
+}

@@ -1,0 +1,1667 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "networksetup",
+    "description": "configure macOS network settings",
+    "subcommands": [
+      {
+        "name": "-listnetworkserviceorder",
+        "description": "Displays a list of network services in the order they are contacted for a connection, along with the corresponding port and device for each"
+      },
+      {
+        "name": "-listallnetworkservices",
+        "description": "Displays a list of all the network services on the server's hardware ports"
+      },
+      {
+        "name": "-listallhardwareports",
+        "description": "Displays list of hardware ports with corresponding device name and ethernet address"
+      },
+      {
+        "name": "-detectnewhardware",
+        "description": "Detects new network hardware and creates a default network service on the hardware"
+      },
+      {
+        "name": "-getmacaddress",
+        "description": "Displays ethernet (or Wi-Fi) address for hardwareport or device specified",
+        "arguments": {
+          "states": [
+            {
+              "name": "hardwareport",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_hardware_ports"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-getcomputername",
+        "description": "Displays the computer name"
+      },
+      {
+        "name": "-setcomputername",
+        "description": "Sets computer name to <computername>. This name is used by AFP",
+        "arguments": {
+          "states": [
+            {
+              "name": "computername",
+              "description": "The new name for your computer on the network",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "-getinfo",
+        "description": "Displays the IP address, subnet mask, router, and hardware address for the <networkservice> that you specify",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setmanual",
+        "description": "Set the TCP/IP configuration for <networkservice> to manual with IP address set to <ip>, Subnet Mask set to <subnet>, and Router address set to <router>",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            },
+            {
+              "name": "ip",
+              "description": "The IP address to set for the network service",
+              "index": 1
+            },
+            {
+              "name": "subnet",
+              "description": "The subnet mask to apply",
+              "index": 2
+            },
+            {
+              "name": "router",
+              "description": "The router address to set",
+              "index": 3
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setdhcp",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            },
+            {
+              "name": "clientid",
+              "description": "Optional DHCP client ID. Use 'Empty' to clear it",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setbootp",
+        "description": "Use this command to set the TCP/IP configuration for the specified <networkservice> to use BOOTP",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setmanualwithdhcprouter",
+        "description": "Use this command to specify a manual IP address to use for DHCP for the specified <networkservice>",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            },
+            {
+              "name": "ip",
+              "description": "The IP address to set for the network service",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "-getadditionalroutes",
+        "description": "Use this command to display the list of additional IPv4 routes configured for the service",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setadditionalroutes",
+        "description": "Use this command to set the list of IPv4 additional routes configured for the service. Each route is specified as a (destination address, subnet mask, gateway a",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            },
+            {
+              "name": "dest-mask-gate",
+              "description": "One or more tuples of (destination address, subnet mask, gateway address). Specify 'Empty' to clear routes",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setv4off",
+        "description": "Use this command to turn IPv4 off on the specified <networkservice>",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setv6off",
+        "description": "Use this command to turn IPv6 off on the specified <networkservice>",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setv6automatic",
+        "description": "Use this command to set IPv6 to get its addresses automatically for <networkservice>",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setv6linklocal",
+        "description": "Use this command to set IPv6 to only use link local for <networkservice>",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setv6manual",
+        "description": "Use this command to set IPv6 to get its addresses manually for <networkservice>. Specify the ip address, the prefix length and the router",
+        "arguments": {
+          "states": [
+            {
+              "name": "ip",
+              "description": "The IPv6 address to assign",
+              "index": 0
+            },
+            {
+              "name": "prefixlength",
+              "description": "The prefix length for the IPv6 address (e.g., 64)",
+              "index": 1
+            },
+            {
+              "name": "router",
+              "description": "The IPv6 address of the router",
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "-getv6additionalroutes",
+        "description": "Use this command to display the list of additional IPv6 routes configured for the service",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setv6additionalroutes",
+        "description": "Use this command to set the list of additional routes configured for the service. Each route is specified as a (destination address, prefix length, gateway addr",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            },
+            {
+              "name": "dest-prefixlength-gate",
+              "description": "The list of routes, each specified as a tuple of destination address, prefix length, and gateway address. Provide multiple routes or omit this to clear all rout",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "-getdnsservers",
+        "description": "Displays DNS info for <networkservice>",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setdnsservers",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            },
+            {
+              "name": "dns",
+              "description": "IP addresses of DNS servers. Use 'empty' to clear all DNS entries",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "-getsearchdomains",
+        "description": "Displays Domain Name info for <networkservice>",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setsearchdomains",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            },
+            {
+              "name": "domain",
+              "description": "List of search domains. Use 'empty' to clear all existing domains",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "-create6to4service",
+        "description": "Use this command to create a new 6 to 4 service with name <newnetworkservicename>",
+        "arguments": {
+          "states": [
+            {
+              "name": "newnetworkservicename",
+              "description": "The name of the new 6 to 4 service to be created",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "-set6to4automatic",
+        "description": "Use this command to set the 6 to 4 service such that it will get the relay address automatically",
+        "arguments": {
+          "states": [
+            {
+              "name": "newnetworkservicename",
+              "description": "The name of the 6 to 4 service to be configured for automatic relay address retrieval",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "-set6to4manual",
+        "description": "Use this command to set the 6 to 4 service such that it will get the relay address manually. Specify the <relayaddress> that you would like to set",
+        "arguments": {
+          "states": [
+            {
+              "name": "newnetworkservicename",
+              "description": "The name of the 6 to 4 service to be configured",
+              "index": 0
+            },
+            {
+              "name": "relayaddress",
+              "description": "The manually specified relay address to be used by the 6 to 4 service",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "-getwebproxy",
+        "description": "Displays Web proxy (server, port, enabled value) info for <networkservice>",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setwebproxy",
+        "description": "Set Web proxy for <networkservice> with <domain> and <port number>. Turns proxy on. Optionally, specify <on> or <off> for <authenticated> to enable and disable ",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            },
+            {
+              "name": "domain",
+              "description": "The domain name or IP address of the proxy server",
+              "index": 1
+            },
+            {
+              "name": "portnumber",
+              "description": "The port number for the proxy server",
+              "index": 2
+            },
+            {
+              "name": "authenticated",
+              "description": "Specify whether proxy authentication is required",
+              "provider": {
+                "values": [
+                  {
+                    "value": "on",
+                    "description": "Specify <on> for <authenticated> to enable authenticated proxy support"
+                  },
+                  {
+                    "value": "off",
+                    "description": "Specify <off> for <authenticated> to disable authenticated proxy support"
+                  }
+                ]
+              },
+              "index": 3
+            },
+            {
+              "name": "username",
+              "description": "The username for proxy authentication",
+              "index": 4
+            },
+            {
+              "name": "password",
+              "description": "The password for proxy authentication",
+              "index": 5
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setwebproxystate",
+        "description": "Set Web proxy on <networkservice> to either <on> or <off>",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            },
+            {
+              "name": "on-|-off",
+              "provider": {
+                "values": [
+                  "on",
+                  "off"
+                ]
+              },
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "-getsecurewebproxy",
+        "description": "Displays Secure Web proxy (server, port, enabled value) info for <networkservice>",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setsecurewebproxy",
+        "description": "Set Secure Web proxy for <networkservice> with <domain> and <port number>. Turns proxy on. Optionally, specify <on> or <off> for <authenticated> to enable and d",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            },
+            {
+              "name": "domain",
+              "description": "The proxy server's domain or IP address",
+              "index": 1
+            },
+            {
+              "name": "portnumber",
+              "description": "The port number for the proxy server",
+              "index": 2
+            },
+            {
+              "name": "authenticated",
+              "description": "Specify whether proxy authentication is required",
+              "provider": {
+                "values": [
+                  {
+                    "value": "on",
+                    "description": "Specify <on> for <authenticated> to enable authenticated proxy support"
+                  },
+                  {
+                    "value": "off",
+                    "description": "Specify <off> for <authenticated> to disable authenticated proxy support"
+                  }
+                ]
+              },
+              "index": 3
+            },
+            {
+              "name": "username",
+              "description": "The username for proxy authentication",
+              "index": 4
+            },
+            {
+              "name": "password",
+              "description": "The password for proxy authentication",
+              "index": 5
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setsecurewebproxystate",
+        "description": "Set Secure Web proxy on <networkservice> to either <on> or <off>",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            },
+            {
+              "name": "on-|-off",
+              "provider": {
+                "values": [
+                  "on",
+                  "off"
+                ]
+              },
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "-getsocksfirewallproxy",
+        "description": "Displays SOCKS Firewall proxy (server, port, enabled value) info for <networkservice>",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setsocksfirewallproxy",
+        "description": "Set SOCKS Firewall proxy for <networkservice> with <domain> and <port number>. Turns proxy on. Optionally, specify <on> or <off> for <authenticated> to enable a",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            },
+            {
+              "name": "domain",
+              "description": "The proxy server's domain or IP address",
+              "index": 1
+            },
+            {
+              "name": "portnumber",
+              "description": "The port number for the proxy server",
+              "index": 2
+            },
+            {
+              "name": "authenticated",
+              "description": "Specify whether proxy authentication is required",
+              "provider": {
+                "values": [
+                  {
+                    "value": "on",
+                    "description": "Specify <on> for <authenticated> to enable authenticated proxy support"
+                  },
+                  {
+                    "value": "off",
+                    "description": "Specify <off> for <authenticated> to disable authenticated proxy support"
+                  }
+                ]
+              },
+              "index": 3
+            },
+            {
+              "name": "username",
+              "description": "The username for proxy authentication",
+              "index": 4
+            },
+            {
+              "name": "password",
+              "description": "The password for proxy authentication",
+              "index": 5
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setsocksfirewallproxystate",
+        "description": "Set SOCKS Firewall proxy to either <on> or <off>",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            },
+            {
+              "name": "on-|-off",
+              "provider": {
+                "values": [
+                  "on",
+                  "off"
+                ]
+              },
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "-getproxybypassdomains",
+        "description": "Displays Bypass Domain Names for <networkservice>",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setproxybypassdomains",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            },
+            {
+              "name": "domain",
+              "description": "Domains to bypass proxy for. Use 'Empty' to clear all bypass domains",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "-getproxyautodiscovery",
+        "description": "Displays Proxy Auto Discover for <networkservice>",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setproxyautodiscovery",
+        "description": "Set Proxy Auto Discover for <networkservice> to either <on> or <off>",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            },
+            {
+              "name": "on-|-off",
+              "provider": {
+                "values": [
+                  "on",
+                  "off"
+                ]
+              },
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setautoproxyurl",
+        "description": "Set proxy auto-config to url for <networkservice> and enable it",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            },
+            {
+              "name": "url",
+              "description": "The URL of the proxy auto-config (PAC) file",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "-getautoproxyurl",
+        "description": "Displays proxy auto-config (url, enabled) info for <networkservice>",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-getairportnetwork",
+        "description": "Displays current Wi-Fi Network",
+        "arguments": {
+          "states": [
+            {
+              "name": "hardwareport",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_wireless_interfaces"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setairportnetwork",
+        "description": "Set Wi-Fi Network to <network> using optional [password] if specified",
+        "arguments": {
+          "states": [
+            {
+              "name": "hardwareport",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_wireless_interfaces"
+              }
+            },
+            {
+              "name": "network",
+              "description": "The name of the Wi-Fi network to connect to",
+              "index": 1
+            },
+            {
+              "name": "password",
+              "description": "Optional password for the Wi-Fi network",
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "-getairportpower",
+        "description": "Displays whether Wi-Fi power is on or off",
+        "arguments": {
+          "states": [
+            {
+              "name": "hardwareport",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_wireless_interfaces"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setairportpower",
+        "description": "Set Wi-Fi power to either <on> or <off>",
+        "arguments": {
+          "states": [
+            {
+              "name": "hardwareport",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_wireless_interfaces"
+              }
+            },
+            {
+              "name": "on-|-off",
+              "provider": {
+                "values": [
+                  "on",
+                  "off"
+                ]
+              },
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "-listpreferredwirelessnetworks",
+        "description": "List the preferred wireless networks for <hardwareport>",
+        "arguments": {
+          "states": [
+            {
+              "name": "hardwareport",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_wireless_interfaces"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-addpreferredwirelessnetworkatindex",
+        "description": "Add wireless network named <network> to preferred list for <hardwareport> at <index>. Store the optional password in the keychain",
+        "arguments": {
+          "states": [
+            {
+              "name": "hardwareport",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_wireless_interfaces"
+              }
+            },
+            {
+              "name": "network",
+              "description": "The name of the Wi-Fi network to add",
+              "index": 1
+            },
+            {
+              "name": "index",
+              "description": "The position in the preferred list",
+              "index": 2
+            },
+            {
+              "name": "securitytype",
+              "description": "The security type of the network",
+              "provider": {
+                "values": [
+                  {
+                    "value": "OPEN",
+                    "description": "No security"
+                  },
+                  {
+                    "value": "WPA",
+                    "description": "WPA Personal"
+                  },
+                  {
+                    "value": "WPA2",
+                    "description": "WPA2 Personal"
+                  },
+                  {
+                    "value": "WPA/WPA2",
+                    "description": "WPA/WPA2 Personal"
+                  },
+                  {
+                    "value": "WPAE",
+                    "description": "WPA Enterprise"
+                  },
+                  {
+                    "value": "WPA2E",
+                    "description": "WPA2 Enterprise"
+                  },
+                  {
+                    "value": "WPAE/WPA2E",
+                    "description": "WPA/WPA2 Enterprise"
+                  },
+                  {
+                    "value": "WEP",
+                    "description": "Plain WEP"
+                  },
+                  {
+                    "value": "8021XWEP",
+                    "description": "802.1X WEP"
+                  }
+                ]
+              },
+              "index": 3
+            },
+            {
+              "name": "password",
+              "description": "Optional password for the network",
+              "index": 4
+            }
+          ]
+        }
+      },
+      {
+        "name": "-removepreferredwirelessnetwork",
+        "description": "Remove <network> from the preferred wireless network list for <hardwareport>",
+        "arguments": {
+          "states": [
+            {
+              "name": "hardwareport",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_wireless_interfaces"
+              }
+            },
+            {
+              "name": "network",
+              "description": "The name of the Wi-Fi network to remove",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "-removeallpreferredwirelessnetworks",
+        "description": "Remove all networks from the preferred wireless network list for <hardwareport>",
+        "arguments": {
+          "states": [
+            {
+              "name": "hardwareport",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_wireless_interfaces"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-getnetworkserviceenabled",
+        "description": "Displays whether a service is on or off (enabled or disabled)",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setnetworkserviceenabled",
+        "description": "Use this command to turn the specified network service on or off (enable or disable)",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            },
+            {
+              "name": "on-|-off",
+              "provider": {
+                "values": [
+                  "on",
+                  "off"
+                ]
+              },
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "-createnetworkservice",
+        "description": "Create a service named <networkservice> on port <hardwareport>. The new service will be enabled by default",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservicename",
+              "description": "The name for the new network service",
+              "index": 0
+            },
+            {
+              "name": "hardwareport",
+              "index": 1,
+              "provider": {
+                "function": "__rush_complete_networksetup_hardware_ports"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-renamenetworkservice",
+        "description": "Use this command to rename the specified network service <networkservice> to <newnetworkservicename>",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            },
+            {
+              "name": "newnetworkservicename",
+              "description": "The new name for the network service",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "-duplicatenetworkservice",
+        "description": "Use this command to duplicate an existing network service <networkservice> and rename it to the specified name <newnetworkservicename>",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            },
+            {
+              "name": "newnetworkservicename",
+              "description": "The new name for the duplicated network service",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "-removenetworkservice",
+        "description": "Use this command to delete a network service <networkservice>. You cannot use this command to delete the last remaining service for a hardware port. To do so, y",
+        "arguments": {
+          "states": [
+            {
+              "name": "networkservice",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-ordernetworkservices",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "repeatable": true,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setMTUAndMediaAutomatically",
+        "description": "Set hardwareport or device specified back to automatically setting the MTU and Media",
+        "arguments": {
+          "states": [
+            {
+              "name": "hardwarePort",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_hardware_ports"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-getMTU",
+        "description": "Get the MTU value for hardwareport or device specified",
+        "arguments": {
+          "states": [
+            {
+              "name": "hardwarePort",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_hardware_ports"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setMTU",
+        "description": "Set MTU for hardwareport or device specified",
+        "arguments": {
+          "states": [
+            {
+              "name": "hardwarePort",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_hardware_ports"
+              }
+            },
+            {
+              "name": "value",
+              "description": "The MTU value to set, typically an integer representing the maximum packet size",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "-listValidMTURange",
+        "description": "List the valid MTU range for hardwareport or device specified",
+        "arguments": {
+          "states": [
+            {
+              "name": "hardwareport",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_hardware_ports"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-getMedia",
+        "description": "Show both the current setting for media and the active media on hardwareport or device specified",
+        "arguments": {
+          "states": [
+            {
+              "name": "hardwareport",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_hardware_ports"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setMedia",
+        "description": "Set media for hardwareport or device specified to subtype. Specify optional [option1] and additional options depending on subtype. Any number of valid options c",
+        "arguments": {
+          "states": [
+            {
+              "name": "hardwarePort",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_hardware_ports"
+              }
+            },
+            {
+              "name": "subtype",
+              "description": "The media subtype to set for the hardware port or device",
+              "index": 1
+            },
+            {
+              "name": "option",
+              "description": "Additional options relevant to the <subtype>. Can include multiple values depending on the subtype",
+              "index": 2,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "-listValidMedia",
+        "description": "List valid media options for hardwareport or device name. Enumerates available subtypes and options per subtype",
+        "arguments": {
+          "states": [
+            {
+              "name": "hardwareport",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_hardware_ports"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-createVLAN",
+        "description": "Create a VLAN with the name <name> over the parent device <parentdevice> and with the tag <tag>",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "The name to assign to the new VLAN",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_pppoe_services"
+              }
+            },
+            {
+              "name": "parentdevice",
+              "description": "The parent device over which the VLAN will be created",
+              "index": 1,
+              "provider": {
+                "function": "__rush_complete_networksetup_hardware_ports"
+              }
+            },
+            {
+              "name": "tag",
+              "description": "The VLAN tag to assign to the new VLAN",
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "-deleteVLAN",
+        "description": "Delete the VLAN with the name <name> over the parent device <parentdevice> and with the tag <tag>",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "The name of the VLAN to be deleted",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_pppoe_services"
+              }
+            },
+            {
+              "name": "parentdevice",
+              "description": "The parent device on which the VLAN is configured",
+              "index": 1,
+              "provider": {
+                "function": "__rush_complete_networksetup_hardware_ports"
+              }
+            },
+            {
+              "name": "tag",
+              "description": "The VLAN tag of the VLAN to be deleted",
+              "index": 2
+            }
+          ]
+        }
+      },
+      {
+        "name": "-listVLANs",
+        "description": "List the VLANs that have been created"
+      },
+      {
+        "name": "-listdevicesthatsupportVLAN",
+        "description": "List the devices that support VLANs"
+      },
+      {
+        "name": "-isBondSupported",
+        "description": "Displays YES if the device can be added to a bond. NO if it cannot",
+        "arguments": {
+          "states": [
+            {
+              "name": "device",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_interfaces"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-createBond",
+        "description": "Create a bond with the user-defined-name name and optionally add any listed devices if they support bonding",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "The user-defined name for the new bond",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_pppoe_services"
+              }
+            },
+            {
+              "name": "device",
+              "description": "The devices to include in the bond. Any number of devices can be specified",
+              "index": 1,
+              "repeatable": true,
+              "provider": {
+                "function": "__rush_complete_networksetup_interfaces"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-deleteBond",
+        "description": "Delete the bond with the specified device-name",
+        "arguments": {
+          "states": [
+            {
+              "name": "bond",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_bonds"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-addDeviceToBond",
+        "description": "Add device to bond",
+        "arguments": {
+          "states": [
+            {
+              "name": "device",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_interfaces"
+              }
+            },
+            {
+              "name": "bond",
+              "index": 1,
+              "provider": {
+                "function": "__rush_complete_networksetup_bonds"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-removeDeviceFromBond",
+        "description": "Remove device from bond",
+        "arguments": {
+          "states": [
+            {
+              "name": "device",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_interfaces"
+              }
+            },
+            {
+              "name": "bond",
+              "index": 1,
+              "provider": {
+                "function": "__rush_complete_networksetup_bonds"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-listBonds",
+        "description": "List of all bonds"
+      },
+      {
+        "name": "-showBondStatus",
+        "description": "Display the status of the specified bond",
+        "arguments": {
+          "states": [
+            {
+              "name": "bond",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_bonds"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-listpppoeservices",
+        "description": "List all PPPoE services in the current set"
+      },
+      {
+        "name": "-showpppoestatus",
+        "description": "Display the status of the PPPoE service with the specified name",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_pppoe_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-createpppoeservice",
+        "description": "Create a PPPoE service on the specified device with the service name specified",
+        "arguments": {
+          "states": [
+            {
+              "name": "device",
+              "description": "The network device to create the PPPoE service on",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_interfaces"
+              }
+            },
+            {
+              "name": "name",
+              "description": "The name for the new PPPoE service",
+              "index": 1,
+              "provider": {
+                "function": "__rush_complete_networksetup_pppoe_services"
+              }
+            },
+            {
+              "name": "account",
+              "description": "The PPPoE account name",
+              "index": 2
+            },
+            {
+              "name": "password",
+              "description": "The PPPoE account password",
+              "index": 3
+            },
+            {
+              "name": "pppoeName",
+              "description": "Optional name for the PPPoE service",
+              "index": 4
+            }
+          ]
+        }
+      },
+      {
+        "name": "-deletepppoeservice",
+        "description": "Delete the service",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setpppoeaccountname",
+        "description": "Set the account name for the service",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            },
+            {
+              "name": "account",
+              "description": "The PPPoE account name",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "-setpppoepassword",
+        "description": "Set the password for the service",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            },
+            {
+              "name": "password",
+              "description": "The PPPoE account password",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "-connectpppoeservice",
+        "description": "Connect the service",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-disconnectpppoeservice",
+        "description": "Disconnect the service",
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_services"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-listlocations",
+        "description": "List all network locations"
+      },
+      {
+        "name": "-getcurrentlocation",
+        "description": "Display the name of the current set"
+      },
+      {
+        "name": "-createlocation",
+        "description": "Create a set with the user-defined-name name and optionally populate it with the default services",
+        "arguments": {
+          "states": [
+            {
+              "name": "location",
+              "description": "The name for the new location",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_locations"
+              }
+            },
+            {
+              "name": "populate",
+              "description": "Specify 'true' to populate with default services or 'false' to create an empty location",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "-deletelocation",
+        "description": "Delete the set",
+        "arguments": {
+          "states": [
+            {
+              "name": "location",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_locations"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-switchtolocation",
+        "description": "Make the specified set the current set",
+        "arguments": {
+          "states": [
+            {
+              "name": "location",
+              "index": 0,
+              "provider": {
+                "function": "__rush_complete_networksetup_locations"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "-version",
+        "description": "Displays version of networksetup tool"
+      },
+      {
+        "name": "-help",
+        "description": "Displays a list of all the commands available in the Network Setup Tool, with explanatory information"
+      },
+      {
+        "name": "-printcommands",
+        "description": "Displays a list of commands with no detail"
+      }
+    ],
+    "providers": {}
+  }
+}
