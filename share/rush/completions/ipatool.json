@@ -1,0 +1,200 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ipatool",
+    "description": "search and download iOS app packages",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help for ipatool",
+        "inherit": true
+      },
+      {
+        "long": "non-interactive",
+        "description": "run in non-interactive session",
+        "inherit": true
+      },
+      {
+        "long": "verbose",
+        "description": "enables verbose logs",
+        "inherit": true
+      },
+      {
+        "long": "format",
+        "description": "output format",
+        "inherit": true,
+        "value": {
+          "name": "format",
+          "provider": "ipatool-formats"
+        }
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version for ipatool",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "auth",
+        "description": "authenticate with the App Store",
+        "subcommands": [
+          {
+            "name": "info",
+            "description": "Show current account info"
+          },
+          {
+            "name": "login",
+            "description": "Login to the App Store",
+            "options": [
+              {
+                "long": "auth-code",
+                "description": "2FA code for the Apple ID",
+                "inherit": false,
+                "value": {
+                  "name": "2FA-code"
+                }
+              },
+              {
+                "short": "e",
+                "long": "email",
+                "description": "Apple ID email address",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "password",
+                "description": "Apple ID password",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "revoke",
+            "description": "Revoke your App Store credentials"
+          }
+        ]
+      },
+      {
+        "name": "completion",
+        "description": "generate shell completion script",
+        "subcommands": [
+          {
+            "name": "bash",
+            "description": "Generate the autocompletion script for bash"
+          },
+          {
+            "name": "fish",
+            "description": "Generate the autocompletion script for fish"
+          },
+          {
+            "name": "powershell",
+            "description": "Generate the autocompletion script for powershell"
+          },
+          {
+            "name": "zsh",
+            "description": "Generate the autocompletion script for zsh"
+          }
+        ]
+      },
+      {
+        "name": "download",
+        "description": "download (encrypted) iOS app packages from the App Store",
+        "options": [
+          {
+            "short": "b",
+            "long": "bundle-identifier",
+            "description": "bundle identifier of the app",
+            "inherit": false,
+            "value": {
+              "name": "identifier"
+            }
+          },
+          {
+            "short": "o",
+            "long": "output",
+            "description": "The destination path of the downloaded app package",
+            "inherit": false,
+            "value": {
+              "name": "output-path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "purchase",
+            "description": "Obtain a license for the app if needed",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "display help for command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "purchase",
+        "description": "obtain a license for the app from the App Store",
+        "options": [
+          {
+            "short": "b",
+            "long": "bundle-identifier",
+            "description": "bundle identifier of the app",
+            "inherit": false,
+            "value": {
+              "name": "identifier"
+            }
+          }
+        ]
+      },
+      {
+        "name": "search",
+        "description": "search for iOS apps available on the App Store",
+        "options": [
+          {
+            "short": "l",
+            "long": "limit",
+            "description": "Limit the number of results",
+            "inherit": false,
+            "value": {
+              "name": "limit"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "query",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "ipatool-formats": {
+        "values": [
+          {
+            "value": "text"
+          },
+          {
+            "value": "json"
+          }
+        ]
+      }
+    }
+  }
+}
