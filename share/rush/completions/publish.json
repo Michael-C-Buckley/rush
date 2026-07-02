@@ -1,0 +1,45 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "publish",
+    "description": "generate and deploy websites",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "new",
+        "description": "set up a new website"
+      },
+      {
+        "name": "run",
+        "description": "run local website server",
+        "options": [
+          {
+            "short": "p",
+            "long": "port",
+            "description": "set server port",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          }
+        ]
+      },
+      {
+        "name": "deploy",
+        "description": "deploy website"
+      },
+      {
+        "name": "generate",
+        "description": "generate website"
+      }
+    ]
+  }
+}
