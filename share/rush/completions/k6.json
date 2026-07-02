@@ -1,0 +1,677 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "k6",
+    "description": "load testing tool",
+    "options": [
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "enable verbose logging",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "disable progress updates",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "help for k6",
+        "inherit": false
+      },
+      {
+        "short": "a",
+        "long": "address",
+        "description": "address for the REST API server (default \"localhost:6565\")",
+        "inherit": false,
+        "value": {
+          "name": "address",
+          "description": "address for the REST API server (default \"localhost:6565\")"
+        }
+      },
+      {
+        "long": "config",
+        "short": "c",
+        "description": "jSON config file",
+        "inherit": false,
+        "value": {
+          "name": "config",
+          "description": "jSON config file"
+        }
+      },
+      {
+        "long": "log-format",
+        "description": "log output format",
+        "inherit": false,
+        "value": {
+          "name": "log-format",
+          "description": "log output format"
+        }
+      },
+      {
+        "long": "log-output",
+        "description": "change the output for k6 logs",
+        "inherit": false,
+        "value": {
+          "name": "log-output",
+          "description": "change the output for k6 logs"
+        }
+      },
+      {
+        "long": "no-color",
+        "description": "disable colored output",
+        "inherit": false,
+        "value": {
+          "name": "no-color",
+          "description": "disable colored output"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "archive",
+        "description": "create an archive",
+        "arguments": {
+          "states": [
+            {
+              "name": "archive",
+              "description": "name of a file to archive",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "cloud",
+        "description": "run a test on the cloud",
+        "arguments": {
+          "states": [
+            {
+              "name": "cloud",
+              "description": "name of a script to run",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "completion",
+        "description": "generate the autocompletion script for the specified shell",
+        "arguments": {
+          "states": [
+            {
+              "name": "completion",
+              "description": "generate the autocompletion script for the specified shell",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        },
+        "subcommands": [
+          {
+            "name": "bash",
+            "description": "generate the autocompletion script for bash"
+          },
+          {
+            "name": "fish",
+            "description": "generate the autocompletion script for fish"
+          },
+          {
+            "name": "powershell",
+            "description": "generate the autocompletion script for powershell"
+          },
+          {
+            "name": "zsh",
+            "description": "generate the autocompletion script for zsh"
+          }
+        ]
+      },
+      {
+        "name": "convert",
+        "description": "convert a HAR file to a k6 script",
+        "arguments": {
+          "states": [
+            {
+              "name": "convert",
+              "description": "hAR file to convert",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "help about any command",
+        "arguments": {
+          "states": [
+            {
+              "name": "help",
+              "description": "help about any command",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "inspect",
+        "description": "inspect a script or archive",
+        "arguments": {
+          "states": [
+            {
+              "name": "inspect",
+              "description": "k6 script to inspect or archive",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "login",
+        "description": "inspect a script or archive",
+        "arguments": {
+          "states": [
+            {
+              "name": "login",
+              "description": "k6 script to inspect or archive",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        },
+        "subcommands": [
+          {
+            "name": "cloud",
+            "description": "authenticate with Load Impact"
+          },
+          {
+            "name": "influxdb",
+            "description": "authenticate with InfluxDB"
+          }
+        ]
+      },
+      {
+        "name": "pause",
+        "description": "pause a running test"
+      },
+      {
+        "name": "resume",
+        "description": "resume a running test"
+      },
+      {
+        "name": "run",
+        "description": "start a load test",
+        "options": [
+          {
+            "long": "address",
+            "description": "address of the API server",
+            "inherit": false,
+            "value": {
+              "name": "address",
+              "description": "address of the API server"
+            }
+          },
+          {
+            "long": "batch",
+            "description": "max parallel batch reqs (default 20)",
+            "inherit": false,
+            "value": {
+              "name": "batch",
+              "description": "max parallel batch reqs (default 20)"
+            }
+          },
+          {
+            "long": "batch-per-host",
+            "description": "max parallel batch reqs per host (default 6)",
+            "inherit": false,
+            "value": {
+              "name": "batch-per-host",
+              "description": "max parallel batch reqs per host (default 6)"
+            }
+          },
+          {
+            "long": "vus",
+            "short": "u",
+            "description": "number of virtual users (default 1)",
+            "inherit": false,
+            "value": {
+              "name": "vus",
+              "description": "number of virtual users (default 1)"
+            }
+          },
+          {
+            "long": "duration",
+            "short": "d",
+            "description": "test duration limit",
+            "inherit": false,
+            "value": {
+              "name": "duration",
+              "description": "test duration limit"
+            }
+          },
+          {
+            "long": "iterations",
+            "short": "i",
+            "description": "script total iteration limit (among all VUs)",
+            "inherit": false,
+            "value": {
+              "name": "iterations",
+              "description": "script total iteration limit (among all VUs)"
+            }
+          },
+          {
+            "long": "stage",
+            "short": "s",
+            "description": "add a stage, as `[duration]:[target]`",
+            "inherit": false,
+            "value": {
+              "name": "stage",
+              "description": "add a stage, as `[duration]:[target]`"
+            }
+          },
+          {
+            "long": "execution-segment",
+            "description": "add a stage, as `[duration]:[target]`",
+            "inherit": false,
+            "value": {
+              "name": "execution-segment",
+              "description": "limit execution to the specified segment, e.g. 10%, 1/3, 0.2:2/3"
+            }
+          },
+          {
+            "long": "execution-segment-sequence",
+            "description": "the execution segment sequence",
+            "inherit": false,
+            "value": {
+              "name": "execution-segment-sequence",
+              "description": "the execution segment sequence"
+            }
+          },
+          {
+            "long": "paused",
+            "short": "p",
+            "description": "start the test in a paused state",
+            "inherit": false,
+            "value": {
+              "name": "paused",
+              "description": "start the test in a paused state"
+            }
+          },
+          {
+            "long": "no-setup",
+            "description": "don't run setup()",
+            "inherit": false,
+            "value": {
+              "name": "no-setup",
+              "description": "don't run setup()"
+            }
+          },
+          {
+            "long": "no-teardown",
+            "description": "don't run teardown()",
+            "inherit": false,
+            "value": {
+              "name": "no-teardown",
+              "description": "don't run teardown()"
+            }
+          },
+          {
+            "long": "max-redirects",
+            "description": "follow at most n redirects (default 10)",
+            "inherit": false,
+            "value": {
+              "name": "max-redirects",
+              "description": "follow at most n redirects (default 10)"
+            }
+          },
+          {
+            "long": "rps",
+            "description": "limit requests per second",
+            "inherit": false,
+            "value": {
+              "name": "rps",
+              "description": "limit requests per second"
+            }
+          },
+          {
+            "long": "user-agent",
+            "description": "user agent for http requests (default \"k6/0.39.0 (https://k6.io/)\")",
+            "inherit": false,
+            "value": {
+              "name": "user-agent",
+              "description": "user agent for http requests (default \"k6/0.39.0 (https://k6.io/)\")"
+            }
+          },
+          {
+            "long": "http-debug",
+            "description": "log all HTTP requests and responses. Excludes body by default. To include body use '--http-debug=full'",
+            "inherit": false,
+            "value": {
+              "name": "http-debug",
+              "description": "log all HTTP requests and responses. Excludes body by default. To include body use '--http-debug=full'"
+            }
+          },
+          {
+            "long": "insecure-skip-tls-verify",
+            "description": "skip verification of TLS certificates",
+            "inherit": false,
+            "value": {
+              "name": "insecure-skip-tls-verify",
+              "description": "skip verification of TLS certificates"
+            }
+          },
+          {
+            "long": "no-connection-reuse",
+            "description": "disable keep-alive connections",
+            "inherit": false,
+            "value": {
+              "name": "no-connection-reuse",
+              "description": "disable keep-alive connections"
+            }
+          },
+          {
+            "long": "no-vu-connection-reuse",
+            "description": "don't reuse connections between iterations",
+            "inherit": false,
+            "value": {
+              "name": "no-vu-connection-reuse",
+              "description": "don't reuse connections between iterations"
+            }
+          },
+          {
+            "long": "min-iteration-duration",
+            "description": "minimum amount of time k6 will take executing a single iteration",
+            "inherit": false,
+            "value": {
+              "name": "min-iteration-duration",
+              "description": "minimum amount of time k6 will take executing a single iteration"
+            }
+          },
+          {
+            "long": "throw",
+            "description": "throw warnings (like failed http requests) as errors",
+            "inherit": false,
+            "value": {
+              "name": "throw",
+              "description": "throw warnings (like failed http requests) as errors"
+            }
+          },
+          {
+            "long": "blacklist-ip",
+            "description": "blacklist an ip range from being called",
+            "inherit": false,
+            "value": {
+              "name": "blacklist-ip",
+              "description": "blacklist an ip range from being calledd"
+            }
+          },
+          {
+            "long": "block-hostnames",
+            "description": "block a case-insensitive hostname pattern, with optional leading wildcard, from being called",
+            "inherit": false,
+            "value": {
+              "name": "block-hostnames",
+              "description": "block a case-insensitive hostname pattern, with optional leading wildcard, from being called"
+            }
+          },
+          {
+            "long": "summary-trend-stats",
+            "description": "define stats for trend metrics (response times), one or more as 'avg,p(95),...' (default 'avg,min,med,max,p(90),p(95)')",
+            "inherit": false,
+            "value": {
+              "name": "summary-trend-stats",
+              "description": "define stats for trend metrics (response times), one or more as 'avg,p(95),...' (default 'avg,min,med,max,p(90),p(95)')"
+            }
+          },
+          {
+            "long": "summary-time-unit",
+            "description": "define the time unit used to display the trend stats. Possible units are: 's', 'ms' and 'us'",
+            "inherit": false,
+            "value": {
+              "name": "summary-time-unit",
+              "description": "define the time unit used to display the trend stats. Possible units are: 's', 'ms' and 'us'"
+            }
+          },
+          {
+            "long": "system-tags",
+            "description": "only include these system tags in metrics (default \"proto,subproto,status,method,url,name,group,check,error,error_code,tls_version,scenario,service,expected_res",
+            "inherit": false,
+            "value": {
+              "name": "system-tags",
+              "description": "only include these system tags in metrics (default \"proto,subproto,status,method,url,name,group,check,error,error_code,tls_version,scenario,service,expected_res"
+            }
+          },
+          {
+            "long": "tag",
+            "description": "add a tag to be applied to all samples, as `[name]=[value]`",
+            "inherit": false,
+            "value": {
+              "name": "tag",
+              "description": "add a tag to be applied to all samples, as `[name]=[value]`"
+            }
+          },
+          {
+            "long": "console-output",
+            "description": "redirects the console logging to the provided output file",
+            "inherit": false,
+            "value": {
+              "name": "console-output",
+              "description": "redirects the console logging to the provided output file"
+            }
+          },
+          {
+            "long": "discard-response-bodies",
+            "description": "read but don't process or save HTTP response bodies",
+            "inherit": false,
+            "value": {
+              "name": "discard-response-bodies",
+              "description": "read but don't process or save HTTP response bodies"
+            }
+          },
+          {
+            "long": "local-ips",
+            "description": "client IP Ranges and/or CIDRs from which each VU will be making requests, e.g. '192.168.220.1,192.168.0.10-192.168.0.25', 'fd:1::0/120', etc",
+            "inherit": false,
+            "value": {
+              "name": "local-ips",
+              "description": "client IP Ranges and/or CIDRs from which each VU will be making requests, e.g. '192.168.220.1,192.168.0.10-192.168.0.25', 'fd:1::0/120', etc"
+            }
+          },
+          {
+            "long": "dns",
+            "description": "dNS resolver configuration",
+            "inherit": false,
+            "value": {
+              "name": "dns",
+              "description": "dNS resolver configuration"
+            }
+          },
+          {
+            "long": "include-system-env-vars",
+            "description": "pass the real system environment variables to the runtime (default true)",
+            "inherit": false,
+            "value": {
+              "name": "include-system-env-vars",
+              "description": "pass the real system environment variables to the runtime (default true)"
+            }
+          },
+          {
+            "long": "compatibility-mode",
+            "description": "javaScript compiler compatibility mode, \"extended\" or \"base\"",
+            "inherit": false,
+            "value": {
+              "name": "compatibility-mode",
+              "description": "javaScript compiler compatibility mode, \"extended\" or \"base\""
+            }
+          },
+          {
+            "long": "type",
+            "short": "t",
+            "description": "override test type, \"js\" or \"archive\"",
+            "inherit": false,
+            "value": {
+              "name": "type",
+              "description": "override test type, \"js\" or \"archive\""
+            }
+          },
+          {
+            "long": "env",
+            "short": "e",
+            "description": "add/override environment variable with VAR=value",
+            "inherit": false,
+            "value": {
+              "name": "env",
+              "description": "add/override environment variable with VAR=value"
+            }
+          },
+          {
+            "long": "no-thresholds",
+            "description": "don't run thresholds",
+            "inherit": false,
+            "value": {
+              "name": "no-thresholds",
+              "description": "don't run thresholds"
+            }
+          },
+          {
+            "long": "no-summary",
+            "description": "don't show the summary at the end of the test",
+            "inherit": false,
+            "value": {
+              "name": "no-summary",
+              "description": "don't show the summary at the end of the test"
+            }
+          },
+          {
+            "long": "summary-export",
+            "description": "output the end-of-test summary report to JSON file",
+            "inherit": false,
+            "value": {
+              "name": "summary-export",
+              "description": "output the end-of-test summary report to JSON file"
+            }
+          },
+          {
+            "long": "out",
+            "short": "o",
+            "description": "uri for an external metrics database",
+            "inherit": false,
+            "value": {
+              "name": "out",
+              "description": "uri for an external metrics database"
+            }
+          },
+          {
+            "long": "linger",
+            "short": "l",
+            "description": "keep the API server alive past test end",
+            "inherit": false,
+            "value": {
+              "name": "linger",
+              "description": "keep the API server alive past test end"
+            }
+          },
+          {
+            "long": "no-usage-report",
+            "description": "don't send anonymous stats to the developers",
+            "inherit": false,
+            "value": {
+              "name": "no-usage-report",
+              "description": "don't send anonymous stats to the developers"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "run",
+              "description": "k6 script to run",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "scale",
+        "description": "scale a running test",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "help for scale",
+            "inherit": false
+          },
+          {
+            "short": "m",
+            "long": "max",
+            "description": "max available virtual users",
+            "inherit": false,
+            "value": {
+              "name": "max",
+              "description": "max available virtual users"
+            }
+          },
+          {
+            "short": "u",
+            "long": "vus",
+            "description": "number of virtual users (default 1)",
+            "inherit": false,
+            "value": {
+              "name": "vus",
+              "description": "number of virtual users (default 1)"
+            }
+          }
+        ]
+      },
+      {
+        "name": "stats",
+        "description": "show test metrics",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "help for stats",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "status",
+        "description": "show test status",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "help for status",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "show the application version and exit",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "help for version",
+            "inherit": false
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
