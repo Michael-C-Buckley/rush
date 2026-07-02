@@ -1,0 +1,261 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "googler",
+    "description": "search Google from the command line",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show this help message and exit",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "start",
+        "description": "start at the Nth result",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        }
+      },
+      {
+        "short": "n",
+        "long": "count",
+        "description": "show N results",
+        "inherit": false,
+        "value": {
+          "name": "n"
+        }
+      },
+      {
+        "short": "N",
+        "long": "news",
+        "description": "show results from news section",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "videos",
+        "description": "show results from videos section",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "long": "tld",
+        "description": "country-specific search with top-level domain .TLD, e.g., 'in' for India",
+        "inherit": false,
+        "value": {
+          "name": "top-level-domain"
+        }
+      },
+      {
+        "short": "l",
+        "long": "lang",
+        "description": "display in language",
+        "inherit": false,
+        "value": {
+          "name": "language"
+        }
+      },
+      {
+        "short": "g",
+        "long": "geoloc",
+        "description": "country-specific geolocation search with country code CC, e.g. 'in' for India",
+        "inherit": false,
+        "value": {
+          "name": "cc",
+          "description": "country codes are the same as top-level domains"
+        }
+      },
+      {
+        "short": "x",
+        "long": "exact",
+        "description": "disable automatic spelling correction",
+        "inherit": false
+      },
+      {
+        "long": "colorize",
+        "description": "whether to colorize output which enables color when stdout is a tty device",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": "googler.colorize-modes"
+        }
+      },
+      {
+        "short": "C",
+        "long": "nocolor",
+        "description": "equivalent to --colorize=never",
+        "inherit": false
+      },
+      {
+        "long": "colors",
+        "description": "set output colors",
+        "inherit": false,
+        "value": {
+          "name": "colors"
+        }
+      },
+      {
+        "short": "j",
+        "long": "first",
+        "aliases": [
+          "lucky"
+        ],
+        "description": "open the first result in web browser and exit",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "long": "time",
+        "description": "time limit search [h5 (5 hrs), d5 (5 days), w5 (5 weeks), m5 (5 months), y5 (5 years)",
+        "inherit": false,
+        "value": {
+          "name": "time-limit"
+        }
+      },
+      {
+        "long": "from",
+        "description": "starting date/month/year of date range. Can be used in conjunction with --to and overrides -t, --time",
+        "inherit": false,
+        "value": {
+          "name": "date",
+          "description": "american date format with slashes, e.g., 2/24/2020, 2/2020, 2020"
+        }
+      },
+      {
+        "long": "to",
+        "description": "ending date/month/year of date range",
+        "inherit": false,
+        "value": {
+          "name": "date",
+          "description": "american date format with slashes, e.g., 2/24/2020, 2/2020, 2020"
+        }
+      },
+      {
+        "short": "w",
+        "long": "site",
+        "description": "search a site using Google",
+        "inherit": false,
+        "value": {
+          "name": "site"
+        }
+      },
+      {
+        "short": "e",
+        "long": "exclude",
+        "description": "exclude site from results",
+        "inherit": false
+      },
+      {
+        "long": "unfilter",
+        "description": "do not omit similar results",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "long": "proxy",
+        "description": "tunnel traffic through an HTTP proxy",
+        "inherit": false,
+        "value": {
+          "name": "proxy",
+          "description": "in the form of [http://][user:password@]proxyhost[:port]"
+        }
+      },
+      {
+        "long": "notweak",
+        "description": "disable TCP optimizations and forced TLS 1.2",
+        "inherit": false
+      },
+      {
+        "long": "json",
+        "description": "output in JSON format; implies --noprompt",
+        "inherit": false
+      },
+      {
+        "long": "url-handler",
+        "description": "custom script or cli utility to open results",
+        "inherit": false,
+        "value": {
+          "name": "util",
+          "provider": "builtin.executables"
+        }
+      },
+      {
+        "long": "show-browser-logs",
+        "description": "do not suppress browser output (stdout and stderr)",
+        "inherit": false
+      },
+      {
+        "long": "np",
+        "aliases": [
+          "noprompt"
+        ],
+        "description": "search and exit, do not prompt",
+        "inherit": false
+      },
+      {
+        "short": "4",
+        "long": "ipv4",
+        "description": "only connect over IPv4 (by default, IPv4 is preferred but IPv6 is used as a fallback)",
+        "inherit": false
+      },
+      {
+        "short": "6",
+        "long": "ipv6",
+        "description": "only connect over IPv6",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "long": "upgrade",
+        "description": "perform in-place self-upgrade",
+        "inherit": false
+      },
+      {
+        "long": "include-git",
+        "description": "when used with --upgrade, get latest git master",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show program's version number and exit",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "long": "debug",
+        "description": "enable debugging",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "keyword",
+          "description": "search keywords",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "googler.colorize-modes": {
+        "candidates": [
+          {
+            "value": "auto"
+          },
+          {
+            "value": "always"
+          },
+          {
+            "value": "never"
+          }
+        ]
+      }
+    }
+  }
+}
