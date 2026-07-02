@@ -1,0 +1,37 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "tokei",
+    "description": "count code quickly",
+    "providers": {
+      "builtin.files": { "builtin": "files" },
+      "tokei.outputs": { "values": ["cbor", "json", "yaml"] },
+      "tokei.sort-columns": { "values": ["files", "lines", "blanks", "code", "comments"] },
+      "tokei.languages": { "function": "__rush_complete_tokei_languages" }
+    },
+    "options": [
+      { "short": "f", "long": "files", "description": "print statistics for individual files" },
+      { "short": "h", "long": "help", "description": "print help" },
+      { "long": "hidden", "description": "count hidden files" },
+      { "short": "l", "long": "languages", "description": "print supported languages and extensions" },
+      { "long": "no-ignore", "description": "ignore ignore files" },
+      { "long": "no-ignore-dot", "description": "ignore .ignore and .tokeignore files" },
+      { "long": "no-ignore-parent", "description": "ignore parent-directory ignore files" },
+      { "long": "no-ignore-vcs", "description": "ignore VCS ignore files" },
+      { "short": "V", "long": "version", "description": "print version" },
+      { "short": "v", "long": "verbose", "repeatable": true, "description": "increase log verbosity" },
+      { "short": "c", "long": "columns", "description": "set strict output column width", "value": { "name": "columns" } },
+      { "short": "e", "long": "exclude", "repeatable": true, "description": "exclude matching files or directories", "value": { "name": "pattern", "provider": "builtin.files" } },
+      { "short": "i", "long": "input", "description": "read statistics from a previous run", "value": { "name": "input", "provider": { "values": ["stdin"] } } },
+      { "short": "o", "long": "output", "description": "select output format", "value": { "name": "format", "provider": "tokei.outputs" } },
+      { "short": "s", "long": "sort", "description": "sort languages by column", "value": { "name": "column", "provider": "tokei.sort-columns" } },
+      { "short": "t", "long": "type", "description": "filter output by language type", "value": { "name": "type", "provider": "tokei.languages" } }
+    ],
+    "arguments": {
+      "states": [
+        { "name": "path", "index": 0, "repeatable": true, "provider": "builtin.files", "description": "file or directory" }
+      ]
+    }
+  }
+}

@@ -1,0 +1,8 @@
+__rush_complete_tokei_languages() {
+  command -v tokei >/dev/null 2>&1 || return
+  tokei --languages 2>/dev/null | while IFS= read -r line; do
+    language=${line%% *}
+    case "$language" in ''|*=*|---*) continue ;; esac
+    rush_complete candidate "$language" --kind plain --description language
+  done
+}
