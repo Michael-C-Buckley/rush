@@ -1,0 +1,239 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "v",
+    "description": "V programming language",
+    "providers": {
+      "files": {
+        "builtin": "files"
+      },
+      "helpTopics": {
+        "values": [
+          {
+            "value": "build",
+            "description": "show help for build"
+          },
+          {
+            "value": "compile",
+            "description": "show help for compile"
+          },
+          {
+            "value": "doc",
+            "description": "show help for doc"
+          },
+          {
+            "value": "fmt",
+            "description": "show help for fmt"
+          },
+          {
+            "value": "init",
+            "description": "show help for init"
+          },
+          {
+            "value": "install",
+            "description": "show help for install"
+          },
+          {
+            "value": "new",
+            "description": "show help for new"
+          },
+          {
+            "value": "profile",
+            "description": "show help for profile"
+          },
+          {
+            "value": "run",
+            "description": "show help for run"
+          },
+          {
+            "value": "test",
+            "description": "show help for test"
+          },
+          {
+            "value": "vet",
+            "description": "show help for vet"
+          },
+          {
+            "value": "watch",
+            "description": "show help for watch"
+          }
+        ]
+      }
+    },
+    "options": [
+      {
+        "description": "show help",
+        "long": "help",
+        "short": "h"
+      },
+      {
+        "description": "show version",
+        "long": "version",
+        "short": "v",
+        "spellings": [
+          "version"
+        ]
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "description": "input file or directory",
+          "provider": "files",
+          "index": 0
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "run",
+        "description": "compile and run a program",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "description": "input file or directory",
+              "provider": "files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "crun",
+        "description": "compile if needed and run a program",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "description": "input file or directory",
+              "provider": "files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "watch",
+        "description": "watch a file and recompile",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "description": "input file or directory",
+              "provider": "files",
+              "index": 0
+            }
+          ]
+        },
+        "subcommands": [
+          {
+            "name": "run",
+            "description": "run after recompiling",
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "description": "input file or directory",
+                  "provider": "files",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "new",
+        "description": "create a V project"
+      },
+      {
+        "name": "init",
+        "description": "initialize an existing V project"
+      },
+      {
+        "name": "test",
+        "description": "run tests"
+      },
+      {
+        "name": "fmt",
+        "description": "format V code",
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "description": "input file or directory",
+              "provider": "files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "vet",
+        "description": "report suspicious code constructs"
+      },
+      {
+        "name": "doc",
+        "description": "generate module documentation"
+      },
+      {
+        "name": "vlib-docs",
+        "description": "generate and open vlib documentation"
+      },
+      {
+        "name": "repl",
+        "description": "run the REPL"
+      },
+      {
+        "name": "where",
+        "description": "print project declaration locations"
+      },
+      {
+        "name": "symlink",
+        "description": "create a V symlink"
+      },
+      {
+        "name": "up",
+        "description": "run the V self-updater"
+      },
+      {
+        "name": "self",
+        "description": "run the V self-compiler",
+        "options": [
+          {
+            "description": "compile V for production",
+            "spellings": [
+              "-prod"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "display help",
+        "arguments": {
+          "states": [
+            {
+              "name": "topic",
+              "provider": "helpTopics",
+              "index": 0
+            }
+          ]
+        },
+        "subcommands": [
+          {
+            "name": "other",
+            "description": "show less common help"
+          },
+          {
+            "name": "topics",
+            "description": "list known help topics"
+          }
+        ]
+      }
+    ]
+  }
+}
