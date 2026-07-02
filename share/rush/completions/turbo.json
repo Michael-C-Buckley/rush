@@ -1,0 +1,252 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "turbo",
+    "description": "Turborepo build system",
+    "options": [
+      {
+        "long": "version",
+        "description": "print the version",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "description": "print a help message",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "bin",
+        "description": "get the path to the turbo binary"
+      },
+      {
+        "name": "link",
+        "description": "link your local directory to a Vercel organization and enable remote caching",
+        "options": [
+          {
+            "long": "no-gitignore",
+            "description": "do not create or modify .gitignore",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "login",
+        "description": "login to your Vercel account",
+        "options": [
+          {
+            "long": "sso-team",
+            "description": "attempt to authenticate to the specified team using SSO",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "logout",
+        "description": "logout of your Vercel account"
+      },
+      {
+        "name": "prune",
+        "description": "prepare a subset of your monorepo",
+        "options": [
+          {
+            "long": "scope",
+            "description": "specify package to act as entry point for pruned monorepo",
+            "inherit": false,
+            "value": {
+              "name": "package"
+            }
+          },
+          {
+            "long": "docker",
+            "description": "output pruned workspace into 'fill' and 'json' directories optimized for Docker layer caching",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "unlink",
+        "description": "unlink the current directory from your Vercel organization and disable remote caching"
+      },
+      {
+        "name": "run",
+        "description": "run tasks in your monorepo",
+        "options": [
+          {
+            "long": "scope",
+            "description": "specify packages to act as entry points for task execution",
+            "inherit": false,
+            "value": {
+              "name": "package"
+            }
+          },
+          {
+            "long": "cache-dir",
+            "description": "specify local filesystem cache directory",
+            "inherit": false,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "concurrency",
+            "description": "limit the concurrency of task execution (use `1` for serial)",
+            "inherit": false,
+            "value": {
+              "name": "limit"
+            }
+          },
+          {
+            "long": "continue",
+            "description": "continue execution even if a task exits with an error",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "description": "ignore the existing cache",
+            "inherit": false
+          },
+          {
+            "long": "graph",
+            "description": "generate a Dot graph of the task execution",
+            "inherit": false
+          },
+          {
+            "long": "global-deps",
+            "description": "specify glob of global filesystem dependencies to be hashed (useful for .env and files in the root directory)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "glob"
+            }
+          },
+          {
+            "long": "since",
+            "description": "limit/set scope to changed packages since a mergebase",
+            "inherit": false,
+            "value": {
+              "name": "branch",
+              "provider": "turbo.branches"
+            }
+          },
+          {
+            "long": "team",
+            "description": "the slug of a turborepo.com team",
+            "inherit": false,
+            "value": {
+              "name": "slug"
+            }
+          },
+          {
+            "long": "token",
+            "description": "a turborepo.com access token",
+            "inherit": false,
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "long": "ignore",
+            "description": "files to ignore when calculating changed files (supports globs)",
+            "inherit": false,
+            "value": {
+              "name": "files"
+            }
+          },
+          {
+            "long": "profile",
+            "description": "file to write turbo's performance profile into",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "parallel",
+            "description": "execute all tasks in parallel",
+            "inherit": false
+          },
+          {
+            "long": "include-dependencies",
+            "description": "include the dependencies of tasks in execution",
+            "inherit": false
+          },
+          {
+            "long": "no-deps",
+            "description": "exclude dependent task consumers from execution",
+            "inherit": false
+          },
+          {
+            "long": "no-cache",
+            "description": "avoid saving task results to the cache (useful for development/watch tasks)",
+            "inherit": false
+          },
+          {
+            "long": "output-logs",
+            "inherit": false,
+            "value": {
+              "name": "level",
+              "provider": "turbo.output-logs"
+            }
+          },
+          {
+            "long": "dry",
+            "aliases": [
+              "dry-run"
+            ],
+            "description": "list the packages in scope and the tasks that would be run",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "required": false,
+              "style": "optional",
+              "provider": "turbo.dry-formats"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "tasks",
+              "index": 0,
+              "repeatable": true,
+              "provider": "turbo.tasks",
+              "description": "turbo task"
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "turbo.tasks": {
+        "function": "__rush_complete_turbo_tasks"
+      },
+      "turbo.branches": {
+        "function": "__rush_complete_turbo_branches"
+      },
+      "turbo.output-logs": {
+        "values": [
+          "new-only",
+          "hash-only",
+          "full",
+          "none"
+        ]
+      },
+      "turbo.dry-formats": {
+        "values": [
+          "json"
+        ]
+      }
+    }
+  }
+}
