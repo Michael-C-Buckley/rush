@@ -293,6 +293,7 @@ pub const CompoundCommand = union(enum) {
     for_command: ForCommand,
     c_for_command: CForCommand,
     arithmetic_command: ArithmeticCommand,
+    conditional_command: ConditionalCommand,
     case_command: CaseCommand,
 
     pub fn validate(self: CompoundCommand) void {
@@ -303,6 +304,7 @@ pub const CompoundCommand = union(enum) {
             .for_command => |command| command.validate(),
             .c_for_command => |command| command.validate(),
             .arithmetic_command => |command| command.validate(),
+            .conditional_command => |command| command.validate(),
             .case_command => |command| command.validate(),
         }
     }
@@ -385,6 +387,80 @@ pub const ArithmeticCommand = struct {
 
     pub fn validate(self: ArithmeticCommand) void {
         _ = self;
+    }
+};
+
+pub const ConditionalCommand = struct {
+    expression: ConditionalExpression,
+
+    pub fn validate(self: ConditionalCommand) void {
+        self.expression.validate();
+    }
+};
+
+pub const ConditionalExpression = union(enum) {
+    word: Word,
+    unary_not: *const ConditionalExpression,
+    unary_test: ConditionalUnaryTest,
+    binary: ConditionalBinary,
+    comparison: ConditionalComparison,
+
+    pub fn validate(self: ConditionalExpression) void {
+        switch (self) {
+            .word => |word| word.validate(),
+            .unary_not => |expr| expr.validate(),
+            .unary_test => |unary| unary.validate(),
+            .binary => |binary| binary.validate(),
+            .comparison => |comparison| comparison.validate(),
+        }
+    }
+};
+
+pub const ConditionalUnaryTestOperator = enum {
+    string_empty,
+    string_nonempty,
+};
+
+pub const ConditionalUnaryTest = struct {
+    operator: ConditionalUnaryTestOperator,
+    operand: Word,
+
+    pub fn validate(self: ConditionalUnaryTest) void {
+        self.operand.validate();
+    }
+};
+
+pub const ConditionalBinaryOperator = enum {
+    and_if,
+    or_if,
+};
+
+pub const ConditionalBinary = struct {
+    operator: ConditionalBinaryOperator,
+    left: *const ConditionalExpression,
+    right: *const ConditionalExpression,
+
+    pub fn validate(self: ConditionalBinary) void {
+        self.left.validate();
+        self.right.validate();
+    }
+};
+
+pub const ConditionalComparisonOperator = enum {
+    equal,
+    not_equal,
+    less,
+    greater,
+};
+
+pub const ConditionalComparison = struct {
+    operator: ConditionalComparisonOperator,
+    left: Word,
+    right: Word,
+
+    pub fn validate(self: ConditionalComparison) void {
+        self.left.validate();
+        self.right.validate();
     }
 };
 

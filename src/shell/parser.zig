@@ -442,6 +442,8 @@ const Parser = struct {
             body = .{ .for_command = for_command };
         } else if (try self.parseArithmeticCommand()) |arithmetic_command| {
             body = .{ .arithmetic_command = arithmetic_command };
+        } else if (try self.parseConditionalCommand()) |conditional_command| {
+            body = .{ .conditional_command = conditional_command };
         } else if (try self.parseCaseCommand()) |case_command| {
             body = .{ .case_command = case_command };
         } else if (self.eat(.left_paren) != null) {
@@ -570,6 +572,125 @@ const Parser = struct {
         const command: ast.ArithmeticCommand = .{ .expression = expression };
         if (self.canValidateHereDocs()) command.validate();
         return command;
+    }
+
+    fn parseConditionalCommand(self: *Parser) ParserError!?ast.ConditionalCommand {
+        if (!self.atConditionalStart()) return null;
+        if (self.mode() == .posix) return error.UnexpectedToken;
+        self.index += 1;
+
+        const expression = try self.parseConditionalOr();
+        if (!self.atConditionalEnd()) return error.UnexpectedToken;
+        self.index += 1;
+
+        const command: ast.ConditionalCommand = .{ .expression = expression };
+        if (self.canValidateHereDocs()) command.validate();
+        return command;
+    }
+
+    fn parseConditionalOr(self: *Parser) ParserError!ast.ConditionalExpression {
+        var expression = try self.parseConditionalAnd();
+        while (self.eat(.pipe_pipe) != null) {
+            const left = try self.copyConditionalExpression(expression);
+            const right = try self.copyConditionalExpression(try self.parseConditionalAnd());
+            expression = .{ .binary = .{ .operator = .or_if, .left = left, .right = right } };
+        }
+        return expression;
+    }
+
+    fn parseConditionalAnd(self: *Parser) ParserError!ast.ConditionalExpression {
+        var expression = try self.parseConditionalUnary();
+        while (self.eat(.ampersand_ampersand) != null) {
+            const left = try self.copyConditionalExpression(expression);
+            const right = try self.copyConditionalExpression(try self.parseConditionalUnary());
+            expression = .{ .binary = .{ .operator = .and_if, .left = left, .right = right } };
+        }
+        return expression;
+    }
+
+    fn parseConditionalUnary(self: *Parser) ParserError!ast.ConditionalExpression {
+        if (self.eat(.bang) != null) {
+            return .{ .unary_not = try self.copyConditionalExpression(try self.parseConditionalUnary()) };
+        }
+
+        if (self.eat(.left_paren) != null) {
+            const expression = try self.parseConditionalOr();
+            try self.expect(.right_paren);
+            return expression;
+        }
+
+        return self.parseConditionalPrimary();
+    }
+
+    fn parseConditionalPrimary(self: *Parser) ParserError!ast.ConditionalExpression {
+        const left_token = self.eatConditionalWord() orelse return error.UnexpectedToken;
+        if (conditionalUnaryTestOperator(left_token)) |operator| {
+            if (!self.atConditionalEnd()) {
+                const operand_token = self.eatConditionalWord() orelse return error.UnexpectedToken;
+                return .{ .unary_test = .{
+                    .operator = operator,
+                    .operand = try self.parseWordToken(operand_token),
+                } };
+            }
+        }
+
+        const left = try self.parseWordToken(left_token);
+        if (self.eatConditionalComparisonOperator()) |operator| {
+            const right_token = self.eatConditionalWord() orelse return error.UnexpectedToken;
+            return .{ .comparison = .{
+                .operator = operator,
+                .left = left,
+                .right = try self.parseWordToken(right_token),
+            } };
+        }
+        return .{ .word = left };
+    }
+
+    fn copyConditionalExpression(self: *Parser, expression: ast.ConditionalExpression) !*const ast.ConditionalExpression {
+        const copied = try self.allocator.create(ast.ConditionalExpression);
+        copied.* = expression;
+        return copied;
+    }
+
+    fn atConditionalStart(self: Parser) bool {
+        if (!self.at(.word)) return false;
+        const tok = self.tokens[self.index];
+        return !tok.quoted and std.mem.eql(u8, tok.text, "[[");
+    }
+
+    fn atConditionalEnd(self: Parser) bool {
+        if (!self.at(.word)) return false;
+        const tok = self.tokens[self.index];
+        return !tok.quoted and std.mem.eql(u8, tok.text, "]]");
+    }
+
+    fn eatConditionalWord(self: *Parser) ?token.Token {
+        if (self.atConditionalEnd()) return null;
+        return self.eat(.word);
+    }
+
+    fn eatConditionalComparisonOperator(self: *Parser) ?ast.ConditionalComparisonOperator {
+        if (self.eat(.less) != null) return .less;
+        if (self.eat(.greater) != null) return .greater;
+        if (!self.at(.word)) return null;
+        const tok = self.tokens[self.index];
+        if (tok.quoted) return null;
+        const operator: ast.ConditionalComparisonOperator = if (std.mem.eql(u8, tok.text, "==") or
+            std.mem.eql(u8, tok.text, "="))
+            .equal
+        else if (std.mem.eql(u8, tok.text, "!="))
+            .not_equal
+        else
+            return null;
+        self.index += 1;
+        return operator;
+    }
+
+    fn conditionalUnaryTestOperator(tok: token.Token) ?ast.ConditionalUnaryTestOperator {
+        if (tok.quoted) return null;
+        if (std.mem.eql(u8, tok.text, "-n")) return .string_nonempty;
+        if (std.mem.eql(u8, tok.text, "-z")) return .string_empty;
+        return null;
     }
 
     fn parseCaseCommand(self: *Parser) ParserError!?ast.CaseCommand {

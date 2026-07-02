@@ -2114,5 +2114,15 @@
             .stderr_match = .nonempty,
             .status_match = .nonzero,
         },
+        .{
+            .name = "conditional command bashism is rejected in POSIX mode",
+            .script =
+            \\[[ x == x ]]
+            \\printf bad
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
     },
 }

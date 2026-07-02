@@ -117,5 +117,42 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "conditional command evaluates strings and boolean operators",
+            .script =
+            \\x=abc
+            \\empty=
+            \\if [[ $x && ! $empty ]]; then printf 'truthy\n'; fi
+            \\if [[ ( $empty || $x ) && $x == abc ]]; then printf 'grouped\n'; fi
+            \\if [[ -n $x && -z $empty ]]; then printf 'unary\n'; fi
+            \\[[ $empty ]] || printf 'empty-status:%s\n' "$?"
+            ,
+            .stdout =
+            \\truthy
+            \\grouped
+            \\unary
+            \\empty-status:1
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "conditional command compares strings and matches patterns",
+            .script =
+            \\x=src/main.zig
+            \\if [[ $x == src/*.zig ]]; then printf 'pattern\n'; fi
+            \\if [[ $x != "src/*.zig" ]]; then printf 'quoted-literal\n'; fi
+            \\if [[ apple < banana && zebra > yak ]]; then printf 'ordered\n'; fi
+            ,
+            .stdout =
+            \\pattern
+            \\quoted-literal
+            \\ordered
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }

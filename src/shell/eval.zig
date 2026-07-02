@@ -650,6 +650,7 @@ fn evalCompoundBody(shell: anytype, command: ast.CompoundCommand) EvalError!resu
         .for_command => |for_command| evalFor(shell, for_command),
         .c_for_command => |c_for_command| evalCFor(shell, c_for_command),
         .arithmetic_command => |arithmetic_command| evalArithmeticCommand(shell, arithmetic_command),
+        .conditional_command => |conditional_command| evalConditionalCommand(shell, conditional_command),
         .case_command => |case_command| evalCase(shell, case_command),
         else => .{ .status = 2 },
     };
@@ -868,6 +869,61 @@ fn evalArithmeticCommand(shell: anytype, command: ast.ArithmeticCommand) EvalErr
         else => return err,
     };
     return .{ .status = if (value != 0) 0 else 1 };
+}
+
+fn evalConditionalCommand(shell: anytype, command: ast.ConditionalCommand) EvalError!result.EvalResult {
+    validateAst(command);
+    const scratch = try shell.beginScratchScope();
+    defer scratch.end();
+
+    const matched = try evalConditionalExpression(shell, command.expression);
+    return .{ .status = if (matched) 0 else 1 };
+}
+
+fn evalConditionalExpression(shell: anytype, expression: ast.ConditionalExpression) EvalError!bool {
+    return switch (expression) {
+        .word => |word| (try expandWord(shell, word)).len != 0,
+        .unary_not => |nested| !try evalConditionalExpression(shell, nested.*),
+        .unary_test => |unary| evalConditionalUnaryTest(shell, unary),
+        .binary => |binary| switch (binary.operator) {
+            .and_if => if (try evalConditionalExpression(shell, binary.left.*))
+                try evalConditionalExpression(shell, binary.right.*)
+            else
+                false,
+            .or_if => if (try evalConditionalExpression(shell, binary.left.*))
+                true
+            else
+                try evalConditionalExpression(shell, binary.right.*),
+        },
+        .comparison => |comparison| evalConditionalComparison(shell, comparison),
+    };
+}
+
+fn evalConditionalUnaryTest(shell: anytype, test_expr: ast.ConditionalUnaryTest) EvalError!bool {
+    const operand = try expandWord(shell, test_expr.operand);
+    return switch (test_expr.operator) {
+        .string_empty => operand.len == 0,
+        .string_nonempty => operand.len != 0,
+    };
+}
+
+fn evalConditionalComparison(shell: anytype, comparison: ast.ConditionalComparison) EvalError!bool {
+    const left = try expandWord(shell, comparison.left);
+    const right = switch (comparison.operator) {
+        .equal, .not_equal => if (comparison.right.quoted)
+            try expandWord(shell, comparison.right)
+        else
+            try expandPatternWord(shell, comparison.right),
+        .less, .greater => try expandWord(shell, comparison.right),
+    };
+
+    const matched = switch (comparison.operator) {
+        .equal => if (comparison.right.quoted) std.mem.eql(u8, left, right) else patternMatches(right, left),
+        .not_equal => if (comparison.right.quoted) !std.mem.eql(u8, left, right) else !patternMatches(right, left),
+        .less => std.mem.order(u8, left, right) == .lt,
+        .greater => std.mem.order(u8, left, right) == .gt,
+    };
+    return matched;
 }
 
 fn evalArithmeticForCommand(shell: anytype, text: []const u8) EvalError!bool {
@@ -3329,6 +3385,9 @@ fn copyCompoundCommand(allocator: std.mem.Allocator, command: ast.CompoundComman
         .arithmetic_command => |arithmetic_command| .{
             .arithmetic_command = try copyArithmeticCommand(allocator, arithmetic_command),
         },
+        .conditional_command => |conditional_command| .{
+            .conditional_command = try copyConditionalCommand(allocator, conditional_command),
+        },
         .case_command => |case_command| .{ .case_command = try copyCaseCommand(allocator, case_command) },
     };
 }
@@ -3493,6 +3552,46 @@ fn copyArithmeticCommand(
     command: ast.ArithmeticCommand,
 ) CopyError!ast.ArithmeticCommand {
     return .{ .expression = try allocator.dupe(u8, command.expression) };
+}
+
+fn copyConditionalCommand(
+    allocator: std.mem.Allocator,
+    command: ast.ConditionalCommand,
+) CopyError!ast.ConditionalCommand {
+    return .{ .expression = try copyConditionalExpressionValue(allocator, command.expression) };
+}
+
+fn copyConditionalExpression(
+    allocator: std.mem.Allocator,
+    expression: ast.ConditionalExpression,
+) CopyError!*const ast.ConditionalExpression {
+    const copied = try allocator.create(ast.ConditionalExpression);
+    copied.* = try copyConditionalExpressionValue(allocator, expression);
+    return copied;
+}
+
+fn copyConditionalExpressionValue(
+    allocator: std.mem.Allocator,
+    expression: ast.ConditionalExpression,
+) CopyError!ast.ConditionalExpression {
+    return switch (expression) {
+        .word => |word| .{ .word = try copyWord(allocator, word) },
+        .unary_not => |nested| .{ .unary_not = try copyConditionalExpression(allocator, nested.*) },
+        .unary_test => |test_expr| .{ .unary_test = .{
+            .operator = test_expr.operator,
+            .operand = try copyWord(allocator, test_expr.operand),
+        } },
+        .binary => |binary| .{ .binary = .{
+            .operator = binary.operator,
+            .left = try copyConditionalExpression(allocator, binary.left.*),
+            .right = try copyConditionalExpression(allocator, binary.right.*),
+        } },
+        .comparison => |comparison| .{ .comparison = .{
+            .operator = comparison.operator,
+            .left = try copyWord(allocator, comparison.left),
+            .right = try copyWord(allocator, comparison.right),
+        } },
+    };
 }
 
 fn copyCaseCommand(allocator: std.mem.Allocator, command: ast.CaseCommand) CopyError!ast.CaseCommand {
