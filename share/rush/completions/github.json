@@ -1,0 +1,110 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "github",
+    "description": "open repositories in GitHub Desktop",
+    "options": [
+      {
+        "long": "help",
+        "description": "show the help page for a command",
+        "inherit": false,
+        "value": {
+          "name": "command",
+          "required": false,
+          "style": "optional",
+          "provider": "github.commands"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "path",
+          "index": 0,
+          "provider": "builtin.directories"
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "clone",
+        "description": "clone a repository",
+        "options": [
+          {
+            "long": "branch",
+            "short": "b",
+            "description": "the branch to checkout after cloning",
+            "inherit": false,
+            "value": {
+              "name": "branch"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "url-or-slug",
+              "provider": "github.clone-url-prefixes",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "open",
+        "description": "open a git repository in GitHub Desktop",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0,
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "show the help page for a command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "provider": "github.commands",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "github.commands": {
+        "candidates": [
+          {
+            "value": "clone"
+          },
+          {
+            "value": "open"
+          },
+          {
+            "value": "help"
+          }
+        ]
+      },
+      "github.clone-url-prefixes": {
+        "candidates": [
+          {
+            "value": "https://github.com/"
+          },
+          {
+            "value": "https://gitlab.com/"
+          },
+          {
+            "value": "https://bitbucket.com/"
+          }
+        ]
+      }
+    }
+  }
+}
