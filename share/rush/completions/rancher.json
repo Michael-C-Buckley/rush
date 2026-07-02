@@ -1,0 +1,555 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "rancher",
+    "description": "interact with Rancher",
+    "options": [
+      {
+        "long": "debug",
+        "description": "debug logging",
+        "inherit": false
+      },
+      {
+        "long": "config",
+        "short": "c",
+        "description": "path to rancher config (default: `$home/.rancher`) [$RANCHER_CONFIG_DIR]",
+        "inherit": false,
+        "value": {
+          "name": "rancher_config_path",
+          "description": "The path to the rancher config",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for rancher cli",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "print the version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "apps",
+        "aliases": [
+          "app"
+        ],
+        "description": "operations with apps. Uses helm. Flags are prepended with 'helm' can also be accurately described by helm documentation",
+        "subcommands": [
+          {
+            "name": "ls",
+            "description": "list all apps in the current Rancher server"
+          },
+          {
+            "name": "delete",
+            "description": "delete an app",
+            "arguments": {
+              "states": [
+                {
+                  "name": "app_name-app_id",
+                  "description": "the name of the app to delete",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "install",
+            "description": "install an app template",
+            "options": [
+              {
+                "long": "answers",
+                "short": "a",
+                "description": "path to an answers file, the format of the file is a map with key:value. This supports JSON and YAML",
+                "inherit": false,
+                "value": {
+                  "name": "answers-file-path",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "values",
+                "short": "v",
+                "description": "path to a helm values file",
+                "inherit": false,
+                "value": {
+                  "name": "values-file-path",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "namespace",
+                "short": "n",
+                "description": "namespace to install the app into",
+                "inherit": false,
+                "value": {
+                  "name": "namespace"
+                }
+              },
+              {
+                "long": "set",
+                "description": "set answers for the template, can be used multiple times. Example: --set foo=bar",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "key=value"
+                }
+              },
+              {
+                "long": "set-string",
+                "description": "set string answers for the template (Skips Helm's type conversion), can be used multiple times. Example: --set-string foo=bar",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "key=value"
+                }
+              },
+              {
+                "long": "version",
+                "description": "version of the template to use",
+                "inherit": false,
+                "value": {
+                  "name": "version"
+                }
+              },
+              {
+                "long": "no-prompt",
+                "description": "suppress asking questions and use the default values when required answers are not provided",
+                "inherit": false
+              },
+              {
+                "long": "helm-timeout",
+                "description": "amount of time for helm to wait for k8s commands (default is 300 secs). Example: --helm-timeout 600 (default: 300)",
+                "inherit": false,
+                "value": {
+                  "name": "seconds"
+                }
+              },
+              {
+                "long": "helm-wait",
+                "description": "helm will wait for as long as timeout value, for installed resources to be ready (pods, PVCs, deployments, etc.). Example: --helm-wait",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "template_name-template_path",
+                  "description": "install an app template in the current Rancher server",
+                  "index": 0
+                },
+                {
+                  "name": "app_name",
+                  "description": "the name of the app to install",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "rollback",
+            "description": "rollback an app to a previous version",
+            "arguments": {
+              "states": [
+                {
+                  "name": "app_name-app_id",
+                  "description": "the name/id of the app to rollback",
+                  "index": 0
+                },
+                {
+                  "name": "revision_id-revision_name",
+                  "description": "the name/id of the revision to rollback",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "upgrade",
+            "description": "upgrade an existing app to a newer version"
+          },
+          {
+            "name": "list-templates",
+            "aliases": [
+              "lt"
+            ],
+            "description": "list templates available for installation"
+          },
+          {
+            "name": "show-tempate",
+            "aliases": [
+              "st"
+            ],
+            "description": "show versions available to install for an app template"
+          },
+          {
+            "name": "show-app",
+            "aliases": [
+              "sa"
+            ],
+            "description": "show an app's available versions and revisions"
+          },
+          {
+            "name": "show-notes",
+            "description": "show contents of apps notes.txt"
+          }
+        ],
+        "options": [
+          {
+            "long": "format",
+            "short": "o",
+            "description": "output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "json",
+                  "yaml"
+                ]
+              }
+            }
+          },
+          {
+            "long": "quiet",
+            "short": "q",
+            "description": "only display IDs or suppress help text",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "catalog",
+        "description": "operations with catalogs",
+        "subcommands": [
+          {
+            "name": "ls",
+            "description": "list all catalogs in the current Rancher server",
+            "options": [
+              {
+                "long": "verbose",
+                "short": "v",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "add",
+            "description": "add a catalog",
+            "options": [
+              {
+                "long": "branch",
+                "description": "branch from the url to use (default: 'master')",
+                "inherit": false,
+                "value": {
+                  "name": "branch-name"
+                }
+              },
+              {
+                "long": "helm-version",
+                "description": "version of helm the app(s) in your catalog will use for deployment. Use 'v2' for helm 2 or 'v3' for helm 3 (default: 'v2')",
+                "inherit": false,
+                "value": {
+                  "name": "version"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "catalog_name",
+                  "description": "the name of the catalog to add",
+                  "index": 0
+                },
+                {
+                  "name": "catalog_url",
+                  "description": "the URL of the catalog to add",
+                  "index": 1
+                }
+              ]
+            }
+          }
+        ],
+        "options": [
+          {
+            "long": "format",
+            "short": "o",
+            "description": "output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "json",
+                  "yaml"
+                ]
+              }
+            }
+          },
+          {
+            "long": "quiet",
+            "short": "q",
+            "description": "only display IDs or suppress help text",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "clusters",
+        "aliases": [
+          "cluster"
+        ],
+        "description": "operations on clusters"
+      },
+      {
+        "name": "context",
+        "description": "operations for the context"
+      },
+      {
+        "name": "globaldns",
+        "description": "operations on global DNS providers and entries"
+      },
+      {
+        "name": "inspect",
+        "description": "view details of resources"
+      },
+      {
+        "name": "kubectl",
+        "description": "run kubectl commands"
+      },
+      {
+        "name": "login",
+        "aliases": [],
+        "description": "login to a Rancher server",
+        "options": [
+          {
+            "long": "token",
+            "description": "aPI Bearer Token to authenticate Rancher CLI to your Rancher server",
+            "inherit": false,
+            "value": {
+              "name": "bearer_token",
+              "description": "The bearer token you want to use"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "server_url",
+              "description": "the server url you want to login to",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "machines",
+        "aliases": [
+          "machine"
+        ],
+        "description": "operations on machines"
+      },
+      {
+        "name": "multiclusterapps",
+        "aliases": [
+          "multiclusterapp"
+        ],
+        "description": "operations with multi-cluster apps"
+      },
+      {
+        "name": "namespaces",
+        "aliases": [
+          "namespace"
+        ],
+        "description": "operations on namespaces"
+      },
+      {
+        "name": "nodes",
+        "aliases": [
+          "node"
+        ],
+        "description": "operations on nodes"
+      },
+      {
+        "name": "projects",
+        "aliases": [
+          "project"
+        ],
+        "description": "operations on projects"
+      },
+      {
+        "name": "ps",
+        "description": "show workloads in a project"
+      },
+      {
+        "name": "server",
+        "description": "operations for the server",
+        "subcommands": [
+          {
+            "name": "current",
+            "description": "display the current server"
+          },
+          {
+            "name": "delete",
+            "description": "\u26a0\ufe0f Delete a server from the local config",
+            "arguments": {
+              "states": [
+                {
+                  "name": "server_name",
+                  "description": "the name of server you want to delete",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "ls",
+            "description": "list all servers"
+          },
+          {
+            "name": "switch",
+            "description": "switch to a new server",
+            "arguments": {
+              "states": [
+                {
+                  "name": "server_name",
+                  "description": "the name of server you want to switch to",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "settings",
+        "aliases": [
+          "setting"
+        ],
+        "description": "show settings for the current server",
+        "subcommands": [
+          {
+            "name": "ls",
+            "description": "list settings"
+          },
+          {
+            "name": "get",
+            "description": "print a setting",
+            "arguments": {
+              "states": [
+                {
+                  "name": "setting_name",
+                  "description": "the name of setting you want to get",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "set",
+            "description": "set the value for a setting",
+            "options": [
+              {
+                "long": "default",
+                "description": "reset the setting back to it's default value. If the default value is (blank) it will be set to that",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "settingname",
+                  "description": "the name of setting you want to set",
+                  "index": 0
+                },
+                {
+                  "name": "setting_value",
+                  "description": "the value of setting you want to set",
+                  "index": 1
+                }
+              ]
+            }
+          }
+        ],
+        "options": [
+          {
+            "long": "format",
+            "short": "o",
+            "description": "output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "json",
+                  "yaml"
+                ]
+              }
+            }
+          },
+          {
+            "long": "quiet",
+            "short": "q",
+            "description": "only display IDs or suppress help text",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "ssh",
+        "description": "sSH into a node"
+      },
+      {
+        "name": "up",
+        "description": "apply compose config"
+      },
+      {
+        "name": "wait",
+        "description": "wait for resources cluster, app, project, multiClusterApp"
+      },
+      {
+        "name": "token",
+        "description": "authenticate and generate new kubeconfig token"
+      },
+      {
+        "name": "help",
+        "aliases": [
+          "h"
+        ],
+        "description": "shows a list of commands or help for one command"
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
