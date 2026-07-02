@@ -1,0 +1,239 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "sta",
+    "description": "generate TypeScript APIs from Swagger schemas",
+    "options": [
+      {
+        "long": "version",
+        "description": "show version",
+        "short": "v"
+      },
+      {
+        "long": "path",
+        "description": "set Swagger schema path or URL",
+        "short": "p",
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "output",
+        "description": "set output directory",
+        "short": "o",
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "name",
+        "description": "set output file name",
+        "short": "n",
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "templates",
+        "description": "set templates directory",
+        "short": "t",
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "default-as-success",
+        "description": "treat default response as success",
+        "short": "d"
+      },
+      {
+        "long": "responses",
+        "description": "generate response metadata",
+        "short": "r"
+      },
+      {
+        "long": "union-enums",
+        "description": "generate enum types as unions"
+      },
+      {
+        "long": "add-readonly",
+        "description": "generate readonly properties"
+      },
+      {
+        "long": "route-types",
+        "description": "generate route type definitions"
+      },
+      {
+        "long": "no-client",
+        "description": "do not generate API class"
+      },
+      {
+        "long": "enum-names-as-values",
+        "description": "use x-enumNames as enum values"
+      },
+      {
+        "long": "extract-request-params",
+        "description": "extract request params"
+      },
+      {
+        "long": "extract-request-body",
+        "description": "extract request body"
+      },
+      {
+        "long": "extract-response-body",
+        "description": "extract response body"
+      },
+      {
+        "long": "extract-response-error",
+        "description": "extract response error"
+      },
+      {
+        "long": "modular",
+        "description": "generate separated files"
+      },
+      {
+        "long": "js",
+        "description": "generate JavaScript API module"
+      },
+      {
+        "long": "module-name-index",
+        "description": "set route path index",
+        "short": "index"
+      },
+      {
+        "long": "module-name-first-tag",
+        "description": "split routes by first tag"
+      },
+      {
+        "long": "disableStrictSSL",
+        "description": "disable strict SSL"
+      },
+      {
+        "long": "disableProxy",
+        "description": "disable proxy"
+      },
+      {
+        "long": "axios",
+        "description": "generate axios HTTP client"
+      },
+      {
+        "long": "unwrap-response-data",
+        "description": "unwrap response data"
+      },
+      {
+        "long": "disable-throw-on-error",
+        "description": "do not throw when response is not ok"
+      },
+      {
+        "long": "single-http-client",
+        "description": "allow passing HttpClient instance"
+      },
+      {
+        "long": "silent",
+        "description": "only output errors"
+      },
+      {
+        "long": "default-response",
+        "description": "set default empty response type",
+        "short": "type"
+      },
+      {
+        "long": "type-prefix",
+        "description": "set data contract prefix",
+        "short": "prefix"
+      },
+      {
+        "long": "type-suffix",
+        "description": "set data contract suffix",
+        "short": "suffix"
+      },
+      {
+        "long": "clean-output",
+        "description": "clean output before generation"
+      },
+      {
+        "long": "api-class-name",
+        "description": "set API class name",
+        "short": "name"
+      },
+      {
+        "long": "patch",
+        "description": "patch small Swagger source errors"
+      },
+      {
+        "long": "debug",
+        "description": "show debug output"
+      },
+      {
+        "long": "another-array-type",
+        "description": "generate Array<Type> syntax"
+      },
+      {
+        "long": "sort-types",
+        "description": "sort fields and types"
+      },
+      {
+        "long": "extract-enums",
+        "description": "extract inline enums"
+      },
+      {
+        "long": "help",
+        "description": "show help",
+        "short": "h"
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "generate-templates",
+        "description": "generate EJS templates",
+        "options": [
+          {
+            "long": "output",
+            "description": "set templates output directory",
+            "short": "o",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "modular",
+            "description": "generate modular templates",
+            "short": "m"
+          },
+          {
+            "long": "http-client",
+            "description": "set HTTP client type",
+            "value": {
+              "name": "client",
+              "provider": {
+                "values": [
+                  {
+                    "value": "fetch"
+                  },
+                  {
+                    "value": "axios"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "clean-output",
+            "description": "clean output directory",
+            "short": "c"
+          },
+          {
+            "long": "rewrite",
+            "description": "rewrite existing templates",
+            "short": "r"
+          }
+        ]
+      }
+    ]
+  }
+}
