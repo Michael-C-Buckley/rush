@@ -246,6 +246,7 @@ pub const LineSession = struct {
         if (self.editing_mode == .vi) return self.handleViKey(event);
         switch (event.key) {
             .enter => {
+                if (event.modifiers.shift) return self.insertLiteralNewline();
                 if (self.completion_menu.selectedCandidate()) |candidate| {
                     try self.applyCompletionCandidate(candidate);
                     return;
@@ -358,6 +359,10 @@ pub const LineSession = struct {
                 try self.clearInput();
             },
             .enter => {
+                if (event.modifiers.shift) {
+                    try self.insertLiteralNewline();
+                    return self.appendViInputRepeatText("\n");
+                }
                 self.clearViInsertRepeatCapture();
                 try self.submitInput();
             },
@@ -370,6 +375,11 @@ pub const LineSession = struct {
                 const start = previousViWordStart(self.editor.buffer.text(), self.editor.buffer.cursor_byte, .word);
                 try self.killRange(start, self.editor.buffer.cursor_byte, start);
                 try self.appendViInputRepeatKey(.delete_previous_word);
+            },
+            .delete_next_word => {
+                const end = nextWordEnd(self.editor.buffer.text(), self.editor.buffer.cursor_byte);
+                try self.killRange(self.editor.buffer.cursor_byte, end, self.editor.buffer.cursor_byte);
+                try self.appendViInputRepeatKey(.delete_next_word);
             },
             .delete_to_start => {
                 try self.killRange(0, self.editor.buffer.cursor_byte, 0);
@@ -402,6 +412,12 @@ pub const LineSession = struct {
         }
     }
 
+    fn insertLiteralNewline(self: *LineSession) !void {
+        try self.editor.buffer.insertText("\n");
+        self.completion_menu.clear(self.allocator);
+        self.clearPendingRemovableSuffix();
+    }
+
     fn handleViReplaceKey(self: *LineSession, event: KeyEvent) !void {
         switch (event.key) {
             .escape => {
@@ -413,6 +429,10 @@ pub const LineSession = struct {
                 try self.clearInput();
             },
             .enter => {
+                if (event.modifiers.shift) {
+                    try self.insertLiteralNewline();
+                    return self.appendViInputRepeatText("\n");
+                }
                 self.clearViInsertRepeatCapture();
                 try self.submitInput();
             },
@@ -967,6 +987,10 @@ pub const LineSession = struct {
             .delete_previous_word => {
                 const start = previousViWordStart(self.editor.buffer.text(), self.editor.buffer.cursor_byte, .word);
                 try self.killRange(start, self.editor.buffer.cursor_byte, start);
+            },
+            .delete_next_word => {
+                const end = nextWordEnd(self.editor.buffer.text(), self.editor.buffer.cursor_byte);
+                try self.killRange(self.editor.buffer.cursor_byte, end, self.editor.buffer.cursor_byte);
             },
             .delete_to_start => try self.killRange(0, self.editor.buffer.cursor_byte, 0),
             .left, .right, .home, .end, .word_left, .word_right => try self.editor.handleKey(.{ .key = key }),
@@ -2967,6 +2991,24 @@ test "line session submits an owned copy on enter" {
     try std.testing.expectEqualStrings("echo hi", line);
 }
 
+test "line session inserts newline on shift-enter" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    var candidates = [_]completion.Candidate{
+        .{ .value = "checkout", .kind = .subcommand, .replace_start = 0, .replace_end = 0 },
+    };
+
+    try session.handleKey(.{ .key = .text, .text = "echo" });
+    try session.applyCompletion(.{ .ambiguous = &candidates });
+    try session.handleKey(.{ .key = .enter, .modifiers = .{ .shift = true } });
+    try session.handleKey(.{ .key = .text, .text = "hi" });
+
+    try std.testing.expectEqual(LineSession.State.editing, session.state);
+    try std.testing.expect(!session.hasCompletionMenu());
+    try std.testing.expectEqualStrings("echo\nhi", session.editor.buffer.text());
+    try std.testing.expect(session.takeSubmittedLine() == null);
+}
+
 test "line session keeps input and clears menu on escape" {
     var session = try LineSession.init(std.testing.allocator, "$ ");
     defer session.deinit();
@@ -3039,6 +3081,22 @@ test "vi line session switches modes and edits in command mode" {
     try std.testing.expectEqual(ViState.insert, session.vi_state);
     try session.handleKey(.{ .key = .text, .text = "B" });
     try std.testing.expectEqualStrings("aBbc", session.editor.buffer.text());
+}
+
+test "vi insert mode inserts newline on shift-enter and kills next word" {
+    var session = try LineSession.initWithEditingMode(std.testing.allocator, .{ .bytes = "$ " }, .{}, .vi);
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .text, .text = "echo there friend" });
+    try session.handleKey(.{ .key = .home });
+    try session.handleKey(.{ .key = .word_right });
+    try session.handleKey(.{ .key = .delete_next_word });
+    try std.testing.expectEqualStrings("echo friend", session.editor.buffer.text());
+    try session.handleKey(.{ .key = .enter, .modifiers = .{ .shift = true } });
+    try session.handleKey(.{ .key = .text, .text = "hi" });
+
+    try std.testing.expectEqual(LineSession.State.editing, session.state);
+    try std.testing.expectEqualStrings("echo\nhi friend", session.editor.buffer.text());
 }
 
 test "vi line session deletes to end and puts killed text" {

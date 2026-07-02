@@ -89,6 +89,8 @@ pub fn keyFromVaxis(codepoint: u21, modifiers: Modifiers) Key {
             'u' => return .delete_to_start,
             'w' => return .delete_previous_word,
             'y' => return .yank,
+            vaxis.Key.backspace => return .delete_previous_word,
+            vaxis.Key.delete => return .delete_next_word,
             vaxis.Key.left => return .word_left,
             vaxis.Key.right => return .word_right,
             else => {},
@@ -146,6 +148,8 @@ test "key mapping supports readline control keys" {
     try std.testing.expectEqual(Key.delete_to_start, keyFromVaxis('u', ctrl));
     try std.testing.expectEqual(Key.delete_previous_word, keyFromVaxis('w', ctrl));
     try std.testing.expectEqual(Key.yank, keyFromVaxis('y', ctrl));
+    try std.testing.expectEqual(Key.delete_previous_word, keyFromVaxis(vaxis.Key.backspace, ctrl));
+    try std.testing.expectEqual(Key.delete_next_word, keyFromVaxis(vaxis.Key.delete, ctrl));
     try std.testing.expectEqual(Key.word_left, keyFromVaxis(vaxis.Key.left, ctrl));
     try std.testing.expectEqual(Key.word_right, keyFromVaxis(vaxis.Key.right, ctrl));
 }

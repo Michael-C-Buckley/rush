@@ -389,6 +389,24 @@ test "terminal capability application plans writes only on state changes" {
     var output: std.ArrayList(u8) = .empty;
     defer output.deinit(std.testing.allocator);
 
+    const editor_sequence = try std.fmt.allocPrint(
+        std.testing.allocator,
+        kitty_keyboard_set,
+        .{editor_kitty_keyboard_flags},
+    );
+    defer std.testing.allocator.free(editor_sequence);
+    const editor_flags: vaxis.Key.KittyFlags = @bitCast(editor_kitty_keyboard_flags);
+
+    try capabilities.appendApplySequence(std.testing.allocator, &output, .kitty_keyboard);
+    try std.testing.expect(capabilities.kitty_keyboard);
+    try std.testing.expect(editor_flags.disambiguate);
+    try std.testing.expectEqualStrings(editor_sequence, output.items);
+
+    output.clearRetainingCapacity();
+    try capabilities.appendApplySequence(std.testing.allocator, &output, .kitty_keyboard);
+    try std.testing.expectEqual(@as(usize, 0), output.items.len);
+
+    output.clearRetainingCapacity();
     try capabilities.appendApplySequence(std.testing.allocator, &output, .unicode);
     try std.testing.expect(capabilities.unicode);
     try std.testing.expectEqualStrings(vaxis.ctlseqs.unicode_set, output.items);
@@ -451,6 +469,23 @@ test "terminal capability suspend restores default keyboard during command hando
     try std.testing.expect(capabilities.kitty_keyboard);
     try std.testing.expect(!capabilities.kitty_keyboard_handoff);
     try std.testing.expectEqualStrings(editor_sequence, output.items);
+}
+
+test "terminal parser emits modified modern keyboard keys" {
+    var parser = Parser.init(std.testing.allocator);
+    defer parser.deinit();
+    var events: std.ArrayList(Event) = .empty;
+    defer events.deinit(std.testing.allocator);
+
+    try parser.feed("\x1b[13;2u\x1b[127;5u\x1b[3;5~", &events);
+
+    try std.testing.expectEqual(@as(usize, 3), events.items.len);
+    try std.testing.expectEqual(line_editor.Key.enter, events.items[0].key_press.key);
+    try std.testing.expect(events.items[0].key_press.modifiers.shift);
+    try std.testing.expectEqual(line_editor.Key.delete_previous_word, events.items[1].key_press.key);
+    try std.testing.expect(events.items[1].key_press.modifiers.ctrl);
+    try std.testing.expectEqual(line_editor.Key.delete_next_word, events.items[2].key_press.key);
+    try std.testing.expect(events.items[2].key_press.modifiers.ctrl);
 }
 
 test "terminal parser emits text keys" {

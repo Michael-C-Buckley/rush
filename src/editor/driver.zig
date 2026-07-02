@@ -1342,7 +1342,7 @@ fn planKeyPress(
 ) KeyPressPlan {
     if (isCompletionTab(key) and has_completion_menu) return .menu_tab;
     if (isCompletionTab(key) and has_completion_provider) return .explicit_completion;
-    if (key.key == .enter and !has_completion_menu) return .enter_accept;
+    if (key.key == .enter and !key.modifiers.shift and !has_completion_menu) return .enter_accept;
     if (isSpaceAccept(key)) return .space_accept;
     if (has_completion_menu and
         shouldRefreshCompletionMenu(key) and
@@ -1626,6 +1626,10 @@ test "key press policy separates completion actions from plain editing" {
     try std.testing.expectEqual(
         KeyPressPlan.enter_accept,
         planKeyPress(.{ .key = .enter }, false, true),
+    );
+    try std.testing.expectEqual(
+        KeyPressPlan.edit,
+        planKeyPress(.{ .key = .enter, .modifiers = .{ .shift = true } }, false, true),
     );
     try std.testing.expectEqual(
         KeyPressPlan.edit,
