@@ -1,0 +1,226 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "make",
+    "options": [
+      {
+        "short": "j",
+        "inherit": false,
+        "value": {
+          "name": "jobs"
+        },
+        "description": "run jobs in parallel"
+      },
+      {
+        "long": "file",
+        "short": "f",
+        "description": "read FILE as a makefile",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        },
+        "spellings": [
+          "--makefile"
+        ]
+      },
+      {
+        "short": "C",
+        "long": "directory",
+        "description": "change to DIRECTORY before doing anything",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "B",
+        "long": "always-make",
+        "description": "unconditionally make all targets",
+        "inherit": false,
+        "value": {
+          "name": "target",
+          "provider": {
+            "function": "__rush_complete_make_targets"
+          }
+        }
+      },
+      {
+        "short": "e",
+        "long": "environment-overrides",
+        "description": "environment variables override makefiles",
+        "inherit": false,
+        "value": {
+          "name": "target",
+          "provider": {
+            "function": "__rush_complete_make_targets"
+          }
+        }
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "print this message and exit",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "long": "ignore-errors",
+        "description": "ignore errors from commands",
+        "inherit": false
+      },
+      {
+        "short": "k",
+        "long": "keep-going",
+        "description": "keep going when some targets can't be made",
+        "inherit": false
+      },
+      {
+        "short": "L",
+        "long": "check-symlink-times",
+        "description": "use the latest mtime between symlinks and target",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "long": "print-data-base",
+        "description": "print make's internal database",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "long": "question",
+        "description": "run no commands; exit status says if up to date",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "long": "no-builtin-rules",
+        "description": "disable the built-in implicit rules",
+        "inherit": false
+      },
+      {
+        "short": "R",
+        "long": "no-builtin-variables",
+        "description": "disable the built-in variable settings",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "long": "touch",
+        "description": "touch targets instead of remaking them",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "print the version number of make and exit",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "print-directory",
+        "description": "print the current directory",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "description": "print lots of debugging information",
+        "inherit": false
+      },
+      {
+        "long": "debug",
+        "description": "print various types of debugging information",
+        "inherit": false
+      },
+      {
+        "short": "I",
+        "long": "include-dir",
+        "description": "search directory for included makefiles",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "l",
+        "long": "load-average",
+        "description": "don't start multiple jobs unless load is below N",
+        "inherit": false,
+        "value": {
+          "name": "N",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "short": "o",
+        "long": "old-file",
+        "description": "consider file to be very old and don't remake it",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "no-print-directory",
+        "description": "turn off -w, even if it was turned on implicitly",
+        "inherit": false
+      },
+      {
+        "short": "W",
+        "long": "what-if",
+        "description": "consider file to be infinitely new",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        },
+        "spellings": [
+          "--new-file",
+          "--assume-new"
+        ]
+      },
+      {
+        "long": "warn-undefined-variables",
+        "description": "warn when an undefined variable is referenced",
+        "inherit": false
+      },
+      {
+        "short": "N",
+        "long": "Next-option",
+        "description": "turn on value of next option",
+        "inherit": false,
+        "value": {
+          "name": "option"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "target",
+          "index": 0,
+          "description": "make target",
+          "repeatable": true,
+          "provider": {
+            "function": "__rush_complete_make_targets"
+          }
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    },
+    "description": "build targets from makefiles"
+  }
+}

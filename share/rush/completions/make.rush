@@ -1,0 +1,39 @@
+__rush_complete_make_targets() {
+  for makefile in GNUmakefile Makefile makefile; do
+    test -f "$makefile" || continue
+    awk '
+      function emit(target, description) {
+        if (target == "" || target ~ /^\./ || target ~ /[%$]/ || seen[target]) return
+        seen[target] = 1
+        if (description == "") description = "make target"
+        print target "\t" description
+      }
+      /^#/ {
+        comment = comment substr($0, 2) "\n"
+        next
+      }
+      /^[[:alnum:]_][^$#\t=]*:([^=]|$)/ {
+        line = $0
+        inline = ""
+        if (line ~ /##+/) {
+          inline = line
+          sub(/^.*##+[[:blank:]]*/, "", inline)
+        }
+        split(line, parts, ":")
+        split(parts[1], targets, /[[:blank:]]+/)
+        description = inline
+        if (description == "" && comment != "") {
+          description = comment
+          gsub(/^[[:blank:]]+|[[:blank:]]+$/, "", description)
+          gsub(/\n+/, " ", description)
+        }
+        for (i in targets) emit(targets[i], description)
+      }
+      !/^#/ { comment = "" }
+    ' "$makefile" | while IFS="$(printf '\t')" read -r target description; do
+      test -n "$target" || continue
+      rush_complete candidate "$target" --kind plain --description "$description"
+    done
+    return 0
+  done
+}
