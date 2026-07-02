@@ -1,0 +1,22 @@
+__rush_complete_sake_commands() {
+  command -v sake >/dev/null 2>&1 || return
+  command -v node >/dev/null 2>&1 || return
+  sake list --json 2>/dev/null | node -e '
+let input = "";
+process.stdin.on("data", chunk => input += chunk);
+process.stdin.on("end", () => {
+  let data;
+  try { data = JSON.parse(input); } catch (_) { return; }
+  for (const group of Object.values(data.groups || {})) {
+    for (const command of group || []) {
+      if (!command || !command.name) continue;
+      const description = command.description || "Sake command";
+      console.log(`${command.name}\t${description}`);
+    }
+  }
+});
+' | while IFS=$(printf '\t') read -r name description; do
+    test -n "$name" || continue
+    rush_complete candidate "$name" --kind plain --description "${description:-Sake command}"
+  done
+}
