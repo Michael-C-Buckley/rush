@@ -1,0 +1,114 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "stepzen",
+    "description": "build, deploy, and test StepZen schemas",
+    "subcommands": [
+      {
+        "name": "help",
+        "description": "show help",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "description": "command to show help for",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "login",
+        "description": "log in to StepZen"
+      },
+      {
+        "name": "logout",
+        "description": "log out of StepZen"
+      },
+      {
+        "name": "start",
+        "description": "deploy and develop an API",
+        "options": [
+          {
+            "long": "dir",
+            "description": "set the StepZen assets directory",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "description": "StepZen directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "endpoint",
+            "description": "set the endpoint to deploy to",
+            "inherit": false,
+            "value": {
+              "name": "endpoint",
+              "description": "endpoint name"
+            }
+          },
+          {
+            "long": "port",
+            "description": "set the GraphiQL explorer port",
+            "inherit": false,
+            "value": {
+              "name": "port",
+              "description": "port number"
+            }
+          }
+        ]
+      },
+      {
+        "name": "import",
+        "description": "import preconfigured schemas",
+        "options": [
+          {
+            "long": "dir",
+            "description": "set the import directory",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "description": "directory",
+              "provider": "builtin.directories"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "schema generator name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "list StepZen account assets",
+        "arguments": {
+          "states": [
+            {
+              "name": "type",
+              "description": "asset type",
+              "provider": {
+                "values": [
+                  "schemas",
+                  "configurationsets"
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
