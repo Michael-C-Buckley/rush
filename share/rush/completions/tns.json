@@ -1,0 +1,91 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "tns",
+    "description": "NativeScript CLI",
+    "providers": {
+      "builtin.files": { "builtin": "files" },
+      "builtin.directories": { "builtin": "directories" },
+      "tns.package-managers": { "values": ["npm", "yarn", "pnpm"] },
+      "tns.platforms": { "values": ["android", "ios"] },
+      "tns.test-frameworks": { "values": ["jasmine", "mocha", "qunit"] }
+    },
+    "options": [
+      { "short": "v", "long": "version", "description": "show NativeScript CLI version" }
+    ],
+    "subcommands": [
+      { "name": "help", "description": "open CLI documentation", "arguments": { "states": [{ "name": "command", "index": 0 }] } },
+      { "name": "info", "description": "display NativeScript environment information", "options": [{ "long": "json", "description": "print JSON output" }] },
+      { "name": "doctor", "description": "check system configuration", "options": [{ "long": "json", "description": "print JSON output" }] },
+      { "name": "update", "description": "update project runtimes and dependencies" },
+      { "name": "migrate", "description": "migrate project dependencies" },
+      { "name": "package-manager", "description": "print or set the package manager", "arguments": { "states": [{ "name": "manager", "index": 0, "provider": "tns.package-managers" }] } },
+      {
+        "name": "proxy",
+        "description": "manage NativeScript proxy settings",
+        "subcommands": [
+          { "name": "set", "description": "set proxy URL", "arguments": { "states": [{ "name": "url", "index": 0 }] } },
+          { "name": "clear", "description": "clear proxy settings" }
+        ]
+      },
+      {
+        "name": "usage-reporting",
+        "description": "configure anonymous usage reporting",
+        "subcommands": [
+          { "name": "status", "description": "show reporting status" },
+          { "name": "enable", "description": "enable reporting" },
+          { "name": "disable", "description": "disable reporting" }
+        ]
+      },
+      {
+        "name": "error-reporting",
+        "description": "configure anonymous error reporting",
+        "subcommands": [
+          { "name": "status", "description": "show reporting status" },
+          { "name": "enable", "description": "enable reporting" },
+          { "name": "disable", "description": "disable reporting" }
+        ]
+      },
+      {
+        "name": "create",
+        "description": "create a NativeScript project",
+        "arguments": { "states": [{ "name": "application-name", "index": 0 }] },
+        "options": [
+          { "long": "template", "description": "select project template", "value": { "name": "template" } },
+          { "long": "path", "description": "create project in directory", "value": { "name": "directory", "provider": "builtin.directories" } },
+          { "long": "appid", "description": "set application identifier", "value": { "name": "id" } },
+          { "long": "js", "description": "create JavaScript project" },
+          { "long": "ts", "description": "create TypeScript project" },
+          { "long": "ng", "description": "create Angular project" },
+          { "long": "vue", "description": "create Vue project" },
+          { "long": "react", "description": "create React project" }
+        ]
+      },
+      { "name": "clean", "description": "clean project build artifacts", "arguments": { "states": [{ "name": "platform", "index": 0, "provider": "tns.platforms" }] } },
+      { "name": "preview", "description": "preview app on a device", "options": [{ "long": "bundle", "description": "bundle the application" }] },
+      {
+        "name": "platform",
+        "aliases": ["platforms"],
+        "description": "manage target platforms",
+        "subcommands": [
+          { "name": "add", "description": "add platform", "arguments": { "states": [{ "name": "platform", "index": 0, "provider": "tns.platforms" }] } },
+          { "name": "remove", "description": "remove platform", "arguments": { "states": [{ "name": "platform", "index": 0, "provider": "tns.platforms" }] } },
+          { "name": "update", "description": "update platform", "arguments": { "states": [{ "name": "platform", "index": 0, "provider": "tns.platforms" }] } },
+          { "name": "list", "description": "list platforms" }
+        ]
+      },
+      { "name": "run", "description": "run app on a device or emulator", "subcommands": [{ "name": "android", "description": "run Android app" }, { "name": "ios", "description": "run iOS app" }], "options": [{ "long": "device", "description": "target device", "value": { "name": "device-id" } }, { "long": "emulator", "description": "use emulator" }, { "long": "hmr", "description": "enable HMR" }, { "long": "no-hmr", "description": "disable HMR" }, { "long": "clean", "description": "force native rebuild" }] },
+      { "name": "debug", "description": "debug app on a device or emulator", "subcommands": [{ "name": "android", "description": "debug Android app" }, { "name": "ios", "description": "debug iOS app" }], "options": [{ "long": "device", "description": "target device", "value": { "name": "device-id" } }, { "long": "emulator", "description": "use emulator" }, { "long": "timeout", "description": "debugger wait timeout", "value": { "name": "seconds" } }] },
+      { "name": "test", "description": "run unit tests", "subcommands": [{ "name": "init", "description": "configure unit testing", "options": [{ "long": "framework", "description": "test framework", "value": { "name": "framework", "provider": "tns.test-frameworks" } }] }, { "name": "android", "description": "test Android app" }, { "name": "ios", "description": "test iOS app" }] },
+      { "name": "plugin", "description": "manage project plugins", "subcommands": [{ "name": "add", "description": "install plugin", "arguments": { "states": [{ "name": "plugin", "index": 0 }] } }, { "name": "remove", "description": "remove plugin", "arguments": { "states": [{ "name": "plugin", "index": 0 }] } }] },
+      { "name": "resources", "description": "manage app resources", "subcommands": [{ "name": "generate", "description": "generate app resources" }, { "name": "update", "description": "update app resources" }] },
+      { "name": "prepare", "description": "prepare project for native build", "subcommands": [{ "name": "android", "description": "prepare Android project" }, { "name": "ios", "description": "prepare iOS project" }] },
+      { "name": "build", "description": "build native app", "subcommands": [{ "name": "android", "description": "build Android app" }, { "name": "ios", "description": "build iOS app" }], "options": [{ "long": "release", "description": "produce release build" }, { "long": "bundle", "description": "bundle the application" }, { "long": "env.production", "description": "enable production build" }, { "long": "key-store-path", "description": "Android keystore path", "value": { "name": "path", "provider": "builtin.files" } }] },
+      { "name": "deploy", "description": "deploy native app", "subcommands": [{ "name": "android", "description": "deploy Android app" }, { "name": "ios", "description": "deploy iOS app" }], "options": [{ "long": "device", "description": "target device", "value": { "name": "device-id" } }, { "long": "release", "description": "deploy release build" }] },
+      { "name": "install", "description": "install dependencies or selected platform", "subcommands": [{ "name": "android", "description": "install Android runtime" }, { "name": "ios", "description": "install iOS runtime" }] },
+      { "name": "appstore", "description": "manage App Store Connect applications", "subcommands": [{ "name": "list", "description": "list application records" }, { "name": "upload", "description": "upload package", "arguments": { "states": [{ "name": "package", "index": 0, "provider": "builtin.files" }] } }] },
+      { "name": "device", "aliases": ["devices"], "description": "list connected devices", "subcommands": [{ "name": "android", "description": "list Android devices" }, { "name": "ios", "description": "list iOS devices" }], "options": [{ "long": "available-devices", "description": "include available devices" }, { "long": "json", "description": "print JSON output" }] }
+    ]
+  }
+}
