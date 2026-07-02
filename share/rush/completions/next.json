@@ -1,0 +1,174 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "next",
+    "description": "build and run Next.js applications",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version information",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "build",
+        "description": "Create an optimized production build of your application",
+        "options": [
+          {
+            "long": "profile",
+            "description": "Enable production profiling",
+            "inherit": false
+          },
+          {
+            "long": "debug",
+            "description": "Enable more verbose build output",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "dir",
+              "description": "Next.js application directory",
+              "index": 0,
+              "required": false,
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "dev",
+        "description": "Start the application in development mode",
+        "arguments": {
+          "states": [
+            {
+              "name": "dir",
+              "description": "Next.js application directory",
+              "index": 0,
+              "required": false,
+              "provider": "builtin.directories"
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "p",
+            "long": "port",
+            "description": "port to start the application on",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "short": "H",
+            "long": "hostname",
+            "description": "hostname to start the application on",
+            "inherit": false,
+            "value": {
+              "name": "hostname"
+            }
+          }
+        ]
+      },
+      {
+        "name": "start",
+        "description": "Start the application in production mode",
+        "arguments": {
+          "states": [
+            {
+              "name": "dir",
+              "description": "Next.js application directory",
+              "index": 0,
+              "required": false,
+              "provider": "builtin.directories"
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "p",
+            "long": "port",
+            "description": "port to start the application on",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "short": "H",
+            "long": "hostname",
+            "description": "hostname to start the application on",
+            "inherit": false,
+            "value": {
+              "name": "hostname"
+            }
+          }
+        ]
+      },
+      {
+        "name": "export",
+        "description": "Exports the application for production deployment",
+        "options": [
+          {
+            "short": "s",
+            "description": "Do not print any messages to console",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "dir",
+              "description": "Next.js application directory",
+              "index": 0,
+              "required": false,
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "telemetry",
+        "description": "Allows you to control Next.js' telemetry collection",
+        "arguments": {
+          "states": [
+            {
+              "name": "status",
+              "description": "Turn Next.js' telemetry collection on or off",
+              "provider": {
+                "values": [
+                  {
+                    "value": "enable",
+                    "description": "Enable Next.js' telemetry collection"
+                  },
+                  {
+                    "value": "disable",
+                    "description": "Disable Next.js' telemetry collection"
+                  }
+                ]
+              },
+              "index": 0,
+              "required": false
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
