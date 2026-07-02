@@ -1,0 +1,341 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "kind",
+    "description": "local Kubernetes clusters in Docker",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "help for kind",
+        "inherit": true
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "silence all stderr output",
+        "inherit": true
+      },
+      {
+        "short": "v",
+        "long": "verbosity",
+        "description": "info log verbosity, higher value produces more output",
+        "inherit": true,
+        "value": {
+          "name": "int"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "build",
+        "description": "build one of [node-image]",
+        "subcommands": [
+          {
+            "name": "node-image",
+            "description": "builds a node image",
+            "options": [
+              {
+                "long": "arch",
+                "description": "architecture to build for, defaults to the host architecture",
+                "inherit": false,
+                "value": {
+                  "name": "architecture",
+                  "description": "architecture to build for, defaults to the host architecture"
+                }
+              },
+              {
+                "long": "base-image",
+                "description": "base image to use for the node image",
+                "inherit": false,
+                "value": {
+                  "name": "base-image",
+                  "description": "name:tag of the base image to use for the build"
+                }
+              },
+              {
+                "long": "image",
+                "description": "name:tag of the resulting image to be built",
+                "inherit": false,
+                "value": {
+                  "name": "name:tag",
+                  "description": "name:tag of the resulting image to be built"
+                }
+              },
+              {
+                "long": "kube-root",
+                "description": "path to the Kubernetes source directory",
+                "inherit": false,
+                "deprecated": true,
+                "value": {
+                  "name": "path",
+                  "description": "path to the Kubernetes source directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "type",
+                "description": "type of node image to build",
+                "inherit": false,
+                "value": {
+                  "name": "type",
+                  "description": "build type, default is docker"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "create",
+        "description": "creates a cluster",
+        "subcommands": [
+          {
+            "name": "cluster",
+            "description": "creates a cluster",
+            "options": [
+              {
+                "long": "config",
+                "description": "path to a kind config file",
+                "inherit": false
+              },
+              {
+                "long": "image",
+                "description": "node docker image to use for booting the cluster",
+                "inherit": false
+              },
+              {
+                "long": "kubeconfig",
+                "description": "sets kubeconfig path instead of $KUBECONFIG or $HOME/.kube/config",
+                "inherit": false
+              },
+              {
+                "long": "name",
+                "description": "cluster name",
+                "inherit": false
+              },
+              {
+                "long": "retain",
+                "description": "retain nodes for debugging when cluster creation fails",
+                "inherit": false
+              },
+              {
+                "long": "wait",
+                "description": "wait for control-plane node to be ready",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "completion",
+        "description": "generates shell completion scripts",
+        "subcommands": [
+          {
+            "name": "bash",
+            "description": "output shell completions for bash"
+          },
+          {
+            "name": "fish",
+            "description": "output shell completions for fish"
+          },
+          {
+            "name": "zsh",
+            "description": "output shell completions for zsh"
+          }
+        ]
+      },
+      {
+        "name": "delete",
+        "description": "deletes one or more clusters",
+        "subcommands": [
+          {
+            "name": "cluster",
+            "description": "delete Cluster",
+            "options": [
+              {
+                "long": "name",
+                "description": "cluster name",
+                "inherit": false,
+                "value": {
+                  "name": "cluster-name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "clusters",
+            "description": "delete Clusters",
+            "options": [
+              {
+                "short": "A",
+                "long": "all",
+                "description": "delete all clusters",
+                "inherit": false
+              },
+              {
+                "long": "kubeconfig",
+                "description": "sets kubeconfig path instead of $KUBECONFIG or $HOME/.kube/config",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "export",
+        "description": "exports a cluster's kubeconfig",
+        "subcommands": [
+          {
+            "name": "kubeconfig",
+            "description": "exports a cluster's kubeconfig",
+            "options": [
+              {
+                "long": "name",
+                "description": "cluster name",
+                "inherit": false
+              },
+              {
+                "long": "internal",
+                "description": "use internal address instead of externalt",
+                "inherit": false
+              },
+              {
+                "long": "kubeconfig",
+                "description": "sets kubeconfig path instead of $KUBECONFIG or $HOME/.kube/config",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "logs",
+            "description": "exports logs to a tempdir or [output-dir] if specified",
+            "options": [
+              {
+                "long": "name",
+                "description": "cluster name",
+                "inherit": false,
+                "value": {
+                  "name": "cluster-name"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "get",
+        "description": "gets one of [clusters, nodes, kubeconfig]",
+        "subcommands": [
+          {
+            "name": "clusters",
+            "description": "lists existing kind clusters by their name"
+          },
+          {
+            "name": "kubeconfig",
+            "description": "prints cluster kubeconfig",
+            "options": [
+              {
+                "long": "name",
+                "description": "cluster name",
+                "inherit": false,
+                "value": {
+                  "name": "cluster-name"
+                }
+              },
+              {
+                "long": "internal",
+                "description": "use internal address instead of external",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "nodes",
+            "description": "lists existing kind nodes by their name",
+            "options": [
+              {
+                "short": "A",
+                "long": "all",
+                "description": "list all nodes",
+                "inherit": false
+              },
+              {
+                "long": "name",
+                "description": "cluster name",
+                "inherit": false,
+                "value": {
+                  "name": "cluster-name"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "load",
+        "description": "loads images into node from an archive or image on host",
+        "subcommands": [
+          {
+            "name": "docker-image",
+            "description": "loads docker images from host into all or specified nodes by name",
+            "options": [
+              {
+                "long": "name",
+                "description": "cluster name",
+                "inherit": false,
+                "value": {
+                  "name": "cluster-name"
+                }
+              },
+              {
+                "long": "nodes",
+                "description": "comma separated list of nodes to load images into",
+                "inherit": false,
+                "value": {
+                  "name": "nodes"
+                }
+              }
+            ]
+          },
+          {
+            "name": "image-archive",
+            "description": "loads docker images from archive into all or specified nodes by name",
+            "options": [
+              {
+                "long": "name",
+                "description": "cluster name",
+                "inherit": false,
+                "value": {
+                  "name": "cluster-name"
+                }
+              },
+              {
+                "long": "nodes",
+                "description": "comma separated list of nodes to load images into",
+                "inherit": false,
+                "value": {
+                  "name": "nodes"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "prints the kind CLI version"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
