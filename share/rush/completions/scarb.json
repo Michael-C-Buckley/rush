@@ -1,0 +1,669 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "scarb",
+    "description": "build and manage Cairo packages with Scarb",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "print help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "add",
+        "description": "add dependencies to a Scarb.toml manifest file",
+        "options": [
+          {
+            "long": "dry-run",
+            "description": "do not actually write the manifest",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "package",
+            "description": "packages to run this command on",
+            "inherit": false,
+            "value": {
+              "name": "SPEC",
+              "description": "packages to run this command on, can be a concrete package name (`foobar`) or a prefix glob (`foo*`) [default: *]"
+            }
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "more output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "less output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          },
+          {
+            "long": "path",
+            "description": "filesystem path to local package to add",
+            "inherit": false,
+            "value": {
+              "name": "PATH",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "git",
+            "description": "git repository location",
+            "inherit": false,
+            "value": {
+              "name": "URI"
+            }
+          },
+          {
+            "long": "branch",
+            "description": "git branch to download the package from",
+            "inherit": false,
+            "value": {
+              "name": "BRANCH"
+            }
+          },
+          {
+            "long": "tag",
+            "description": "git tag to download the package from",
+            "inherit": false,
+            "value": {
+              "name": "TAG"
+            }
+          },
+          {
+            "long": "rev",
+            "description": "git reference to download the package from",
+            "inherit": false,
+            "value": {
+              "name": "REV"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "DEP_ID",
+              "description": "reference to a package to add as a dependency",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "remove",
+        "description": "remove dependencies from a manifest file",
+        "options": [
+          {
+            "long": "dry-run",
+            "description": "do not actually write the manifest",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "package",
+            "description": "packages to run this command on",
+            "inherit": false,
+            "value": {
+              "name": "SPEC",
+              "description": "packages to run this command on, can be a concrete package name (`foobar`) or a prefix glob (`foo*`) [default: *]"
+            }
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "more output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "less output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "run for all packages in the workspace",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "DEP_ID",
+              "description": "dependencies to be removed",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "build",
+        "description": "compile current project",
+        "options": [
+          {
+            "short": "p",
+            "long": "package",
+            "description": "packages to run this command on",
+            "inherit": false,
+            "value": {
+              "name": "SPEC",
+              "description": "packages to run this command on, can be a concrete package name (`foobar`) or a prefix glob (`foo*`) [default: *]"
+            }
+          },
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "run for all packages in the workspace",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "more output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "less output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "cache",
+        "description": "manipulate packages cache",
+        "options": [
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "more output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "less output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "clean",
+            "description": "remove all cached dependencies",
+            "options": [
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "more output per occurrence",
+                "inherit": false
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "less output per occurrence",
+                "inherit": false
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "print help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "path",
+            "description": "print the path of the cache directory",
+            "options": [
+              {
+                "short": "v",
+                "long": "verbose",
+                "description": "more output per occurrence",
+                "inherit": false
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "less output per occurrence",
+                "inherit": false
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "print help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "help",
+            "description": "print this message or the help of the given subcommand(s)"
+          }
+        ]
+      },
+      {
+        "name": "clean",
+        "description": "remove generated artifacts",
+        "options": [
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "more output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "less output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "commands",
+        "description": "list installed commands",
+        "options": [
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "more output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "less output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "fetch",
+        "description": "fetch dependencies of packages from the network",
+        "options": [
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "more output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "less output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "fmt",
+        "description": "format project files",
+        "options": [
+          {
+            "short": "c",
+            "long": "check",
+            "description": "only check if files are formatted, do not write the changes to disk",
+            "inherit": false
+          },
+          {
+            "long": "no-color",
+            "description": "do not color output",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "more output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "package",
+            "description": "packages to run this command on",
+            "inherit": false,
+            "value": {
+              "name": "SPEC",
+              "description": "packages to run this command on, can be a concrete package name (`foobar`) or a prefix glob (`foo*`) [default: *]"
+            }
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "less output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "run for all packages in the workspace",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "create a new Scarb package in existing directory",
+        "options": [
+          {
+            "long": "name",
+            "description": "set the resulting package name, defaults to the directory name",
+            "inherit": false,
+            "value": {
+              "name": "NAME",
+              "description": "name for the resulting package"
+            }
+          },
+          {
+            "long": "no-vcs",
+            "description": "do not initialize a new Git repository",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "more output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "less output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "metadata",
+        "description": "output the resolved dependencies of a package, the concrete used versions including overrides, in machine-readable format",
+        "options": [
+          {
+            "long": "format-version",
+            "description": "format version",
+            "inherit": false,
+            "value": {
+              "name": "VERSION"
+            }
+          },
+          {
+            "long": "no-deps",
+            "description": "output information only about the workspace members and don't fetch dependencies",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "more output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "less output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "manifest-path",
+        "description": "print path to current Scarb.toml file to standard output",
+        "options": [
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "more output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "less output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "new",
+        "description": "create a new Scarb package at <PATH>",
+        "options": [
+          {
+            "long": "name",
+            "description": "set the resulting package name, defaults to the directory name",
+            "inherit": false,
+            "value": {
+              "name": "NAME",
+              "description": "name for the resulting package"
+            }
+          },
+          {
+            "long": "no-vcs",
+            "description": "do not initialize a new Git repository",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "more output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "less output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "PATH",
+              "description": "path where the new Scarb package should be created",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "run",
+        "description": "run arbitrary package scripts",
+        "options": [
+          {
+            "short": "p",
+            "long": "package",
+            "description": "packages to run this command on",
+            "inherit": false,
+            "value": {
+              "name": "SPEC",
+              "description": "packages to run this command on, can be a concrete package name (`foobar`) or a prefix glob (`foo*`) [default: *]"
+            }
+          },
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "more output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "long": "workspace",
+            "description": "run for all packages in the workspace",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "less output per occurrence",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "SCRIPT",
+              "description": "the name of the script from manifest file to execute",
+              "index": 0
+            },
+            {
+              "name": "ARGS",
+              "description": "arguments to pass to executed script",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "test",
+        "description": "runs test in the local project, if it has a Scarb.toml manifest. If project is a virtual workspace, will run all tests by default",
+        "options": [
+          {
+            "long": "workspace",
+            "short": "w",
+            "description": "run for all packages in the workspace",
+            "inherit": false
+          },
+          {
+            "long": "filter",
+            "short": "f",
+            "description": "runs the test with a specific filter",
+            "inherit": false,
+            "value": {
+              "name": "FILTER",
+              "description": "the filter applied for names of test"
+            }
+          },
+          {
+            "long": "include-ignored",
+            "description": "run ignored and not ignored tests",
+            "inherit": false
+          },
+          {
+            "long": "ignored",
+            "description": "run only ignored tests",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "more output per occurrence",
+            "inherit": false
+          },
+          {
+            "long": "quiet",
+            "short": "q",
+            "description": "less output per occurrence",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "print help",
+            "inherit": false
+          },
+          {
+            "long": "package",
+            "short": "p",
+            "description": "packages to run this command on",
+            "inherit": false,
+            "value": {
+              "name": "SPEC",
+              "description": "packages to run this command on, can be a concrete package name (`foobar`) or a prefix glob (`foo*`) [default: *]"
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "scarb.workspace-members": {
+        "function": "__rush_complete_scarb_workspace_members"
+      }
+    }
+  }
+}
