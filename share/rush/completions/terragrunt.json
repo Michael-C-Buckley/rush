@@ -1,0 +1,1445 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "terragrunt",
+    "description": "manage Terraform with Terragrunt",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "long": "terragrunt-config",
+        "description": "set Terragrunt config file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "terragrunt-tfpath",
+        "description": "set Terraform binary path",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "terragrunt-no-auto-init",
+        "description": "disable automatic terraform init",
+        "inherit": false
+      },
+      {
+        "long": "terragrunt-no-auto-retry",
+        "description": "disable automatic retries",
+        "inherit": false
+      },
+      {
+        "long": "terragrunt-non-interactive",
+        "description": "assume yes for prompts",
+        "inherit": false
+      },
+      {
+        "long": "terragrunt-working-dir",
+        "description": "set working directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "terragrunt-download-dir",
+        "description": "set download directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "terragrunt-source",
+        "description": "set Terraform source directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "terragrunt-source-map",
+        "description": "map source URL",
+        "inherit": false,
+        "value": {
+          "name": "source=dest"
+        }
+      },
+      {
+        "long": "terragrunt-source-update",
+        "description": "clear cached source before download",
+        "inherit": false
+      },
+      {
+        "long": "terragrunt-ignore-dependency-errors",
+        "description": "ignore dependency errors",
+        "inherit": false
+      },
+      {
+        "long": "terragrunt-iam-role",
+        "description": "assume IAM role",
+        "inherit": false,
+        "value": {
+          "name": "arn"
+        }
+      },
+      {
+        "long": "terragrunt-iam-assume-role-duration",
+        "description": "set assume-role duration",
+        "inherit": false,
+        "value": {
+          "name": "duration"
+        }
+      },
+      {
+        "long": "terragrunt-iam-assume-role-session-name",
+        "description": "set assume-role session name",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "terragrunt-exclude-dir",
+        "description": "exclude directory glob",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "terragrunt-include-dir",
+        "description": "include directory glob",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "terragrunt-strict-include",
+        "description": "strictly include selected directories",
+        "inherit": false
+      },
+      {
+        "long": "terragrunt-strict-validate",
+        "description": "enable strict validate-inputs",
+        "inherit": false
+      },
+      {
+        "long": "terragrunt-ignore-dependency-order",
+        "description": "ignore dependency order",
+        "inherit": false
+      },
+      {
+        "long": "terragrunt-ignore-external-dependencies",
+        "description": "ignore external dependencies",
+        "inherit": false
+      },
+      {
+        "long": "terragrunt-include-external-dependencies",
+        "description": "include external dependencies",
+        "inherit": false
+      },
+      {
+        "long": "terragrunt-parallelism",
+        "description": "set module parallelism",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "terragrunt-debug",
+        "description": "write debug tfvars",
+        "inherit": false
+      },
+      {
+        "long": "terragrunt-log-level",
+        "description": "set log level",
+        "inherit": false,
+        "value": {
+          "name": "level",
+          "provider": {
+            "values": [
+              "panic",
+              "fatal",
+              "error",
+              "warn",
+              "info",
+              "debug",
+              "trace"
+            ]
+          }
+        }
+      },
+      {
+        "long": "terragrunt-check",
+        "description": "enable hclfmt check mode",
+        "inherit": false
+      },
+      {
+        "long": "terragrunt-hclfmt-file",
+        "description": "set hclfmt file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "terragrunt-override-attr",
+        "description": "override provider attribute",
+        "inherit": false,
+        "value": {
+          "name": "key=value"
+        }
+      },
+      {
+        "long": "terragrunt-json-out",
+        "description": "set render-json output file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "terragrunt-modules-that-include",
+        "description": "filter modules including file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "prepare working directory",
+        "options": [
+          {
+            "spellings": [
+              "-upgrade"
+            ],
+            "description": "upgrade modules and plugins",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-lock"
+            ],
+            "description": "set state locking",
+            "inherit": false,
+            "value": {
+              "name": "bool",
+              "provider": {
+                "values": [
+                  "true",
+                  "false"
+                ]
+              }
+            }
+          },
+          {
+            "spellings": [
+              "-force"
+            ],
+            "description": "force operation",
+            "inherit": false,
+            "value": {
+              "name": "bool",
+              "provider": {
+                "values": [
+                  "true",
+                  "false"
+                ]
+              }
+            }
+          },
+          {
+            "spellings": [
+              "-lock-timeout"
+            ],
+            "description": "set lock timeout",
+            "inherit": false,
+            "value": {
+              "name": "duration"
+            }
+          },
+          {
+            "spellings": [
+              "-input"
+            ],
+            "description": "ask for variable input",
+            "inherit": false,
+            "value": {
+              "name": "bool",
+              "provider": {
+                "values": [
+                  "true",
+                  "false"
+                ]
+              }
+            }
+          },
+          {
+            "spellings": [
+              "-no-color"
+            ],
+            "description": "disable color output",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-help"
+            ],
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-chdir"
+            ],
+            "description": "change working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "spellings": [
+              "-version"
+            ],
+            "description": "show version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "validate",
+        "description": "validate configuration",
+        "options": [
+          {
+            "spellings": [
+              "-help"
+            ],
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-chdir"
+            ],
+            "description": "change working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "spellings": [
+              "-version"
+            ],
+            "description": "show version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "plan",
+        "description": "show planned changes",
+        "options": [
+          {
+            "spellings": [
+              "-compact-warnings"
+            ],
+            "description": "show compact warnings",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-destroy"
+            ],
+            "description": "plan destroy",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-detailed-exitcode"
+            ],
+            "description": "return detailed exit code",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-out"
+            ],
+            "description": "save plan file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-parallelism"
+            ],
+            "description": "set parallelism",
+            "inherit": false,
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "spellings": [
+              "-refresh"
+            ],
+            "description": "refresh state first",
+            "inherit": false,
+            "value": {
+              "name": "bool",
+              "provider": {
+                "values": [
+                  "true",
+                  "false"
+                ]
+              }
+            }
+          },
+          {
+            "spellings": [
+              "-state"
+            ],
+            "description": "set state file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "spellings": [
+              "-target"
+            ],
+            "description": "target resource address",
+            "inherit": false,
+            "value": {
+              "name": "address"
+            },
+            "repeatable": true
+          },
+          {
+            "spellings": [
+              "-var"
+            ],
+            "description": "set variable",
+            "inherit": false,
+            "value": {
+              "name": "name=value"
+            },
+            "repeatable": true
+          },
+          {
+            "spellings": [
+              "-var-file"
+            ],
+            "description": "set variable file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            },
+            "repeatable": true
+          },
+          {
+            "spellings": [
+              "-lock"
+            ],
+            "description": "set state locking",
+            "inherit": false,
+            "value": {
+              "name": "bool",
+              "provider": {
+                "values": [
+                  "true",
+                  "false"
+                ]
+              }
+            }
+          },
+          {
+            "spellings": [
+              "-force"
+            ],
+            "description": "force operation",
+            "inherit": false,
+            "value": {
+              "name": "bool",
+              "provider": {
+                "values": [
+                  "true",
+                  "false"
+                ]
+              }
+            }
+          },
+          {
+            "spellings": [
+              "-lock-timeout"
+            ],
+            "description": "set lock timeout",
+            "inherit": false,
+            "value": {
+              "name": "duration"
+            }
+          },
+          {
+            "spellings": [
+              "-input"
+            ],
+            "description": "ask for variable input",
+            "inherit": false,
+            "value": {
+              "name": "bool",
+              "provider": {
+                "values": [
+                  "true",
+                  "false"
+                ]
+              }
+            }
+          },
+          {
+            "spellings": [
+              "-no-color"
+            ],
+            "description": "disable color output",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-help"
+            ],
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-chdir"
+            ],
+            "description": "change working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "spellings": [
+              "-version"
+            ],
+            "description": "show version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "apply",
+        "description": "create or update infrastructure",
+        "options": [
+          {
+            "spellings": [
+              "-help"
+            ],
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-chdir"
+            ],
+            "description": "change working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "spellings": [
+              "-version"
+            ],
+            "description": "show version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "destroy",
+        "description": "destroy infrastructure",
+        "options": [
+          {
+            "spellings": [
+              "-help"
+            ],
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-chdir"
+            ],
+            "description": "change working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "spellings": [
+              "-version"
+            ],
+            "description": "show version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "console",
+        "description": "try Terraform expressions",
+        "options": [
+          {
+            "spellings": [
+              "-help"
+            ],
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-chdir"
+            ],
+            "description": "change working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "spellings": [
+              "-version"
+            ],
+            "description": "show version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "fmt",
+        "description": "format configuration",
+        "options": [
+          {
+            "spellings": [
+              "-help"
+            ],
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-chdir"
+            ],
+            "description": "change working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "spellings": [
+              "-version"
+            ],
+            "description": "show version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "force-unlock",
+        "description": "release a state lock",
+        "options": [
+          {
+            "spellings": [
+              "-help"
+            ],
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-chdir"
+            ],
+            "description": "change working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "spellings": [
+              "-version"
+            ],
+            "description": "show version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "graph",
+        "description": "generate dependency graph",
+        "options": [
+          {
+            "spellings": [
+              "-help"
+            ],
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-chdir"
+            ],
+            "description": "change working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "spellings": [
+              "-version"
+            ],
+            "description": "show version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "import",
+        "description": "import existing infrastructure",
+        "options": [
+          {
+            "spellings": [
+              "-help"
+            ],
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-chdir"
+            ],
+            "description": "change working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "spellings": [
+              "-version"
+            ],
+            "description": "show version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "login",
+        "description": "save credentials for remote host",
+        "options": [
+          {
+            "spellings": [
+              "-help"
+            ],
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-chdir"
+            ],
+            "description": "change working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "spellings": [
+              "-version"
+            ],
+            "description": "show version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "logout",
+        "description": "remove remote host credentials",
+        "options": [
+          {
+            "spellings": [
+              "-help"
+            ],
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-chdir"
+            ],
+            "description": "change working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "spellings": [
+              "-version"
+            ],
+            "description": "show version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "output",
+        "description": "show output values",
+        "options": [
+          {
+            "spellings": [
+              "-help"
+            ],
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-chdir"
+            ],
+            "description": "change working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "spellings": [
+              "-version"
+            ],
+            "description": "show version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "providers",
+        "description": "show required providers",
+        "options": [
+          {
+            "spellings": [
+              "-help"
+            ],
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-chdir"
+            ],
+            "description": "change working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "spellings": [
+              "-version"
+            ],
+            "description": "show version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "refresh",
+        "description": "refresh state",
+        "options": [
+          {
+            "spellings": [
+              "-help"
+            ],
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-chdir"
+            ],
+            "description": "change working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "spellings": [
+              "-version"
+            ],
+            "description": "show version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "show",
+        "description": "show state or plan",
+        "options": [
+          {
+            "spellings": [
+              "-help"
+            ],
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-chdir"
+            ],
+            "description": "change working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "spellings": [
+              "-version"
+            ],
+            "description": "show version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "untaint",
+        "description": "remove tainted state",
+        "options": [
+          {
+            "spellings": [
+              "-help"
+            ],
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-chdir"
+            ],
+            "description": "change working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "spellings": [
+              "-version"
+            ],
+            "description": "show version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "get",
+        "description": "install or upgrade modules",
+        "options": [
+          {
+            "spellings": [
+              "-update"
+            ],
+            "description": "check modules for updates",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-help"
+            ],
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-chdir"
+            ],
+            "description": "change working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "spellings": [
+              "-version"
+            ],
+            "description": "show version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "taint",
+        "description": "mark resource tainted",
+        "options": [
+          {
+            "spellings": [
+              "-allow-missing"
+            ],
+            "description": "succeed if missing",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-lock"
+            ],
+            "description": "set state locking",
+            "inherit": false,
+            "value": {
+              "name": "bool",
+              "provider": {
+                "values": [
+                  "true",
+                  "false"
+                ]
+              }
+            }
+          },
+          {
+            "spellings": [
+              "-lock-timeout"
+            ],
+            "description": "set lock timeout",
+            "inherit": false,
+            "value": {
+              "name": "duration"
+            }
+          },
+          {
+            "spellings": [
+              "-ignore-remote-version"
+            ],
+            "description": "ignore remote version",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-help"
+            ],
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-chdir"
+            ],
+            "description": "change working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "spellings": [
+              "-version"
+            ],
+            "description": "show version",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "address",
+              "description": "resource address",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "state",
+        "description": "manage Terraform state"
+      },
+      {
+        "name": "workspace",
+        "description": "manage workspaces",
+        "options": [
+          {
+            "spellings": [
+              "-help"
+            ],
+            "description": "show help",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-chdir"
+            ],
+            "description": "change working directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "spellings": [
+              "-version"
+            ],
+            "description": "show version",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "new",
+            "description": "create workspace",
+            "arguments": {
+              "states": [
+                {
+                  "name": "workspace",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "spellings": [
+                  "-lock"
+                ],
+                "description": "set state locking",
+                "inherit": false,
+                "value": {
+                  "name": "bool",
+                  "provider": {
+                    "values": [
+                      "true",
+                      "false"
+                    ]
+                  }
+                }
+              },
+              {
+                "spellings": [
+                  "-lock-timeout"
+                ],
+                "description": "set lock timeout",
+                "inherit": false,
+                "value": {
+                  "name": "duration"
+                }
+              },
+              {
+                "spellings": [
+                  "-state"
+                ],
+                "description": "set state file",
+                "inherit": false,
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "spellings": [
+                  "-help"
+                ],
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "spellings": [
+                  "-chdir"
+                ],
+                "description": "change working directory",
+                "inherit": false,
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "spellings": [
+                  "-version"
+                ],
+                "description": "show version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "show",
+            "description": "show current workspace",
+            "options": [
+              {
+                "spellings": [
+                  "-help"
+                ],
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "spellings": [
+                  "-chdir"
+                ],
+                "description": "change working directory",
+                "inherit": false,
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "spellings": [
+                  "-version"
+                ],
+                "description": "show version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "list workspaces",
+            "options": [
+              {
+                "spellings": [
+                  "-help"
+                ],
+                "description": "show help",
+                "inherit": false
+              },
+              {
+                "spellings": [
+                  "-chdir"
+                ],
+                "description": "change working directory",
+                "inherit": false,
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "spellings": [
+                  "-version"
+                ],
+                "description": "show version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "delete workspace",
+            "arguments": {
+              "states": [
+                {
+                  "name": "workspace",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "spellings": [
+                  "-lock"
+                ],
+                "description": "set state locking",
+                "inherit": false,
+                "value": {
+                  "name": "bool",
+                  "provider": {
+                    "values": [
+                      "true",
+                      "false"
+                    ]
+                  }
+                }
+              },
+              {
+                "spellings": [
+                  "-force"
+                ],
+                "description": "force operation",
+                "inherit": false,
+                "value": {
+                  "name": "bool",
+                  "provider": {
+                    "values": [
+                      "true",
+                      "false"
+                    ]
+                  }
+                }
+              },
+              {
+                "spellings": [
+                  "-lock-timeout"
+                ],
+                "description": "set lock timeout",
+                "inherit": false,
+                "value": {
+                  "name": "duration"
+                }
+              },
+              {
+                "spellings": [
+                  "-input"
+                ],
+                "description": "ask for variable input",
+                "inherit": false,
+                "value": {
+                  "name": "bool",
+                  "provider": {
+                    "values": [
+                      "true",
+                      "false"
+                    ]
+                  }
+                }
+              },
+              {
+                "spellings": [
+                  "-no-color"
+                ],
+                "description": "disable color output",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "select",
+            "description": "select workspace",
+            "arguments": {
+              "states": [
+                {
+                  "name": "workspace",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "-install-autocomplete",
+        "description": "install shell completion"
+      },
+      {
+        "name": "-uninstall-autocomplete",
+        "description": "uninstall shell completion"
+      },
+      {
+        "name": "run-all",
+        "description": "run command across a stack",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0,
+              "optional": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "terragrunt-info",
+        "description": "print Terragrunt state"
+      },
+      {
+        "name": "validate-inputs",
+        "description": "validate configured inputs"
+      },
+      {
+        "name": "graph-dependencies",
+        "description": "print dependency graph"
+      },
+      {
+        "name": "hclfmt",
+        "description": "format HCL files"
+      },
+      {
+        "name": "aws-provider-patch",
+        "description": "patch nested AWS providers"
+      },
+      {
+        "name": "render-json",
+        "description": "render config as JSON"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
