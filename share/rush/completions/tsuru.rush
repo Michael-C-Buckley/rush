@@ -1,0 +1,20 @@
+__rush_complete_tsuru_table_first_column() {
+  description="$1"
+  shift
+  command -v tsuru >/dev/null 2>&1 || return
+  tsuru "$@" 2>/dev/null | awk -F'|' '/^\|/ { gsub(/^[[:space:]]+|[[:space:]]+$/, "", $2); if (NR > 1 && $2 != "") print $2 }' | while IFS= read -r value; do
+    rush_complete candidate "$value" --kind plain --description "$description"
+  done
+}
+
+__rush_complete_tsuru_apps() { __rush_complete_tsuru_table_first_column app app list; }
+__rush_complete_tsuru_teams() { __rush_complete_tsuru_table_first_column team team list; }
+__rush_complete_tsuru_pools() { __rush_complete_tsuru_table_first_column pool pool list; }
+__rush_complete_tsuru_plans() { __rush_complete_tsuru_table_first_column plan plan list; }
+
+__rush_complete_tsuru_platforms() {
+  command -v tsuru >/dev/null 2>&1 || return
+  tsuru platform list 2>/dev/null | sed 's/^- //' | while IFS= read -r platform; do
+    test -n "$platform" && rush_complete candidate "$platform" --kind plain --description platform
+  done
+}

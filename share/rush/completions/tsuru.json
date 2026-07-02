@@ -1,0 +1,1209 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "tsuru",
+    "description": "manage applications on a Tsuru PaaS",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "Show help for tsuru",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "app",
+        "description": "app commands",
+        "subcommands": [
+          {
+            "name": "build",
+            "description": "builds a tsuru app image respecting",
+            "options": [
+              {
+                "short": "a",
+                "long": "app",
+                "description": "app name",
+                "inherit": false,
+                "value": {
+                  "name": "app",
+                  "provider": "tsuru.apps"
+                }
+              },
+              {
+                "short": "f",
+                "long": "files-only",
+                "description": "enables single file build into the root of the app's tree",
+                "inherit": false,
+                "value": {
+                  "name": "file-or-dir-n",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "help for build",
+                "inherit": false
+              },
+              {
+                "short": "t",
+                "long": "tag",
+                "description": "the image tag",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "description": "creates a new app using the given name and platform",
+            "options": [
+              {
+                "short": "d",
+                "long": "description",
+                "description": "description of the app",
+                "inherit": false
+              },
+              {
+                "short": "g",
+                "long": "tag",
+                "description": "tag to be used by the app",
+                "inherit": false
+              },
+              {
+                "long": "router-opts",
+                "description": "router options",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "pool",
+                "description": "filter applications by pool",
+                "inherit": false,
+                "value": {
+                  "name": "pool",
+                  "provider": "tsuru.pools"
+                }
+              },
+              {
+                "short": "t",
+                "long": "team",
+                "description": "team that owns the app",
+                "inherit": false,
+                "value": {
+                  "name": "team",
+                  "provider": "tsuru.teams"
+                }
+              },
+              {
+                "short": "p",
+                "long": "plan",
+                "description": "plan to use for the app",
+                "inherit": false,
+                "value": {
+                  "name": "plan",
+                  "provider": "tsuru.plans"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "app",
+                  "description": "app name",
+                  "index": 0,
+                  "provider": "tsuru.apps"
+                },
+                {
+                  "name": "platform",
+                  "description": "platform of the app",
+                  "index": 1,
+                  "provider": "tsuru.platforms"
+                }
+              ]
+            }
+          },
+          {
+            "name": "deploy",
+            "description": "deploys set of files and/or directories to tsuru server",
+            "options": [
+              {
+                "short": "f",
+                "long": "files-only",
+                "description": "enables single file deployment into the root of the app's tree",
+                "inherit": false
+              },
+              {
+                "short": "i",
+                "long": "image",
+                "description": "the image to deploy in app",
+                "inherit": false
+              },
+              {
+                "short": "m",
+                "long": "message",
+                "description": "a message describing this deploy",
+                "inherit": false
+              },
+              {
+                "long": "new-version",
+                "description": "creates a new version for the current deployment while preserving existing versions",
+                "inherit": false
+              },
+              {
+                "long": "override-old-versions",
+                "description": "force replace all deployed versions by this new deploy",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file-or-dir-n",
+                  "provider": "builtin.files",
+                  "index": 0
+                }
+              ]
+            },
+            "subcommands": [
+              {
+                "name": "list",
+                "description": "list information about deploys for an application"
+              },
+              {
+                "name": "rebuild",
+                "description": "rebuild and deploy the last app image",
+                "options": [
+                  {
+                    "short": "a",
+                    "long": "app",
+                    "description": "app name",
+                    "inherit": false,
+                    "value": {
+                      "name": "app",
+                      "provider": "tsuru.apps"
+                    }
+                  },
+                  {
+                    "long": "new-version",
+                    "description": "creates a new version for the current deployment while preserving existing versions",
+                    "inherit": false
+                  },
+                  {
+                    "long": "override-old-versions",
+                    "description": "force replace all deployed versions by this new deploy",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "rollback",
+                "description": "deploys an existing image for an app",
+                "options": [
+                  {
+                    "long": "new-version",
+                    "description": "creates a new version for the current deployment while preserving existing versions",
+                    "inherit": false
+                  },
+                  {
+                    "long": "override-old-versions",
+                    "description": "force replace all deployed versions by this new deploy",
+                    "inherit": false
+                  },
+                  {
+                    "long": "yes",
+                    "spellings": [
+                      "y"
+                    ],
+                    "description": "answer yes to all questions",
+                    "inherit": false
+                  }
+                ],
+                "subcommands": [
+                  {
+                    "name": "update",
+                    "description": "locks an existing image of an app",
+                    "options": [
+                      {
+                        "short": "a",
+                        "long": "app",
+                        "description": "app name",
+                        "inherit": false,
+                        "value": {
+                          "name": "app",
+                          "provider": "tsuru.apps"
+                        }
+                      },
+                      {
+                        "short": "d",
+                        "long": "disable",
+                        "description": "enables or disables the rollback on a specific image version",
+                        "inherit": false
+                      },
+                      {
+                        "short": "i",
+                        "long": "image",
+                        "description": "the image name for an app version",
+                        "inherit": false
+                      },
+                      {
+                        "short": "r",
+                        "long": "reason",
+                        "description": "the reason why the rollback has to be disabled",
+                        "inherit": false
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "grant",
+            "description": "allows a team to access an application",
+            "arguments": {
+              "states": [
+                {
+                  "name": "team",
+                  "description": "team name",
+                  "index": 0,
+                  "provider": "tsuru.teams"
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "a",
+                "long": "app",
+                "description": "app name",
+                "inherit": false,
+                "value": {
+                  "name": "app",
+                  "provider": "tsuru.apps"
+                }
+              }
+            ]
+          },
+          {
+            "name": "info",
+            "description": "shows information about an app",
+            "options": [
+              {
+                "short": "a",
+                "long": "app",
+                "description": "app name",
+                "inherit": false,
+                "value": {
+                  "name": "app",
+                  "provider": "tsuru.apps"
+                }
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "list all apps",
+            "options": [
+              {
+                "short": "n",
+                "long": "name",
+                "description": "filter applications by name",
+                "inherit": false
+              },
+              {
+                "short": "q",
+                "description": "display only applications name",
+                "inherit": false
+              },
+              {
+                "short": "s",
+                "long": "status",
+                "description": "filter applications by unit status. Accepts multiple values separated by commas. Possible values can be: building, created, starting, error, started, stopped, a",
+                "inherit": false
+              },
+              {
+                "short": "u",
+                "long": "user",
+                "description": "filter applications by owner",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "pool",
+                "description": "filter applications by pool",
+                "inherit": false,
+                "value": {
+                  "name": "pool",
+                  "provider": "tsuru.pools"
+                }
+              },
+              {
+                "short": "p",
+                "long": "platform",
+                "description": "filter applications by platform",
+                "inherit": false,
+                "value": {
+                  "name": "platform",
+                  "provider": "tsuru.platforms"
+                }
+              },
+              {
+                "short": "t",
+                "long": "team",
+                "description": "team that owns the app",
+                "inherit": false,
+                "value": {
+                  "name": "team",
+                  "provider": "tsuru.teams"
+                }
+              }
+            ]
+          },
+          {
+            "name": "log",
+            "description": "shows the logs of an app",
+            "options": [
+              {
+                "short": "a",
+                "long": "app",
+                "description": "app name",
+                "inherit": false,
+                "value": {
+                  "name": "app",
+                  "provider": "tsuru.apps"
+                }
+              },
+              {
+                "short": "f",
+                "long": "follow",
+                "description": "follow log output",
+                "inherit": false
+              },
+              {
+                "short": "l",
+                "long": "lines",
+                "description": "number of lines to show",
+                "inherit": false
+              },
+              {
+                "spellings": [
+                  "no-data"
+                ],
+                "description": "no date information",
+                "inherit": false
+              },
+              {
+                "short": "s",
+                "long": "source",
+                "description": "the log from the given source",
+                "inherit": false
+              },
+              {
+                "short": "u",
+                "long": "unit",
+                "description": "the log from the given unit",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "metadata",
+            "description": "manage metadata for an app",
+            "subcommands": [
+              {
+                "name": "get",
+                "description": "retrieves metadata for an application",
+                "options": [
+                  {
+                    "short": "a",
+                    "long": "app",
+                    "description": "app name",
+                    "inherit": false,
+                    "value": {
+                      "name": "app",
+                      "provider": "tsuru.apps"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "set",
+                "description": "sets metadata for an application",
+                "options": [
+                  {
+                    "short": "a",
+                    "long": "app",
+                    "description": "app name",
+                    "inherit": false,
+                    "value": {
+                      "name": "app",
+                      "provider": "tsuru.apps"
+                    }
+                  },
+                  {
+                    "long": "no-restart",
+                    "description": "do not restart the app after the metadata is set",
+                    "inherit": false
+                  },
+                  {
+                    "short": "t",
+                    "long": "type",
+                    "description": "metadata type: annotation or label",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "<NAME=value>",
+                      "description": "the metadata key",
+                      "index": 0,
+                      "repeatable": true
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "unset",
+                "description": "unsets metadata for an application",
+                "options": [
+                  {
+                    "short": "a",
+                    "long": "app",
+                    "description": "app name",
+                    "inherit": false,
+                    "value": {
+                      "name": "app",
+                      "provider": "tsuru.apps"
+                    }
+                  },
+                  {
+                    "long": "no-restart",
+                    "description": "do not restart the app after the metadata is set",
+                    "inherit": false
+                  },
+                  {
+                    "short": "t",
+                    "long": "type",
+                    "description": "metadata type: annotation or label",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "NAME",
+                      "description": "the metadata key",
+                      "index": 0,
+                      "repeatable": true
+                    }
+                  ]
+                }
+              }
+            ]
+          },
+          {
+            "name": "quota",
+            "description": "shows the quota of an app",
+            "subcommands": [
+              {
+                "name": "change",
+                "description": "changes the limit of units that an app can have",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "limit",
+                      "description": "the new limit of units",
+                      "index": 0
+                    }
+                  ]
+                },
+                "options": [
+                  {
+                    "short": "a",
+                    "long": "app",
+                    "description": "app name",
+                    "inherit": false,
+                    "value": {
+                      "name": "app",
+                      "provider": "tsuru.apps"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "view",
+                "description": "displays the current usage and limit of the given app",
+                "options": [
+                  {
+                    "short": "a",
+                    "long": "app",
+                    "description": "app name",
+                    "inherit": false,
+                    "value": {
+                      "name": "app",
+                      "provider": "tsuru.apps"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "remove",
+            "description": "removes an app",
+            "options": [
+              {
+                "short": "a",
+                "long": "app",
+                "description": "app name",
+                "inherit": false,
+                "value": {
+                  "name": "app",
+                  "provider": "tsuru.apps"
+                }
+              }
+            ]
+          },
+          {
+            "name": "restart",
+            "description": "restarts an application, or one of the processes of the application",
+            "options": [
+              {
+                "short": "a",
+                "long": "app",
+                "description": "app name",
+                "inherit": false,
+                "value": {
+                  "name": "app",
+                  "provider": "tsuru.apps"
+                }
+              },
+              {
+                "short": "p",
+                "long": "process",
+                "description": "process name",
+                "inherit": false
+              },
+              {
+                "long": "version",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "revoke",
+            "description": "removes a team access to an application",
+            "arguments": {
+              "states": [
+                {
+                  "name": "team",
+                  "description": "team name",
+                  "index": 0,
+                  "provider": "tsuru.teams"
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "a",
+                "long": "app",
+                "description": "app name",
+                "inherit": false,
+                "value": {
+                  "name": "app",
+                  "provider": "tsuru.apps"
+                }
+              }
+            ]
+          },
+          {
+            "name": "router",
+            "description": "manage routers for an app",
+            "subcommands": [
+              {
+                "name": "add",
+                "description": "adds a router to an app",
+                "options": [
+                  {
+                    "short": "a",
+                    "long": "app",
+                    "description": "app name",
+                    "inherit": false,
+                    "value": {
+                      "name": "app",
+                      "provider": "tsuru.apps"
+                    }
+                  },
+                  {
+                    "short": "o",
+                    "long": "opts",
+                    "description": "custom options sent directly to router implementation",
+                    "inherit": false
+                  }
+                ],
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "router",
+                      "description": "router name",
+                      "index": 0
+                    }
+                  ]
+                }
+              },
+              {
+                "name": "list",
+                "description": "list routers for an app"
+              },
+              {
+                "name": "remove",
+                "description": "removes a router from an app",
+                "arguments": {
+                  "states": [
+                    {
+                      "name": "router",
+                      "description": "router name",
+                      "index": 0
+                    }
+                  ]
+                },
+                "options": [
+                  {
+                    "short": "a",
+                    "long": "app",
+                    "description": "app name",
+                    "inherit": false,
+                    "value": {
+                      "name": "app",
+                      "provider": "tsuru.apps"
+                    }
+                  }
+                ]
+              },
+              {
+                "name": "update",
+                "description": "updates a router for an app",
+                "options": [
+                  {
+                    "short": "a",
+                    "long": "app",
+                    "description": "app name",
+                    "inherit": false,
+                    "value": {
+                      "name": "app",
+                      "provider": "tsuru.apps"
+                    }
+                  },
+                  {
+                    "short": "o",
+                    "long": "opts",
+                    "description": "custom options sent directly to router implementation",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "version",
+                "description": "manage router versions for an app",
+                "subcommands": [
+                  {
+                    "name": "add",
+                    "description": "adds a router version to an app",
+                    "arguments": {
+                      "states": [
+                        {
+                          "name": "version",
+                          "index": 0
+                        }
+                      ]
+                    },
+                    "options": [
+                      {
+                        "short": "a",
+                        "long": "app",
+                        "description": "app name",
+                        "inherit": false,
+                        "value": {
+                          "name": "app",
+                          "provider": "tsuru.apps"
+                        }
+                      }
+                    ]
+                  },
+                  {
+                    "name": "remove",
+                    "description": "removes a router version from an app",
+                    "arguments": {
+                      "states": [
+                        {
+                          "name": "version",
+                          "index": 0
+                        }
+                      ]
+                    },
+                    "options": [
+                      {
+                        "short": "a",
+                        "long": "app",
+                        "description": "app name",
+                        "inherit": false,
+                        "value": {
+                          "name": "app",
+                          "provider": "tsuru.apps"
+                        }
+                      }
+                    ]
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "routes",
+            "description": "list all routers",
+            "subcommands": [
+              {
+                "name": "rebuild",
+                "description": "rebuild routes for an application",
+                "options": [
+                  {
+                    "short": "a",
+                    "long": "app",
+                    "description": "app name",
+                    "inherit": false,
+                    "value": {
+                      "name": "app",
+                      "provider": "tsuru.apps"
+                    }
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "run",
+            "description": "runs a command inside an app",
+            "options": [
+              {
+                "short": "a",
+                "long": "app",
+                "description": "app name",
+                "inherit": false,
+                "value": {
+                  "name": "app",
+                  "provider": "tsuru.apps"
+                }
+              },
+              {
+                "short": "i",
+                "long": "isolated",
+                "description": "running in ephemeral container",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "once",
+                "description": "running only one unit",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "shell",
+            "description": "opens a remote shell inside unit, using the API server as a proxy",
+            "arguments": {
+              "states": [
+                {
+                  "name": "app",
+                  "description": "app name",
+                  "index": 0,
+                  "provider": "tsuru.apps"
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "a",
+                "long": "app",
+                "description": "app name",
+                "inherit": false,
+                "value": {
+                  "name": "app",
+                  "provider": "tsuru.apps"
+                }
+              }
+            ]
+          },
+          {
+            "name": "start",
+            "description": "starts an app",
+            "options": [
+              {
+                "short": "a",
+                "long": "app",
+                "description": "app name",
+                "inherit": false,
+                "value": {
+                  "name": "app",
+                  "provider": "tsuru.apps"
+                }
+              },
+              {
+                "short": "p",
+                "long": "process",
+                "description": "process name",
+                "inherit": false
+              },
+              {
+                "long": "version",
+                "description": "version number",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "stop",
+            "description": "stops an application",
+            "options": [
+              {
+                "short": "a",
+                "long": "app",
+                "description": "app name",
+                "inherit": false,
+                "value": {
+                  "name": "app",
+                  "provider": "tsuru.apps"
+                }
+              },
+              {
+                "short": "p",
+                "long": "process",
+                "description": "process name",
+                "inherit": false
+              },
+              {
+                "long": "version",
+                "description": "version number",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "swap",
+            "description": "swaps routing between two apps",
+            "options": [
+              {
+                "short": "c",
+                "long": "cname-only",
+                "description": "swap only the cname",
+                "inherit": false
+              },
+              {
+                "short": "f",
+                "long": "force",
+                "description": "force Swap among apps with different number of units or different platform",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "unlock",
+            "description": "forces the removal of an application lock",
+            "options": [
+              {
+                "short": "a",
+                "long": "app",
+                "description": "app name",
+                "inherit": false,
+                "value": {
+                  "name": "app",
+                  "provider": "tsuru.apps"
+                }
+              },
+              {
+                "short": "y",
+                "long": "assume-yes",
+                "description": "don't ask for confirmation",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "update",
+            "description": "updates an app",
+            "options": [
+              {
+                "short": "a",
+                "long": "app",
+                "description": "app name",
+                "inherit": false,
+                "value": {
+                  "name": "app",
+                  "provider": "tsuru.apps"
+                }
+              },
+              {
+                "long": "cpu",
+                "description": "cPU limit for app, this will override the plan cpu value. One cpu is equivalent to 1 vCPU/Core, fractional requests are allowed and the expression 0.1 is equiva",
+                "inherit": false
+              },
+              {
+                "short": "d",
+                "long": "description",
+                "description": "changes description for the app",
+                "inherit": false
+              },
+              {
+                "short": "g",
+                "long": "tag",
+                "description": "add tags for the app",
+                "inherit": false
+              },
+              {
+                "short": "i",
+                "long": "image-reset",
+                "description": "forces next deploy to build app image from scratch",
+                "inherit": false
+              },
+              {
+                "long": "memory",
+                "description": "memory limit for app, this will override the plan memory value. You can express memory as a bytes integer or using one of these suffixes: E, P, T, G, M, K, Ei, ",
+                "inherit": false
+              },
+              {
+                "long": "no-restart",
+                "description": "prevent tsuru from restarting the application",
+                "inherit": false
+              },
+              {
+                "short": "p",
+                "long": "platform",
+                "description": "filter applications by platform",
+                "inherit": false,
+                "value": {
+                  "name": "platform",
+                  "provider": "tsuru.platforms"
+                }
+              },
+              {
+                "short": "o",
+                "long": "pool",
+                "description": "filter applications by pool",
+                "inherit": false,
+                "value": {
+                  "name": "pool",
+                  "provider": "tsuru.pools"
+                }
+              },
+              {
+                "short": "p",
+                "long": "plan",
+                "description": "plan to use for the app",
+                "inherit": false,
+                "value": {
+                  "name": "plan",
+                  "provider": "tsuru.plans"
+                }
+              },
+              {
+                "short": "t",
+                "long": "team",
+                "description": "team that owns the app",
+                "inherit": false,
+                "value": {
+                  "name": "team",
+                  "provider": "tsuru.teams"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "env",
+        "description": "app environment variables",
+        "options": [
+          {
+            "short": "p",
+            "long": "private",
+            "description": "private environment variables",
+            "inherit": false
+          },
+          {
+            "long": "no-restart",
+            "description": "don't restart the app after setting the env vars",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "get",
+            "description": "get environment variables from an app",
+            "options": [
+              {
+                "short": "a",
+                "long": "app",
+                "description": "app name",
+                "inherit": false,
+                "value": {
+                  "name": "app",
+                  "provider": "tsuru.apps"
+                }
+              }
+            ]
+          },
+          {
+            "name": "set",
+            "description": "set environment variables to an app",
+            "options": [
+              {
+                "short": "a",
+                "long": "app",
+                "description": "app name",
+                "inherit": false,
+                "value": {
+                  "name": "app",
+                  "provider": "tsuru.apps"
+                }
+              },
+              {
+                "short": "p",
+                "long": "private",
+                "description": "private environment variables",
+                "inherit": false
+              },
+              {
+                "long": "no-restart",
+                "description": "don't restart the app after setting the env vars",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "unset",
+            "description": "unset environment variables from an app",
+            "options": [
+              {
+                "short": "a",
+                "long": "app",
+                "description": "app name",
+                "inherit": false,
+                "value": {
+                  "name": "app",
+                  "provider": "tsuru.apps"
+                }
+              },
+              {
+                "long": "no-restart",
+                "description": "don't restart the app after setting the env vars",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "cluster",
+        "description": "cluster commands",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add a new cluster"
+          },
+          {
+            "name": "list",
+            "description": "list all clusters"
+          },
+          {
+            "name": "remove",
+            "description": "remove a cluster"
+          },
+          {
+            "name": "update",
+            "description": "update a cluster"
+          }
+        ]
+      },
+      {
+        "name": "certificate",
+        "description": "certificate commands",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list App TLS certificates"
+          },
+          {
+            "name": "set",
+            "description": "creates or update a TLS certificate into the specific app",
+            "options": [
+              {
+                "short": "a",
+                "long": "app",
+                "description": "app name",
+                "inherit": false,
+                "value": {
+                  "name": "app",
+                  "provider": "tsuru.apps"
+                }
+              }
+            ]
+          },
+          {
+            "name": "unset",
+            "description": "unset a TLS certificate from a specific app",
+            "options": [
+              {
+                "short": "a",
+                "long": "app",
+                "description": "app name",
+                "inherit": false,
+                "value": {
+                  "name": "app",
+                  "provider": "tsuru.apps"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "login",
+        "description": "login to tsuru server",
+        "arguments": {
+          "states": [
+            {
+              "name": "email",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "logout",
+        "description": "logout from tsuru server"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "tsuru.apps": {
+        "function": "__rush_complete_tsuru_apps"
+      },
+      "tsuru.teams": {
+        "function": "__rush_complete_tsuru_teams"
+      },
+      "tsuru.platforms": {
+        "function": "__rush_complete_tsuru_platforms"
+      },
+      "tsuru.pools": {
+        "function": "__rush_complete_tsuru_pools"
+      },
+      "tsuru.plans": {
+        "function": "__rush_complete_tsuru_plans"
+      }
+    }
+  }
+}
