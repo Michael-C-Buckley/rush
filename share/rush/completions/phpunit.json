@@ -1,0 +1,290 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "phpunit",
+    "description": "run PHPUnit tests",
+    "options": [
+      {
+        "long": "coverage-clover",
+        "description": "write Clover XML coverage report",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "coverage-crap4j",
+        "description": "write Crap4J XML coverage report",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "coverage-html",
+        "description": "write HTML coverage report",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "coverage-php",
+        "description": "export PHP_CodeCoverage object",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "coverage-text",
+        "description": "write text coverage report",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files",
+          "style": "equals"
+        }
+      },
+      {
+        "long": "coverage-xml",
+        "description": "write PHPUnit XML coverage report",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "coverage-cache",
+        "description": "set coverage cache directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "warm-coverage-cache",
+        "description": "warm static analysis cache",
+        "inherit": false
+      },
+      {
+        "long": "coverage-filter",
+        "description": "include directory in coverage analysis",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "path-coverage",
+        "description": "perform path coverage analysis",
+        "inherit": false
+      },
+      {
+        "long": "disable-coverage-ignore",
+        "description": "disable coverage ignore annotations",
+        "inherit": false
+      },
+      {
+        "long": "no-coverage",
+        "description": "ignore coverage configuration",
+        "inherit": false
+      },
+      {
+        "long": "dont-report-useless-tests",
+        "description": "hide tests that do not test anything",
+        "inherit": false
+      },
+      {
+        "long": "strict-coverage",
+        "description": "enforce @covers usage",
+        "inherit": false
+      },
+      {
+        "long": "strict-global-state",
+        "description": "enforce global state checks",
+        "inherit": false
+      },
+      {
+        "long": "disallow-test-output",
+        "description": "fail on test output",
+        "inherit": false
+      },
+      {
+        "long": "disallow-resource-usage",
+        "description": "fail on resource usage in small tests",
+        "inherit": false
+      },
+      {
+        "long": "enforce-time-limit",
+        "description": "enforce test size time limits",
+        "inherit": false
+      },
+      {
+        "long": "default-time-limit",
+        "description": "set default test timeout",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "long": "disallow-todo-tests",
+        "description": "fail on @todo tests",
+        "inherit": false
+      },
+      {
+        "long": "log-junit",
+        "description": "write JUnit XML log",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "log-teamcity",
+        "description": "write TeamCity log",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "testdox-html",
+        "description": "write TestDox HTML file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "testdox-text",
+        "description": "write TestDox text file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "testdox-xml",
+        "description": "write TestDox XML file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "reverse-list",
+        "description": "print defects in reverse order",
+        "inherit": false
+      },
+      {
+        "long": "no-logging",
+        "description": "ignore logging configuration",
+        "inherit": false
+      },
+      {
+        "long": "prepend",
+        "description": "include a PHP script before startup",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "bootstrap",
+        "description": "include a PHP script before tests",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "c",
+        "long": "configuration",
+        "description": "read XML configuration file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "no-configuration",
+        "description": "ignore default configuration file",
+        "inherit": false
+      },
+      {
+        "long": "extensions",
+        "description": "load PHPUnit extensions",
+        "inherit": false,
+        "value": {
+          "name": "extensions"
+        }
+      },
+      {
+        "long": "no-extensions",
+        "description": "do not load PHPUnit extensions",
+        "inherit": false
+      },
+      {
+        "long": "include-path",
+        "description": "prepend paths to PHP include_path",
+        "inherit": false,
+        "value": {
+          "name": "paths"
+        }
+      },
+      {
+        "short": "d",
+        "description": "set a php.ini value",
+        "inherit": false,
+        "value": {
+          "name": "key[=value]"
+        }
+      },
+      {
+        "long": "cache-result-file",
+        "description": "set result cache file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "generate-configuration",
+        "description": "generate a configuration file",
+        "inherit": false
+      },
+      {
+        "long": "migrate-configuration",
+        "description": "migrate the configuration file",
+        "inherit": false
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
