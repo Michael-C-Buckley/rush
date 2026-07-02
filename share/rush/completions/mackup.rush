@@ -1,0 +1,11 @@
+__rush_complete_mackup_applications() {
+  mackup list 2>/dev/null | while IFS= read -r line; do
+    case "$line" in
+      "  - "*)
+        app=${line#"  - "}
+        test -n "$app" || continue
+        rush_complete candidate "$app" --kind plain --description "application"
+        ;;
+    esac
+  done
+}

@@ -1,0 +1,73 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "mackup",
+    "description": "back up and restore application settings",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "force",
+        "short": "f",
+        "description": "force every question asked to be answered with 'Yes'",
+        "inherit": false
+      },
+      {
+        "long": "root",
+        "short": "r",
+        "description": "allow mackup to be run as superuser",
+        "inherit": false
+      },
+      {
+        "long": "dry-run",
+        "short": "n",
+        "description": "show steps without executing",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "list",
+        "description": "list all the supported mackup applications"
+      },
+      {
+        "name": "backup",
+        "description": "sync your conf files to your synced storage"
+      },
+      {
+        "name": "restore",
+        "description": "link the conf files already in your synced storage on your system"
+      },
+      {
+        "name": "show",
+        "description": "show the current configuration",
+        "arguments": {
+          "states": [
+            {
+              "name": "application",
+              "index": 0,
+              "description": "application to show",
+              "provider": {
+                "function": "__rush_complete_mackup_applications"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "uninstall",
+        "description": "reset everything as it was before using Mackup"
+      }
+    ]
+  }
+}
