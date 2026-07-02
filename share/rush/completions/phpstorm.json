@@ -1,0 +1,92 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "phpstorm",
+    "description": "open PhpStorm from the command line",
+    "options": [
+      { "spellings": ["nosplash"], "description": "hide the splash screen", "inherit": false },
+      { "spellings": ["dontReopenProjects"], "description": "show the welcome screen", "inherit": false },
+      { "spellings": ["disableNonBundledPlugins"], "description": "disable manually installed plugins", "inherit": false },
+      { "long": "wait", "description": "wait for opened files to close", "inherit": false }
+    ],
+    "subcommands": [
+      {
+        "name": "diff",
+        "description": "open a file diff viewer",
+        "arguments": {
+          "states": [
+            { "name": "left", "description": "left file", "provider": "builtin.files", "index": 0 },
+            { "name": "right", "description": "right file", "provider": "builtin.files", "index": 1 },
+            { "name": "base", "description": "base file", "provider": "builtin.files", "index": 2 }
+          ]
+        }
+      },
+      {
+        "name": "merge",
+        "description": "open a file merge dialog",
+        "arguments": {
+          "states": [
+            { "name": "left", "description": "left file", "provider": "builtin.files", "index": 0 },
+            { "name": "right", "description": "right file", "provider": "builtin.files", "index": 1 },
+            { "name": "base", "description": "base file", "provider": "builtin.files", "index": 2 }
+          ]
+        }
+      },
+      {
+        "name": "format",
+        "description": "format files with code style settings",
+        "options": [
+          { "short": "h", "description": "show format help", "inherit": false },
+          { "short": "m", "spellings": ["-mask"], "description": "set file masks", "inherit": false, "value": { "name": "masks" } },
+          { "short": "r", "spellings": ["-R"], "description": "process directories recursively", "inherit": false },
+          { "short": "s", "spellings": ["-settings"], "description": "use a code style settings file", "inherit": false, "value": { "name": "file", "provider": "builtin.files" } },
+          { "spellings": ["-allowDefaults"], "description": "use default code style settings", "inherit": false },
+          { "spellings": ["-charset"], "description": "set file charset", "inherit": false, "value": { "name": "charset" } },
+          { "short": "d", "spellings": ["-dry"], "description": "validate formatting without changes", "inherit": false }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "path", "description": "file or directory to format", "provider": "builtin.files", "index": 0, "repeatable": true }
+          ]
+        }
+      },
+      {
+        "name": "inspect",
+        "description": "inspect a project",
+        "options": [
+          { "spellings": ["-changes"], "description": "inspect local changes only", "inherit": false },
+          { "short": "d", "description": "inspect a subdirectory", "inherit": false, "value": { "name": "directory", "provider": "builtin.directories" } },
+          { "spellings": ["-format"], "description": "set output format", "inherit": false, "value": { "name": "format" } },
+          { "short": "v", "description": "set output verbosity", "inherit": false, "value": { "name": "level" } }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "project", "description": "project directory", "provider": "builtin.directories", "index": 0 },
+            { "name": "profile", "description": "inspection profile", "provider": "builtin.files", "index": 1 },
+            { "name": "output", "description": "output path", "provider": "builtin.files", "index": 2 }
+          ]
+        }
+      },
+      {
+        "name": "installPlugins",
+        "description": "install plugins by id",
+        "arguments": {
+          "states": [
+            { "name": "plugin", "description": "plugin id", "index": 0 },
+            { "name": "repository", "description": "repository URL", "index": 1 }
+          ]
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        { "name": "path", "description": "file or directory to open", "provider": "builtin.files", "index": 0, "repeatable": true }
+      ]
+    },
+    "providers": {
+      "builtin.files": { "builtin": "files" },
+      "builtin.directories": { "builtin": "directories" }
+    }
+  }
+}
