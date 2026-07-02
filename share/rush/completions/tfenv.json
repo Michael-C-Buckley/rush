@@ -1,0 +1,84 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "tfenv",
+    "description": "manage Terraform versions",
+    "options": [
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show tfenv version",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "install",
+        "description": "install Terraform version",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "Terraform version",
+              "provider": {
+                "values": [
+                  "latest",
+                  "min-required"
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "use",
+        "description": "use Terraform version",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "Terraform version",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "uninstall",
+        "description": "uninstall Terraform version",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "Terraform version",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "list installed versions"
+      },
+      {
+        "name": "list-remote",
+        "description": "list installable versions"
+      },
+      {
+        "name": "version-name",
+        "description": "print current version"
+      },
+      {
+        "name": "init",
+        "description": "initialize shell environment"
+      }
+    ]
+  }
+}
