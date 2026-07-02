@@ -1,0 +1,5048 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "st2",
+    "description": "control StackStorm automation",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help"
+      },
+      {
+        "long": "version",
+        "description": "show version"
+      },
+      {
+        "long": "url",
+        "description": "set base URL",
+        "value": {
+          "name": "url"
+        }
+      },
+      {
+        "long": "auth-url",
+        "description": "set auth URL",
+        "value": {
+          "name": "url"
+        }
+      },
+      {
+        "long": "api-url",
+        "description": "set API URL",
+        "value": {
+          "name": "url"
+        }
+      },
+      {
+        "long": "stream-url",
+        "description": "set stream URL",
+        "value": {
+          "name": "url"
+        }
+      },
+      {
+        "long": "api-version",
+        "description": "set API version",
+        "value": {
+          "name": "version"
+        }
+      },
+      {
+        "long": "cacert",
+        "description": "set CA bundle",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "config-file",
+        "description": "set config file",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "print-config",
+        "description": "print config values"
+      },
+      {
+        "long": "skip-config",
+        "description": "skip config file"
+      },
+      {
+        "long": "debug",
+        "description": "enable debug mode"
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "run",
+        "description": "invoke an action",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "short": "t",
+            "long": "token",
+            "description": "set access token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "long": "api-key",
+            "description": "set API key",
+            "value": {
+              "name": "key"
+            }
+          },
+          {
+            "short": "j",
+            "long": "json",
+            "description": "output JSON"
+          },
+          {
+            "short": "y",
+            "long": "yaml",
+            "description": "output YAML"
+          },
+          {
+            "long": "delay",
+            "description": "delay execution",
+            "value": {
+              "name": "delay"
+            }
+          },
+          {
+            "long": "tail",
+            "description": "tail new execution"
+          },
+          {
+            "short": "a",
+            "long": "async",
+            "description": "do not wait for completion"
+          },
+          {
+            "short": "u",
+            "long": "user",
+            "description": "run as user",
+            "value": {
+              "name": "user"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "action",
+              "index": 0,
+              "description": "action"
+            },
+            {
+              "name": "parameters",
+              "index": 1,
+              "description": "parameters",
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "action",
+        "description": "actions",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list actions",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "long": "attr",
+                "description": "select output attributes",
+                "value": {
+                  "name": "attr"
+                },
+                "repeatable": true
+              },
+              {
+                "short": "w",
+                "long": "width",
+                "description": "set output widths",
+                "value": {
+                  "name": "width"
+                },
+                "repeatable": true
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get actions",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "create",
+            "description": "create actions",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "index": 0,
+                  "description": "file",
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "update",
+            "description": "update actions",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id"
+                },
+                {
+                  "name": "file",
+                  "index": 1,
+                  "description": "file",
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete actions",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id"
+                }
+              ]
+            }
+          },
+          {
+            "name": "enable",
+            "description": "enable action",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id"
+                }
+              ]
+            }
+          },
+          {
+            "name": "disable",
+            "description": "disable action",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id"
+                }
+              ]
+            }
+          },
+          {
+            "name": "execute",
+            "description": "execute action",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id"
+                },
+                {
+                  "name": "parameters",
+                  "index": 1,
+                  "description": "parameters",
+                  "repeatable": true
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "action-alias",
+        "description": "action aliases",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list action aliases",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "long": "attr",
+                "description": "select output attributes",
+                "value": {
+                  "name": "attr"
+                },
+                "repeatable": true
+              },
+              {
+                "short": "w",
+                "long": "width",
+                "description": "set output widths",
+                "value": {
+                  "name": "width"
+                },
+                "repeatable": true
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get action aliases",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "create",
+            "description": "create action aliases",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "index": 0,
+                  "description": "file",
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "update",
+            "description": "update action aliases",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id"
+                },
+                {
+                  "name": "file",
+                  "index": 1,
+                  "description": "file",
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete action aliases",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id"
+                }
+              ]
+            }
+          },
+          {
+            "name": "match",
+            "description": "match command text",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "command",
+                  "index": 0,
+                  "description": "command"
+                }
+              ]
+            }
+          },
+          {
+            "name": "execute",
+            "description": "execute command text",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "command",
+                  "index": 0,
+                  "description": "command"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "auth",
+        "description": "authenticate user",
+        "options": [
+          {
+            "short": "p",
+            "description": "set password",
+            "value": {
+              "name": "password"
+            }
+          },
+          {
+            "short": "l",
+            "long": "ttl",
+            "description": "set token TTL",
+            "value": {
+              "name": "ttl"
+            }
+          },
+          {
+            "short": "t",
+            "long": "only-token",
+            "description": "print only token"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "short": "t",
+            "long": "token",
+            "description": "set access token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "long": "api-key",
+            "description": "set API key",
+            "value": {
+              "name": "key"
+            }
+          },
+          {
+            "short": "j",
+            "long": "json",
+            "description": "output JSON"
+          },
+          {
+            "short": "y",
+            "long": "yaml",
+            "description": "output YAML"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "username",
+              "index": 0,
+              "description": "username"
+            }
+          ]
+        }
+      },
+      {
+        "name": "login",
+        "description": "log in and update CLI config",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "short": "t",
+            "long": "token",
+            "description": "set access token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "long": "api-key",
+            "description": "set API key",
+            "value": {
+              "name": "key"
+            }
+          },
+          {
+            "short": "j",
+            "long": "json",
+            "description": "output JSON"
+          },
+          {
+            "short": "y",
+            "long": "yaml",
+            "description": "output YAML"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "username",
+              "index": 0,
+              "description": "username"
+            }
+          ]
+        }
+      },
+      {
+        "name": "whoami",
+        "description": "show current user",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "short": "t",
+            "long": "token",
+            "description": "set access token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "long": "api-key",
+            "description": "set API key",
+            "value": {
+              "name": "key"
+            }
+          },
+          {
+            "short": "j",
+            "long": "json",
+            "description": "output JSON"
+          },
+          {
+            "short": "y",
+            "long": "yaml",
+            "description": "output YAML"
+          }
+        ]
+      },
+      {
+        "name": "apikey",
+        "description": "API keys",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list API keys",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "long": "attr",
+                "description": "select output attributes",
+                "value": {
+                  "name": "attr"
+                },
+                "repeatable": true
+              },
+              {
+                "short": "w",
+                "long": "width",
+                "description": "set output widths",
+                "value": {
+                  "name": "width"
+                },
+                "repeatable": true
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get API key",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "key-or-id",
+                  "index": 0,
+                  "description": "key or id"
+                }
+              ]
+            }
+          },
+          {
+            "name": "create",
+            "description": "create API key",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "short": "k",
+                "long": "only-key",
+                "description": "print only key"
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "delete API key",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "key-or-id",
+                  "index": 0,
+                  "description": "key or id"
+                }
+              ]
+            }
+          },
+          {
+            "name": "enable",
+            "description": "enable API key",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "key-or-id",
+                  "index": 0,
+                  "description": "key or id"
+                }
+              ]
+            }
+          },
+          {
+            "name": "disable",
+            "description": "disable API key",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "key-or-id",
+                  "index": 0,
+                  "description": "key or id"
+                }
+              ]
+            }
+          },
+          {
+            "name": "load",
+            "description": "load API key from file",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "index": 0,
+                  "description": "file",
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "execution",
+        "description": "action executions",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list executions",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "long": "attr",
+                "description": "select output attributes",
+                "value": {
+                  "name": "attr"
+                },
+                "repeatable": true
+              },
+              {
+                "short": "w",
+                "long": "width",
+                "description": "set output widths",
+                "value": {
+                  "name": "width"
+                },
+                "repeatable": true
+              },
+              {
+                "short": "n",
+                "long": "last",
+                "description": "set result count",
+                "value": {
+                  "name": "count"
+                }
+              },
+              {
+                "short": "s",
+                "long": "sort",
+                "description": "set sort order",
+                "value": {
+                  "name": "order",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "desc"
+                      },
+                      {
+                        "value": "ascending"
+                      },
+                      {
+                        "value": "asc"
+                      },
+                      {
+                        "value": "descending"
+                      }
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "status",
+                "description": "filter by status",
+                "value": {
+                  "name": "status",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "succeeded"
+                      },
+                      {
+                        "value": "running"
+                      },
+                      {
+                        "value": "scheduled"
+                      },
+                      {
+                        "value": "paused"
+                      },
+                      {
+                        "value": "failed"
+                      },
+                      {
+                        "value": "canceling"
+                      },
+                      {
+                        "value": "canceled"
+                      }
+                    ]
+                  }
+                }
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get execution",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "id",
+                  "index": 0,
+                  "description": "id",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "re-run",
+            "description": "rerun execution",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "id",
+                  "index": 0,
+                  "description": "id"
+                },
+                {
+                  "name": "parameters",
+                  "index": 1,
+                  "description": "parameters",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "cancel",
+            "description": "cancel executions",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "id",
+                  "index": 0,
+                  "description": "id",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "pause",
+            "description": "pause executions",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "id",
+                  "index": 0,
+                  "description": "id",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "resume",
+            "description": "resume executions",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "id",
+                  "index": 0,
+                  "description": "id",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "tail",
+            "description": "tail execution output",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "id",
+                  "index": 0,
+                  "description": "id"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "inquiry",
+        "description": "workflow inquiries",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list inquiries",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "long": "attr",
+                "description": "select output attributes",
+                "value": {
+                  "name": "attr"
+                },
+                "repeatable": true
+              },
+              {
+                "short": "w",
+                "long": "width",
+                "description": "set output widths",
+                "value": {
+                  "name": "width"
+                },
+                "repeatable": true
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get inquiry",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "id",
+                  "index": 0,
+                  "description": "id",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "respond",
+            "description": "respond to inquiry",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "short": "r",
+                "long": "response",
+                "description": "set response JSON",
+                "value": {
+                  "name": "response"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "id",
+                  "index": 0,
+                  "description": "id"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "key",
+        "description": "key-value pairs",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list keys",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "long": "attr",
+                "description": "select output attributes",
+                "value": {
+                  "name": "attr"
+                },
+                "repeatable": true
+              },
+              {
+                "short": "w",
+                "long": "width",
+                "description": "set output widths",
+                "value": {
+                  "name": "width"
+                },
+                "repeatable": true
+              },
+              {
+                "long": "prefix",
+                "description": "filter by prefix",
+                "value": {
+                  "name": "prefix"
+                }
+              },
+              {
+                "short": "d",
+                "long": "decrypt",
+                "description": "decrypt secrets"
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get key",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0,
+                  "description": "name",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "set",
+            "description": "set key",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "short": "e",
+                "long": "encrypt",
+                "description": "encrypt value"
+              },
+              {
+                "short": "s",
+                "long": "scope",
+                "description": "set scope",
+                "value": {
+                  "name": "scope"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0,
+                  "description": "name"
+                },
+                {
+                  "name": "value",
+                  "index": 1,
+                  "description": "value"
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete key",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0,
+                  "description": "name"
+                }
+              ]
+            }
+          },
+          {
+            "name": "load",
+            "description": "load keys from file",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "index": 0,
+                  "description": "file",
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete_by_prefix",
+            "description": "delete keys by prefix",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "prefix",
+                  "index": 0,
+                  "description": "prefix"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "pack",
+        "description": "packs",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list packs",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "long": "attr",
+                "description": "select output attributes",
+                "value": {
+                  "name": "attr"
+                },
+                "repeatable": true
+              },
+              {
+                "short": "w",
+                "long": "width",
+                "description": "set output widths",
+                "value": {
+                  "name": "width"
+                },
+                "repeatable": true
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get installed pack",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref",
+                  "index": 0,
+                  "description": "ref",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "show",
+            "description": "show available pack",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "pack",
+                  "index": 0,
+                  "description": "pack"
+                }
+              ]
+            }
+          },
+          {
+            "name": "search",
+            "description": "search packs",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "query",
+                  "index": 0,
+                  "description": "query"
+                }
+              ]
+            }
+          },
+          {
+            "name": "install",
+            "description": "install packs",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "long": "skip-dependencies",
+                "description": "skip dependencies"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "pack",
+                  "index": 0,
+                  "description": "pack",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove",
+            "description": "remove packs",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "pack",
+                  "index": 0,
+                  "description": "pack",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "register",
+            "description": "register packs",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "pack",
+                  "index": 0,
+                  "description": "pack",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "config",
+            "description": "configure pack",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0,
+                  "description": "name"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "policy",
+        "description": "policies",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list policies",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "long": "attr",
+                "description": "select output attributes",
+                "value": {
+                  "name": "attr"
+                },
+                "repeatable": true
+              },
+              {
+                "short": "w",
+                "long": "width",
+                "description": "set output widths",
+                "value": {
+                  "name": "width"
+                },
+                "repeatable": true
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get policies",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "create",
+            "description": "create policies",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "index": 0,
+                  "description": "file",
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "update",
+            "description": "update policies",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id"
+                },
+                {
+                  "name": "file",
+                  "index": 1,
+                  "description": "file",
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete policies",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "rule",
+        "description": "rules",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list rules",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "long": "attr",
+                "description": "select output attributes",
+                "value": {
+                  "name": "attr"
+                },
+                "repeatable": true
+              },
+              {
+                "short": "w",
+                "long": "width",
+                "description": "set output widths",
+                "value": {
+                  "name": "width"
+                },
+                "repeatable": true
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get rules",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "create",
+            "description": "create rules",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "index": 0,
+                  "description": "file",
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "update",
+            "description": "update rules",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id"
+                },
+                {
+                  "name": "file",
+                  "index": 1,
+                  "description": "file",
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete rules",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id"
+                }
+              ]
+            }
+          },
+          {
+            "name": "enable",
+            "description": "enable rules",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id"
+                }
+              ]
+            }
+          },
+          {
+            "name": "disable",
+            "description": "disable rules",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "trigger",
+        "description": "triggers",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list triggers",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "long": "attr",
+                "description": "select output attributes",
+                "value": {
+                  "name": "attr"
+                },
+                "repeatable": true
+              },
+              {
+                "short": "w",
+                "long": "width",
+                "description": "set output widths",
+                "value": {
+                  "name": "width"
+                },
+                "repeatable": true
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get triggers",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "create",
+            "description": "create triggers",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "index": 0,
+                  "description": "file",
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "update",
+            "description": "update triggers",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id"
+                },
+                {
+                  "name": "file",
+                  "index": 1,
+                  "description": "file",
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete triggers",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "rule-enforcement",
+        "description": "rule enforcements",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list rule enforcements",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "long": "attr",
+                "description": "select output attributes",
+                "value": {
+                  "name": "attr"
+                },
+                "repeatable": true
+              },
+              {
+                "short": "w",
+                "long": "width",
+                "description": "set output widths",
+                "value": {
+                  "name": "width"
+                },
+                "repeatable": true
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get rule enforcements",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "create",
+            "description": "create rule enforcements",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "file",
+                  "index": 0,
+                  "description": "file",
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "update",
+            "description": "update rule enforcements",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id"
+                },
+                {
+                  "name": "file",
+                  "index": 1,
+                  "description": "file",
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "delete rule enforcements",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "policy-type",
+        "description": "policy types",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list policy types",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "long": "attr",
+                "description": "select output attributes",
+                "value": {
+                  "name": "attr"
+                },
+                "repeatable": true
+              },
+              {
+                "short": "w",
+                "long": "width",
+                "description": "set output widths",
+                "value": {
+                  "name": "width"
+                },
+                "repeatable": true
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get policy type",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "webhook",
+        "description": "webhooks",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list webhooks",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "long": "attr",
+                "description": "select output attributes",
+                "value": {
+                  "name": "attr"
+                },
+                "repeatable": true
+              },
+              {
+                "short": "w",
+                "long": "width",
+                "description": "set output widths",
+                "value": {
+                  "name": "width"
+                },
+                "repeatable": true
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get webhook",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "url",
+                  "index": 0,
+                  "description": "url",
+                  "repeatable": true
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "timer",
+        "description": "timers",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list timers",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "long": "attr",
+                "description": "select output attributes",
+                "value": {
+                  "name": "attr"
+                },
+                "repeatable": true
+              },
+              {
+                "short": "w",
+                "long": "width",
+                "description": "set output widths",
+                "value": {
+                  "name": "width"
+                },
+                "repeatable": true
+              },
+              {
+                "short": "ty",
+                "long": "timer-type",
+                "description": "filter by timer type",
+                "value": {
+                  "name": "type"
+                }
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get timer",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name-or-id",
+                  "index": 0,
+                  "description": "name or id",
+                  "repeatable": true
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "runner",
+        "description": "runners",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list runners",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "long": "attr",
+                "description": "select output attributes",
+                "value": {
+                  "name": "attr"
+                },
+                "repeatable": true
+              },
+              {
+                "short": "w",
+                "long": "width",
+                "description": "set output widths",
+                "value": {
+                  "name": "width"
+                },
+                "repeatable": true
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get runner",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name-or-id",
+                  "index": 0,
+                  "description": "name or id",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "enable",
+            "description": "enable runner",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name-or-id",
+                  "index": 0,
+                  "description": "name or id"
+                }
+              ]
+            }
+          },
+          {
+            "name": "disable",
+            "description": "disable runner",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name-or-id",
+                  "index": 0,
+                  "description": "name or id"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "sensor",
+        "description": "sensors",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list sensors",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "long": "attr",
+                "description": "select output attributes",
+                "value": {
+                  "name": "attr"
+                },
+                "repeatable": true
+              },
+              {
+                "short": "w",
+                "long": "width",
+                "description": "set output widths",
+                "value": {
+                  "name": "width"
+                },
+                "repeatable": true
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get sensor",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "enable",
+            "description": "enable sensor",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id"
+                }
+              ]
+            }
+          },
+          {
+            "name": "disable",
+            "description": "disable sensor",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "ref-or-id",
+                  "index": 0,
+                  "description": "ref or id"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "trace",
+        "description": "traces",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list traces",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "long": "attr",
+                "description": "select output attributes",
+                "value": {
+                  "name": "attr"
+                },
+                "repeatable": true
+              },
+              {
+                "short": "w",
+                "long": "width",
+                "description": "set output widths",
+                "value": {
+                  "name": "width"
+                },
+                "repeatable": true
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get trace",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "id",
+                  "index": 0,
+                  "description": "id",
+                  "repeatable": true
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "trigger-instance",
+        "description": "trigger instances",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list trigger instances",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "long": "attr",
+                "description": "select output attributes",
+                "value": {
+                  "name": "attr"
+                },
+                "repeatable": true
+              },
+              {
+                "short": "w",
+                "long": "width",
+                "description": "set output widths",
+                "value": {
+                  "name": "width"
+                },
+                "repeatable": true
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get trigger instance",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "id",
+                  "index": 0,
+                  "description": "id",
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "re-emit",
+            "description": "re-emit trigger instance",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "id",
+                  "index": 0,
+                  "description": "id",
+                  "repeatable": true
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "workflow",
+        "description": "workflows",
+        "subcommands": [
+          {
+            "name": "inspect",
+            "description": "inspect workflow definition",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "long": "file",
+                "description": "set workflow file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "action",
+                "description": "set action",
+                "value": {
+                  "name": "action"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "service-registry",
+        "description": "service registry",
+        "subcommands": [
+          {
+            "name": "group",
+            "description": "service registry groups",
+            "subcommands": [
+              {
+                "name": "list",
+                "description": "list groups",
+                "options": [
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help"
+                  },
+                  {
+                    "short": "t",
+                    "long": "token",
+                    "description": "set access token",
+                    "value": {
+                      "name": "token"
+                    }
+                  },
+                  {
+                    "long": "api-key",
+                    "description": "set API key",
+                    "value": {
+                      "name": "key"
+                    }
+                  },
+                  {
+                    "short": "j",
+                    "long": "json",
+                    "description": "output JSON"
+                  },
+                  {
+                    "short": "y",
+                    "long": "yaml",
+                    "description": "output YAML"
+                  },
+                  {
+                    "long": "attr",
+                    "description": "select output attributes",
+                    "value": {
+                      "name": "attr"
+                    },
+                    "repeatable": true
+                  },
+                  {
+                    "short": "w",
+                    "long": "width",
+                    "description": "set output widths",
+                    "value": {
+                      "name": "width"
+                    },
+                    "repeatable": true
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "member",
+            "description": "service registry members",
+            "subcommands": [
+              {
+                "name": "list",
+                "description": "list members",
+                "options": [
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help"
+                  },
+                  {
+                    "short": "t",
+                    "long": "token",
+                    "description": "set access token",
+                    "value": {
+                      "name": "token"
+                    }
+                  },
+                  {
+                    "long": "api-key",
+                    "description": "set API key",
+                    "value": {
+                      "name": "key"
+                    }
+                  },
+                  {
+                    "short": "j",
+                    "long": "json",
+                    "description": "output JSON"
+                  },
+                  {
+                    "short": "y",
+                    "long": "yaml",
+                    "description": "output YAML"
+                  },
+                  {
+                    "long": "attr",
+                    "description": "select output attributes",
+                    "value": {
+                      "name": "attr"
+                    },
+                    "repeatable": true
+                  },
+                  {
+                    "short": "w",
+                    "long": "width",
+                    "description": "set output widths",
+                    "value": {
+                      "name": "width"
+                    },
+                    "repeatable": true
+                  },
+                  {
+                    "long": "group-id",
+                    "description": "set group id",
+                    "value": {
+                      "name": "group"
+                    }
+                  }
+                ]
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "role",
+        "description": "RBAC roles",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list roles",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "long": "attr",
+                "description": "select output attributes",
+                "value": {
+                  "name": "attr"
+                },
+                "repeatable": true
+              },
+              {
+                "short": "w",
+                "long": "width",
+                "description": "set output widths",
+                "value": {
+                  "name": "width"
+                },
+                "repeatable": true
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get role",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "id",
+                  "index": 0,
+                  "description": "id",
+                  "repeatable": true
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "role-assignment",
+        "description": "RBAC role assignments",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list role assignments",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "get role assignment",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "short": "t",
+                "long": "token",
+                "description": "set access token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "api-key",
+                "description": "set API key",
+                "value": {
+                  "name": "key"
+                }
+              },
+              {
+                "short": "j",
+                "long": "json",
+                "description": "output JSON"
+              },
+              {
+                "short": "y",
+                "long": "yaml",
+                "description": "output YAML"
+              },
+              {
+                "short": "r",
+                "long": "role",
+                "description": "filter by role",
+                "value": {
+                  "name": "role"
+                }
+              },
+              {
+                "short": "u",
+                "long": "user",
+                "description": "filter by user",
+                "value": {
+                  "name": "user"
+                }
+              }
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
