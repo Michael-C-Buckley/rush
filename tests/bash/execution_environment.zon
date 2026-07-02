@@ -143,6 +143,35 @@
             .status = 0,
         },
         .{
+            .name = "unset removes indexed arrays and elements",
+            .script =
+            \\arr=(a b c)
+            \\unset 'arr[0]'
+            \\printf 'element-count=<%s> value=<%s>\n' "${#arr[@]}" "${arr[1]}"
+            \\printf 'element-index=<%s>\n' "${!arr[@]}"
+            \\unset 'arr[-1]'
+            \\printf 'negative-count=<%s>\n' "${#arr[@]}"
+            \\printf 'negative-index=<%s>\n' "${!arr[@]}"
+            \\unset 'arr[@]'
+            \\printf 'all=<%s>\n' "${#arr[@]}"
+            \\arr=(a b)
+            \\unset arr
+            \\printf 'removed=<%s>\n' "${arr-unset}"
+            ,
+            .stdout =
+            \\element-count=<2> value=<b>
+            \\element-index=<1>
+            \\element-index=<2>
+            \\negative-count=<1>
+            \\negative-index=<1>
+            \\all=<0>
+            \\removed=<unset>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command substitution clears errexit by default",
             .script =
             \\set -e

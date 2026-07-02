@@ -2172,7 +2172,12 @@ fn evalUnset(shell: anytype, args: []const []const u8) !result.EvalResult {
     if (functions and variables) return .{ .status = 2 };
     const unset_functions = functions and !variables;
     var status: result.ExitStatus = 0;
-    for (args[index..]) |name| {
+    for (args[index..]) |name_arg| {
+        const array_target = if (!unset_functions and shell.state.options.mode == .bash)
+            parseUnsetArrayTarget(name_arg)
+        else
+            null;
+        const name = if (array_target) |target| target.name else name_arg;
         if (!isAssignmentName(name) and !unset_functions) {
             status = 2;
             continue;
@@ -2182,6 +2187,8 @@ fn evalUnset(shell: anytype, args: []const []const u8) !result.EvalResult {
                 shell.state.removeFunction(name);
                 try shell.state.suppressFunctionAutoload(name);
             }
+        } else if (array_target) |target| {
+            status = try unsetArrayTarget(shell, target, status);
         } else if (shell.state.getVariable(name)) |variable| {
             if (variable.readonly) {
                 // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
@@ -2198,9 +2205,60 @@ fn evalUnset(shell: anytype, args: []const []const u8) !result.EvalResult {
             } else {
                 shell.state.removeVariableAttributes(name);
             }
+        } else if (shell.state.getArray(name) != null) {
+            shell.state.removeArray(name);
         }
     }
     return .{ .status = status, .flow = if (status == 1) .{ .fatal = status } else .normal };
+}
+
+const UnsetArrayTarget = struct {
+    name: []const u8,
+    subscript: []const u8,
+};
+
+fn parseUnsetArrayTarget(arg: []const u8) ?UnsetArrayTarget {
+    if (arg.len < 4 or arg[arg.len - 1] != ']') return null;
+    const open_index = std.mem.indexOfScalar(u8, arg, '[') orelse return null;
+    if (open_index == 0) return null;
+    const name = arg[0..open_index];
+    if (!isAssignmentName(name)) return null;
+    return .{ .name = name, .subscript = arg[open_index + 1 .. arg.len - 1] };
+}
+
+fn unsetArrayTarget(shell: anytype, target: UnsetArrayTarget, current_status: result.ExitStatus) !result.ExitStatus {
+    if (std.mem.eql(u8, target.subscript, "@") or std.mem.eql(u8, target.subscript, "*")) {
+        try shell.state.putArray(target.name, &.{});
+        return current_status;
+    }
+    const array = shell.state.getArray(target.name) orelse return current_status;
+    const index = unsetArrayIndex(target.subscript, array) catch |err| switch (err) {
+        error.BadArraySubscript => {
+            try shell.host.writeAll(.stderr, try std.fmt.allocPrint(
+                shell.scratchAllocator(),
+                "unset: [{s}]: bad array subscript\n",
+                .{target.subscript},
+            ));
+            return 1;
+        },
+    };
+    try shell.state.removeArrayElement(target.name, index);
+    return current_status;
+}
+
+const UnsetArrayIndexError = error{BadArraySubscript};
+
+fn unsetArrayIndex(subscript: []const u8, array: state_mod.ArrayVariable) UnsetArrayIndexError!usize {
+    const value = std.fmt.parseInt(i64, subscript, 10) catch 0;
+    if (value >= 0) return @intCast(value);
+    if (array.elements.len == 0) return error.BadArraySubscript;
+    const max_index = array.elements[array.elements.len - 1].index;
+    const magnitude: u64 = if (value == std.math.minInt(i64))
+        @as(u64, 1) << 63
+    else
+        @intCast(-value);
+    if (magnitude > max_index + 1) return error.BadArraySubscript;
+    return max_index + 1 - @as(usize, @intCast(magnitude));
 }
 
 fn evalTrap(shell: anytype, args: []const []const u8) !result.EvalResult {

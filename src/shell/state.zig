@@ -539,8 +539,26 @@ pub const State = struct {
         allocator.free(elements);
     }
 
-    fn removeArray(self: *State, name: []const u8) void {
+    pub fn removeArray(self: *State, name: []const u8) void {
         if (self.arrays.fetchRemove(name)) |entry| entry.value.deinit(self.allocator);
+    }
+
+    pub fn removeArrayElement(self: *State, name: []const u8, index: usize) !void {
+        const array = self.arrays.getPtr(name) orelse return;
+        for (array.elements, 0..) |element, element_index| {
+            if (element.index == index) {
+                const old_elements = array.elements;
+                const new_elements = try self.allocator.alloc(ArrayElement, old_elements.len - 1);
+                @memcpy(new_elements[0..element_index], old_elements[0..element_index]);
+                @memcpy(new_elements[element_index..], old_elements[element_index + 1 ..]);
+                self.allocator.free(element.value);
+                self.allocator.free(old_elements);
+                array.elements = new_elements;
+                self.clearFunctionAutoloadMissesIfSearchVariable(name);
+                return;
+            }
+            if (element.index > index) return;
+        }
     }
 
     pub fn putVariableAttributes(self: *State, attributes: VariableAttributes) !void {
