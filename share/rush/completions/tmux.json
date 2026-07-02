@@ -1,0 +1,2937 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "tmux",
+    "description": "terminal multiplexer",
+    "subcommands": [
+      {
+        "name": "a",
+        "aliases": [
+          "at",
+          "attach",
+          "attach-session"
+        ],
+        "description": "attach to last session",
+        "options": [
+          {
+            "short": "d",
+            "description": "detach all others clients to the session",
+            "inherit": false
+          },
+          {
+            "short": "x",
+            "description": "send SIGHUP to the parent process and detach the client",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "description": "set the session's working directory",
+            "inherit": false,
+            "value": {
+              "name": "working-directory",
+              "description": "the session's working directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "E",
+            "description": "don't use update-environment option",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "attach to a session with the given name",
+            "inherit": false,
+            "value": {
+              "name": "target-session",
+              "provider": "tmux.sessions"
+            }
+          },
+          {
+            "short": "f",
+            "description": "set client flags",
+            "inherit": false,
+            "value": {
+              "name": "flags",
+              "provider": "tmux.client-flags"
+            }
+          }
+        ]
+      },
+      {
+        "name": "bind",
+        "aliases": [
+          "bind-key"
+        ],
+        "description": "bind a key to a command",
+        "options": [
+          {
+            "short": "n",
+            "description": "alias for -T root",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "description": "indicate that this key may repeat",
+            "inherit": false
+          },
+          {
+            "short": "N",
+            "description": "attach a note to the key",
+            "inherit": false,
+            "value": {
+              "name": "note"
+            }
+          },
+          {
+            "short": "T",
+            "description": "the key table to use",
+            "inherit": false,
+            "value": {
+              "name": "key-table"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "key",
+              "description": "the key to bind",
+              "index": 0
+            },
+            {
+              "name": "command",
+              "description": "the command to bind to the key",
+              "index": 1
+            },
+            {
+              "name": "arguments",
+              "description": "arguments for the command",
+              "index": 2,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "breakp",
+        "aliases": [
+          "break-pane"
+        ],
+        "description": "break a pane from an exiting into a new window",
+        "options": [
+          {
+            "short": "a",
+            "description": "move the window to the next index after",
+            "inherit": false
+          },
+          {
+            "short": "b",
+            "description": "move the window to the next index before",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "description": "the new windows does not become the current window",
+            "inherit": false
+          },
+          {
+            "short": "P",
+            "description": "print information about the new window",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "description": "the target window",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "description": "the source pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the destination window",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          }
+        ]
+      },
+      {
+        "name": "capturep",
+        "aliases": [
+          "capture-pane"
+        ],
+        "description": "capture the contents of a pane to a buffer",
+        "options": [
+          {
+            "short": "a",
+            "description": "use the alternate screen and history is not accessible",
+            "inherit": false
+          },
+          {
+            "short": "e",
+            "description": "include escape sequences for text and background attributes",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "description": "redirect output to stdout",
+            "inherit": false
+          },
+          {
+            "short": "P",
+            "description": "capture only outputs that is the beginning of an as-yet incomplete escape sequence",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "description": "do not throw an error if not alternate screen is found",
+            "inherit": false
+          },
+          {
+            "short": "C",
+            "description": "escape non-printable characters as octal",
+            "inherit": false
+          },
+          {
+            "short": "J",
+            "description": "preserve trailing spaces and join any wrapped lines",
+            "inherit": false
+          },
+          {
+            "short": "N",
+            "description": "preserve trailing spaces at each line's end",
+            "inherit": false
+          },
+          {
+            "short": "b",
+            "description": "the buffer name",
+            "inherit": false
+          },
+          {
+            "short": "E",
+            "description": "ending line number",
+            "inherit": false,
+            "value": {
+              "name": "end-line"
+            }
+          },
+          {
+            "short": "S",
+            "description": "starting line number",
+            "inherit": false,
+            "value": {
+              "name": "start-line"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the target pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          }
+        ]
+      },
+      {
+        "name": "choose-buffer",
+        "description": "put a pane into buffer choice mode",
+        "options": [
+          {
+            "short": "N",
+            "description": "start without the preview",
+            "inherit": false
+          },
+          {
+            "short": "Z",
+            "description": "zoom the pane",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "description": "reverse the sort order",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "description": "specify an initial filter",
+            "inherit": false,
+            "value": {
+              "name": "filter"
+            }
+          },
+          {
+            "short": "O",
+            "description": "specify the sort order",
+            "inherit": false,
+            "value": {
+              "name": "sort-order",
+              "provider": {
+                "values": [
+                  "time",
+                  "name",
+                  "size"
+                ]
+              }
+            }
+          },
+          {
+            "short": "t",
+            "description": "the target pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "template",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "choose-client",
+        "description": "put a pane into buffer client mode",
+        "options": [
+          {
+            "short": "N",
+            "description": "start without the preview",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "description": "reserve the sort order",
+            "inherit": false
+          },
+          {
+            "short": "Z",
+            "description": "zoom the pane",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "description": "specify an initial filter",
+            "inherit": false,
+            "value": {
+              "name": "filter"
+            }
+          },
+          {
+            "short": "O",
+            "description": "specify the initial sort field",
+            "inherit": false,
+            "value": {
+              "name": "sort",
+              "provider": {
+                "values": [
+                  "name",
+                  "size",
+                  "creation",
+                  "activity"
+                ]
+              }
+            }
+          },
+          {
+            "short": "t",
+            "description": "the target pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "template",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "choose-tree",
+        "description": "put a pane into buffer tree mode",
+        "options": [
+          {
+            "short": "G",
+            "description": "include all sessions in any session group in the tree",
+            "inherit": false
+          },
+          {
+            "short": "N",
+            "description": "start without the preview",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "description": "reserve the sort order",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "description": "start with sessions collapsed",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "description": "start with windows collapsed",
+            "inherit": false
+          },
+          {
+            "short": "Z",
+            "description": "zoom the pane",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "description": "specify an initial filter",
+            "inherit": false,
+            "value": {
+              "name": "filter"
+            }
+          },
+          {
+            "short": "O",
+            "description": "specify the initial sort field",
+            "inherit": false,
+            "value": {
+              "name": "sort",
+              "provider": {
+                "values": [
+                  "name",
+                  "size",
+                  "creation",
+                  "activity"
+                ]
+              }
+            }
+          },
+          {
+            "short": "t",
+            "description": "the target pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "template",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "clearhist",
+        "aliases": [
+          "clear-history"
+        ],
+        "description": "remove and clear history for a pane"
+      },
+      {
+        "name": "clock-mode",
+        "description": "enter clock mode"
+      },
+      {
+        "name": "command-prompt",
+        "description": "open the tmux command prompt in a client",
+        "options": [
+          {
+            "short": "l",
+            "description": "the prompt only accept one key press",
+            "inherit": false
+          },
+          {
+            "short": "i",
+            "description": "execute the command every time the prompt input changes",
+            "inherit": false
+          },
+          {
+            "short": "k",
+            "description": "like -l but the key press is translated to a key name",
+            "inherit": false
+          },
+          {
+            "short": "N",
+            "description": "the prompt only accept numeric key press",
+            "inherit": false
+          },
+          {
+            "short": "T",
+            "description": "tell that the prompt is for a target",
+            "inherit": false
+          },
+          {
+            "short": "W",
+            "description": "tell that the prompt is for a window",
+            "inherit": false
+          },
+          {
+            "short": "I",
+            "description": "comma-separated list of the initial text for each prompt",
+            "inherit": false,
+            "value": {
+              "name": "inputs"
+            }
+          },
+          {
+            "short": "p",
+            "description": "comma-separated list of prompts which are displayed in order",
+            "inherit": false,
+            "value": {
+              "name": "prompts"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the target client",
+            "inherit": false,
+            "value": {
+              "name": "target-client",
+              "provider": "tmux.clients"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "template",
+              "description": "if specified, used as a command",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "confirm",
+        "aliases": [
+          "confirm-before"
+        ],
+        "description": "run a command but ask for confirmation before",
+        "options": [
+          {
+            "short": "p",
+            "description": "a prompt to display for confirmation",
+            "inherit": false,
+            "value": {
+              "name": "prompt"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the target client",
+            "inherit": false,
+            "value": {
+              "name": "target-client",
+              "provider": "tmux.clients"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "description": "the command to run",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "copy-mode",
+        "description": "enter copy mode",
+        "options": [
+          {
+            "short": "e",
+            "description": "scrolling to the bottom should exit copy mode",
+            "inherit": false
+          },
+          {
+            "short": "H",
+            "description": "hide the position indicator",
+            "inherit": false
+          },
+          {
+            "short": "M",
+            "description": "begin a mouse drag",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "description": "cancel copy mode and any other modes",
+            "inherit": false
+          },
+          {
+            "short": "u",
+            "description": "scroll one page up",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "description": "the source pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the target pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          }
+        ]
+      },
+      {
+        "name": "deleteb",
+        "aliases": [
+          "delete-buffer"
+        ],
+        "description": "delete a paste buffer",
+        "options": [
+          {
+            "short": "b",
+            "description": "the target buffer",
+            "inherit": false,
+            "value": {
+              "name": "buffer-name",
+              "provider": "tmux.buffers"
+            }
+          }
+        ]
+      },
+      {
+        "name": "detach",
+        "aliases": [
+          "detach-client"
+        ],
+        "description": "detach a client from the server",
+        "options": [
+          {
+            "short": "a",
+            "description": "kills all but the client given with -t",
+            "inherit": false
+          },
+          {
+            "short": "P",
+            "description": "send SIGHUP to the parent process",
+            "inherit": false
+          },
+          {
+            "short": "E",
+            "description": "run the given shell-command to replace the client",
+            "inherit": false,
+            "value": {
+              "name": "shell-command",
+              "description": "the shell-command to run"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the target client",
+            "inherit": false,
+            "value": {
+              "name": "target-client",
+              "provider": "tmux.clients"
+            }
+          },
+          {
+            "short": "s",
+            "description": "detach all clients attached to the specified session",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "menu",
+        "aliases": [
+          "display-menu"
+        ],
+        "description": "display menu on target-client",
+        "options": [
+          {
+            "short": "O",
+            "description": "do not close the menu when the mouse button is released",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "description": "the target client",
+            "inherit": false,
+            "value": {
+              "name": "target-client",
+              "provider": "tmux.clients"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the target pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          },
+          {
+            "short": "T",
+            "description": "specify a title",
+            "inherit": false,
+            "value": {
+              "name": "title"
+            }
+          },
+          {
+            "short": "x",
+            "description": "give the x position of the menu",
+            "inherit": false,
+            "value": {
+              "name": "position"
+            }
+          },
+          {
+            "short": "y",
+            "description": "give the y position of the menu",
+            "inherit": false,
+            "value": {
+              "name": "position"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "the name of the menu",
+              "index": 0
+            },
+            {
+              "name": "key",
+              "description": "the key to press to open the menu",
+              "index": 1
+            },
+            {
+              "name": "command",
+              "description": "commands to execute",
+              "index": 2,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "display",
+        "aliases": [
+          "display-message"
+        ],
+        "description": "display a message in the status line",
+        "options": [
+          {
+            "short": "a",
+            "description": "list the format variables and their values",
+            "inherit": false
+          },
+          {
+            "short": "I",
+            "description": "forward any input read from stdin to the empty pane target-pane",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "description": "print output to stdout",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "description": "print verbose logging as the format is parsed",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "description": "a delay for the message",
+            "inherit": false,
+            "value": {
+              "name": "delay"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the target pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "message",
+              "description": "the message to display",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "displayp",
+        "aliases": [
+          "display-panes"
+        ],
+        "description": "display an indicator for each visible pane",
+        "options": [
+          {
+            "short": "b",
+            "description": "do not block other commands from running until the indicator is closed",
+            "inherit": false
+          },
+          {
+            "short": "N",
+            "description": "do not close the indicator when a key is pressed",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "description": "specify the duration",
+            "inherit": false,
+            "value": {
+              "name": "duration",
+              "description": "the duration to close the indicator after in milliseconds"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the target client",
+            "inherit": false,
+            "value": {
+              "name": "target-client",
+              "provider": "tmux.clients"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "template",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "findw",
+        "aliases": [
+          "find-window"
+        ],
+        "description": "search for a pattern in windows",
+        "options": [
+          {
+            "short": "i",
+            "description": "make the search ignore cases",
+            "inherit": false
+          },
+          {
+            "short": "C",
+            "description": "match only visible window contents",
+            "inherit": false
+          },
+          {
+            "short": "N",
+            "description": "match only the window name",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "description": "search a regular expression",
+            "inherit": false
+          },
+          {
+            "short": "T",
+            "description": "match only the window's title",
+            "inherit": false
+          },
+          {
+            "short": "Z",
+            "description": "zoom the pane",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "the target pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "match-string",
+              "description": "a string to search for",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "has",
+        "aliases": [
+          "has-session"
+        ],
+        "description": "check and report if a session exists on the server",
+        "options": [
+          {
+            "short": "t",
+            "description": "specify the target session",
+            "inherit": false,
+            "value": {
+              "name": "target-session",
+              "provider": "tmux.sessions"
+            }
+          }
+        ]
+      },
+      {
+        "name": "if",
+        "aliases": [
+          "if-shell"
+        ],
+        "description": "execute a tmux command if a shell-command succeeded"
+      },
+      {
+        "name": "joinp",
+        "aliases": [
+          "join-pane",
+          "movep",
+          "move-pane"
+        ],
+        "description": "split a pane and move an existing one into the new space",
+        "options": [
+          {
+            "short": "b",
+            "description": "src-pane will be joined to left of or above dst-pane",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "description": "set the size of the new space",
+            "inherit": false,
+            "value": {
+              "name": "size",
+              "description": "the size of the new space"
+            }
+          },
+          {
+            "short": "s",
+            "description": "the source pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the destination pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          }
+        ]
+      },
+      {
+        "name": "killp",
+        "aliases": [
+          "kill-pane"
+        ],
+        "description": "destroy a given pane",
+        "options": [
+          {
+            "short": "a",
+            "description": "kill all but the target-pane",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "the target pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          }
+        ]
+      },
+      {
+        "name": "kill-server",
+        "description": "kill clients, session and server"
+      },
+      {
+        "name": "kill-ses",
+        "aliases": [
+          "kill-session"
+        ],
+        "description": "kill/delete sessions",
+        "options": [
+          {
+            "short": "t",
+            "description": "kill/delete session with the given name",
+            "inherit": false,
+            "value": {
+              "name": "target-session",
+              "provider": "tmux.sessions"
+            }
+          },
+          {
+            "short": "a",
+            "description": "kill/delete all session but the current",
+            "inherit": false
+          },
+          {
+            "short": "C",
+            "description": "clear alerts (bell, activity, or silence) in all windows linked to the session",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "killw",
+        "aliases": [
+          "kill-window"
+        ],
+        "description": "destroy a given window",
+        "options": [
+          {
+            "short": "a",
+            "description": "kill all but the target-window",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "the target window",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          }
+        ]
+      },
+      {
+        "name": "lastp",
+        "aliases": [
+          "last-pane"
+        ],
+        "description": "select the previously selected pane",
+        "options": [
+          {
+            "short": "d",
+            "description": "disable input to the pane",
+            "inherit": false
+          },
+          {
+            "short": "e",
+            "description": "enable input to the pane",
+            "inherit": false
+          },
+          {
+            "short": "Z",
+            "description": "keep the window zoomed if it was zoomed",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "the target window",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          }
+        ]
+      },
+      {
+        "name": "last",
+        "aliases": [
+          "last-window"
+        ],
+        "description": "select the previously selected window",
+        "options": [
+          {
+            "short": "t",
+            "description": "select the previously select window of the target-session",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          }
+        ]
+      },
+      {
+        "name": "linkw",
+        "aliases": [
+          "link-window"
+        ],
+        "description": "link a window to another",
+        "options": [
+          {
+            "short": "a",
+            "description": "move the window to the next index after dst-window",
+            "inherit": false
+          },
+          {
+            "short": "b",
+            "description": "move the window to the next index before dst-window",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "description": "do not select the newly linked window",
+            "inherit": false
+          },
+          {
+            "short": "k",
+            "description": "kill dst-window if exist",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "description": "the source window",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the destination window",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          }
+        ]
+      },
+      {
+        "name": "lsb",
+        "aliases": [
+          "list-buffers"
+        ],
+        "description": "list paste buffers of a session"
+      },
+      {
+        "name": "lsc",
+        "aliases": [
+          "list-clients"
+        ],
+        "description": "list clients attached to a server",
+        "options": [
+          {
+            "short": "t",
+            "description": "list only clients connected to that session",
+            "inherit": false,
+            "value": {
+              "name": "target-client",
+              "provider": "tmux.clients"
+            }
+          }
+        ]
+      },
+      {
+        "name": "lscm",
+        "aliases": [
+          "list-commands"
+        ],
+        "description": "list supported sub-commands",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "description": "the command to list syntax of",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "lsk",
+        "aliases": [
+          "list-keys"
+        ],
+        "description": "list all key-bindings"
+      },
+      {
+        "name": "lsp",
+        "aliases": [
+          "list-panes"
+        ],
+        "description": "list panes of a window",
+        "options": [
+          {
+            "short": "a",
+            "description": "ignore target-window and list all panes",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "description": "target-window becomes a session",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          },
+          {
+            "short": "f",
+            "description": "specify a filter",
+            "inherit": false,
+            "value": {
+              "name": "filter"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the target window",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          }
+        ]
+      },
+      {
+        "name": "ls",
+        "aliases": [
+          "list-sessions"
+        ],
+        "description": "list sessions managed by a server",
+        "options": [
+          {
+            "short": "f",
+            "description": "filter the sessions",
+            "inherit": false,
+            "value": {
+              "name": "filter"
+            }
+          }
+        ]
+      },
+      {
+        "name": "lsw",
+        "aliases": [
+          "list-windows"
+        ],
+        "description": "list windows of a session",
+        "options": [
+          {
+            "short": "a",
+            "description": "ignore target-session and list all windows",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "description": "specify a filter",
+            "inherit": false,
+            "value": {
+              "name": "filter"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the target session",
+            "inherit": false,
+            "value": {
+              "name": "target-session",
+              "provider": "tmux.sessions"
+            }
+          }
+        ]
+      },
+      {
+        "name": "loadb",
+        "aliases": [
+          "load-buffer"
+        ],
+        "description": "load a file into a paste buffer",
+        "options": [
+          {
+            "short": "w",
+            "description": "send the buffer to the clipboard",
+            "inherit": false
+          },
+          {
+            "short": "b",
+            "description": "the target buffer",
+            "inherit": false,
+            "value": {
+              "name": "buffer-name",
+              "provider": "tmux.buffers"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the target client",
+            "inherit": false,
+            "value": {
+              "name": "target-client",
+              "provider": "tmux.clients"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "load from this path",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "lockc",
+        "aliases": [
+          "lock-client"
+        ],
+        "description": "lock a client",
+        "options": [
+          {
+            "short": "t",
+            "description": "the target client",
+            "inherit": false,
+            "value": {
+              "name": "target-client",
+              "provider": "tmux.clients"
+            }
+          }
+        ]
+      },
+      {
+        "name": "lock",
+        "aliases": [
+          "lock-server"
+        ],
+        "description": "lock all clients attached to the server"
+      },
+      {
+        "name": "locks",
+        "aliases": [
+          "lock-session"
+        ],
+        "description": "lock all clients attached to a session",
+        "options": [
+          {
+            "short": "t",
+            "description": "lock all clients attached to target-session",
+            "inherit": false,
+            "value": {
+              "name": "target-client",
+              "provider": "tmux.clients"
+            }
+          }
+        ]
+      },
+      {
+        "name": "movew",
+        "aliases": [
+          "move-window"
+        ],
+        "description": "move a window to another",
+        "options": [
+          {
+            "short": "a",
+            "description": "move the window to the next index after dst-window",
+            "inherit": false
+          },
+          {
+            "short": "b",
+            "description": "move the window to the next index before dst-window",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "description": "renumber all windows in the session in sequential order",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "description": "do not select the newly linked window",
+            "inherit": false
+          },
+          {
+            "short": "k",
+            "description": "kill dst-window if exist",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "description": "the source window",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the destination window",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          }
+        ]
+      },
+      {
+        "name": "new",
+        "aliases": [
+          "new-session"
+        ],
+        "description": "create a new session",
+        "options": [
+          {
+            "short": "A",
+            "description": "behave like attach-session if session-name already exist",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "description": "use the initial size from default-size",
+            "inherit": false
+          },
+          {
+            "short": "D",
+            "description": "behave like -d if -A is set",
+            "inherit": false
+          },
+          {
+            "short": "E",
+            "description": "do not use update-environment option",
+            "inherit": false
+          },
+          {
+            "short": "P",
+            "description": "print information about the new session",
+            "inherit": false
+          },
+          {
+            "short": "X",
+            "description": "behave like -x if -A is set",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "description": "specify a start directory for the session",
+            "inherit": false,
+            "value": {
+              "name": "start-directory",
+              "description": "the start directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "e",
+            "description": "set environment variables",
+            "inherit": false,
+            "value": {
+              "name": "environment",
+              "description": "environment variables with the form VARIABLE=VALUE"
+            }
+          },
+          {
+            "short": "n",
+            "description": "start a new session with the given name",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          },
+          {
+            "short": "s",
+            "description": "start a new session with the given name",
+            "inherit": false,
+            "value": {
+              "name": "target-session",
+              "provider": "tmux.sessions"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the name of the group",
+            "inherit": false,
+            "value": {
+              "name": "group-name"
+            }
+          },
+          {
+            "short": "x",
+            "description": "the width of the session",
+            "inherit": false,
+            "value": {
+              "name": "width"
+            }
+          },
+          {
+            "short": "y",
+            "description": "the height of the session",
+            "inherit": false,
+            "value": {
+              "name": "height"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "shell-command",
+              "description": "a shell command to run when creating the session",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "neww",
+        "aliases": [
+          "new-window"
+        ],
+        "description": "create a new window",
+        "options": [
+          {
+            "short": "a",
+            "description": "insert the new window at the next index after target-window",
+            "inherit": false
+          },
+          {
+            "short": "b",
+            "description": "insert the new window at the next index before target-window",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          },
+          {
+            "short": "d",
+            "description": "the session does not make the new window the current window",
+            "inherit": false
+          },
+          {
+            "short": "k",
+            "description": "kill the target-window if exist",
+            "inherit": false
+          },
+          {
+            "short": "P",
+            "description": "print information about the new window",
+            "inherit": false
+          },
+          {
+            "short": "S",
+            "description": "select window-name if exist",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "description": "specify a start directory for the window",
+            "inherit": false,
+            "value": {
+              "name": "start-directory",
+              "description": "the start directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "e",
+            "description": "set environment variables",
+            "inherit": false,
+            "value": {
+              "name": "environment",
+              "description": "environment variables with the form VARIABLE=VALUE"
+            }
+          },
+          {
+            "short": "n",
+            "description": "start a new window with the given name",
+            "inherit": false,
+            "value": {
+              "name": "window-name"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the target window",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "shell-command",
+              "description": "a shell command to run when creating the window",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "nextl",
+        "aliases": [
+          "next-layout"
+        ],
+        "description": "move a window to the next layout",
+        "options": [
+          {
+            "short": "t",
+            "description": "the target pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          }
+        ]
+      },
+      {
+        "name": "next",
+        "aliases": [
+          "next-window"
+        ],
+        "description": "move to the next window in a session",
+        "options": [
+          {
+            "short": "a",
+            "description": "move to the next window with an alert",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "move to the next window of the target-session",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          }
+        ]
+      },
+      {
+        "name": "pasteb",
+        "aliases": [
+          "paste-buffer"
+        ],
+        "description": "insert a paste buffer into the window"
+      },
+      {
+        "name": "pipep",
+        "aliases": [
+          "pipe-pane"
+        ],
+        "description": "pipe output from a pane to a shell command",
+        "options": [
+          {
+            "short": "I",
+            "description": "connect stdout to shell-command",
+            "inherit": false
+          },
+          {
+            "short": "O",
+            "description": "connect stdin to shell-command",
+            "inherit": false
+          },
+          {
+            "short": "o",
+            "description": "only open a new pipe if no previous pipe exists",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "the target pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "shell-command",
+              "description": "the shell-command to run",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "prevl",
+        "aliases": [
+          "previous-layout"
+        ],
+        "description": "move a window to the previous layout",
+        "options": [
+          {
+            "short": "t",
+            "description": "the target window",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          }
+        ]
+      },
+      {
+        "name": "prev",
+        "aliases": [
+          "previous-window"
+        ],
+        "description": "move to the previous window in a session",
+        "options": [
+          {
+            "short": "a",
+            "description": "move with an alert",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "move to the previous window of the target-session",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          }
+        ]
+      },
+      {
+        "name": "refresh",
+        "aliases": [
+          "refresh-client"
+        ],
+        "description": "refresh a client",
+        "options": [
+          {
+            "short": "c",
+            "description": "return the tracking cursor",
+            "inherit": false
+          },
+          {
+            "short": "D",
+            "description": "allow the visible portion of a window to be changed",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "description": "request the clipboard from the client",
+            "inherit": false
+          },
+          {
+            "short": "L",
+            "description": "allow the visible portion of a window to be changed",
+            "inherit": false
+          },
+          {
+            "short": "R",
+            "description": "allow the visible portion of a window to be changed",
+            "inherit": false
+          },
+          {
+            "short": "S",
+            "description": "only update the client's status line",
+            "inherit": false
+          },
+          {
+            "short": "U",
+            "description": "allow the visible portion of a window to be changed",
+            "inherit": false
+          },
+          {
+            "short": "A",
+            "description": "the target pane",
+            "inherit": false
+          },
+          {
+            "short": "B",
+            "description": "a subscription to a format for a control mode",
+            "inherit": false,
+            "value": {
+              "name": "subscription"
+            }
+          },
+          {
+            "short": "C",
+            "description": "set the width and height",
+            "inherit": false,
+            "value": {
+              "name": "XxY"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the target client",
+            "inherit": false,
+            "value": {
+              "name": "target-client",
+              "provider": "tmux.clients"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "adjustment",
+              "description": "an adjustment value to use",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "rename",
+        "aliases": [
+          "rename-session"
+        ],
+        "description": "rename a session",
+        "options": [
+          {
+            "short": "t",
+            "description": "rename the target-session",
+            "inherit": false,
+            "value": {
+              "name": "target-session",
+              "provider": "tmux.sessions"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "new-name",
+              "description": "the new name of the session",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "renamew",
+        "aliases": [
+          "rename-window"
+        ],
+        "description": "rename a window",
+        "options": [
+          {
+            "short": "t",
+            "description": "the target window",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "new-name",
+              "description": "the new name of the window",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "resizep",
+        "aliases": [
+          "resize-pane"
+        ],
+        "description": "resize a pane",
+        "options": [
+          {
+            "short": "D",
+            "description": "resize down by adjustment",
+            "inherit": false
+          },
+          {
+            "short": "L",
+            "description": "resize left by adjustment",
+            "inherit": false
+          },
+          {
+            "short": "M",
+            "description": "begin mouse resizing",
+            "inherit": false
+          },
+          {
+            "short": "R",
+            "description": "resize right by adjustment",
+            "inherit": false
+          },
+          {
+            "short": "T",
+            "description": "trim all lines below the current cursor position",
+            "inherit": false
+          },
+          {
+            "short": "U",
+            "description": "resize up by adjustment",
+            "inherit": false
+          },
+          {
+            "short": "Z",
+            "description": "toggle the active pane between zoomed and unzoomed",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "the target pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          },
+          {
+            "short": "x",
+            "description": "the width of the pane",
+            "inherit": false,
+            "value": {
+              "name": "width"
+            }
+          },
+          {
+            "short": "y",
+            "description": "the height of the pane",
+            "inherit": false,
+            "value": {
+              "name": "height"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "adjustment",
+              "description": "adjustment used with -ULDR",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "resizew",
+        "aliases": [
+          "resize-window"
+        ],
+        "description": "resize a window",
+        "options": [
+          {
+            "short": "a",
+            "description": "set the size of the smallest session containing the window",
+            "inherit": false
+          },
+          {
+            "short": "A",
+            "description": "set the size of the largest session containing the window",
+            "inherit": false
+          },
+          {
+            "short": "D",
+            "description": "resize down by adjustment",
+            "inherit": false
+          },
+          {
+            "short": "L",
+            "description": "resize left by adjustment",
+            "inherit": false
+          },
+          {
+            "short": "R",
+            "description": "resize right by adjustment",
+            "inherit": false
+          },
+          {
+            "short": "U",
+            "description": "resize up by adjustment",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "the target window",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          },
+          {
+            "short": "x",
+            "description": "the width of the pane",
+            "inherit": false,
+            "value": {
+              "name": "width"
+            }
+          },
+          {
+            "short": "y",
+            "description": "the height of the pane",
+            "inherit": false,
+            "value": {
+              "name": "height"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "adjustment",
+              "description": "adjustment used with -ULDR",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "respawnp",
+        "aliases": [
+          "respawn-pane"
+        ],
+        "description": "reactivate a pane in which a command has exited",
+        "options": [
+          {
+            "short": "k",
+            "description": "kill the target-pane if exist",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "description": "specify a start directory for the pane",
+            "inherit": false,
+            "value": {
+              "name": "start-directory",
+              "description": "the start directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "e",
+            "description": "set environment variables",
+            "inherit": false,
+            "value": {
+              "name": "environment",
+              "description": "environment variables with the form VARIABLE=VALUE"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the target pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "shell-command",
+              "description": "a shell command to run when creating the pane",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "respawnw",
+        "aliases": [
+          "respawn-window"
+        ],
+        "description": "reactivate a window in which a command has exited",
+        "options": [
+          {
+            "short": "k",
+            "description": "kill the target-window if exist",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "description": "specify a start directory for the window",
+            "inherit": false,
+            "value": {
+              "name": "start-directory",
+              "description": "the start directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "e",
+            "description": "set environment variables",
+            "inherit": false,
+            "value": {
+              "name": "environment",
+              "description": "environment variables with the form VARIABLE=VALUE"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the target window",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "shell-command",
+              "description": "a shell command to run when creating the window",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "rotatew",
+        "aliases": [
+          "rotate-window"
+        ],
+        "description": "rotate positions of panes in a window",
+        "options": [
+          {
+            "short": "D",
+            "description": "rotate upward",
+            "inherit": false
+          },
+          {
+            "short": "U",
+            "description": "rotate downward",
+            "inherit": false
+          },
+          {
+            "short": "Z",
+            "description": "keep the window zoomed if it was zoomed",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "the target window",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "aliases": [
+          "run-shell"
+        ],
+        "description": "execute a command without create a new window"
+      },
+      {
+        "name": "saveb",
+        "aliases": [
+          "save-buffer"
+        ],
+        "description": "save a paste buffer to a file"
+      },
+      {
+        "name": "selectl",
+        "aliases": [
+          "select-layout"
+        ],
+        "description": "choose a layout for a pane",
+        "options": [
+          {
+            "short": "E",
+            "description": "spread the current pane and any panes next to it evenly",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "description": "equivalent to next-layout",
+            "inherit": false
+          },
+          {
+            "short": "o",
+            "description": "apply the last set layout if possible",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "description": "equivalent to previous-layout",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "the target pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "layout-name",
+              "description": "use the last preset layout used if not specified",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "selectp",
+        "aliases": [
+          "select-pane"
+        ],
+        "description": "make a pane the active one in the window",
+        "options": [
+          {
+            "short": "D",
+            "description": "use the down pane",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "description": "disable input to the pane",
+            "inherit": false
+          },
+          {
+            "short": "e",
+            "description": "enable input to the pane",
+            "inherit": false
+          },
+          {
+            "short": "L",
+            "description": "use the left pane",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "description": "same as last-pane command",
+            "inherit": false
+          },
+          {
+            "short": "M",
+            "description": "clear the marked pane",
+            "inherit": false
+          },
+          {
+            "short": "m",
+            "description": "set the market pane",
+            "inherit": false
+          },
+          {
+            "short": "R",
+            "description": "use the right pane",
+            "inherit": false
+          },
+          {
+            "short": "U",
+            "description": "use the up pane",
+            "inherit": false
+          },
+          {
+            "short": "Z",
+            "description": "set the pane's title",
+            "inherit": false
+          },
+          {
+            "short": "T",
+            "description": "set the pane title",
+            "inherit": false,
+            "value": {
+              "name": "title"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the target pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          }
+        ]
+      },
+      {
+        "name": "selectw",
+        "aliases": [
+          "select-window"
+        ],
+        "description": "select a window",
+        "options": [
+          {
+            "short": "l",
+            "description": "same as last-window",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "description": "same as next-window",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "description": "same as previous-window",
+            "inherit": false
+          },
+          {
+            "short": "T",
+            "description": "same as last-window if the selected window is already the current window",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "the target window",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          }
+        ]
+      },
+      {
+        "name": "send",
+        "aliases": [
+          "send-keys"
+        ],
+        "description": "send key(s) to a window"
+      },
+      {
+        "name": "send-prefix",
+        "description": "send the prefix key to a window"
+      },
+      {
+        "name": "info",
+        "aliases": [
+          "server-info"
+        ],
+        "description": "show every session, window, pane, etc"
+      },
+      {
+        "name": "setb",
+        "aliases": [
+          "set-buffer"
+        ],
+        "description": "set content of a paste buffer",
+        "options": [
+          {
+            "short": "a",
+            "description": "append to rather than overwriting the buffer",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "description": "send the buffer to the clipboard",
+            "inherit": false
+          },
+          {
+            "short": "b",
+            "description": "the name of the buffer",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "the target client",
+            "inherit": false,
+            "value": {
+              "name": "target-client",
+              "provider": "tmux.clients"
+            }
+          },
+          {
+            "short": "n",
+            "description": "the new name of the buffer",
+            "inherit": false,
+            "value": {
+              "name": "new-buffer-name"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "data",
+              "description": "the data to set in the buffer",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "setenv",
+        "aliases": [
+          "set-environment"
+        ],
+        "description": "(Un)set an environment variable"
+      },
+      {
+        "name": "set-hook",
+        "description": "set a hook to a command"
+      },
+      {
+        "name": "set",
+        "aliases": [
+          "set-option"
+        ],
+        "description": "set a session option"
+      },
+      {
+        "name": "setw",
+        "aliases": [
+          "set-window-option"
+        ],
+        "description": "set a window option"
+      },
+      {
+        "name": "showb",
+        "aliases": [
+          "show-buffer"
+        ],
+        "description": "display the contents of a paste buffer"
+      },
+      {
+        "name": "showenv",
+        "aliases": [
+          "show-environment"
+        ],
+        "description": "display the environment",
+        "options": [
+          {
+            "short": "t",
+            "description": "display the environment of the target-session",
+            "inherit": false,
+            "value": {
+              "name": "target-session",
+              "provider": "tmux.sessions"
+            }
+          }
+        ]
+      },
+      {
+        "name": "show-hooks",
+        "description": "show the global list of hooks"
+      },
+      {
+        "name": "showmsgs",
+        "aliases": [
+          "show-messages"
+        ],
+        "description": "show client's message log",
+        "options": [
+          {
+            "short": "T",
+            "description": "show debugging information about terminals",
+            "inherit": false
+          },
+          {
+            "short": "J",
+            "description": "show debugging information about jobs",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "the target client",
+            "inherit": false,
+            "value": {
+              "name": "target-client",
+              "provider": "tmux.clients"
+            }
+          }
+        ]
+      },
+      {
+        "name": "show",
+        "aliases": [
+          "show-options"
+        ],
+        "description": "show session options"
+      },
+      {
+        "name": "showw",
+        "aliases": [
+          "show-winsow-options"
+        ],
+        "description": "show window options"
+      },
+      {
+        "name": "source",
+        "aliases": [
+          "source-file"
+        ],
+        "description": "execute tmux commands from a file",
+        "options": [
+          {
+            "short": "F",
+            "description": "expand path as a format",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "description": "parse the file but don't run commands",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "description": "don't return any error if path does not exist",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "description": "show the parsed command and line numbers if possible",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0,
+              "repeatable": true,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "splitw",
+        "aliases": [
+          "split-window"
+        ],
+        "description": "splits a pane into two",
+        "options": [
+          {
+            "short": "b",
+            "description": "create the new pane to the left of or above target-pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          },
+          {
+            "short": "f",
+            "description": "create a new pane spanning the full window height with -h or width with -v",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "description": "set the pane take full height",
+            "inherit": false
+          },
+          {
+            "short": "I",
+            "description": "create an empty pane and forward stdin to it",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "description": "set the pane take full width",
+            "inherit": false
+          },
+          {
+            "short": "Z",
+            "description": "zoom if the window is not zoomed",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "description": "specify a start directory for the pane",
+            "inherit": false,
+            "value": {
+              "name": "start-directory",
+              "description": "the start directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "e",
+            "description": "set environment variables",
+            "inherit": false,
+            "value": {
+              "name": "environment",
+              "description": "environment variables with the form VARIABLE=VALUE"
+            }
+          },
+          {
+            "short": "l",
+            "description": "set the size in columns (horizontal split) or rows (vertical split)",
+            "inherit": false,
+            "value": {
+              "name": "size"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the target pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "shell-command",
+              "description": "a shell command to run when creating the pane",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "start",
+        "aliases": [
+          "start-server"
+        ],
+        "description": "start a tmux server"
+      },
+      {
+        "name": "suspendc",
+        "aliases": [
+          "suspend-client"
+        ],
+        "description": "suspend a client",
+        "options": [
+          {
+            "short": "t",
+            "description": "the target client",
+            "inherit": false,
+            "value": {
+              "name": "target-client",
+              "provider": "tmux.clients"
+            }
+          }
+        ]
+      },
+      {
+        "name": "swapp",
+        "aliases": [
+          "swap-pane"
+        ],
+        "description": "swap two panes",
+        "options": [
+          {
+            "short": "d",
+            "description": "do not change the active pane",
+            "inherit": false
+          },
+          {
+            "short": "D",
+            "description": "swap with the next pane",
+            "inherit": false
+          },
+          {
+            "short": "U",
+            "description": "swap dst-pane with the previous pane",
+            "inherit": false
+          },
+          {
+            "short": "Z",
+            "description": "keep the window zoomed if it was zoomed",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "description": "the source pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the destination pane",
+            "inherit": false,
+            "value": {
+              "name": "target-pane",
+              "provider": "tmux.panes"
+            }
+          }
+        ]
+      },
+      {
+        "name": "swapw",
+        "aliases": [
+          "swap-window"
+        ],
+        "description": "swap two windows",
+        "options": [
+          {
+            "short": "d",
+            "description": "the new window does not become the current window",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "description": "the source window",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          },
+          {
+            "short": "t",
+            "description": "the destination window",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          }
+        ]
+      },
+      {
+        "name": "switchc",
+        "aliases": [
+          "switch-client"
+        ],
+        "description": "switch the client to another session",
+        "options": [
+          {
+            "short": "E",
+            "description": "do not use update-environment option",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "description": "move the client to the last session",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "description": "move the client to the next session",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "description": "move the client to the previous session",
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "description": "toggle the client read-only and ignore-size flags",
+            "inherit": false
+          },
+          {
+            "short": "Z",
+            "description": "keep the window zoomed if it was zoomed",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "description": "the target client",
+            "inherit": false,
+            "value": {
+              "name": "target-client",
+              "provider": "tmux.clients"
+            }
+          },
+          {
+            "short": "t",
+            "description": "switch the client to the target-session",
+            "inherit": false,
+            "value": {
+              "name": "target-client",
+              "provider": "tmux.clients"
+            }
+          },
+          {
+            "short": "T",
+            "description": "set the client's key table",
+            "inherit": false,
+            "value": {
+              "name": "key-table"
+            }
+          }
+        ]
+      },
+      {
+        "name": "unbind",
+        "aliases": [
+          "unbind-key"
+        ],
+        "description": "unbind a key",
+        "options": [
+          {
+            "short": "a",
+            "description": "remove all key-bindings",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "description": "alias for -T root",
+            "inherit": false
+          },
+          {
+            "short": "q",
+            "description": "prevent errors being returned",
+            "inherit": false
+          },
+          {
+            "short": "T",
+            "description": "the key table to use",
+            "inherit": false,
+            "value": {
+              "name": "key-table"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "key",
+              "description": "the key to unbind",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "unlinkw",
+        "aliases": [
+          "unlink-window"
+        ],
+        "description": "unlink a window",
+        "options": [
+          {
+            "short": "k",
+            "description": "destroy the window",
+            "inherit": false
+          },
+          {
+            "short": "t",
+            "description": "the target window",
+            "inherit": false,
+            "value": {
+              "name": "target-window",
+              "provider": "tmux.windows"
+            }
+          }
+        ]
+      },
+      {
+        "name": "wait",
+        "aliases": [
+          "wait-for"
+        ],
+        "description": "wait for an event or trigger it",
+        "options": [
+          {
+            "short": "L",
+            "description": "lock the channel",
+            "inherit": false
+          },
+          {
+            "short": "U",
+            "description": "unlock the channel",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "channel",
+              "description": "wait for this channel",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "tmux.sessions": {
+        "function": "__rush_complete_tmux_sessions"
+      },
+      "tmux.windows": {
+        "function": "__rush_complete_tmux_windows"
+      },
+      "tmux.panes": {
+        "function": "__rush_complete_tmux_panes"
+      },
+      "tmux.buffers": {
+        "function": "__rush_complete_tmux_buffers"
+      },
+      "tmux.clients": {
+        "function": "__rush_complete_tmux_clients"
+      },
+      "tmux.client-flags": {
+        "values": [
+          "active-pane",
+          "ignore-size",
+          "no-output",
+          "pause-after",
+          "read-only",
+          "wait-exit"
+        ]
+      }
+    }
+  }
+}

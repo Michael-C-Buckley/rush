@@ -1,0 +1,35 @@
+__rush_complete_tmux_emit_colon_list() {
+  kind="$1"
+  shift
+  command -v tmux >/dev/null 2>&1 || return
+  tmux "$@" 2>/dev/null | while IFS= read -r line; do
+    value=${line%%:*}
+    description=${line#*:}
+    test -n "$value" || continue
+    if test "$description" = "$line"; then
+      rush_complete candidate "$value" --kind plain --description "$kind"
+    else
+      rush_complete candidate "$value" --kind plain --description "$description"
+    fi
+  done
+}
+
+__rush_complete_tmux_sessions() {
+  __rush_complete_tmux_emit_colon_list session ls
+}
+
+__rush_complete_tmux_clients() {
+  __rush_complete_tmux_emit_colon_list client lsc
+}
+
+__rush_complete_tmux_panes() {
+  __rush_complete_tmux_emit_colon_list pane lsp
+}
+
+__rush_complete_tmux_windows() {
+  __rush_complete_tmux_emit_colon_list window lsw
+}
+
+__rush_complete_tmux_buffers() {
+  __rush_complete_tmux_emit_colon_list buffer lsb
+}
