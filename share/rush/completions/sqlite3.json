@@ -1,0 +1,261 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "sqlite3",
+    "description": "query SQLite databases",
+    "options": [
+      {
+        "spellings": [
+          "-append"
+        ],
+        "description": "append the database to the end of the file",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-ascii"
+        ],
+        "description": "set output mode to 'ascii'",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-bail"
+        ],
+        "description": "stop after hitting an error",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-batch"
+        ],
+        "description": "force batch I/O",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-column"
+        ],
+        "description": "set output mode to 'column'",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-cmd"
+        ],
+        "description": "run \"COMMAND\" before reading stdin",
+        "inherit": false,
+        "value": {
+          "name": "COMMAND"
+        }
+      },
+      {
+        "spellings": [
+          "-csv"
+        ],
+        "description": "set output mode to 'csv'",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-echo"
+        ],
+        "description": "print commands before execution",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-init"
+        ],
+        "description": "read/process named file",
+        "inherit": false,
+        "value": {
+          "name": "FILENAME",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "-header"
+        ],
+        "description": "turn headers on",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-noheader"
+        ],
+        "description": "turn headers off",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-help"
+        ],
+        "description": "show help message",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-html"
+        ],
+        "description": "set output mode to HTML",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-interactive"
+        ],
+        "description": "force interactive I/O",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-line"
+        ],
+        "description": "set output mode to 'line'",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-list"
+        ],
+        "description": "set output mode to 'list'",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-lookaside"
+        ],
+        "description": "use N entries of SZ bytes for lookaside memory",
+        "inherit": false,
+        "value": [
+          {
+            "name": "SIZE"
+          },
+          {
+            "name": "N"
+          }
+        ]
+      },
+      {
+        "spellings": [
+          "-memtrace"
+        ],
+        "description": "trace all memory allocations and deallocations",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-mmap"
+        ],
+        "description": "default mmap size set to N",
+        "inherit": false,
+        "value": {
+          "name": "N"
+        }
+      },
+      {
+        "spellings": [
+          "-newline"
+        ],
+        "description": "set output row separator",
+        "inherit": false,
+        "value": {
+          "name": "SEP"
+        }
+      },
+      {
+        "spellings": [
+          "-nofollow"
+        ],
+        "description": "refuse to open symbolic links to database files",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-nullvalue"
+        ],
+        "description": "set text string for NULL values",
+        "inherit": false,
+        "value": {
+          "name": "TEXT"
+        }
+      },
+      {
+        "spellings": [
+          "-pagecache"
+        ],
+        "description": "use N slots of SZ bytes each for page cache memory",
+        "inherit": false,
+        "value": [
+          {
+            "name": "SIZE"
+          },
+          {
+            "name": "N"
+          }
+        ]
+      },
+      {
+        "spellings": [
+          "-quote"
+        ],
+        "description": "set output mode to 'quote'",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-readonly"
+        ],
+        "description": "open the database read-only",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-separator"
+        ],
+        "description": "set output column separator",
+        "inherit": false,
+        "value": {
+          "name": "SEP"
+        }
+      },
+      {
+        "spellings": [
+          "-stats"
+        ],
+        "description": "print memory stats before each finalize",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-version"
+        ],
+        "description": "show SQLite version",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-vfs"
+        ],
+        "description": "use NAME as the default VFS",
+        "inherit": false,
+        "value": {
+          "name": "NAME"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "FILENAME",
+          "index": 0,
+          "provider": "builtin.files",
+          "description": "database file"
+        }
+      ]
+    }
+  }
+}
