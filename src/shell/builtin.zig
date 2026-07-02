@@ -72,6 +72,7 @@ pub const Id = enum {
     unalias,
     unset,
     wait,
+    z,
 };
 
 pub const Definition = struct {
@@ -132,6 +133,7 @@ pub const core_definitions: DefinitionMap = .initComptime(.{
     .{ "unalias", Definition{ .name = "unalias", .id = .unalias, .kind = .regular } },
     .{ "unset", Definition{ .name = "unset", .id = .unset, .kind = .special } },
     .{ "wait", Definition{ .name = "wait", .id = .wait, .kind = .regular } },
+    .{ "z", Definition{ .name = "z", .id = .z, .kind = .regular } },
 });
 
 pub const Registry = struct {
@@ -186,7 +188,7 @@ pub fn lookupInMode(name: []const u8, mode: state_mod.Mode) ?Definition {
     const definition = lookup(name) orelse return null;
     // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
     if (mode == .posix and (definition.id == .declare or definition.id == .local or definition.id == .source or
-        definition.id == .shopt or definition.id == .typeset)) return null;
+        definition.id == .shopt or definition.id == .typeset or definition.id == .z)) return null;
     return definition;
 }
 
@@ -238,7 +240,17 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .umask => evalUmask(shell, args),
         .unalias => evalUnalias(shell, args),
         .unset => evalUnset(shell, args),
-        .abbr, .color, .env, .event, .prompt, .prompt_duration, .prompt_pwd, .rush_complete, .rush_env => unreachable,
+        .abbr,
+        .color,
+        .env,
+        .event,
+        .prompt,
+        .prompt_duration,
+        .prompt_pwd,
+        .rush_complete,
+        .rush_env,
+        .z,
+        => unreachable,
     };
 }
 
@@ -2440,6 +2452,7 @@ test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.unalias, lookup("unalias").?.id);
     try std.testing.expectEqual(Id.unset, lookup("unset").?.id);
     try std.testing.expectEqual(Id.wait, lookup("wait").?.id);
+    try std.testing.expectEqual(Id.z, lookup("z").?.id);
     try std.testing.expectEqual(@as(?Definition, null), lookup("missing"));
 }
 

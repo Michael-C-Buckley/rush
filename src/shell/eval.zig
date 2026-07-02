@@ -7,6 +7,7 @@ const uucode = @import("uucode");
 const ast = @import("ast.zig");
 const builtin = @import("builtin.zig");
 const editor_render = @import("../editor/render.zig");
+const history_mod = @import("../history.zig");
 const host_mod = @import("../host.zig");
 const lexer = @import("lexer.zig");
 const parser = @import("parser.zig");
@@ -1724,6 +1725,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
     }
     if (builtin_definition) |definition| {
         if (definition.id == .cd) return evalCdBuiltin(shell, fields);
+        if (definition.id == .z) return evalZBuiltin(shell, fields);
         if (definition.id == .command) {
             return evalCommandBuiltin(shell, fields, command.assignments, &redirections, &restore_redirections);
         }
@@ -1768,6 +1770,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
             .umask,
             .unalias,
             .wait,
+            .z,
             => fields,
             .false_, .true_ => &[_][]const u8{name},
             else => unreachable,
@@ -1912,10 +1915,8 @@ fn evalCdBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Eval
     }
     if (args.len - index > 1) return .{ .status = 2 };
 
-    const allocator = shell.scratchAllocator();
-    const old_pwd = try currentLogicalDir(shell);
     var print_new_dir = false;
-    var target = if (index >= args.len) target: {
+    const target = if (index >= args.len) target: {
         break :target parameterValue(shell, "HOME") orelse return .{ .status = 1 };
     } else if (std.mem.eql(u8, args[index], "-")) target: {
         print_new_dir = true;
@@ -1924,10 +1925,79 @@ fn evalCdBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Eval
         break :target try cdPathTarget(shell, args[index], &print_new_dir) orelse args[index];
     };
 
+    return changeDirectoryBuiltin(shell, "cd", target, physical, print_new_dir, true);
+}
+
+fn evalZBuiltin(shell: anytype, args: []const []const u8) EvalError!result.EvalResult {
+    std.debug.assert(args.len != 0);
+    const index: usize = 1;
+    if (args.len == 3 and std.mem.eql(u8, args[1], "--")) {
+        return changeDirectoryBuiltin(shell, "z", args[2], false, false, false);
+    }
+    if (index >= args.len) {
+        const home = parameterValue(shell, "HOME") orelse return .{ .status = 1 };
+        return changeDirectoryBuiltin(shell, "z", home, false, false, false);
+    }
+    if (args.len == 2 and std.mem.eql(u8, args[index], "-")) {
+        const old_pwd = parameterValue(shell, "OLDPWD") orelse {
+            try shell.host.writeAll(.stderr, "zoxide: $OLDPWD is not set\n");
+            return .{ .status = 1 };
+        };
+        return changeDirectoryBuiltin(shell, "z", old_pwd, false, false, false);
+    }
+    if (args.len == 2) {
+        const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+            .pointer => |pointer| pointer.child,
+            else => @TypeOf(shell.host),
+        };
+        if (comptime @hasDecl(HostType, "listDir")) {
+            if (try pathIsDirectory(shell, args[index], .other)) {
+                return changeDirectoryBuiltin(shell, "z", args[index], false, false, false);
+            }
+        }
+    }
+
+    if (comptime !@hasField(@TypeOf(shell.*), "command_history")) return .{ .status = 1 };
+    const command_history = shell.command_history orelse {
+        try shell.host.writeAll(.stderr, "z: no history available\n");
+        return .{ .status = 1 };
+    };
+    const jump = command_history.jump orelse {
+        try shell.host.writeAll(.stderr, "z: no directory history available\n");
+        return .{ .status = 1 };
+    };
+
+    const allocator = shell.scratchAllocator();
+    const current_dir = try currentLogicalDir(shell);
+    const now = std.Io.Clock.real.now(command_history.io).toSeconds();
+    const target = try jump(command_history.context, allocator, args[index..], current_dir, now) orelse {
+        try writeZNoMatchDiagnostic(shell, args[index..]);
+        return .{ .status = 1 };
+    };
+    defer allocator.free(target);
+    return changeDirectoryBuiltin(shell, "z", target, false, false, false);
+}
+
+fn changeDirectoryBuiltin(
+    shell: anytype,
+    builtin_name: []const u8,
+    initial_target: []const u8,
+    physical: bool,
+    print_new_dir: bool,
+    allow_suggestion: bool,
+) EvalError!result.EvalResult {
+    const allocator = shell.scratchAllocator();
+    const old_pwd = try currentLogicalDir(shell);
+    var target = initial_target;
     shell.host.changeDir(target) catch |err| {
-        target = try cdSuggestionRecoveryTarget(shell, target, err) orelse return .{ .status = 1 };
+        target = if (allow_suggestion)
+            try cdSuggestionRecoveryTarget(shell, builtin_name, target, err) orelse return .{ .status = 1 }
+        else {
+            try writeCdFailureDiagnostic(shell, builtin_name, target, err, null, .line);
+            return .{ .status = 1 };
+        };
         shell.host.changeDir(target) catch |recovery_err| {
-            try writeCdFailureDiagnostic(shell, target, recovery_err, null, .line);
+            try writeCdFailureDiagnostic(shell, builtin_name, target, recovery_err, null, .line);
             return .{ .status = 1 };
         };
     };
@@ -1944,7 +2014,21 @@ fn evalCdBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Eval
     return .{};
 }
 
-fn cdSuggestionRecoveryTarget(shell: anytype, target: []const u8, err: anyerror) !?[]const u8 {
+fn writeZNoMatchDiagnostic(shell: anytype, terms: []const []const u8) !void {
+    try shell.host.writeAll(.stderr, "z: no match for:");
+    for (terms) |term| {
+        try shell.host.writeAll(.stderr, " ");
+        try shell.host.writeAll(.stderr, term);
+    }
+    try shell.host.writeAll(.stderr, "\n");
+}
+
+fn cdSuggestionRecoveryTarget(
+    shell: anytype,
+    builtin_name: []const u8,
+    target: []const u8,
+    err: anyerror,
+) !?[]const u8 {
     const suggestion = if (err == error.FileNotFound and shell.state.options.interactive)
         try collectCdSuggestion(shell, target)
     else
@@ -1953,7 +2037,7 @@ fn cdSuggestionRecoveryTarget(shell: anytype, target: []const u8, err: anyerror)
         .confirm
     else
         .line;
-    try writeCdFailureDiagnostic(shell, target, err, suggestion, mode);
+    try writeCdFailureDiagnostic(shell, builtin_name, target, err, suggestion, mode);
     if (suggestion == null or mode != .confirm) return null;
 
     const accepted = if (readCdConfirmationKey(shell)) |key|
@@ -1962,7 +2046,7 @@ fn cdSuggestionRecoveryTarget(shell: anytype, target: []const u8, err: anyerror)
         false;
     try shell.host.writeAll(.stderr, "\n");
     if (accepted) return suggestion;
-    try writeCdFailureDiagnostic(shell, target, err, null, .line);
+    try writeCdFailureDiagnostic(shell, builtin_name, target, err, null, .line);
     return null;
 }
 
@@ -1970,6 +2054,7 @@ const CdSuggestionDiagnosticMode = enum { line, confirm };
 
 fn writeCdFailureDiagnostic(
     shell: anytype,
+    builtin_name: []const u8,
     target: []const u8,
     err: anyerror,
     suggestion: ?[]const u8,
@@ -1980,7 +2065,8 @@ fn writeCdFailureDiagnostic(
 
     var message: std.ArrayList(u8) = .empty;
     if (mode == .line) {
-        try message.appendSlice(allocator, "cd: ");
+        try message.appendSlice(allocator, builtin_name);
+        try message.appendSlice(allocator, ": ");
         try message.appendSlice(allocator, target);
         try message.appendSlice(allocator, ": ");
         try message.appendSlice(allocator, reason);
@@ -2210,6 +2296,12 @@ fn evalCommandBuiltin(
         switch (definition.id) {
             .cd => {
                 const evaluated = try evalCdBuiltin(shell, args[index..]);
+                restoreVariables(shell, saved);
+                restored_assignments = true;
+                return evaluated;
+            },
+            .z => {
+                const evaluated = try evalZBuiltin(shell, args[index..]);
                 restoreVariables(shell, saved);
                 restored_assignments = true;
                 return evaluated;
@@ -9018,12 +9110,124 @@ test "cd suggestion diagnostic styles the suggested directory" {
         .allocator = arena.allocator(),
     };
 
-    try writeCdFailureDiagnostic(&sh, "repos/ruxh", error.FileNotFound, "repos/rush", .line);
+    try writeCdFailureDiagnostic(&sh, "cd", "repos/ruxh", error.FileNotFound, "repos/rush", .line);
 
     try std.testing.expectEqualStrings(
         "cd: repos/ruxh: no such directory; did you mean: \x1b[1m\x1b[38;5;1mrepos/rush\x1b[22m\x1b[39m?\n",
         host.stderr.items,
     );
+}
+
+test "z builtin jumps through directory history" {
+    const TestHost = struct {
+        const Self = @This();
+
+        cwd: []const u8 = "/old",
+        stdout: std.ArrayList(u8) = .empty,
+        stderr: std.ArrayList(u8) = .empty,
+
+        fn deinit(self: *Self) void {
+            self.stdout.deinit(std.testing.allocator);
+            self.stderr.deinit(std.testing.allocator);
+            self.* = undefined;
+        }
+
+        fn currentDir(self: *Self, allocator: std.mem.Allocator) ![]const u8 {
+            return allocator.dupe(u8, self.cwd);
+        }
+
+        fn changeDir(self: *Self, target: []const u8) !void {
+            if (!std.mem.eql(u8, target, "/repo/project")) return error.FileNotFound;
+            self.cwd = "/repo/project";
+        }
+
+        fn currentParentProcessId(_: *Self) host_mod.Pid {
+            return 1;
+        }
+
+        fn writeAll(self: *Self, fd: host_mod.Fd, bytes: []const u8) !void {
+            switch (fd) {
+                .stdin => {},
+                .stdout => try self.stdout.appendSlice(std.testing.allocator, bytes),
+                .stderr => try self.stderr.appendSlice(std.testing.allocator, bytes),
+                else => {},
+            }
+        }
+    };
+    const JumpContext = struct {
+        const Self = @This();
+
+        seen_terms: []const []const u8 = &.{},
+
+        fn list(
+            _: *anyopaque,
+            // ziglint-ignore: Z023 parameter order follows CommandHistory.list callback shape
+            allocator: std.mem.Allocator,
+        ) ![]history_mod.HistoryEntry {
+            return allocator.alloc(history_mod.HistoryEntry, 0);
+        }
+
+        fn jump(
+            context: *anyopaque,
+            // ziglint-ignore: Z023 parameter order follows CommandHistory.jump callback shape
+            allocator: std.mem.Allocator,
+            terms: []const []const u8,
+            exclude: []const u8,
+            now: i64,
+        ) !?[]const u8 {
+            _ = now;
+            const self: *Self = @ptrCast(@alignCast(context));
+            self.seen_terms = terms;
+            try std.testing.expectEqualStrings("/old", exclude);
+            const target = try allocator.dupe(u8, "/repo/project");
+            return target;
+        }
+    };
+    const TestShell = struct {
+        const Self = @This();
+
+        host: TestHost,
+        state: state_mod.State,
+        env: []const [*:0]const u8 = &.{},
+        command_history: ?history_mod.CommandHistory = null,
+        scratch: std.mem.Allocator,
+        notified_old: []const u8 = "",
+        notified_new: []const u8 = "",
+
+        fn scratchAllocator(self: *Self) std.mem.Allocator {
+            return self.scratch;
+        }
+
+        fn notifyDirectoryChange(self: *Self, old_pwd: []const u8, new_pwd: []const u8) void {
+            self.notified_old = old_pwd;
+            self.notified_new = new_pwd;
+        }
+    };
+
+    var jump_context: JumpContext = .{};
+    var scratch = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer scratch.deinit();
+    var shell: TestShell = .{
+        .host = .{},
+        .state = state_mod.State.init(std.testing.allocator, .{}),
+        .scratch = scratch.allocator(),
+    };
+    defer shell.host.deinit();
+    defer shell.state.deinit();
+    shell.command_history = .{
+        .context = &jump_context,
+        .io = std.testing.io,
+        .list = JumpContext.list,
+        .jump = JumpContext.jump,
+    };
+
+    try std.testing.expectEqual(@as(result.ExitStatus, 0), (try evalZBuiltin(&shell, &.{ "z", "proj" })).status);
+    try std.testing.expectEqualStrings("proj", jump_context.seen_terms[0]);
+    try std.testing.expectEqualStrings("/repo/project", shell.host.cwd);
+    try std.testing.expectEqualStrings("/old", shell.state.getVariable("OLDPWD").?.value);
+    try std.testing.expectEqualStrings("/repo/project", shell.state.getVariable("PWD").?.value);
+    try std.testing.expectEqualStrings("/old", shell.notified_old);
+    try std.testing.expectEqualStrings("/repo/project", shell.notified_new);
 }
 
 test "cd suggestion prompt accepts y and times out to no" {
@@ -9043,7 +9247,7 @@ test "cd suggestion prompt accepts y and times out to no" {
         .allocator = arena.allocator(),
     };
 
-    const accepted = try cdSuggestionRecoveryTarget(&sh, "repos/ruxh", error.FileNotFound) orelse
+    const accepted = try cdSuggestionRecoveryTarget(&sh, "cd", "repos/ruxh", error.FileNotFound) orelse
         return error.MissingSuggestion;
 
     try std.testing.expectEqualStrings("repos/rush", accepted);
@@ -9057,7 +9261,7 @@ test "cd suggestion prompt accepts y and times out to no" {
     host.interactive_key = null;
     host.interactive_key_timeout_ms = null;
 
-    try std.testing.expect(try cdSuggestionRecoveryTarget(&sh, "repos/ruxh", error.FileNotFound) == null);
+    try std.testing.expect(try cdSuggestionRecoveryTarget(&sh, "cd", "repos/ruxh", error.FileNotFound) == null);
     try std.testing.expectEqual(@as(?u64, cd_suggestion_confirm_timeout_ms), host.interactive_key_timeout_ms);
     try std.testing.expectEqualStrings(
         "did you mean: \x1b[1m\x1b[38;5;4mrepos/rush\x1b[22m\x1b[39m? [y,N] \n" ++

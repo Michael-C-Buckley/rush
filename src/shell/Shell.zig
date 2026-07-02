@@ -87,7 +87,7 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
             const definition = builtin_registry.lookup(name) orelse return null;
             if (self.state.options.mode == .posix and
                 (definition.id == .declare or definition.id == .local or definition.id == .source or
-                    definition.id == .shopt or definition.id == .typeset)) return null;
+                    definition.id == .shopt or definition.id == .typeset or definition.id == .z)) return null;
             return definition;
         }
 

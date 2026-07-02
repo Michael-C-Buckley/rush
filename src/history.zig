@@ -20,6 +20,7 @@ pub const CommandHistory = struct {
     io: std.Io,
     list: *const fn (*anyopaque, std.mem.Allocator) anyerror![]HistoryEntry,
     append: ?*const fn (*anyopaque, std.Io, []const u8, ExitStatus, i64, i64) anyerror!void = null,
+    jump: ?*const fn (*anyopaque, std.mem.Allocator, []const []const u8, []const u8, i64) anyerror!?[]const u8 = null,
     suppress_next_append: ?*const fn (*anyopaque) void = null,
 };
 
@@ -185,6 +186,18 @@ pub const History = struct {
             if (std.mem.startsWith(u8, entry, prefix) and entry.len > prefix.len) return entry;
         }
         return null;
+    }
+
+    pub fn jumpDirectory(
+        self: *History,
+        allocator: std.mem.Allocator,
+        terms: []const []const u8,
+        exclude: []const u8,
+        now: i64,
+    ) !?[]const u8 {
+        if (terms.len == 0) return null;
+        if (self.db) |db| return queryJumpDirectory(allocator, db, terms, exclude, now);
+        return rankJumpDirectoryRecords(allocator, self.records.items, terms, exclude, now);
     }
 
     pub fn load(self: *History, io: std.Io, path: []const u8) !void {
@@ -404,6 +417,7 @@ pub const InteractiveHistoryService = struct {
             .io = io,
             .list = listFcEntries,
             .append = appendFcCommand,
+            .jump = jumpDirectory,
             .suppress_next_append = suppressNextFcAppend,
         };
     }
@@ -488,6 +502,16 @@ pub const InteractiveHistoryService = struct {
         return self.history.fcEntries(allocator);
     }
 
+    fn jumpDirectoryPath(
+        self: *InteractiveHistoryService,
+        allocator: std.mem.Allocator,
+        terms: []const []const u8,
+        exclude: []const u8,
+        now: i64,
+    ) !?[]const u8 {
+        return self.history.jumpDirectory(allocator, terms, exclude, now);
+    }
+
     // ziglint-ignore: Z023 parameter order follows method or callback shape; preserve API
     fn listFcEntries(context: *anyopaque, allocator: std.mem.Allocator) ![]HistoryEntry {
         const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
@@ -505,6 +529,18 @@ pub const InteractiveHistoryService = struct {
     ) !void {
         const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
         try history_service.history.appendCommand(io, line, status, started_at, duration_ms);
+    }
+
+    fn jumpDirectory(
+        context: *anyopaque,
+        // ziglint-ignore: Z023 parameter order follows CommandHistory.jump callback shape
+        allocator: std.mem.Allocator,
+        terms: []const []const u8,
+        exclude: []const u8,
+        now: i64,
+    ) !?[]const u8 {
+        const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
+        return history_service.jumpDirectoryPath(allocator, terms, exclude, now);
     }
 
     fn suppressNextFcAppend(context: *anyopaque) void {
@@ -654,9 +690,143 @@ fn applyLineHistoryRequest(session: *line_editor.LineSession, history: line_edit
 
 const HistoryDirection = enum { previous, next };
 
+const DirectoryJumpCandidate = struct {
+    path: []const u8,
+    visits: i64 = 0,
+    last_seen: i64 = 0,
+};
+
 fn exitSignalFromStatus(status: ExitStatus) ?u8 {
     if (status < 128) return null;
     return status - 128;
+}
+
+fn queryJumpDirectory(
+    allocator: std.mem.Allocator,
+    db: *sqlite.sqlite3,
+    terms: []const []const u8,
+    exclude: []const u8,
+    now: i64,
+) !?[]const u8 {
+    var stmt: ?*sqlite.sqlite3_stmt = null;
+    try sqliteCheck(sqlite.sqlite3_prepare_v2(
+        db,
+        "select cwd, count(*), max(started_at) from history where cwd <> '' group by cwd",
+        -1,
+        &stmt,
+        null,
+    ), db);
+    defer _ = sqlite.sqlite3_finalize(stmt);
+
+    var best: ?DirectoryJumpCandidate = null;
+    var best_path: ?[]const u8 = null;
+    errdefer if (best_path) |path| allocator.free(path);
+    while (true) {
+        const rc = sqlite.sqlite3_step(stmt);
+        if (rc == sqlite.SQLITE_DONE) break;
+        if (rc != sqlite.SQLITE_ROW) try sqliteCheck(rc, db);
+        const cwd_text = sqlite.sqlite3_column_text(stmt, 0) orelse continue;
+        const candidate: DirectoryJumpCandidate = .{
+            .path = std.mem.span(cwd_text),
+            .visits = sqlite.sqlite3_column_int64(stmt, 1),
+            .last_seen = sqlite.sqlite3_column_int64(stmt, 2),
+        };
+        if (std.mem.eql(u8, candidate.path, exclude)) continue;
+        if (!directoryJumpMatches(candidate.path, terms)) continue;
+        if (best == null or directoryJumpCandidateBefore(candidate, best.?, now)) {
+            const path = try allocator.dupe(u8, candidate.path);
+            if (best_path) |old_path| allocator.free(old_path);
+            best_path = path;
+            best = .{ .path = path, .visits = candidate.visits, .last_seen = candidate.last_seen };
+        }
+    }
+    _ = best orelse return null;
+    const path = best_path.?;
+    best_path = null;
+    return path;
+}
+
+fn rankJumpDirectoryRecords(
+    allocator: std.mem.Allocator,
+    records: []const History.HistoryRecord,
+    terms: []const []const u8,
+    exclude: []const u8,
+    now: i64,
+) !?[]const u8 {
+    var candidates: std.StringHashMapUnmanaged(DirectoryJumpCandidate) = .empty;
+    defer candidates.deinit(allocator);
+    for (records) |record| {
+        if (record.cwd.len == 0) continue;
+        if (std.mem.eql(u8, record.cwd, exclude)) continue;
+        if (!directoryJumpMatches(record.cwd, terms)) continue;
+        const result = try candidates.getOrPut(allocator, record.cwd);
+        if (!result.found_existing) {
+            result.value_ptr.* = .{ .path = record.cwd, .visits = 0, .last_seen = record.when };
+        }
+        result.value_ptr.visits += 1;
+        result.value_ptr.last_seen = @max(result.value_ptr.last_seen, record.when);
+    }
+
+    var best: ?DirectoryJumpCandidate = null;
+    var iterator = candidates.valueIterator();
+    while (iterator.next()) |candidate| {
+        if (best == null or directoryJumpCandidateBefore(candidate.*, best.?, now)) best = candidate.*;
+    }
+    const candidate = best orelse return null;
+    return try allocator.dupe(u8, candidate.path);
+}
+
+fn directoryJumpCandidateBefore(
+    candidate: DirectoryJumpCandidate,
+    best: DirectoryJumpCandidate,
+    now: i64,
+) bool {
+    const candidate_score = directoryJumpFrecencyScore(candidate, now);
+    const best_score = directoryJumpFrecencyScore(best, now);
+    if (candidate_score != best_score) return candidate_score > best_score;
+    return false;
+}
+
+fn directoryJumpFrecencyScore(candidate: DirectoryJumpCandidate, now: i64) f64 {
+    return @as(f64, @floatFromInt(candidate.visits)) * directoryJumpRecencyMultiplier(candidate.last_seen, now);
+}
+
+fn directoryJumpRecencyMultiplier(last_seen: i64, now: i64) f64 {
+    const age = @max(now - last_seen, 0);
+    if (age < 60 * 60) return 4.0;
+    if (age < 24 * 60 * 60) return 2.0;
+    if (age < 7 * 24 * 60 * 60) return 0.5;
+    return 0.25;
+}
+
+fn directoryJumpMatches(path: []const u8, terms: []const []const u8) bool {
+    if (terms.len == 0) return true;
+    var search_end = path.len;
+    var term_index = terms.len;
+    while (term_index > 0) {
+        term_index -= 1;
+        const term = terms[term_index];
+        if (term.len == 0) continue;
+        const index = lastIndexOfIgnoreCase(path[0..search_end], term) orelse return false;
+        if (term_index == terms.len - 1 and pathComponentSeparatorAfter(path, index + term.len)) return false;
+        search_end = index;
+    }
+    return true;
+}
+
+fn lastIndexOfIgnoreCase(haystack: []const u8, needle: []const u8) ?usize {
+    if (needle.len == 0) return haystack.len;
+    if (needle.len > haystack.len) return null;
+    var end = haystack.len - needle.len + 1;
+    while (end > 0) {
+        end -= 1;
+        if (std.ascii.eqlIgnoreCase(haystack[end..][0..needle.len], needle)) return end;
+    }
+    return null;
+}
+
+fn pathComponentSeparatorAfter(path: []const u8, start: usize) bool {
+    return std.mem.indexOfScalar(u8, path[start..], '/') != null;
 }
 
 fn queryHistoryEntry(
@@ -1472,6 +1642,75 @@ test "history navigation is scoped to current cwd" {
     const repo_b_suggestion = (try history.suggestEntry(std.testing.allocator, "echo", "/repo/b", "", "")).?;
     defer repo_b_suggestion.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("echo repo-b", repo_b_suggestion.text);
+}
+
+test "history directory jump ranks frecent matching directories" {
+    const path = "rush-history-directory-jump-test.sqlite";
+    try deleteHistoryDbFilesIfExists(std.testing.io, path);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    try history.load(std.testing.io, path);
+    try insertHistoryRecord(history.db.?, .{ .cmd = "old", .cwd = "/work/project-old", .when = 100 });
+    try insertHistoryRecord(history.db.?, .{ .cmd = "one", .cwd = "/work/project-new", .when = 200 });
+    try insertHistoryRecord(history.db.?, .{ .cmd = "two", .cwd = "/work/project-new", .when = 300 });
+    try insertHistoryRecord(history.db.?, .{ .cmd = "other", .cwd = "/tmp/project", .when = 1_000 });
+
+    const target = (try history.jumpDirectory(std.testing.allocator, &.{"proj"}, "", 1_000)) orelse
+        return error.TestExpectedEqual;
+    defer std.testing.allocator.free(target);
+    try std.testing.expectEqualStrings("/work/project-new", target);
+}
+
+test "history directory jump matches multiple terms in path order" {
+    const path = "rush-history-directory-jump-terms-test.sqlite";
+    try deleteHistoryDbFilesIfExists(std.testing.io, path);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    try history.load(std.testing.io, path);
+    try insertHistoryRecord(history.db.?, .{ .cmd = "one", .cwd = "/src/rush/website", .when = 100 });
+    try insertHistoryRecord(history.db.?, .{ .cmd = "two", .cwd = "/src/website/rush", .when = 200 });
+
+    const target = (try history.jumpDirectory(std.testing.allocator, &.{ "rush", "web" }, "", 200)) orelse
+        return error.TestExpectedEqual;
+    defer std.testing.allocator.free(target);
+    try std.testing.expectEqualStrings("/src/rush/website", target);
+
+    try std.testing.expect(try history.jumpDirectory(std.testing.allocator, &.{"missing"}, "", 200) == null);
+}
+
+test "history directory jump mirrors zoxide keyword matching" {
+    const path = "rush-history-directory-jump-zoxide-match-test.sqlite";
+    try deleteHistoryDbFilesIfExists(std.testing.io, path);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    try history.load(std.testing.io, path);
+    try insertHistoryRecord(history.db.?, .{ .cmd = "one", .cwd = "/foo/bar", .when = 100 });
+    try insertHistoryRecord(history.db.?, .{ .cmd = "two", .cwd = "/foo/baz", .when = 200 });
+    try insertHistoryRecord(history.db.?, .{ .cmd = "three", .cwd = "/foo/baz", .when = 300 });
+
+    const basename_match = (try history.jumpDirectory(std.testing.allocator, &.{"ba"}, "", 300)) orelse
+        return error.TestExpectedEqual;
+    defer std.testing.allocator.free(basename_match);
+    try std.testing.expectEqualStrings("/foo/baz", basename_match);
+
+    try std.testing.expect(try history.jumpDirectory(std.testing.allocator, &.{"fo"}, "", 300) == null);
+    try std.testing.expect(try history.jumpDirectory(std.testing.allocator, &.{ "foo", "o", "bar" }, "", 300) == null);
+    const excluded_current = (try history.jumpDirectory(std.testing.allocator, &.{"ba"}, "/foo/baz", 300)) orelse
+        return error.TestExpectedEqual;
+    defer std.testing.allocator.free(excluded_current);
+    try std.testing.expectEqualStrings("/foo/bar", excluded_current);
 }
 
 test "history autosuggestion ranks cwd matches before global recency" {
