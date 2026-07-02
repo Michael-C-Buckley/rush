@@ -1,0 +1,1680 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "paper",
+    "description": "paper cli",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "Help for Paper",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "bench",
+        "description": "Benchmark a Paper query",
+        "options": [
+          {
+            "long": "benchmem",
+            "description": "Report memory allocations with benchmark results",
+            "inherit": false
+          },
+          {
+            "long": "bundle",
+            "short": "b",
+            "description": "Set bundle file(s) or directory path(s). This flag can be repeated",
+            "inherit": false,
+            "value": {
+              "name": "bundle",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          },
+          {
+            "long": "count",
+            "description": "Number of times to repeat each benchmark",
+            "inherit": false,
+            "value": {
+              "name": "count"
+            }
+          },
+          {
+            "long": "data",
+            "short": "d",
+            "description": "Set policy or data file(s). This flag can be repeated",
+            "inherit": false,
+            "value": {
+              "name": "data",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          },
+          {
+            "long": "fail",
+            "description": "Exits with non-zero exit code on undefined/empty result and errors",
+            "inherit": false
+          },
+          {
+            "long": "format",
+            "short": "f",
+            "description": "Set output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": "paper.formats"
+            }
+          },
+          {
+            "long": "ignore",
+            "description": "Set file and directory names to ignore during loading (e.g., '.*' excludes hidden files)",
+            "inherit": false,
+            "value": {
+              "name": "ignore"
+            }
+          },
+          {
+            "long": "import",
+            "description": "Set query import(s). This flag can be repeated",
+            "inherit": false,
+            "value": {
+              "name": "import"
+            }
+          },
+          {
+            "long": "input",
+            "short": "i",
+            "description": "Set input file path",
+            "inherit": false,
+            "value": {
+              "name": "input",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "metrics",
+            "description": "Report query performance metrics",
+            "inherit": false
+          },
+          {
+            "long": "package",
+            "description": "Set query package",
+            "inherit": false,
+            "value": {
+              "name": "package"
+            }
+          },
+          {
+            "long": "partial",
+            "short": "p",
+            "description": "Perform partial evaluation",
+            "inherit": false
+          },
+          {
+            "long": "schema",
+            "short": "s",
+            "description": "Set schema file path or directory path",
+            "inherit": false,
+            "value": {
+              "name": "schema",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          },
+          {
+            "long": "stdin",
+            "description": "Read query from stdin",
+            "inherit": false
+          },
+          {
+            "long": "stdin-input",
+            "short": "I",
+            "description": "Read input document from stdin",
+            "inherit": false
+          },
+          {
+            "long": "target",
+            "short": "t",
+            "description": "Set the runtime to exercise",
+            "inherit": false,
+            "value": {
+              "name": "target",
+              "provider": "paper.targets"
+            }
+          },
+          {
+            "long": "unknowns",
+            "short": "u",
+            "description": "Set paths to treat as unknown during partial evaluation",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "unknowns"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for bench",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "build",
+        "description": "Build an Paper bundle",
+        "options": [
+          {
+            "long": "bundle",
+            "short": "b",
+            "description": "Load paths as bundle files or root directories",
+            "inherit": false
+          },
+          {
+            "long": "capabilities",
+            "description": "Set capabilities.json file path",
+            "inherit": false,
+            "value": {
+              "name": "capabilities",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "debug",
+            "description": "Enable debug output",
+            "inherit": false
+          },
+          {
+            "long": "entrypoint",
+            "short": "e",
+            "description": "Set slash separated entrypoint path",
+            "inherit": false,
+            "value": {
+              "name": "entrypoint"
+            }
+          },
+          {
+            "long": "exclude-files-verify",
+            "description": "Set file names to exclude during bundle verification",
+            "inherit": false,
+            "value": {
+              "name": "exclude-files-verify",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "ignore",
+            "description": "Set file and directory names to ignore during loading (e.g., '.*' excludes hidden files)",
+            "inherit": false,
+            "value": {
+              "name": "ignore"
+            }
+          },
+          {
+            "long": "optimize",
+            "short": "O",
+            "description": "Set optimization level",
+            "inherit": false,
+            "value": {
+              "name": "optimize"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "Set the output filename",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "revision",
+            "short": "r",
+            "description": "Set output bundle revision",
+            "inherit": false,
+            "value": {
+              "name": "revision"
+            }
+          },
+          {
+            "long": "scope",
+            "description": "Scope to use for bundle signature verification",
+            "inherit": false,
+            "value": {
+              "name": "scope"
+            }
+          },
+          {
+            "long": "signing-alg",
+            "description": "Name of the signing algorithm",
+            "inherit": false,
+            "value": {
+              "name": "signing-alg"
+            }
+          },
+          {
+            "long": "signing-key",
+            "description": "Set the secret (HMAC) or path of the PEM file containing the private key (RSA and ECDSA)",
+            "inherit": false,
+            "value": {
+              "name": "signing-key",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "target",
+            "short": "t",
+            "description": "Set the output bundle target type",
+            "inherit": false,
+            "value": {
+              "name": "target",
+              "provider": "paper.targets"
+            }
+          },
+          {
+            "long": "verification-key",
+            "description": "Set the secret (HMAC) or path of the PEM file containing the public key (RSA and ECDSA)",
+            "inherit": false,
+            "value": {
+              "name": "verification-key",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "verification-key-id",
+            "description": "Name assigned to the verification key used for bundle verification",
+            "inherit": false,
+            "value": {
+              "name": "verification-key-id"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for build",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "check",
+        "description": "Check Paper source files",
+        "options": [
+          {
+            "long": "bundle",
+            "short": "b",
+            "description": "Load paths as bundle files or root directories",
+            "inherit": false
+          },
+          {
+            "long": "capabilities",
+            "description": "Set capabilities.json file path",
+            "inherit": false,
+            "value": {
+              "name": "capabilities",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "format",
+            "short": "f",
+            "description": "Set output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": "paper.formats"
+            }
+          },
+          {
+            "long": "ignore",
+            "description": "Set file and directory names to ignore during loading (e.g., '.*' excludes hidden files)",
+            "inherit": false,
+            "value": {
+              "name": "ignore"
+            }
+          },
+          {
+            "long": "max-errors",
+            "short": "m",
+            "description": "Set the number of errors to allow before compilation fails early",
+            "inherit": false,
+            "value": {
+              "name": "max-errors"
+            }
+          },
+          {
+            "long": "schema",
+            "short": "s",
+            "description": "Set schema file path or directory path",
+            "inherit": false,
+            "value": {
+              "name": "schema",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          },
+          {
+            "long": "strict",
+            "short": "S",
+            "description": "Enable compiler strict mode",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for check",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "completion",
+        "description": "Generate the autocompletion script for the specified shell",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for completion",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "bash",
+            "description": "Generate the autocompletion script for bash",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "Disable completion descriptions",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for bash",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "fish",
+            "description": "Generate the autocompletion script for fish",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "Disable completion descriptions",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for fish",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "powershell",
+            "description": "Generate the autocompletion script for powershell",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "Disable completion descriptions",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for powershell",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "zsh",
+            "description": "Generate the autocompletion script for zsh",
+            "options": [
+              {
+                "long": "no-descriptions",
+                "description": "Disable completion descriptions",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for zsh",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "deps",
+        "description": "Analyze Paper query dependencies",
+        "options": [
+          {
+            "long": "bundle",
+            "short": "b",
+            "description": "Set bundle file(s) or directory path(s). This flag can be repeated",
+            "inherit": false,
+            "value": {
+              "name": "bundle",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          },
+          {
+            "long": "data",
+            "short": "d",
+            "description": "Set policy or data file(s). This flag can be repeated",
+            "inherit": false,
+            "value": {
+              "name": "data",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          },
+          {
+            "long": "format",
+            "short": "f",
+            "description": "Set output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": "paper.formats"
+            }
+          },
+          {
+            "long": "ignore",
+            "description": "Set file and directory names to ignore during loading (e.g., '.*' excludes hidden files)",
+            "inherit": false,
+            "value": {
+              "name": "ignore"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for deps",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "eval",
+        "description": "Evaluate a Paper query",
+        "options": [
+          {
+            "long": "bundle",
+            "short": "b",
+            "description": "Set bundle file(s) or directory path(s). This flag can be repeated",
+            "inherit": false,
+            "value": {
+              "name": "bundle",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          },
+          {
+            "long": "capabilities",
+            "description": "Set capabilities.json file path",
+            "inherit": false,
+            "value": {
+              "name": "capabilities",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "count",
+            "description": "Number of times to repeat each benchmark",
+            "inherit": false,
+            "value": {
+              "name": "count"
+            }
+          },
+          {
+            "long": "coverage",
+            "description": "Report coverage",
+            "inherit": false
+          },
+          {
+            "long": "data",
+            "short": "d",
+            "description": "Set policy or data file(s). This flag can be repeated",
+            "inherit": false,
+            "value": {
+              "name": "data",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          },
+          {
+            "long": "disable-early-exit",
+            "description": "Disable 'early exit' optimizations",
+            "inherit": false
+          },
+          {
+            "long": "disable-indexing",
+            "description": "Disable indexing optimizations",
+            "inherit": false
+          },
+          {
+            "long": "disable-inlining",
+            "description": "Set paths of documents to exclude from inlining",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "disable-inlining"
+            }
+          },
+          {
+            "long": "explain",
+            "description": "Enable query explanations",
+            "inherit": false,
+            "value": {
+              "name": "explain"
+            }
+          },
+          {
+            "long": "fail",
+            "description": "Exits with non-zero exit code on undefined/empty result and errors",
+            "inherit": false
+          },
+          {
+            "long": "fail-defined",
+            "description": "Exits with non-zero exit code on defined/non-empty result and errors",
+            "inherit": false
+          },
+          {
+            "long": "format",
+            "short": "f",
+            "description": "Set output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": "paper.formats"
+            }
+          },
+          {
+            "long": "ignore",
+            "description": "Set file and directory names to ignore during loading (e.g., '.*' excludes hidden files)",
+            "inherit": false,
+            "value": {
+              "name": "ignore"
+            }
+          },
+          {
+            "long": "import",
+            "description": "Set query import(s). This flag can be repeated",
+            "inherit": false,
+            "value": {
+              "name": "import"
+            }
+          },
+          {
+            "long": "input",
+            "short": "i",
+            "description": "Set input file path",
+            "inherit": false,
+            "value": {
+              "name": "input",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "instrument",
+            "description": "Enable query instrumentation metrics (implies --metrics)",
+            "inherit": false
+          },
+          {
+            "long": "metrics",
+            "description": "Report query performance metrics",
+            "inherit": false
+          },
+          {
+            "long": "package",
+            "description": "Set query package",
+            "inherit": false,
+            "value": {
+              "name": "package"
+            }
+          },
+          {
+            "long": "partial",
+            "short": "p",
+            "description": "Perform partial evaluation",
+            "inherit": false
+          },
+          {
+            "long": "pretty-limit",
+            "description": "Set limit after which pretty output gets truncated",
+            "inherit": false,
+            "value": {
+              "name": "pretty-limit"
+            }
+          },
+          {
+            "long": "profile",
+            "description": "Perform expression profiling",
+            "inherit": false
+          },
+          {
+            "long": "profile-limit",
+            "description": "Set number of profiling results to show",
+            "inherit": false,
+            "value": {
+              "name": "profile-limit",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "profile-sort",
+            "description": "Set sort order of expression profiler results",
+            "inherit": false,
+            "value": {
+              "name": "profile-sort",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "schema",
+            "short": "s",
+            "description": "Set schema file path or directory path",
+            "inherit": false,
+            "value": {
+              "name": "schema",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          },
+          {
+            "long": "shallow-inlining",
+            "description": "Disable inlining of rules that depend on unknowns",
+            "inherit": false
+          },
+          {
+            "long": "stdin",
+            "description": "Read query from stdin",
+            "inherit": false
+          },
+          {
+            "long": "stdin-input",
+            "short": "I",
+            "description": "Read input document from stdin",
+            "inherit": false
+          },
+          {
+            "long": "strict-builtin-errors",
+            "description": "Treat built-in function errors as fatal",
+            "inherit": false
+          },
+          {
+            "long": "target",
+            "short": "t",
+            "description": "Set the runtime to exercise",
+            "inherit": false,
+            "value": {
+              "name": "target",
+              "provider": "paper.targets"
+            }
+          },
+          {
+            "long": "timeout",
+            "description": "Set eval timeout (default unlimited)",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "unknowns",
+            "short": "u",
+            "description": "Set paths to treat as unknown during partial evaluation",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "unknowns"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for eval",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "exec",
+        "description": "Execute against input files",
+        "options": [
+          {
+            "long": "bundle",
+            "short": "b",
+            "description": "Set bundle file(s) or directory path(s). This flag can be repeated",
+            "inherit": false,
+            "value": {
+              "name": "bundle",
+              "provider": [
+                "builtin.files",
+                "builtin.directories"
+              ]
+            }
+          },
+          {
+            "long": "config-file",
+            "short": "c",
+            "description": "Set path of configuration file",
+            "inherit": false,
+            "value": {
+              "name": "config-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "decision",
+            "description": "Set decision to evaluate",
+            "inherit": false,
+            "value": {
+              "name": "decision"
+            }
+          },
+          {
+            "long": "format",
+            "short": "f",
+            "description": "Set output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": "paper.formats"
+            }
+          },
+          {
+            "long": "log-format",
+            "description": "Set log format",
+            "inherit": false,
+            "value": {
+              "name": "log-format"
+            }
+          },
+          {
+            "long": "log-level",
+            "short": "l",
+            "description": "Set log level",
+            "inherit": false,
+            "value": {
+              "name": "log-level"
+            }
+          },
+          {
+            "long": "set",
+            "description": "Override config values on the command line (use commas to specify multiple values)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "set"
+            }
+          },
+          {
+            "long": "set-file",
+            "description": "Override config values with files on the command line (use commas to specify multiple values)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "set-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for exec",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "fmt",
+        "description": "Format Paper source files",
+        "options": [
+          {
+            "long": "diff",
+            "short": "d",
+            "description": "Only display a diff of the changes",
+            "inherit": false
+          },
+          {
+            "long": "fail",
+            "description": "Non zero exit code on reformat",
+            "inherit": false
+          },
+          {
+            "long": "list",
+            "short": "l",
+            "description": "List all files who would change when formatted",
+            "inherit": false
+          },
+          {
+            "long": "write",
+            "short": "w",
+            "description": "Overwrite the original source file",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for fmt",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "inspect",
+        "description": "Inspect Paper bundle(s)",
+        "options": [
+          {
+            "long": "format",
+            "short": "f",
+            "description": "Set output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": "paper.formats"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for inspect",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "parse",
+        "description": "Parse Paper source file",
+        "options": [
+          {
+            "long": "format",
+            "short": "f",
+            "description": "Set output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": "paper.formats"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for parse",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "Start Paper in interactive or server mode",
+        "options": [
+          {
+            "long": "addr",
+            "short": "a",
+            "description": "Set listening address of the server (e.g., [ip]:<port> for TCP, unix://<path> for UNIX domain socket)",
+            "inherit": false,
+            "value": {
+              "name": "addr"
+            }
+          },
+          {
+            "long": "authentication",
+            "description": "Set authentication scheme",
+            "inherit": false,
+            "value": {
+              "name": "authentication"
+            }
+          },
+          {
+            "long": "authorization",
+            "description": "Set authorization scheme",
+            "inherit": false,
+            "value": {
+              "name": "authorization"
+            }
+          },
+          {
+            "long": "bundle",
+            "short": "b",
+            "description": "Load paths as bundle files or root directories",
+            "inherit": false
+          },
+          {
+            "long": "config-file",
+            "short": "c",
+            "description": "Set path of configuration file",
+            "inherit": false,
+            "value": {
+              "name": "config-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "diagnostic-addr",
+            "description": "Set read-only diagnostic listening address of the server for /health and /metric APIs (e.g., [ip]:<port> for TCP, unix://<path> for UNIX domain socket)",
+            "inherit": false,
+            "value": {
+              "name": "diagnostic-addr"
+            }
+          },
+          {
+            "long": "exclude-files-verify",
+            "description": "Set file names to exclude during bundle verification",
+            "inherit": false,
+            "value": {
+              "name": "exclude-files-verify",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "format",
+            "short": "f",
+            "description": "Set shell output format, i.e, pretty, json",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": "paper.formats"
+            }
+          },
+          {
+            "long": "h2c",
+            "description": "Enable H2C for HTTP listeners",
+            "inherit": false
+          },
+          {
+            "long": "history",
+            "short": "H",
+            "description": "Set path of history file",
+            "inherit": false,
+            "value": {
+              "name": "history",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "ignore",
+            "description": "Set file and directory names to ignore during loading (e.g., '.*' excludes hidden files)",
+            "inherit": false,
+            "value": {
+              "name": "ignore"
+            }
+          },
+          {
+            "long": "log-format",
+            "description": "Set log format",
+            "inherit": false,
+            "value": {
+              "name": "log-format"
+            }
+          },
+          {
+            "long": "log-level",
+            "short": "l",
+            "description": "Set log level",
+            "inherit": false,
+            "value": {
+              "name": "log-level"
+            }
+          },
+          {
+            "long": "max-errors",
+            "short": "m",
+            "description": "Set the number of errors to allow before compilation fails early",
+            "inherit": false,
+            "value": {
+              "name": "max-errors"
+            }
+          },
+          {
+            "long": "min-tls-version",
+            "description": "Set minimum TLS version to be used by Paper's server",
+            "inherit": false,
+            "value": {
+              "name": "min-tls-version"
+            }
+          },
+          {
+            "long": "pprof",
+            "description": "Enables pprof endpoints",
+            "inherit": false
+          },
+          {
+            "long": "ready-timeout",
+            "description": "Wait (in seconds) for configured plugins before starting server (value <= 0 disables ready check)",
+            "inherit": false,
+            "value": {
+              "name": "ready-timeout"
+            }
+          },
+          {
+            "long": "scope",
+            "description": "Scope to use for bundle signature verification",
+            "inherit": false,
+            "value": {
+              "name": "scope"
+            }
+          },
+          {
+            "long": "server",
+            "short": "s",
+            "description": "Start the runtime in server mode",
+            "inherit": false
+          },
+          {
+            "long": "set",
+            "description": "Override config values on the command line (use commas to specify multiple values)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "set"
+            }
+          },
+          {
+            "long": "set-file",
+            "description": "Override config values with files on the command line (use commas to specify multiple values)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "set-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "shutdown-grace-period",
+            "description": "Set the time (in seconds) that the server will wait to gracefully shut down",
+            "inherit": false,
+            "value": {
+              "name": "shutdown-grace-period"
+            }
+          },
+          {
+            "long": "shutdown-wait-period",
+            "description": "Set the time (in seconds) that the server will wait before initiating shutdown",
+            "inherit": false,
+            "value": {
+              "name": "shutdown-wait-period"
+            }
+          },
+          {
+            "long": "signing-alg",
+            "description": "Name of the signing algorithm",
+            "inherit": false,
+            "value": {
+              "name": "signing-alg"
+            }
+          },
+          {
+            "long": "skip-verify",
+            "description": "Disables bundle signature verification",
+            "inherit": false
+          },
+          {
+            "long": "tls-ca-cert-file",
+            "description": "Set path of TLS CA cert file",
+            "inherit": false,
+            "value": {
+              "name": "tls-ca-cert-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "tls-cert-file",
+            "description": "Set path of TLS certificate file",
+            "inherit": false,
+            "value": {
+              "name": "tls-cert-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "tls-cert-refresh-period",
+            "description": "Set certificate refresh period",
+            "inherit": false,
+            "value": {
+              "name": "tls-cert-refresh-period"
+            }
+          },
+          {
+            "long": "tls-private-key-file",
+            "description": "Set path of TLS private key file",
+            "inherit": false,
+            "value": {
+              "name": "tls-private-key-file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "verification-key",
+            "description": "Set the secret (HMAC) or path of the PEM file containing the public key (RSA and ECDSA)",
+            "inherit": false,
+            "value": {
+              "name": "verification-key",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "verification-key-id",
+            "description": "Name assigned to the verification key used for bundle verification",
+            "inherit": false,
+            "value": {
+              "name": "verification-key-id"
+            }
+          },
+          {
+            "long": "watch",
+            "short": "w",
+            "description": "Watch command line files for changes",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for run",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "sign",
+        "description": "Generate an Paper bundle signature",
+        "options": [
+          {
+            "long": "bundle",
+            "short": "b",
+            "description": "Load paths as bundle files or root directories",
+            "inherit": false
+          },
+          {
+            "long": "output-file-path",
+            "short": "o",
+            "description": "Set the location for the .signatures.json file",
+            "inherit": false,
+            "value": {
+              "name": "output-file-path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "signing-alg",
+            "description": "Name of the signing algorithm",
+            "inherit": false,
+            "value": {
+              "name": "signing-alg"
+            }
+          },
+          {
+            "long": "signing-key",
+            "description": "Set the secret (HMAC) or path of the PEM file containing the private key (RSA and ECDSA)",
+            "inherit": false,
+            "value": {
+              "name": "signing-key",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for sign",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "test",
+        "description": "Execute Paper test cases",
+        "options": [
+          {
+            "long": "bench",
+            "description": "Benchmark the unit tests",
+            "inherit": false
+          },
+          {
+            "long": "benchmem",
+            "description": "Report memory allocations with benchmark results",
+            "inherit": false
+          },
+          {
+            "long": "bundle",
+            "short": "b",
+            "description": "Load paths as bundle files or root directories",
+            "inherit": false
+          },
+          {
+            "long": "count",
+            "description": "Number of times to repeat each test",
+            "inherit": false,
+            "value": {
+              "name": "count"
+            }
+          },
+          {
+            "long": "coverage",
+            "short": "c",
+            "description": "Report coverage (overrides debug tracing)",
+            "inherit": false
+          },
+          {
+            "long": "exit-zero-on-skipped",
+            "short": "z",
+            "description": "Skipped tests return status 0",
+            "inherit": false
+          },
+          {
+            "long": "explain",
+            "description": "Enable query explanations",
+            "inherit": false,
+            "value": {
+              "name": "explain"
+            }
+          },
+          {
+            "long": "format",
+            "short": "f",
+            "description": "Set output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": "paper.formats"
+            }
+          },
+          {
+            "long": "ignore",
+            "description": "Set file and directory names to ignore during loading (e.g., '.*' excludes hidden files)",
+            "inherit": false,
+            "value": {
+              "name": "ignore"
+            }
+          },
+          {
+            "long": "max-errors",
+            "short": "m",
+            "description": "Set the number of errors to allow before compilation fails early",
+            "inherit": false,
+            "value": {
+              "name": "max-errors"
+            }
+          },
+          {
+            "long": "run",
+            "short": "r",
+            "description": "Run only test cases matching the regular expression",
+            "inherit": false,
+            "value": {
+              "name": "run"
+            }
+          },
+          {
+            "long": "show-failure-line",
+            "short": "l",
+            "description": "Show test failure line",
+            "inherit": false
+          },
+          {
+            "long": "target",
+            "short": "t",
+            "description": "Set the runtime to exercise",
+            "inherit": false,
+            "value": {
+              "name": "target",
+              "provider": "paper.targets"
+            }
+          },
+          {
+            "long": "threshold",
+            "description": "Set coverage threshold and exit with non-zero status if coverage is less than threshold %",
+            "inherit": false,
+            "value": {
+              "name": "threshold"
+            }
+          },
+          {
+            "long": "timeout",
+            "description": "Set test timeout (default 5s, 30s when benchmarking)",
+            "inherit": false,
+            "value": {
+              "name": "timeout"
+            }
+          },
+          {
+            "long": "verbose",
+            "short": "v",
+            "description": "Set verbose reporting mode",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for test",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "Print the version of Paper",
+        "options": [
+          {
+            "long": "check",
+            "short": "c",
+            "description": "Check for latest Paper release",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "Help about any command",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "bench",
+            "description": "Benchmark a Paper query",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for bench",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "build",
+            "description": "Build an Paper bundle",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for build",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "check",
+            "description": "Check Paper source files",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for check",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "completion",
+            "description": "Generate the autocompletion script for the specified shell",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for completion",
+                "inherit": false
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "bash",
+                "description": "Generate the autocompletion script for bash",
+                "options": [
+                  {
+                    "long": "no-descriptions",
+                    "description": "Disable completion descriptions",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for bash",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "fish",
+                "description": "Generate the autocompletion script for fish",
+                "options": [
+                  {
+                    "long": "no-descriptions",
+                    "description": "Disable completion descriptions",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for fish",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "powershell",
+                "description": "Generate the autocompletion script for powershell",
+                "options": [
+                  {
+                    "long": "no-descriptions",
+                    "description": "Disable completion descriptions",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for powershell",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "zsh",
+                "description": "Generate the autocompletion script for zsh",
+                "options": [
+                  {
+                    "long": "no-descriptions",
+                    "description": "Disable completion descriptions",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for zsh",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "deps",
+            "description": "Analyze Paper query dependencies",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for deps",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "eval",
+            "description": "Evaluate a Paper query",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for eval",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "exec",
+            "description": "Execute against input files",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for exec",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "fmt",
+            "description": "Format Paper source files",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for fmt",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "inspect",
+            "description": "Inspect Paper bundle(s)",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for inspect",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "parse",
+            "description": "Parse Paper source file",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for parse",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "run",
+            "description": "Start Paper in interactive or server mode",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for run",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "sign",
+            "description": "Generate an Paper bundle signature",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for sign",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "test",
+            "description": "Execute Paper test cases",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for test",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "version",
+            "description": "Print the version of Paper",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for version",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "paper.formats": {
+        "values": [
+          "json",
+          "values",
+          "bindings",
+          "pretty",
+          "source",
+          "raw",
+          "discard"
+        ]
+      },
+      "paper.targets": {
+        "values": [
+          "Paper",
+          "wasm"
+        ]
+      }
+    }
+  }
+}
