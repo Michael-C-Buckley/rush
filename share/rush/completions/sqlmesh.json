@@ -1,0 +1,767 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "sqlmesh",
+    "description": "manage SQLMesh projects",
+    "options": [
+      {
+        "long": "paths",
+        "description": "paths to SQLMesh project files",
+        "inherit": false,
+        "value": {
+          "name": "paths",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "config",
+        "description": "path to config file",
+        "inherit": false,
+        "value": {
+          "name": "config",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "gateway",
+        "description": "the name of the gateway",
+        "inherit": false,
+        "value": {
+          "name": "gateway"
+        }
+      },
+      {
+        "long": "ignore-warnings",
+        "description": "ignore warnings",
+        "inherit": false
+      },
+      {
+        "long": "debug",
+        "description": "enable debug mode",
+        "inherit": false
+      },
+      {
+        "long": "log-to-stdout",
+        "description": "display logs in stdout",
+        "inherit": false
+      },
+      {
+        "long": "log-file-dir",
+        "description": "the directory to write log files to",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "create a new SQLMesh repository",
+        "options": [
+          {
+            "short": "t",
+            "long": "template",
+            "description": "project template. Supported values: airflow, dbt, dlt, default, empty",
+            "inherit": false,
+            "value": {
+              "name": "template",
+              "provider": {
+                "values": [
+                  "airflow",
+                  "dbt",
+                  "dlt",
+                  "default",
+                  "empty"
+                ]
+              }
+            }
+          },
+          {
+            "long": "dlt-pipeline",
+            "description": "dLT pipeline for which to generate a SQLMesh project. Use alongside template: dlt",
+            "inherit": false,
+            "value": {
+              "name": "pipeline"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "sql_dialect",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "render",
+        "description": "render a model's query, optionally expanding referenced models",
+        "options": [
+          {
+            "long": "dialect",
+            "description": "the SQL dialect to render the query as",
+            "inherit": false,
+            "value": {
+              "name": "dialect"
+            }
+          },
+          {
+            "long": "no-format",
+            "description": "disable fancy formatting of the query",
+            "inherit": false
+          },
+          {
+            "long": "start",
+            "description": "start time for the render",
+            "inherit": false,
+            "value": {
+              "name": "start"
+            }
+          },
+          {
+            "long": "end",
+            "description": "end time for the render",
+            "inherit": false,
+            "value": {
+              "name": "end"
+            }
+          },
+          {
+            "long": "execution-time",
+            "description": "execution time for the render",
+            "inherit": false,
+            "value": {
+              "name": "time"
+            }
+          },
+          {
+            "long": "expand",
+            "description": "expand referenced models",
+            "inherit": false,
+            "value": {
+              "name": "models"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "model",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "evaluate",
+        "description": "evaluate a model and return a dataframe with a default limit of 1000",
+        "options": [
+          {
+            "long": "start",
+            "description": "start time for evaluation",
+            "inherit": false,
+            "value": {
+              "name": "start"
+            }
+          },
+          {
+            "long": "end",
+            "description": "end time for evaluation",
+            "inherit": false,
+            "value": {
+              "name": "end"
+            }
+          },
+          {
+            "long": "execution-time",
+            "description": "execution time for evaluation",
+            "inherit": false,
+            "value": {
+              "name": "time"
+            }
+          },
+          {
+            "long": "limit",
+            "description": "the number of rows which the query should be limited to",
+            "inherit": false,
+            "value": {
+              "name": "limit"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "model",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "format",
+        "description": "format all SQL models and audits",
+        "options": [
+          {
+            "short": "t",
+            "long": "transpile",
+            "description": "transpile project models to the specified dialect",
+            "inherit": false,
+            "value": {
+              "name": "dialect"
+            }
+          },
+          {
+            "long": "append-newline",
+            "description": "include a newline at the end of each file",
+            "inherit": false
+          },
+          {
+            "long": "no-rewrite-casts",
+            "description": "preserve the existing casts, without rewriting them to use the :: syntax",
+            "inherit": false
+          },
+          {
+            "long": "normalize",
+            "description": "whether or not to normalize identifiers to lowercase",
+            "inherit": false
+          },
+          {
+            "long": "pad",
+            "description": "determines the pad size in a formatted string",
+            "inherit": false,
+            "value": {
+              "name": "size"
+            }
+          },
+          {
+            "long": "indent",
+            "description": "determines the indentation size in a formatted string",
+            "inherit": false,
+            "value": {
+              "name": "size"
+            }
+          },
+          {
+            "long": "normalize-functions",
+            "description": "whether or not to normalize all function names",
+            "inherit": false,
+            "value": {
+              "name": "mode",
+              "provider": {
+                "values": [
+                  "upper",
+                  "lower"
+                ]
+              }
+            }
+          },
+          {
+            "long": "leading-comma",
+            "description": "determines whether or not the comma is leading or trailing in select expressions",
+            "inherit": false
+          },
+          {
+            "long": "max-text-width",
+            "description": "the max number of characters in a segment before creating new lines in pretty mode",
+            "inherit": false,
+            "value": {
+              "name": "width"
+            }
+          },
+          {
+            "long": "check",
+            "description": "whether or not to check formatting (but not actually format anything)",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "paths",
+              "provider": "builtin.files",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "diff",
+        "description": "show the diff between the local state and the target environment",
+        "arguments": {
+          "states": [
+            {
+              "name": "environment",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "plan",
+        "description": "apply local changes to the target environment",
+        "options": [
+          {
+            "long": "create-from",
+            "description": "the environment to create the target environment from if it doesn't exist. Default: prod",
+            "inherit": false,
+            "value": {
+              "name": "environment"
+            }
+          },
+          {
+            "long": "skip-tests",
+            "description": "skip tests prior to generating the plan if they are defined",
+            "inherit": false
+          },
+          {
+            "long": "restate-model",
+            "description": "restate data for specified models and models downstream from the one specified",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "model"
+            }
+          },
+          {
+            "long": "no-gaps",
+            "description": "ensure that new snapshots have no data gaps when comparing to existing snapshots",
+            "inherit": false
+          },
+          {
+            "long": "skip-backfill",
+            "description": "skip the backfill step and only create a virtual update for the plan",
+            "inherit": false
+          },
+          {
+            "long": "empty-backfill",
+            "description": "produce empty backfill",
+            "inherit": false
+          },
+          {
+            "long": "forward-only",
+            "description": "create a plan for forward-only changes",
+            "inherit": false
+          },
+          {
+            "long": "allow-destructive-model",
+            "description": "allow destructive forward-only changes to models whose names match the expression",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "model"
+            }
+          },
+          {
+            "long": "effective-from",
+            "description": "the effective date from which to apply forward-only changes on production",
+            "inherit": false,
+            "value": {
+              "name": "date"
+            }
+          },
+          {
+            "long": "no-prompts",
+            "description": "disable interactive prompts for the backfill time range",
+            "inherit": false
+          },
+          {
+            "long": "auto-apply",
+            "description": "automatically apply the new plan after creation",
+            "inherit": false
+          },
+          {
+            "long": "no-auto-categorization",
+            "description": "disable automatic change categorization",
+            "inherit": false
+          },
+          {
+            "long": "include-unmodified",
+            "description": "include unmodified models in the target environment",
+            "inherit": false
+          },
+          {
+            "long": "select-model",
+            "description": "select specific model changes that should be included in the plan",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "model"
+            }
+          },
+          {
+            "long": "backfill-model",
+            "description": "backfill only the models whose names match the expression",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "model"
+            }
+          },
+          {
+            "long": "no-diff",
+            "description": "hide text differences for changed models",
+            "inherit": false
+          },
+          {
+            "long": "run",
+            "description": "run latest intervals as part of the plan application (prod environment only)",
+            "inherit": false
+          },
+          {
+            "long": "enable-preview",
+            "description": "enable preview for forward-only models when targeting a development environment",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "enable verbose output",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "environment",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "run",
+        "description": "evaluate missing intervals for the target environment",
+        "options": [
+          {
+            "long": "start",
+            "description": "start time for the run",
+            "inherit": false,
+            "value": {
+              "name": "start"
+            }
+          },
+          {
+            "long": "end",
+            "description": "end time for the run",
+            "inherit": false,
+            "value": {
+              "name": "end"
+            }
+          },
+          {
+            "long": "skip-janitor",
+            "description": "skip the janitor task",
+            "inherit": false
+          },
+          {
+            "long": "ignore-cron",
+            "description": "run for all missing intervals, ignoring individual cron schedules",
+            "inherit": false
+          },
+          {
+            "long": "select-model",
+            "description": "select specific models to run. Note: this always includes upstream dependencies",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "model"
+            }
+          },
+          {
+            "long": "exit-on-env-update",
+            "description": "exit with specified code if the run is interrupted by an update to the target environment",
+            "inherit": false,
+            "value": {
+              "name": "code"
+            }
+          },
+          {
+            "long": "no-auto-upstream",
+            "description": "do not automatically include upstream models. Only applicable when --select-model is used",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "environment",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "invalidate",
+        "description": "invalidate the target environment, forcing its removal during the next run of the janitor process",
+        "options": [
+          {
+            "short": "s",
+            "long": "sync",
+            "description": "wait for the environment to be deleted before returning",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "environment",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "janitor",
+        "description": "run the janitor process on-demand",
+        "options": [
+          {
+            "long": "ignore-ttl",
+            "description": "cleanup snapshots that are not referenced in any environment, regardless of when they're set to expire",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "dag",
+        "description": "render the DAG as an html file",
+        "options": [
+          {
+            "long": "select-model",
+            "description": "select specific models to include in the dag",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "model"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "create_test",
+        "description": "generate a unit test fixture for a given model",
+        "options": [
+          {
+            "short": "q",
+            "long": "query",
+            "description": "queries that will be used to generate data for the model's dependencies",
+            "repeatable": true,
+            "inherit": false,
+            "value": [
+              {
+                "name": "name"
+              },
+              {
+                "name": "query"
+              }
+            ]
+          },
+          {
+            "short": "o",
+            "long": "overwrite",
+            "description": "when true, the fixture file will be overwritten in case it already exists",
+            "inherit": false
+          },
+          {
+            "short": "v",
+            "long": "var",
+            "description": "key-value pairs that will define variables needed by the model",
+            "repeatable": true,
+            "inherit": false,
+            "value": [
+              {
+                "name": "key"
+              },
+              {
+                "name": "value"
+              }
+            ]
+          },
+          {
+            "short": "p",
+            "long": "path",
+            "description": "the file path corresponding to the fixture, relative to the test directory",
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "n",
+            "long": "name",
+            "description": "the name of the test that will be created",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "include-ctes",
+            "description": "when true, CTE fixtures will also be generated",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "model",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "test",
+        "description": "run model unit tests",
+        "options": [
+          {
+            "short": "k",
+            "long": "match-pattern",
+            "description": "only run tests matching pattern",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "pattern"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "enable verbose output",
+            "inherit": false
+          },
+          {
+            "long": "preserve-fixtures",
+            "description": "preserve the fixture tables in the testing database, useful for debugging",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "tests",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "audit",
+        "description": "run audits for the target model(s)",
+        "options": [
+          {
+            "long": "model",
+            "description": "a model to audit",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "model"
+            }
+          },
+          {
+            "long": "start",
+            "description": "start time for the audit",
+            "inherit": false,
+            "value": {
+              "name": "start"
+            }
+          },
+          {
+            "long": "end",
+            "description": "end time for the audit",
+            "inherit": false,
+            "value": {
+              "name": "end"
+            }
+          },
+          {
+            "long": "execution-time",
+            "description": "execution time for the audit",
+            "inherit": false,
+            "value": {
+              "name": "time"
+            }
+          }
+        ]
+      },
+      {
+        "name": "ui",
+        "description": "start a browser-based SQLMesh UI",
+        "options": [
+          {
+            "long": "host",
+            "description": "bind socket to this host",
+            "inherit": false,
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "long": "port",
+            "description": "bind socket to this port",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "mode",
+            "description": "mode to start the UI in",
+            "inherit": false,
+            "value": {
+              "name": "mode",
+              "provider": {
+                "values": [
+                  "ide",
+                  "catalog",
+                  "docs",
+                  "plan"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "migrate",
+        "description": "migrate SQLMesh to the current running version"
+      },
+      {
+        "name": "rollback",
+        "description": "rollback SQLMesh to the previous migration"
+      },
+      {
+        "name": "create_external_models",
+        "description": "create a schema file containing external model schemas",
+        "options": [
+          {
+            "long": "strict",
+            "description": "raise an error if the external model is missing in the database",
+            "inherit": false
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
