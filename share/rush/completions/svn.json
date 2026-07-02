@@ -1,0 +1,198 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "svn",
+    "description": "use Subversion version control",
+    "options": [
+      {
+        "long": "version",
+        "description": "show version"
+      },
+      {
+        "long": "verbose",
+        "description": "show verbose version information"
+      },
+      {
+        "long": "quiet",
+        "description": "show only version number"
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "help",
+        "aliases": [
+          "h"
+        ],
+        "description": "show help",
+        "arguments": {
+          "states": [
+            {
+              "name": "subcommand",
+              "description": "subcommand",
+              "index": 0,
+              "optional": true,
+              "provider": {
+                "values": [
+                  "add",
+                  "auth",
+                  "blame",
+                  "cat",
+                  "changelist",
+                  "checkout",
+                  "cleanup",
+                  "commit",
+                  "copy",
+                  "delete",
+                  "diff",
+                  "export",
+                  "help",
+                  "import",
+                  "info",
+                  "list",
+                  "lock",
+                  "log",
+                  "merge",
+                  "mergeinfo",
+                  "mkdir",
+                  "move",
+                  "patch",
+                  "propdel",
+                  "propedit",
+                  "propget",
+                  "proplist",
+                  "propset",
+                  "relocate",
+                  "resolve",
+                  "resolved",
+                  "revert",
+                  "status",
+                  "switch",
+                  "unlock",
+                  "update",
+                  "upgrade"
+                ]
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "status",
+        "aliases": [
+          "st"
+        ],
+        "description": "show working copy status"
+      },
+      {
+        "name": "info",
+        "description": "show item information"
+      },
+      {
+        "name": "checkout",
+        "aliases": [
+          "co"
+        ],
+        "description": "check out a working copy",
+        "arguments": {
+          "states": [
+            {
+              "name": "repository",
+              "description": "repository URL",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "commit",
+        "aliases": [
+          "ci"
+        ],
+        "description": "commit changes",
+        "options": [
+          {
+            "short": "m",
+            "long": "message",
+            "description": "set commit message",
+            "inherit": false,
+            "value": {
+              "name": "message"
+            }
+          },
+          {
+            "long": "username",
+            "description": "set username",
+            "inherit": false,
+            "value": {
+              "name": "username"
+            }
+          },
+          {
+            "long": "password",
+            "description": "set password",
+            "inherit": false,
+            "value": {
+              "name": "password"
+            }
+          },
+          {
+            "long": "password-from-stdin",
+            "description": "read password from stdin",
+            "inherit": false
+          },
+          {
+            "long": "no-auth-cache",
+            "description": "do not cache auth tokens",
+            "inherit": false
+          },
+          {
+            "long": "non-interactive",
+            "description": "disable interactive prompts",
+            "inherit": false
+          },
+          {
+            "long": "force-interactive",
+            "description": "force interactive prompts",
+            "inherit": false
+          },
+          {
+            "long": "trust-server-cert",
+            "description": "trust server certificate",
+            "inherit": false
+          },
+          {
+            "long": "trust-server-cert-failures",
+            "description": "trust certificate failures",
+            "inherit": false,
+            "value": {
+              "name": "failures"
+            }
+          },
+          {
+            "long": "config-dir",
+            "description": "set config directory",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "config-option",
+            "description": "set config option",
+            "inherit": false,
+            "value": {
+              "name": "option"
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
