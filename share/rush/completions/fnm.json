@@ -1,0 +1,1055 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "fnm",
+    "description": "manage Node.js versions",
+    "subcommands": [
+      {
+        "name": "install",
+        "description": "install a new Node.js version",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0,
+              "description": "node.js version or lts/NAME"
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "lts",
+            "description": "use the latest LTS version",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information",
+            "inherit": true
+          },
+          {
+            "short": "V",
+            "long": "version",
+            "description": "print version information",
+            "inherit": true
+          },
+          {
+            "long": "arch",
+            "description": "override installed Node binary architecture",
+            "inherit": true,
+            "value": {
+              "name": "arch",
+              "provider": "fnm.architectures"
+            }
+          },
+          {
+            "long": "fnm-dir",
+            "description": "root directory of fnm installations",
+            "inherit": true,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "log-level",
+            "description": "set the log level",
+            "inherit": true,
+            "value": {
+              "name": "level",
+              "provider": "fnm.log-levels"
+            }
+          },
+          {
+            "long": "node-dist-mirror",
+            "description": "set the Node.js distribution mirror",
+            "inherit": true,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "version-file-strategy",
+            "description": "set how to resolve Node versions from files",
+            "inherit": true,
+            "value": {
+              "name": "strategy",
+              "provider": "fnm.version-file-strategies"
+            }
+          }
+        ]
+      },
+      {
+        "name": "uninstall",
+        "description": "uninstall a Node.js version",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0,
+              "description": "node.js version or lts/NAME"
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "lts",
+            "description": "use the latest LTS version",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information",
+            "inherit": true
+          },
+          {
+            "short": "V",
+            "long": "version",
+            "description": "print version information",
+            "inherit": true
+          },
+          {
+            "long": "arch",
+            "description": "override installed Node binary architecture",
+            "inherit": true,
+            "value": {
+              "name": "arch",
+              "provider": "fnm.architectures"
+            }
+          },
+          {
+            "long": "fnm-dir",
+            "description": "root directory of fnm installations",
+            "inherit": true,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "log-level",
+            "description": "set the log level",
+            "inherit": true,
+            "value": {
+              "name": "level",
+              "provider": "fnm.log-levels"
+            }
+          },
+          {
+            "long": "node-dist-mirror",
+            "description": "set the Node.js distribution mirror",
+            "inherit": true,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "version-file-strategy",
+            "description": "set how to resolve Node versions from files",
+            "inherit": true,
+            "value": {
+              "name": "strategy",
+              "provider": "fnm.version-file-strategies"
+            }
+          }
+        ]
+      },
+      {
+        "name": "use",
+        "description": "change Node.js version",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0,
+              "description": "node.js version or lts/NAME"
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "install-if-missing",
+            "description": "install the version if it isn't installed",
+            "inherit": false
+          },
+          {
+            "long": "lts",
+            "description": "use the latest LTS version",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information",
+            "inherit": true
+          },
+          {
+            "short": "V",
+            "long": "version",
+            "description": "print version information",
+            "inherit": true
+          },
+          {
+            "long": "arch",
+            "description": "override installed Node binary architecture",
+            "inherit": true,
+            "value": {
+              "name": "arch",
+              "provider": "fnm.architectures"
+            }
+          },
+          {
+            "long": "fnm-dir",
+            "description": "root directory of fnm installations",
+            "inherit": true,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "log-level",
+            "description": "set the log level",
+            "inherit": true,
+            "value": {
+              "name": "level",
+              "provider": "fnm.log-levels"
+            }
+          },
+          {
+            "long": "node-dist-mirror",
+            "description": "set the Node.js distribution mirror",
+            "inherit": true,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "version-file-strategy",
+            "description": "set how to resolve Node versions from files",
+            "inherit": true,
+            "value": {
+              "name": "strategy",
+              "provider": "fnm.version-file-strategies"
+            }
+          }
+        ]
+      },
+      {
+        "name": "exec",
+        "description": "run a command within fnm context",
+        "options": [
+          {
+            "long": "lts",
+            "description": "use the latest LTS version",
+            "inherit": false
+          },
+          {
+            "long": "using",
+            "description": "either an explicit version, or a filename with the version written in it",
+            "inherit": false,
+            "value": {
+              "name": "version"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information",
+            "inherit": true
+          },
+          {
+            "short": "V",
+            "long": "version",
+            "description": "print version information",
+            "inherit": true
+          },
+          {
+            "long": "arch",
+            "description": "override installed Node binary architecture",
+            "inherit": true,
+            "value": {
+              "name": "arch",
+              "provider": "fnm.architectures"
+            }
+          },
+          {
+            "long": "fnm-dir",
+            "description": "root directory of fnm installations",
+            "inherit": true,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "log-level",
+            "description": "set the log level",
+            "inherit": true,
+            "value": {
+              "name": "level",
+              "provider": "fnm.log-levels"
+            }
+          },
+          {
+            "long": "node-dist-mirror",
+            "description": "set the Node.js distribution mirror",
+            "inherit": true,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "version-file-strategy",
+            "description": "set how to resolve Node versions from files",
+            "inherit": true,
+            "value": {
+              "name": "strategy",
+              "provider": "fnm.version-file-strategies"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "description": "command to run",
+              "provider": "builtin.executables",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "current",
+        "description": "print the current Node.js version",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information",
+            "inherit": true
+          },
+          {
+            "short": "V",
+            "long": "version",
+            "description": "print version information",
+            "inherit": true
+          },
+          {
+            "long": "arch",
+            "description": "override installed Node binary architecture",
+            "inherit": true,
+            "value": {
+              "name": "arch",
+              "provider": "fnm.architectures"
+            }
+          },
+          {
+            "long": "fnm-dir",
+            "description": "root directory of fnm installations",
+            "inherit": true,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "log-level",
+            "description": "set the log level",
+            "inherit": true,
+            "value": {
+              "name": "level",
+              "provider": "fnm.log-levels"
+            }
+          },
+          {
+            "long": "node-dist-mirror",
+            "description": "set the Node.js distribution mirror",
+            "inherit": true,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "version-file-strategy",
+            "description": "set how to resolve Node versions from files",
+            "inherit": true,
+            "value": {
+              "name": "strategy",
+              "provider": "fnm.version-file-strategies"
+            }
+          }
+        ]
+      },
+      {
+        "name": "list",
+        "aliases": [
+          "ls"
+        ],
+        "description": "list all locally installed Node.js versions",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information",
+            "inherit": true
+          },
+          {
+            "short": "V",
+            "long": "version",
+            "description": "print version information",
+            "inherit": true
+          },
+          {
+            "long": "arch",
+            "description": "override installed Node binary architecture",
+            "inherit": true,
+            "value": {
+              "name": "arch",
+              "provider": "fnm.architectures"
+            }
+          },
+          {
+            "long": "fnm-dir",
+            "description": "root directory of fnm installations",
+            "inherit": true,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "log-level",
+            "description": "set the log level",
+            "inherit": true,
+            "value": {
+              "name": "level",
+              "provider": "fnm.log-levels"
+            }
+          },
+          {
+            "long": "node-dist-mirror",
+            "description": "set the Node.js distribution mirror",
+            "inherit": true,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "version-file-strategy",
+            "description": "set how to resolve Node versions from files",
+            "inherit": true,
+            "value": {
+              "name": "strategy",
+              "provider": "fnm.version-file-strategies"
+            }
+          }
+        ]
+      },
+      {
+        "name": "list-remote",
+        "aliases": [
+          "ls-remote"
+        ],
+        "description": "list all remote Node.js versions",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information",
+            "inherit": true
+          },
+          {
+            "short": "V",
+            "long": "version",
+            "description": "print version information",
+            "inherit": true
+          },
+          {
+            "long": "arch",
+            "description": "override installed Node binary architecture",
+            "inherit": true,
+            "value": {
+              "name": "arch",
+              "provider": "fnm.architectures"
+            }
+          },
+          {
+            "long": "fnm-dir",
+            "description": "root directory of fnm installations",
+            "inherit": true,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "log-level",
+            "description": "set the log level",
+            "inherit": true,
+            "value": {
+              "name": "level",
+              "provider": "fnm.log-levels"
+            }
+          },
+          {
+            "long": "node-dist-mirror",
+            "description": "set the Node.js distribution mirror",
+            "inherit": true,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "version-file-strategy",
+            "description": "set how to resolve Node versions from files",
+            "inherit": true,
+            "value": {
+              "name": "strategy",
+              "provider": "fnm.version-file-strategies"
+            }
+          }
+        ]
+      },
+      {
+        "name": "alias",
+        "description": "alias a version to a common name",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0,
+              "description": "node.js version or lts/NAME"
+            },
+            {
+              "name": "name",
+              "description": "alias name",
+              "index": 1
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information",
+            "inherit": true
+          },
+          {
+            "short": "V",
+            "long": "version",
+            "description": "print version information",
+            "inherit": true
+          },
+          {
+            "long": "arch",
+            "description": "override installed Node binary architecture",
+            "inherit": true,
+            "value": {
+              "name": "arch",
+              "provider": "fnm.architectures"
+            }
+          },
+          {
+            "long": "fnm-dir",
+            "description": "root directory of fnm installations",
+            "inherit": true,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "log-level",
+            "description": "set the log level",
+            "inherit": true,
+            "value": {
+              "name": "level",
+              "provider": "fnm.log-levels"
+            }
+          },
+          {
+            "long": "node-dist-mirror",
+            "description": "set the Node.js distribution mirror",
+            "inherit": true,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "version-file-strategy",
+            "description": "set how to resolve Node versions from files",
+            "inherit": true,
+            "value": {
+              "name": "strategy",
+              "provider": "fnm.version-file-strategies"
+            }
+          }
+        ]
+      },
+      {
+        "name": "unalias",
+        "description": "deletes the alias named <name>",
+        "arguments": {
+          "states": [
+            {
+              "name": "requested-alias",
+              "description": "alias name",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information",
+            "inherit": true
+          },
+          {
+            "short": "V",
+            "long": "version",
+            "description": "print version information",
+            "inherit": true
+          },
+          {
+            "long": "arch",
+            "description": "override installed Node binary architecture",
+            "inherit": true,
+            "value": {
+              "name": "arch",
+              "provider": "fnm.architectures"
+            }
+          },
+          {
+            "long": "fnm-dir",
+            "description": "root directory of fnm installations",
+            "inherit": true,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "log-level",
+            "description": "set the log level",
+            "inherit": true,
+            "value": {
+              "name": "level",
+              "provider": "fnm.log-levels"
+            }
+          },
+          {
+            "long": "node-dist-mirror",
+            "description": "set the Node.js distribution mirror",
+            "inherit": true,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "version-file-strategy",
+            "description": "set how to resolve Node versions from files",
+            "inherit": true,
+            "value": {
+              "name": "strategy",
+              "provider": "fnm.version-file-strategies"
+            }
+          }
+        ]
+      },
+      {
+        "name": "completions",
+        "description": "print shell completions to stdout",
+        "options": [
+          {
+            "long": "shell",
+            "description": "shell syntax to print",
+            "inherit": false,
+            "value": {
+              "name": "shell",
+              "provider": "fnm.shells"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information",
+            "inherit": true
+          },
+          {
+            "short": "V",
+            "long": "version",
+            "description": "print version information",
+            "inherit": true
+          },
+          {
+            "long": "arch",
+            "description": "override installed Node binary architecture",
+            "inherit": true,
+            "value": {
+              "name": "arch",
+              "provider": "fnm.architectures"
+            }
+          },
+          {
+            "long": "fnm-dir",
+            "description": "root directory of fnm installations",
+            "inherit": true,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "log-level",
+            "description": "set the log level",
+            "inherit": true,
+            "value": {
+              "name": "level",
+              "provider": "fnm.log-levels"
+            }
+          },
+          {
+            "long": "node-dist-mirror",
+            "description": "set the Node.js distribution mirror",
+            "inherit": true,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "version-file-strategy",
+            "description": "set how to resolve Node versions from files",
+            "inherit": true,
+            "value": {
+              "name": "strategy",
+              "provider": "fnm.version-file-strategies"
+            }
+          }
+        ]
+      },
+      {
+        "name": "default",
+        "description": "set a version as the default version. This is a shorthand for 'fnm alias VERSION default'",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0,
+              "description": "node.js version or lts/NAME"
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information",
+            "inherit": true
+          },
+          {
+            "short": "V",
+            "long": "version",
+            "description": "print version information",
+            "inherit": true
+          },
+          {
+            "long": "arch",
+            "description": "override installed Node binary architecture",
+            "inherit": true,
+            "value": {
+              "name": "arch",
+              "provider": "fnm.architectures"
+            }
+          },
+          {
+            "long": "fnm-dir",
+            "description": "root directory of fnm installations",
+            "inherit": true,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "log-level",
+            "description": "set the log level",
+            "inherit": true,
+            "value": {
+              "name": "level",
+              "provider": "fnm.log-levels"
+            }
+          },
+          {
+            "long": "node-dist-mirror",
+            "description": "set the Node.js distribution mirror",
+            "inherit": true,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "version-file-strategy",
+            "description": "set how to resolve Node versions from files",
+            "inherit": true,
+            "value": {
+              "name": "strategy",
+              "provider": "fnm.version-file-strategies"
+            }
+          }
+        ]
+      },
+      {
+        "name": "env",
+        "description": "print and set up required environment variables for fnm",
+        "options": [
+          {
+            "long": "use-on-cd",
+            "description": "print the script to change Node versions every directory change",
+            "inherit": false
+          },
+          {
+            "long": "shell",
+            "description": "shell syntax to print",
+            "inherit": false,
+            "value": {
+              "name": "shell",
+              "provider": "fnm.shells"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information",
+            "inherit": true
+          },
+          {
+            "short": "V",
+            "long": "version",
+            "description": "print version information",
+            "inherit": true
+          },
+          {
+            "long": "arch",
+            "description": "override installed Node binary architecture",
+            "inherit": true,
+            "value": {
+              "name": "arch",
+              "provider": "fnm.architectures"
+            }
+          },
+          {
+            "long": "fnm-dir",
+            "description": "root directory of fnm installations",
+            "inherit": true,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "log-level",
+            "description": "set the log level",
+            "inherit": true,
+            "value": {
+              "name": "level",
+              "provider": "fnm.log-levels"
+            }
+          },
+          {
+            "long": "node-dist-mirror",
+            "description": "set the Node.js distribution mirror",
+            "inherit": true,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "version-file-strategy",
+            "description": "set how to resolve Node versions from files",
+            "inherit": true,
+            "value": {
+              "name": "strategy",
+              "provider": "fnm.version-file-strategies"
+            }
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "prints the help page or the help of the given subcommand(s)",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "print help information",
+            "inherit": true
+          },
+          {
+            "short": "V",
+            "long": "version",
+            "description": "print version information",
+            "inherit": true
+          },
+          {
+            "long": "arch",
+            "description": "override installed Node binary architecture",
+            "inherit": true,
+            "value": {
+              "name": "arch",
+              "provider": "fnm.architectures"
+            }
+          },
+          {
+            "long": "fnm-dir",
+            "description": "root directory of fnm installations",
+            "inherit": true,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "log-level",
+            "description": "set the log level",
+            "inherit": true,
+            "value": {
+              "name": "level",
+              "provider": "fnm.log-levels"
+            }
+          },
+          {
+            "long": "node-dist-mirror",
+            "description": "set the Node.js distribution mirror",
+            "inherit": true,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "version-file-strategy",
+            "description": "set how to resolve Node versions from files",
+            "inherit": true,
+            "value": {
+              "name": "strategy",
+              "provider": "fnm.version-file-strategies"
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "fnm.architectures": {
+        "values": [
+          "x86",
+          "x64",
+          "arm64",
+          "armv7l",
+          "ppc64le",
+          "ppc64",
+          "s390x"
+        ]
+      },
+      "fnm.log-levels": {
+        "values": [
+          "quiet",
+          "info",
+          "error"
+        ]
+      },
+      "fnm.shells": {
+        "values": [
+          "zsh",
+          "bash",
+          "fish",
+          "powershell",
+          "elvish"
+        ]
+      },
+      "fnm.version-file-strategies": {
+        "values": [
+          "local",
+          "recursive"
+        ]
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      }
+    },
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "print help information",
+        "inherit": true
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "print version information",
+        "inherit": true
+      },
+      {
+        "long": "arch",
+        "description": "override installed Node binary architecture",
+        "inherit": true,
+        "value": {
+          "name": "arch",
+          "provider": "fnm.architectures"
+        }
+      },
+      {
+        "long": "fnm-dir",
+        "description": "root directory of fnm installations",
+        "inherit": true,
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "log-level",
+        "description": "set the log level",
+        "inherit": true,
+        "value": {
+          "name": "level",
+          "provider": "fnm.log-levels"
+        }
+      },
+      {
+        "long": "node-dist-mirror",
+        "description": "set the Node.js distribution mirror",
+        "inherit": true,
+        "value": {
+          "name": "url"
+        }
+      },
+      {
+        "long": "version-file-strategy",
+        "description": "set how to resolve Node versions from files",
+        "inherit": true,
+        "value": {
+          "name": "strategy",
+          "provider": "fnm.version-file-strategies"
+        }
+      }
+    ]
+  }
+}
