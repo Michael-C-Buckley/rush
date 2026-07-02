@@ -1,0 +1,274 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "helmfile",
+    "description": "deploy helm charts",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for helmfile",
+        "inherit": true
+      },
+      {
+        "long": "allow-no-matching-release",
+        "description": "do not fail when a selector has no matching releases",
+        "inherit": true
+      },
+      {
+        "long": "chart",
+        "short": "c",
+        "description": "set chart name",
+        "inherit": true,
+        "value": {
+          "name": "chart"
+        }
+      },
+      {
+        "long": "color",
+        "description": "output with color",
+        "inherit": true
+      },
+      {
+        "long": "debug",
+        "description": "enable verbose helm output",
+        "inherit": true
+      },
+      {
+        "long": "enable-live-output",
+        "description": "stream helm stdout and stderr live",
+        "inherit": true
+      },
+      {
+        "long": "environment",
+        "short": "e",
+        "description": "set environment name",
+        "inherit": true,
+        "value": {
+          "name": "environment"
+        }
+      },
+      {
+        "long": "file",
+        "short": "f",
+        "description": "load config from file or directory",
+        "inherit": true,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "helm-binary",
+        "short": "b",
+        "description": "path to helm binary",
+        "inherit": true,
+        "value": {
+          "name": "binary",
+          "provider": "builtin.executables"
+        }
+      },
+      {
+        "long": "interactive",
+        "short": "i",
+        "description": "confirm before modifying clusters",
+        "inherit": true
+      },
+      {
+        "long": "kube-context",
+        "description": "set kubectl context",
+        "inherit": true,
+        "value": {
+          "name": "kube-context"
+        }
+      },
+      {
+        "long": "log-level",
+        "description": "set log level",
+        "inherit": true,
+        "value": {
+          "name": "log-level",
+          "provider": "helmfile-log-levels"
+        }
+      },
+      {
+        "long": "namespace",
+        "short": "n",
+        "description": "set namespace",
+        "inherit": true,
+        "value": {
+          "name": "namespace"
+        }
+      },
+      {
+        "long": "no-color",
+        "description": "output without color",
+        "inherit": true
+      },
+      {
+        "long": "quiet",
+        "short": "q",
+        "description": "silence output",
+        "inherit": true
+      },
+      {
+        "long": "selector",
+        "short": "l",
+        "description": "select releases by label",
+        "inherit": true,
+        "value": {
+          "name": "selector"
+        }
+      },
+      {
+        "long": "state-values-file",
+        "description": "load state values from a YAML file",
+        "inherit": true,
+        "value": {
+          "name": "state-values-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "state-values-set",
+        "description": "set state values on the command line",
+        "inherit": true,
+        "value": {
+          "name": "state-values-set"
+        }
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "print version information",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "apply",
+        "description": "apply resources when there are changes"
+      },
+      {
+        "name": "build",
+        "description": "build resources from state file"
+      },
+      {
+        "name": "cache",
+        "description": "manage cache"
+      },
+      {
+        "name": "charts",
+        "description": "sync releases from state file",
+        "deprecated": true
+      },
+      {
+        "name": "completion",
+        "description": "generate shell completion script",
+        "arguments": {
+          "states": [
+            {
+              "name": "shell",
+              "index": 0,
+              "provider": "helmfile-shells"
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete",
+        "description": "delete releases from manifests",
+        "deprecated": true
+      },
+      {
+        "name": "deps",
+        "description": "update chart dependencies"
+      },
+      {
+        "name": "destroy",
+        "description": "destroy and purge releases"
+      },
+      {
+        "name": "diff",
+        "description": "diff releases defined in state file"
+      },
+      {
+        "name": "fetch",
+        "description": "fetch charts from state file"
+      },
+      {
+        "name": "help",
+        "description": "show help for a command"
+      },
+      {
+        "name": "init",
+        "description": "initialize helmfile and dependencies"
+      },
+      {
+        "name": "lint",
+        "description": "lint charts from state file"
+      },
+      {
+        "name": "list",
+        "description": "list releases defined in state file"
+      },
+      {
+        "name": "repos",
+        "description": "sync repositories from state file"
+      },
+      {
+        "name": "secrets",
+        "description": "decrypt secrets with helm-secrets"
+      },
+      {
+        "name": "status",
+        "description": "show release status from state file"
+      },
+      {
+        "name": "sync",
+        "description": "sync releases defined in state file"
+      },
+      {
+        "name": "template",
+        "description": "template releases defined in state file"
+      },
+      {
+        "name": "test",
+        "description": "test charts from state file"
+      },
+      {
+        "name": "version",
+        "description": "print CLI version"
+      },
+      {
+        "name": "write-values",
+        "description": "write values files for releases"
+      }
+    ],
+    "providers": {
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "helmfile-log-levels": {
+        "values": [
+          { "value": "debug" },
+          { "value": "info" },
+          { "value": "warn" },
+          { "value": "error" }
+        ]
+      },
+      "helmfile-shells": {
+        "values": [
+          { "value": "bash" },
+          { "value": "fish" },
+          { "value": "powershell" },
+          { "value": "zsh" }
+        ]
+      }
+    }
+  }
+}
