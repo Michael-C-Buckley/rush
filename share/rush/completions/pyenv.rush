@@ -1,0 +1,16 @@
+__rush_complete_pyenv_installed_versions() {
+  command -v pyenv >/dev/null 2>&1 || return
+  pyenv versions --bare 2>/dev/null | while IFS= read -r version; do
+    test -n "$version" && rush_complete candidate "$version" --kind value --description 'installed Python version'
+  done
+}
+
+__rush_complete_pyenv_installable_versions() {
+  command -v pyenv >/dev/null 2>&1 || return
+  pyenv install --list 2>/dev/null | sed 's/^[[:space:]]*//' | while IFS= read -r version; do
+    case "$version" in
+      ''|'Available versions:'*) continue ;;
+    esac
+    rush_complete candidate "$version" --kind value --description 'installable Python version'
+  done
+}
