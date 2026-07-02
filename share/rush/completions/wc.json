@@ -1,0 +1,41 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "wc",
+    "description": "count lines, words, characters, and bytes",
+    "options": [
+      {
+        "short": "c",
+        "description": "output the number of bytes to the standard input"
+      },
+      {
+        "short": "l",
+        "description": "output the number of lines to the standard input"
+      },
+      {
+        "short": "m",
+        "description": "output the number of characters to the standard input"
+      },
+      {
+        "short": "w",
+        "description": "output the number of words to the standard input"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "description": "File to count in",
+          "provider": "files",
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
