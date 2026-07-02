@@ -1,0 +1,29 @@
+__rush_complete_trex_dependencies() {
+  test -f import_map.json || return
+  python3 - <<'PY' 2>/dev/null | while IFS='\t' read -r name url; do
+import json
+try:
+    data=json.load(open('import_map.json'))
+except Exception:
+    raise SystemExit
+for name, url in (data.get('imports') or {}).items():
+    print(f'{name}\t{url}')
+PY
+    test -n "$name" && rush_complete candidate "$name" --kind plain --description "$url"
+  done
+}
+
+__rush_complete_trex_scripts() {
+  test -f run.json || return
+  python3 - <<'PY' 2>/dev/null | while IFS= read -r script; do
+import json
+try:
+    data=json.load(open('run.json'))
+except Exception:
+    raise SystemExit
+for name in (data.get('scripts') or {}):
+    print(name)
+PY
+    test -n "$script" && rush_complete candidate "$script" --kind plain --description 'trex script'
+  done
+}

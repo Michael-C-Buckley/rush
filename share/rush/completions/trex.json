@@ -1,0 +1,182 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "trex",
+    "description": "Deno package manager based on import_map.json",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "print help info",
+        "inherit": true
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "print version",
+        "inherit": true
+      },
+      {
+        "short": "c",
+        "long": "custom",
+        "description": "install custom package",
+        "inherit": true,
+        "value": {
+          "name": "custom-package",
+          "description": "name=url"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "i",
+        "aliases": [
+          "install"
+        ],
+        "description": "install a package",
+        "options": [
+          {
+            "short": "m",
+            "long": "map",
+            "description": "install package from deno.land",
+            "inherit": false,
+            "value": {
+              "name": "package-name"
+            }
+          },
+          {
+            "short": "n",
+            "long": "nest",
+            "description": "install package from nest.land",
+            "inherit": false,
+            "value": {
+              "name": "package-name"
+            }
+          },
+          {
+            "short": "p",
+            "long": "pkg",
+            "description": "install package from repository",
+            "inherit": false,
+            "value": {
+              "name": "repository"
+            }
+          }
+        ]
+      },
+      {
+        "name": "delete",
+        "description": "delete a package",
+        "arguments": {
+          "states": [
+            {
+              "name": "package-name",
+              "index": 0,
+              "provider": "trex.dependencies"
+            }
+          ]
+        }
+      },
+      {
+        "name": "upgrade",
+        "description": "upgrade trex",
+        "options": [
+          {
+            "long": "canary",
+            "description": "install from dev branch",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "tree",
+        "description": "view dependency tree"
+      },
+      {
+        "name": "run",
+        "description": "run a script alias in a file run.json",
+        "options": [
+          {
+            "short": "w",
+            "long": "watch",
+            "description": "use reboot script alias protocol (rsap)",
+            "inherit": false
+          },
+          {
+            "spellings": [
+              "-wv"
+            ],
+            "description": "verbose output in --watch mode (rsap)",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "script-alias",
+              "index": 0,
+              "provider": "trex.scripts"
+            }
+          ]
+        }
+      },
+      {
+        "name": "purge",
+        "description": "remove a package or url from cache",
+        "arguments": {
+          "states": [
+            {
+              "name": "package-or-url",
+              "index": 0,
+              "provider": "trex.dependencies"
+            }
+          ]
+        }
+      },
+      {
+        "name": "ls",
+        "description": "shows the list of installed packages"
+      },
+      {
+        "name": "exec",
+        "description": "execute a cli tool with out install then",
+        "options": [
+          {
+            "long": "perms",
+            "description": "specify cli permisions",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "cli-tool",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "check",
+        "description": "check deno.land [std/x] dependencies updates",
+        "options": [
+          {
+            "short": "f",
+            "long": "fix",
+            "description": "update outdated dependencies",
+            "inherit": false
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "trex.dependencies": {
+        "function": "__rush_complete_trex_dependencies"
+      },
+      "trex.scripts": {
+        "function": "__rush_complete_trex_scripts"
+      }
+    }
+  }
+}
