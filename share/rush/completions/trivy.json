@@ -1,0 +1,1436 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "trivy",
+    "description": "vulnerability and misconfiguration scanner",
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "trivy.formats": {
+        "values": [
+          "table",
+          "json",
+          "sarif",
+          "template"
+        ]
+      },
+      "trivy.severities": {
+        "values": [
+          "UNKNOWN",
+          "LOW",
+          "MEDIUM",
+          "HIGH",
+          "CRITICAL"
+        ]
+      },
+      "trivy.vuln-types": {
+        "values": [
+          "os",
+          "library"
+        ]
+      },
+      "trivy.security-checks": {
+        "values": [
+          "vuln",
+          "config"
+        ]
+      },
+      "trivy.artifact-types": {
+        "values": [
+          "image",
+          "fs",
+          "repo",
+          "archive"
+        ]
+      },
+      "trivy.sbom-formats": {
+        "values": [
+          "cyclonedx"
+        ]
+      }
+    },
+    "options": [
+      {
+        "long": "quiet",
+        "short": "q",
+        "description": "suppress progress and log output"
+      },
+      {
+        "long": "debug",
+        "short": "d",
+        "description": "enable debug output"
+      },
+      {
+        "long": "cache-dir",
+        "description": "cache directory",
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help"
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "print version"
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "image",
+        "description": "scan container image",
+        "aliases": [
+          "i"
+        ],
+        "options": [
+          {
+            "long": "template",
+            "short": "t",
+            "description": "output template",
+            "value": {
+              "name": "template"
+            }
+          },
+          {
+            "long": "format",
+            "short": "f",
+            "description": "select output format",
+            "value": {
+              "name": "format",
+              "provider": "trivy.formats"
+            }
+          },
+          {
+            "long": "severity",
+            "short": "s",
+            "description": "filter by severity",
+            "value": {
+              "name": "severity",
+              "provider": "trivy.severities"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "write output to file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "exit-code",
+            "description": "exit code when findings are found",
+            "value": {
+              "name": "code"
+            }
+          },
+          {
+            "long": "clear-cache",
+            "short": "c",
+            "description": "clear image caches without scanning"
+          },
+          {
+            "long": "vuln-type",
+            "description": "filter vulnerability types",
+            "value": {
+              "name": "type",
+              "provider": "trivy.vuln-types"
+            }
+          },
+          {
+            "long": "security-checks",
+            "description": "select security checks",
+            "value": {
+              "name": "check",
+              "provider": "trivy.security-checks"
+            }
+          },
+          {
+            "long": "ignorefile",
+            "description": "use .trivyignore file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "description": "set timeout",
+            "value": {
+              "name": "duration"
+            }
+          },
+          {
+            "long": "ignore-policy",
+            "description": "use Rego ignore policy file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "list-all-pkgs",
+            "description": "include packages without vulnerabilities"
+          },
+          {
+            "long": "cache-backend",
+            "description": "set cache backend",
+            "value": {
+              "name": "backend"
+            }
+          },
+          {
+            "long": "no-progress",
+            "description": "suppress progress bar"
+          },
+          {
+            "long": "offline-scan",
+            "description": "avoid dependency identification API requests"
+          },
+          {
+            "long": "skip-files",
+            "description": "skip matching files",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "skip-dirs",
+            "description": "skip matching directories",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "skip-db-update",
+            "description": "skip vulnerability database update"
+          },
+          {
+            "long": "skip-update",
+            "description": "skip vulnerability database update"
+          },
+          {
+            "long": "download-db-only",
+            "description": "download database without scanning"
+          },
+          {
+            "long": "reset",
+            "description": "remove caches and database"
+          },
+          {
+            "long": "removed-pkgs",
+            "description": "detect vulnerabilities in removed packages"
+          },
+          {
+            "long": "input",
+            "short": "i",
+            "description": "read input file instead of image name",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "ignore-unfixed",
+            "description": "display only fixed vulnerabilities"
+          },
+          {
+            "long": "insecure",
+            "description": "allow insecure connections"
+          },
+          {
+            "long": "light",
+            "description": "deprecated light mode"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "image-name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "filesystem",
+        "description": "scan local filesystem",
+        "aliases": [
+          "fs"
+        ],
+        "options": [
+          {
+            "long": "template",
+            "short": "t",
+            "description": "output template",
+            "value": {
+              "name": "template"
+            }
+          },
+          {
+            "long": "format",
+            "short": "f",
+            "description": "select output format",
+            "value": {
+              "name": "format",
+              "provider": "trivy.formats"
+            }
+          },
+          {
+            "long": "severity",
+            "short": "s",
+            "description": "filter by severity",
+            "value": {
+              "name": "severity",
+              "provider": "trivy.severities"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "write output to file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "exit-code",
+            "description": "exit code when findings are found",
+            "value": {
+              "name": "code"
+            }
+          },
+          {
+            "long": "clear-cache",
+            "short": "c",
+            "description": "clear image caches without scanning"
+          },
+          {
+            "long": "vuln-type",
+            "description": "filter vulnerability types",
+            "value": {
+              "name": "type",
+              "provider": "trivy.vuln-types"
+            }
+          },
+          {
+            "long": "security-checks",
+            "description": "select security checks",
+            "value": {
+              "name": "check",
+              "provider": "trivy.security-checks"
+            }
+          },
+          {
+            "long": "ignorefile",
+            "description": "use .trivyignore file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "description": "set timeout",
+            "value": {
+              "name": "duration"
+            }
+          },
+          {
+            "long": "ignore-policy",
+            "description": "use Rego ignore policy file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "list-all-pkgs",
+            "description": "include packages without vulnerabilities"
+          },
+          {
+            "long": "cache-backend",
+            "description": "set cache backend",
+            "value": {
+              "name": "backend"
+            }
+          },
+          {
+            "long": "no-progress",
+            "description": "suppress progress bar"
+          },
+          {
+            "long": "offline-scan",
+            "description": "avoid dependency identification API requests"
+          },
+          {
+            "long": "skip-files",
+            "description": "skip matching files",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "skip-dirs",
+            "description": "skip matching directories",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "skip-policy-update",
+            "description": "skip built-in policy update"
+          },
+          {
+            "long": "config-policy",
+            "description": "use Rego policy directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "config-data",
+            "description": "load Rego policy data from directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "policy-namespaces",
+            "description": "set Rego policy namespaces",
+            "value": {
+              "name": "namespace"
+            }
+          },
+          {
+            "long": "skip-db-update",
+            "description": "skip vulnerability database update"
+          },
+          {
+            "long": "skip-update",
+            "description": "skip vulnerability database update"
+          },
+          {
+            "long": "download-db-only",
+            "description": "download database without scanning"
+          },
+          {
+            "long": "reset",
+            "description": "remove caches and database"
+          },
+          {
+            "long": "server",
+            "description": "server address",
+            "value": {
+              "name": "server"
+            }
+          },
+          {
+            "long": "token",
+            "description": "authentication token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "long": "token-header",
+            "description": "token header name",
+            "value": {
+              "name": "header"
+            }
+          },
+          {
+            "long": "custom-headers",
+            "description": "custom headers",
+            "value": {
+              "name": "headers"
+            }
+          },
+          {
+            "long": "ignore-unfixed",
+            "description": "display only fixed vulnerabilities"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "rootfs",
+        "description": "scan root filesystem",
+        "options": [
+          {
+            "long": "template",
+            "short": "t",
+            "description": "output template",
+            "value": {
+              "name": "template"
+            }
+          },
+          {
+            "long": "format",
+            "short": "f",
+            "description": "select output format",
+            "value": {
+              "name": "format",
+              "provider": "trivy.formats"
+            }
+          },
+          {
+            "long": "severity",
+            "short": "s",
+            "description": "filter by severity",
+            "value": {
+              "name": "severity",
+              "provider": "trivy.severities"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "write output to file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "exit-code",
+            "description": "exit code when findings are found",
+            "value": {
+              "name": "code"
+            }
+          },
+          {
+            "long": "clear-cache",
+            "short": "c",
+            "description": "clear image caches without scanning"
+          },
+          {
+            "long": "vuln-type",
+            "description": "filter vulnerability types",
+            "value": {
+              "name": "type",
+              "provider": "trivy.vuln-types"
+            }
+          },
+          {
+            "long": "security-checks",
+            "description": "select security checks",
+            "value": {
+              "name": "check",
+              "provider": "trivy.security-checks"
+            }
+          },
+          {
+            "long": "ignorefile",
+            "description": "use .trivyignore file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "description": "set timeout",
+            "value": {
+              "name": "duration"
+            }
+          },
+          {
+            "long": "ignore-policy",
+            "description": "use Rego ignore policy file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "list-all-pkgs",
+            "description": "include packages without vulnerabilities"
+          },
+          {
+            "long": "cache-backend",
+            "description": "set cache backend",
+            "value": {
+              "name": "backend"
+            }
+          },
+          {
+            "long": "no-progress",
+            "description": "suppress progress bar"
+          },
+          {
+            "long": "offline-scan",
+            "description": "avoid dependency identification API requests"
+          },
+          {
+            "long": "skip-files",
+            "description": "skip matching files",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "skip-dirs",
+            "description": "skip matching directories",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "skip-policy-update",
+            "description": "skip built-in policy update"
+          },
+          {
+            "long": "config-policy",
+            "description": "use Rego policy directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "config-data",
+            "description": "load Rego policy data from directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "policy-namespaces",
+            "description": "set Rego policy namespaces",
+            "value": {
+              "name": "namespace"
+            }
+          },
+          {
+            "long": "skip-db-update",
+            "description": "skip vulnerability database update"
+          },
+          {
+            "long": "skip-update",
+            "description": "skip vulnerability database update"
+          },
+          {
+            "long": "download-db-only",
+            "description": "download database without scanning"
+          },
+          {
+            "long": "reset",
+            "description": "remove caches and database"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "sbom",
+        "description": "generate SBOM for an artifact",
+        "options": [
+          {
+            "long": "output",
+            "short": "o",
+            "description": "write output to file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "clear-cache",
+            "short": "c",
+            "description": "clear image caches"
+          },
+          {
+            "long": "ignorefile",
+            "description": "use .trivyignore file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "description": "set timeout",
+            "value": {
+              "name": "duration"
+            }
+          },
+          {
+            "long": "severity",
+            "short": "s",
+            "description": "filter by severity",
+            "value": {
+              "name": "severity",
+              "provider": "trivy.severities"
+            }
+          },
+          {
+            "long": "offline-scan",
+            "description": "avoid dependency identification API requests"
+          },
+          {
+            "long": "skip-files",
+            "description": "skip matching files",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "skip-dirs",
+            "description": "skip matching directories",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "artifact-type",
+            "description": "input artifact type",
+            "value": {
+              "name": "type",
+              "provider": "trivy.artifact-types"
+            }
+          },
+          {
+            "long": "type",
+            "description": "input artifact type",
+            "value": {
+              "name": "type",
+              "provider": "trivy.artifact-types"
+            }
+          },
+          {
+            "long": "sbom-format",
+            "description": "SBOM format",
+            "value": {
+              "name": "format",
+              "provider": "trivy.sbom-formats"
+            }
+          }
+        ]
+      },
+      {
+        "name": "repository",
+        "description": "scan remote repository",
+        "aliases": [
+          "repo"
+        ],
+        "options": [
+          {
+            "long": "template",
+            "short": "t",
+            "description": "output template",
+            "value": {
+              "name": "template"
+            }
+          },
+          {
+            "long": "format",
+            "short": "f",
+            "description": "select output format",
+            "value": {
+              "name": "format",
+              "provider": "trivy.formats"
+            }
+          },
+          {
+            "long": "severity",
+            "short": "s",
+            "description": "filter by severity",
+            "value": {
+              "name": "severity",
+              "provider": "trivy.severities"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "write output to file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "exit-code",
+            "description": "exit code when findings are found",
+            "value": {
+              "name": "code"
+            }
+          },
+          {
+            "long": "clear-cache",
+            "short": "c",
+            "description": "clear image caches without scanning"
+          },
+          {
+            "long": "vuln-type",
+            "description": "filter vulnerability types",
+            "value": {
+              "name": "type",
+              "provider": "trivy.vuln-types"
+            }
+          },
+          {
+            "long": "security-checks",
+            "description": "select security checks",
+            "value": {
+              "name": "check",
+              "provider": "trivy.security-checks"
+            }
+          },
+          {
+            "long": "ignorefile",
+            "description": "use .trivyignore file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "description": "set timeout",
+            "value": {
+              "name": "duration"
+            }
+          },
+          {
+            "long": "ignore-policy",
+            "description": "use Rego ignore policy file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "list-all-pkgs",
+            "description": "include packages without vulnerabilities"
+          },
+          {
+            "long": "cache-backend",
+            "description": "set cache backend",
+            "value": {
+              "name": "backend"
+            }
+          },
+          {
+            "long": "no-progress",
+            "description": "suppress progress bar"
+          },
+          {
+            "long": "offline-scan",
+            "description": "avoid dependency identification API requests"
+          },
+          {
+            "long": "skip-files",
+            "description": "skip matching files",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "skip-dirs",
+            "description": "skip matching directories",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "skip-policy-update",
+            "description": "skip built-in policy update"
+          },
+          {
+            "long": "skip-db-update",
+            "description": "skip vulnerability database update"
+          },
+          {
+            "long": "skip-update",
+            "description": "skip vulnerability database update"
+          },
+          {
+            "long": "download-db-only",
+            "description": "download database without scanning"
+          },
+          {
+            "long": "reset",
+            "description": "remove caches and database"
+          },
+          {
+            "long": "ignore-unfixed",
+            "description": "display only fixed vulnerabilities"
+          },
+          {
+            "long": "removed-pkgs",
+            "description": "detect vulnerabilities in removed packages"
+          },
+          {
+            "long": "input",
+            "short": "i",
+            "description": "read input file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "quiet",
+            "short": "q",
+            "description": "suppress progress and logs"
+          },
+          {
+            "long": "insecure",
+            "description": "allow insecure connections"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "repository",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "client",
+        "description": "run in client mode",
+        "aliases": [
+          "c"
+        ],
+        "options": [
+          {
+            "long": "template",
+            "short": "t",
+            "description": "output template",
+            "value": {
+              "name": "template"
+            }
+          },
+          {
+            "long": "format",
+            "short": "f",
+            "description": "select output format",
+            "value": {
+              "name": "format",
+              "provider": "trivy.formats"
+            }
+          },
+          {
+            "long": "severity",
+            "short": "s",
+            "description": "filter by severity",
+            "value": {
+              "name": "severity",
+              "provider": "trivy.severities"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "write output to file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "exit-code",
+            "description": "exit code when findings are found",
+            "value": {
+              "name": "code"
+            }
+          },
+          {
+            "long": "clear-cache",
+            "short": "c",
+            "description": "clear image caches without scanning"
+          },
+          {
+            "long": "vuln-type",
+            "description": "filter vulnerability types",
+            "value": {
+              "name": "type",
+              "provider": "trivy.vuln-types"
+            }
+          },
+          {
+            "long": "security-checks",
+            "description": "select security checks",
+            "value": {
+              "name": "check",
+              "provider": "trivy.security-checks"
+            }
+          },
+          {
+            "long": "ignorefile",
+            "description": "use .trivyignore file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "description": "set timeout",
+            "value": {
+              "name": "duration"
+            }
+          },
+          {
+            "long": "ignore-policy",
+            "description": "use Rego ignore policy file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "list-all-pkgs",
+            "description": "include packages without vulnerabilities"
+          },
+          {
+            "long": "cache-backend",
+            "description": "set cache backend",
+            "value": {
+              "name": "backend"
+            }
+          },
+          {
+            "long": "no-progress",
+            "description": "suppress progress bar"
+          },
+          {
+            "long": "offline-scan",
+            "description": "avoid dependency identification API requests"
+          },
+          {
+            "long": "skip-files",
+            "description": "skip matching files",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "skip-dirs",
+            "description": "skip matching directories",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "input",
+            "short": "i",
+            "description": "read input file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "ignore-unfixed",
+            "description": "display only fixed vulnerabilities"
+          },
+          {
+            "long": "insecure",
+            "description": "allow insecure connections"
+          },
+          {
+            "long": "removed-pkgs",
+            "description": "detect removed packages"
+          },
+          {
+            "long": "config-policy",
+            "description": "use Rego policy directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "token",
+            "description": "authentication token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "long": "token-header",
+            "description": "token header name",
+            "value": {
+              "name": "header"
+            }
+          },
+          {
+            "long": "custom-headers",
+            "description": "custom headers",
+            "value": {
+              "name": "headers"
+            }
+          },
+          {
+            "long": "remote",
+            "description": "server address",
+            "value": {
+              "name": "url"
+            }
+          }
+        ]
+      },
+      {
+        "name": "server",
+        "description": "run in server mode",
+        "aliases": [
+          "s"
+        ],
+        "options": [
+          {
+            "long": "skip-db-update",
+            "description": "skip vulnerability database update"
+          },
+          {
+            "long": "skip-update",
+            "description": "skip vulnerability database update"
+          },
+          {
+            "long": "download-db-only",
+            "description": "download database without scanning"
+          },
+          {
+            "long": "reset",
+            "description": "remove caches and database"
+          },
+          {
+            "long": "cache-backend",
+            "description": "set cache backend",
+            "value": {
+              "name": "backend"
+            }
+          },
+          {
+            "long": "token",
+            "description": "authentication token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "long": "token-header",
+            "description": "token header name",
+            "value": {
+              "name": "header"
+            }
+          },
+          {
+            "long": "listen",
+            "description": "listen address",
+            "value": {
+              "name": "address"
+            }
+          }
+        ]
+      },
+      {
+        "name": "config",
+        "description": "scan config files",
+        "aliases": [
+          "conf"
+        ],
+        "options": [
+          {
+            "long": "template",
+            "short": "t",
+            "description": "output template",
+            "value": {
+              "name": "template"
+            }
+          },
+          {
+            "long": "format",
+            "short": "f",
+            "description": "select output format",
+            "value": {
+              "name": "format",
+              "provider": "trivy.formats"
+            }
+          },
+          {
+            "long": "severity",
+            "short": "s",
+            "description": "filter by severity",
+            "value": {
+              "name": "severity",
+              "provider": "trivy.severities"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "write output to file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "exit-code",
+            "description": "exit code when findings are found",
+            "value": {
+              "name": "code"
+            }
+          },
+          {
+            "long": "skip-policy-update",
+            "description": "skip built-in policy update"
+          },
+          {
+            "long": "reset",
+            "description": "remove caches and database"
+          },
+          {
+            "long": "clear-cache",
+            "short": "c",
+            "description": "clear cache"
+          },
+          {
+            "long": "ignorefile",
+            "description": "use .trivyignore file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "timeout",
+            "description": "set timeout",
+            "value": {
+              "name": "duration"
+            }
+          },
+          {
+            "long": "skip-files",
+            "description": "skip matching files",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "skip-dirs",
+            "description": "skip matching directories",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "config-policy",
+            "description": "use Rego policy directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "config-data",
+            "description": "load Rego policy data from directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "policy-namespaces",
+            "description": "set Rego policy namespaces",
+            "value": {
+              "name": "namespace"
+            }
+          },
+          {
+            "long": "file-patterns",
+            "description": "file patterns",
+            "value": {
+              "name": "patterns"
+            }
+          },
+          {
+            "long": "include-non-failures",
+            "description": "include non-failing results"
+          },
+          {
+            "long": "trace",
+            "description": "enable verbose custom query tracing"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0,
+              "provider": "builtin.files",
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "plugin",
+        "description": "manage plugins",
+        "aliases": [
+          "p"
+        ],
+        "subcommands": [
+          {
+            "name": "install",
+            "description": "install plugin",
+            "aliases": [
+              "i"
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "plugin",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "uninstall",
+            "description": "uninstall plugin",
+            "aliases": [
+              "u"
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "plugin",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list installed plugins",
+            "aliases": [
+              "l"
+            ]
+          },
+          {
+            "name": "info",
+            "description": "show plugin information",
+            "arguments": {
+              "states": [
+                {
+                  "name": "plugin",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "run",
+            "description": "run plugin",
+            "aliases": [
+              "r"
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "plugin",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "update",
+            "description": "update plugin",
+            "arguments": {
+              "states": [
+                {
+                  "name": "plugin",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "help",
+            "description": "show plugin help",
+            "aliases": [
+              "h"
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "command",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "print version"
+      },
+      {
+        "name": "help",
+        "description": "show command help",
+        "aliases": [
+          "h"
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
