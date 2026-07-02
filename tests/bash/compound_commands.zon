@@ -64,5 +64,58 @@
             .stderr = "",
             .status = 0,
         },
+        .{
+            .name = "arithmetic command evaluates expression status and mutations",
+            .script =
+            \\i=0
+            \\if (( ++i )); then printf 'if:%s\n' "$i"; fi
+            \\(( i - 1 ))
+            \\printf 'zero-status:%s\n' "$?"
+            \\(( i + 1 ))
+            \\printf 'nonzero-status:%s\n' "$?"
+            ,
+            .stdout =
+            \\if:1
+            \\zero-status:1
+            \\nonzero-status:0
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "c-style for command evaluates arithmetic clauses",
+            .script =
+            \\for (( i=0; i<4; ++i )); do
+            \\    if (( i == 1 )); then continue; fi
+            \\    if (( i == 3 )); then break; fi
+            \\    printf 'loop:%s\n' "$i"
+            \\done
+            \\printf 'after:%s status:%s\n' "$i" "$?"
+            ,
+            .stdout =
+            \\loop:0
+            \\loop:2
+            \\after:3 status:0
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "c-style for command permits empty clauses",
+            .script =
+            \\for (( ; ; )); do
+            \\    printf 'once\n'
+            \\    break
+            \\done
+            ,
+            .stdout =
+            \\once
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
     },
 }

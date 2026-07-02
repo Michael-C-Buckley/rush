@@ -436,8 +436,12 @@ const Parser = struct {
             body = .{ .if_command = if_command };
         } else if (try self.parseLoopCommand()) |loop| {
             body = .{ .loop = loop };
+        } else if (try self.parseCForCommand()) |c_for_command| {
+            body = .{ .c_for_command = c_for_command };
         } else if (try self.parseForCommand()) |for_command| {
             body = .{ .for_command = for_command };
+        } else if (try self.parseArithmeticCommand()) |arithmetic_command| {
+            body = .{ .arithmetic_command = arithmetic_command };
         } else if (try self.parseCaseCommand()) |case_command| {
             body = .{ .case_command = case_command };
         } else if (self.eat(.left_paren) != null) {
@@ -503,8 +507,35 @@ const Parser = struct {
         return command;
     }
 
+    fn parseCForCommand(self: *Parser) ParserError!?ast.CForCommand {
+        const start = self.index;
+        if (self.eatReserved(.for_kw) == null) return null;
+        if (!self.atArithmeticDelimiterStart()) {
+            self.index = start;
+            return null;
+        }
+        if (self.mode() == .posix) return error.UnexpectedToken;
+
+        const header = try self.parseArithmeticDelimitedText();
+        const sections = try cForSections(header);
+        try self.skipSeparators();
+        _ = self.eatReserved(.do_kw) orelse return error.UnexpectedToken;
+        const body = try self.parseList(.done);
+        _ = self.eatReserved(.done_kw) orelse return error.UnexpectedToken;
+
+        const command: ast.CForCommand = .{
+            .init = emptyArithmeticSectionAsNull(sections.init),
+            .condition = emptyArithmeticSectionAsNull(sections.condition),
+            .update = emptyArithmeticSectionAsNull(sections.update),
+            .body = body,
+        };
+        if (self.canValidateHereDocs()) command.validate();
+        return command;
+    }
+
     fn parseForCommand(self: *Parser) ParserError!?ast.ForCommand {
         if (self.eatReserved(.for_kw) == null) return null;
+        if (self.atArithmeticDelimiterStart()) return error.UnexpectedToken;
         const name_token = self.eat(.word) orelse return error.UnexpectedToken;
         if (name_token.quoted) return error.UnexpectedToken;
         if (!isAssignmentName(name_token.text) and self.mode() == .posix) return error.UnexpectedToken;
@@ -527,6 +558,16 @@ const Parser = struct {
         _ = self.eatReserved(.done_kw) orelse return error.UnexpectedToken;
 
         const command: ast.ForCommand = .{ .name = name_token.text, .words = words, .body = body };
+        if (self.canValidateHereDocs()) command.validate();
+        return command;
+    }
+
+    fn parseArithmeticCommand(self: *Parser) ParserError!?ast.ArithmeticCommand {
+        if (!self.atArithmeticDelimiterStart()) return null;
+        if (self.mode() == .posix) return error.UnexpectedToken;
+
+        const expression = try self.parseArithmeticDelimitedText();
+        const command: ast.ArithmeticCommand = .{ .expression = expression };
         if (self.canValidateHereDocs()) command.validate();
         return command;
     }
@@ -1151,6 +1192,42 @@ const Parser = struct {
         return self.at(.here_doc_body) or self.at(.here_doc_body_unterminated);
     }
 
+    fn atArithmeticDelimiterStart(self: Parser) bool {
+        if (!self.at(.left_paren) or self.index + 1 >= self.tokens.len) return false;
+        const first = self.tokens[self.index];
+        const second = self.tokens[self.index + 1];
+        return second.kind == .left_paren and first.span.end == second.span.start;
+    }
+
+    fn parseArithmeticDelimitedText(self: *Parser) ParserError![]const u8 {
+        std.debug.assert(self.atArithmeticDelimiterStart());
+        const open = self.tokens[self.index + 1];
+        const content_start = open.span.end;
+        self.index += 2;
+
+        var depth: usize = 0;
+        while (self.index + 1 < self.tokens.len) : (self.index += 1) {
+            const tok = self.tokens[self.index];
+            if (tok.kind == .left_paren) {
+                depth += 1;
+                continue;
+            }
+            if (tok.kind != .right_paren) continue;
+            if (depth != 0) {
+                depth -= 1;
+                continue;
+            }
+
+            const next = self.tokens[self.index + 1];
+            if (next.kind == .right_paren and tok.span.end == next.span.start) {
+                const content = self.source.text[content_start..tok.span.start];
+                self.index += 2;
+                return content;
+            }
+        }
+        return error.UnexpectedToken;
+    }
+
     /// Snapshots the location where parsing stopped, for diagnostics. The
     /// token at the current index is the best approximation of the error
     /// position without threading spans through every error return.
@@ -1316,6 +1393,65 @@ const Parser = struct {
 
 fn parseIoNumber(text: []const u8) !u31 {
     return std.fmt.parseInt(u31, text, 10) catch error.UnexpectedToken;
+}
+
+const CForSections = struct {
+    init: []const u8,
+    condition: []const u8,
+    update: []const u8,
+};
+
+fn cForSections(text: []const u8) ParseError!CForSections {
+    const first = topLevelArithmeticSemicolon(text, 0) orelse return error.UnexpectedToken;
+    const second = topLevelArithmeticSemicolon(text, first + 1) orelse return error.UnexpectedToken;
+    if (topLevelArithmeticSemicolon(text, second + 1) != null) return error.UnexpectedToken;
+    return .{
+        .init = text[0..first],
+        .condition = text[first + 1 .. second],
+        .update = text[second + 1 ..],
+    };
+}
+
+fn emptyArithmeticSectionAsNull(text: []const u8) ?[]const u8 {
+    const trimmed = std.mem.trim(u8, text, " \t\r\n");
+    return if (trimmed.len == 0) null else text;
+}
+
+fn topLevelArithmeticSemicolon(text: []const u8, start: usize) ?usize {
+    var index = start;
+    var paren_depth: usize = 0;
+    while (index < text.len) {
+        switch (text[index]) {
+            '\'', '"' => |quote| {
+                index += 1;
+                while (index < text.len) : (index += 1) {
+                    if (text[index] == '\\' and index + 1 < text.len) {
+                        index += 2;
+                        continue;
+                    }
+                    if (text[index] == quote) {
+                        index += 1;
+                        break;
+                    }
+                }
+            },
+            '\\' => index += if (index + 1 < text.len) 2 else 1,
+            '(' => {
+                paren_depth += 1;
+                index += 1;
+            },
+            ')' => {
+                if (paren_depth != 0) paren_depth -= 1;
+                index += 1;
+            },
+            ';' => {
+                if (paren_depth == 0) return index;
+                index += 1;
+            },
+            else => index += 1,
+        }
+    }
+    return null;
 }
 
 fn redirectionOperator(kind: token.Kind) ast.RedirectionOperator {

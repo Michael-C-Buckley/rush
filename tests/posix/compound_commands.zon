@@ -2095,5 +2095,24 @@
             .stderr_match = .nonempty,
             .status_match = .nonzero,
         },
+        .{
+            .name = "arithmetic command bashism is rejected in POSIX mode",
+            .script =
+            \\(( 1 ))
+            \\printf bad
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
+            .name = "c-style for command bashism is rejected in POSIX mode",
+            .script =
+            \\for (( i=0; i<1; ++i )); do printf bad; done
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
     },
 }

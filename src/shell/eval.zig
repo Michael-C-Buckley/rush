@@ -648,6 +648,8 @@ fn evalCompoundBody(shell: anytype, command: ast.CompoundCommand) EvalError!resu
         .if_command => |if_command| evalIf(shell, if_command),
         .loop => |loop| evalLoop(shell, loop),
         .for_command => |for_command| evalFor(shell, for_command),
+        .c_for_command => |c_for_command| evalCFor(shell, c_for_command),
+        .arithmetic_command => |arithmetic_command| evalArithmeticCommand(shell, arithmetic_command),
         .case_command => |case_command| evalCase(shell, case_command),
         else => .{ .status = 2 },
     };
@@ -808,6 +810,86 @@ fn evalFor(shell: anytype, command: ast.ForCommand) EvalError!result.EvalResult 
         }
     }
     return .{ .status = status };
+}
+
+fn evalCFor(shell: anytype, command: ast.CForCommand) EvalError!result.EvalResult {
+    validateAst(command);
+    shell.state.loop_depth += 1;
+    defer shell.state.loop_depth -= 1;
+
+    if (command.init) |init| {
+        if (!try evalArithmeticForSideEffect(shell, init)) return .{ .status = 1 };
+    }
+
+    var status: result.ExitStatus = 0;
+    while (true) {
+        if (command.condition) |condition| {
+            if (!try evalArithmeticForCommand(shell, condition)) return .{ .status = status };
+        }
+
+        const evaluated = try evalList(shell, command.body);
+        status = evaluated.status;
+        switch (evaluated.flow) {
+            .normal => {},
+            .continue_ => |count| if (count <= 1 or count > shell.state.loop_depth) {
+                if (command.update) |update| {
+                    if (!try evalArithmeticForSideEffect(shell, update)) return .{ .status = 1 };
+                }
+                continue;
+            } else return .{
+                .status = status,
+                .flow = .{ .continue_ = count - 1 },
+            },
+            .break_ => |count| if (count <= 1 or count > shell.state.loop_depth)
+                return .{ .status = status }
+            else
+                return .{
+                    .status = status,
+                    .flow = .{ .break_ = count - 1 },
+                },
+            else => return evaluated,
+        }
+
+        if (command.update) |update| {
+            if (!try evalArithmeticForSideEffect(shell, update)) return .{ .status = 1 };
+        }
+    }
+}
+
+fn evalArithmeticCommand(shell: anytype, command: ast.ArithmeticCommand) EvalError!result.EvalResult {
+    validateAst(command);
+    const text = std.mem.trim(u8, command.expression, " \t\r\n");
+    if (text.len == 0) return .{ .status = 1 };
+    const value = evalArithmeticValue(shell, text) catch |err| switch (err) {
+        error.InvalidArithmetic, error.FatalExpansionError => {
+            try shell.host.writeAll(.stderr, "arithmetic expansion error\n");
+            return .{ .status = 1 };
+        },
+        else => return err,
+    };
+    return .{ .status = if (value != 0) 0 else 1 };
+}
+
+fn evalArithmeticForCommand(shell: anytype, text: []const u8) EvalError!bool {
+    const value = evalArithmeticValue(shell, text) catch |err| switch (err) {
+        error.InvalidArithmetic, error.FatalExpansionError => {
+            try shell.host.writeAll(.stderr, "arithmetic expansion error\n");
+            return false;
+        },
+        else => return err,
+    };
+    return value != 0;
+}
+
+fn evalArithmeticForSideEffect(shell: anytype, text: []const u8) EvalError!bool {
+    _ = evalArithmeticValue(shell, text) catch |err| switch (err) {
+        error.InvalidArithmetic, error.FatalExpansionError => {
+            try shell.host.writeAll(.stderr, "arithmetic expansion error\n");
+            return false;
+        },
+        else => return err,
+    };
+    return true;
 }
 
 fn forCommandWords(shell: anytype, words: ast.ForWords) ![]const []const u8 {
@@ -3243,6 +3325,10 @@ fn copyCompoundCommand(allocator: std.mem.Allocator, command: ast.CompoundComman
         .if_command => |if_command| .{ .if_command = try copyIfCommand(allocator, if_command) },
         .loop => |loop| .{ .loop = try copyLoopCommand(allocator, loop) },
         .for_command => |for_command| .{ .for_command = try copyForCommand(allocator, for_command) },
+        .c_for_command => |c_for_command| .{ .c_for_command = try copyCForCommand(allocator, c_for_command) },
+        .arithmetic_command => |arithmetic_command| .{
+            .arithmetic_command = try copyArithmeticCommand(allocator, arithmetic_command),
+        },
         .case_command => |case_command| .{ .case_command = try copyCaseCommand(allocator, case_command) },
     };
 }
@@ -3390,6 +3476,22 @@ fn copyForCommand(allocator: std.mem.Allocator, command: ast.ForCommand) CopyErr
         },
         .body = try copyList(allocator, command.body),
     };
+}
+
+fn copyCForCommand(allocator: std.mem.Allocator, command: ast.CForCommand) CopyError!ast.CForCommand {
+    return .{
+        .init = if (command.init) |init| try allocator.dupe(u8, init) else null,
+        .condition = if (command.condition) |condition| try allocator.dupe(u8, condition) else null,
+        .update = if (command.update) |update| try allocator.dupe(u8, update) else null,
+        .body = try copyList(allocator, command.body),
+    };
+}
+
+fn copyArithmeticCommand(
+    allocator: std.mem.Allocator,
+    command: ast.ArithmeticCommand,
+) CopyError!ast.ArithmeticCommand {
+    return .{ .expression = try allocator.dupe(u8, command.expression) };
 }
 
 fn copyCaseCommand(allocator: std.mem.Allocator, command: ast.CaseCommand) CopyError!ast.CaseCommand {
@@ -5143,10 +5245,20 @@ fn expandWordPart(shell: anytype, part: ast.WordPart, substitution_status: ?*?re
 }
 
 fn expandArithmetic(shell: anytype, text: []const u8) ![]const u8 {
+    const value = try parseArithmeticValue(shell, text);
+    return std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{value});
+}
+
+fn evalArithmeticValue(shell: anytype, text: []const u8) !i64 {
+    const scratch = try shell.beginScratchScope();
+    defer scratch.end();
+    return parseArithmeticValue(shell, text);
+}
+
+fn parseArithmeticValue(shell: anytype, text: []const u8) !i64 {
     const expanded = try expandArithmeticText(shell, text);
     var parser_state: ArithmeticParser(@TypeOf(shell)) = .{ .shell = shell, .text = expanded };
-    const value = try parser_state.parse();
-    return std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{value});
+    return parser_state.parse();
 }
 
 fn expandArithmeticText(shell: anytype, text: []const u8) ![]const u8 {

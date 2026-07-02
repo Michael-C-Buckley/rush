@@ -283,6 +283,8 @@ pub const CompoundCommand = union(enum) {
     if_command: IfCommand,
     loop: LoopCommand,
     for_command: ForCommand,
+    c_for_command: CForCommand,
+    arithmetic_command: ArithmeticCommand,
     case_command: CaseCommand,
 
     pub fn validate(self: CompoundCommand) void {
@@ -291,6 +293,8 @@ pub const CompoundCommand = union(enum) {
             .if_command => |command| command.validate(),
             .loop => |command| command.validate(),
             .for_command => |command| command.validate(),
+            .c_for_command => |command| command.validate(),
+            .arithmetic_command => |command| command.validate(),
             .case_command => |command| command.validate(),
         }
     }
@@ -354,6 +358,25 @@ pub const ForCommand = struct {
         std.debug.assert(self.name.len != 0);
         self.words.validate();
         self.body.validate();
+    }
+};
+
+pub const CForCommand = struct {
+    init: ?[]const u8 = null,
+    condition: ?[]const u8 = null,
+    update: ?[]const u8 = null,
+    body: List,
+
+    pub fn validate(self: CForCommand) void {
+        self.body.validate();
+    }
+};
+
+pub const ArithmeticCommand = struct {
+    expression: []const u8,
+
+    pub fn validate(self: ArithmeticCommand) void {
+        _ = self;
     }
 };
 
