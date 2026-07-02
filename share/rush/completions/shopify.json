@@ -1,0 +1,174 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "shopify",
+    "description": "build Shopify apps and themes",
+    "providers": {
+      "shopify.live-reload-modes": {
+        "values": [
+          { "value": "hot-reload" },
+          { "value": "full-page" },
+          { "value": "off" }
+        ]
+      },
+      "shopify.theme-check-categories": {
+        "values": [
+          { "value": "html" },
+          { "value": "json" },
+          { "value": "liquid" },
+          { "value": "performance" },
+          { "value": "translation" }
+        ]
+      },
+      "shopify.theme-check-levels": {
+        "values": [
+          { "value": "error" },
+          { "value": "suggestion" },
+          { "value": "style" }
+        ]
+      },
+      "shopify.extension-types": {
+        "values": [
+          { "value": "checkout_ui" },
+          { "value": "post_purchase_ui" },
+          { "value": "subscription_ui" },
+          { "value": "theme_app_extension" },
+          { "value": "web_pixel" },
+          { "value": "order_discount" },
+          { "value": "product_discount" },
+          { "value": "shipping_discount" },
+          { "value": "delivery_customization" },
+          { "value": "payment_customization" },
+          { "value": "cart_checkout_validation" },
+          { "value": "cart_transform" }
+        ]
+      },
+      "shopify.webhook-delivery-methods": {
+        "values": [
+          { "value": "http" },
+          { "value": "google-pub-sub" },
+          { "value": "event-bridge" }
+        ]
+      },
+      "shopify.populate-types": {
+        "values": [
+          { "value": "products" },
+          { "value": "customers" },
+          { "value": "draftorders" }
+        ]
+      }
+    },
+    "options": [
+      { "short": "h", "long": "help", "description": "show help", "inherit": true }
+    ],
+    "subcommands": [
+      {
+        "name": "theme",
+        "description": "develop Shopify themes",
+        "options": [
+          { "long": "verbose", "description": "show detailed logs", "inherit": true }
+        ],
+        "subcommands": [
+          {
+            "name": "init",
+            "description": "clone a starter theme",
+            "options": [
+              { "short": "u", "long": "clone-url", "description": "set Git repository URL", "value": { "name": "url" } },
+              { "long": "latest", "description": "clone the latest release" },
+              { "long": "path", "description": "set theme directory", "value": { "name": "directory", "provider": "builtin.directories" } }
+            ],
+            "arguments": { "states": [ { "name": "name", "index": 0, "description": "theme name" } ] }
+          },
+          {
+            "name": "dev",
+            "aliases": ["serve"],
+            "description": "preview a local theme",
+            "options": [
+              { "short": "s", "long": "store", "description": "set development store", "value": { "name": "store" } },
+              { "long": "password", "description": "set Theme Access password", "value": { "name": "password" } },
+              { "short": "t", "long": "theme", "description": "set theme id or name", "value": { "name": "theme" } },
+              { "long": "live-reload", "description": "set live reload mode", "value": { "name": "mode", "provider": "shopify.live-reload-modes" } },
+              { "long": "host", "description": "set host interface", "value": { "name": "host" } },
+              { "long": "port", "description": "set preview port", "value": { "name": "port" } },
+              { "long": "poll", "description": "force polling for file changes" },
+              { "short": "e", "long": "theme-editor-sync", "description": "sync theme editor JSON changes" },
+              { "short": "x", "long": "ignore", "description": "ignore matching files", "value": { "name": "pattern" }, "repeatable": true },
+              { "short": "o", "long": "only", "description": "only process matching files", "value": { "name": "pattern" }, "repeatable": true }
+            ]
+          },
+          {
+            "name": "check",
+            "description": "run Theme Check",
+            "options": [
+              { "short": "C", "long": "config", "description": "set Theme Check config", "value": { "name": "file", "provider": "builtin.files" } },
+              { "short": "c", "long": "category", "description": "run a check category", "value": { "name": "category", "provider": "shopify.theme-check-categories" }, "repeatable": true },
+              { "short": "x", "long": "exclude-category", "description": "exclude a check category", "value": { "name": "category", "provider": "shopify.theme-check-categories" }, "repeatable": true },
+              { "long": "fail-level", "description": "set failing severity", "value": { "name": "level", "provider": "shopify.theme-check-levels" } },
+              { "short": "a", "long": "auto-correct", "description": "fix correctable offenses" },
+              { "long": "init", "description": "generate a Theme Check config" },
+              { "short": "o", "long": "output", "description": "set output format", "value": { "name": "format", "provider": { "values": [ { "value": "json" }, { "value": "text" } ] } } },
+              { "long": "path", "description": "set theme directory", "value": { "name": "directory", "provider": "builtin.directories" } }
+            ]
+          },
+          {
+            "name": "open",
+            "description": "open theme preview links",
+            "options": [
+              { "short": "t", "long": "theme", "description": "set theme id or name", "value": { "name": "theme" } },
+              { "short": "s", "long": "store", "description": "set development store", "value": { "name": "store" } },
+              { "short": "l", "long": "live", "description": "open live theme" },
+              { "short": "d", "long": "development", "description": "open development theme" },
+              { "short": "e", "long": "editor", "description": "open theme editor" }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "delete a theme",
+            "options": [
+              { "short": "s", "long": "store", "description": "set store", "value": { "name": "store" } },
+              { "short": "d", "long": "development", "description": "delete development theme" },
+              { "short": "f", "long": "force", "description": "skip confirmation" },
+              { "short": "a", "long": "show-all", "description": "show themes created by others" },
+              { "short": "t", "long": "theme", "description": "set theme id or name", "value": { "name": "theme" } }
+            ],
+            "arguments": { "states": [ { "name": "theme", "index": 0, "description": "theme id" } ] }
+          },
+          { "name": "package", "description": "package local theme files", "options": [ { "long": "path", "description": "set theme directory", "value": { "name": "directory", "provider": "builtin.directories" } } ] },
+          { "name": "publish", "description": "publish a theme", "options": [ { "short": "f", "long": "force", "description": "skip confirmation" }, { "short": "s", "long": "store", "description": "set store", "value": { "name": "store" } }, { "short": "t", "long": "theme", "description": "set theme id or name", "value": { "name": "theme" } } ] },
+          { "name": "share", "description": "upload an unpublished theme", "options": [ { "short": "s", "long": "store", "description": "set store", "value": { "name": "store" } }, { "long": "path", "description": "set theme directory", "value": { "name": "directory", "provider": "builtin.directories" } } ] },
+          { "name": "pull", "description": "download theme files", "options": [ { "short": "t", "long": "theme", "description": "set theme id or name", "value": { "name": "theme" } }, { "long": "path", "description": "set theme directory", "value": { "name": "directory", "provider": "builtin.directories" } }, { "short": "s", "long": "store", "description": "set store", "value": { "name": "store" } }, { "short": "l", "long": "live", "description": "pull live theme" }, { "short": "d", "long": "development", "description": "pull development theme" }, { "short": "n", "long": "nodelete", "description": "do not delete local files" }, { "short": "x", "long": "ignore", "description": "ignore matching files", "value": { "name": "pattern" }, "repeatable": true }, { "short": "o", "long": "only", "description": "only download matching files", "value": { "name": "pattern" }, "repeatable": true } ] },
+          { "name": "push", "description": "upload theme files", "options": [ { "short": "t", "long": "theme", "description": "set theme id or name", "value": { "name": "theme" } }, { "short": "s", "long": "store", "description": "set store", "value": { "name": "store" } }, { "long": "path", "description": "set theme directory", "value": { "name": "directory", "provider": "builtin.directories" } }, { "short": "d", "long": "development", "description": "push development theme" }, { "short": "n", "long": "nodelete", "description": "do not delete remote files" }, { "short": "j", "long": "json", "description": "output JSON" }, { "short": "a", "long": "allow-live", "description": "allow overwriting live theme" }, { "short": "l", "long": "live", "description": "push live theme" }, { "short": "p", "long": "publish", "description": "publish after push" }, { "short": "u", "long": "unpublished", "description": "upload as unpublished theme" }, { "short": "x", "long": "ignore", "description": "ignore matching files", "value": { "name": "pattern" }, "repeatable": true }, { "short": "o", "long": "only", "description": "only upload matching files", "value": { "name": "pattern" }, "repeatable": true } ] },
+          { "name": "list", "description": "list store themes", "options": [ { "short": "s", "long": "store", "description": "set store", "value": { "name": "store" } }, { "long": "id", "description": "filter by theme id", "value": { "name": "id" } }, { "long": "role", "description": "filter by role", "value": { "name": "role", "provider": { "values": [ { "value": "live" }, { "value": "unpublished" }, { "value": "development" } ] } } }, { "long": "name", "description": "filter by name", "value": { "name": "name" } } ] },
+          { "name": "info", "description": "show theme environment information" },
+          { "name": "language-server", "description": "start the theme language server" }
+        ]
+      },
+      {
+        "name": "app",
+        "description": "develop Shopify apps",
+        "options": [ { "long": "verbose", "description": "show detailed logs", "inherit": true } ],
+        "subcommands": [
+          { "name": "dev", "description": "preview an app", "options": [ { "long": "tunnel-url", "description": "set tunnel URL", "value": { "name": "url" } }, { "short": "s", "long": "store", "description": "set development store", "value": { "name": "store" } }, { "long": "api-key", "description": "set app client id", "value": { "name": "key" } }, { "long": "path", "description": "set app directory", "value": { "name": "directory", "provider": "builtin.directories" } }, { "long": "reset", "description": "reset dev settings" } ] },
+          { "name": "generate", "description": "generate app resources", "subcommands": [ { "name": "extension", "description": "create an app extension", "options": [ { "short": "n", "long": "name", "description": "set extension name", "value": { "name": "name" } }, { "long": "path", "description": "set app directory", "value": { "name": "directory", "provider": "builtin.directories" } }, { "short": "t", "long": "type", "description": "set extension type", "value": { "name": "type", "provider": "shopify.extension-types" } } ] }, { "name": "schema", "description": "generate GraphQL schema", "options": [ { "long": "path", "description": "set app directory", "value": { "name": "directory", "provider": "builtin.directories" } }, { "long": "api-key", "description": "set app client id", "value": { "name": "key" } } ] } ] },
+          { "name": "deploy", "description": "deploy an app", "options": [ { "long": "api-key", "description": "set app API key", "value": { "name": "key" } }, { "short": "f", "long": "force", "description": "skip confirmation" }, { "long": "reset", "description": "reset deploy settings" }, { "long": "path", "description": "set app directory", "value": { "name": "directory", "provider": "builtin.directories" } } ] },
+          { "name": "build", "description": "build an app", "options": [ { "long": "api-key", "description": "set app client id", "value": { "name": "key" } }, { "long": "path", "description": "set app directory", "value": { "name": "directory", "provider": "builtin.directories" } }, { "long": "skip-dependencies-installation", "description": "skip dependency checks" } ] },
+          { "name": "env", "description": "manage app environment files", "subcommands": [ { "name": "pull", "description": "write app environment variables", "options": [ { "long": "env-file", "description": "set env file", "value": { "name": "file", "provider": "builtin.files" } }, { "long": "path", "description": "set app directory", "value": { "name": "directory", "provider": "builtin.directories" } } ] }, { "name": "show", "description": "show app environment variables", "options": [ { "long": "path", "description": "set app directory", "value": { "name": "directory", "provider": "builtin.directories" } } ] } ] },
+          { "name": "update-url", "description": "update app URLs", "options": [ { "long": "path", "description": "set app directory", "value": { "name": "directory", "provider": "builtin.directories" } }, { "long": "redirect-urls", "description": "set redirect URLs", "value": { "name": "urls" } }, { "long": "app-url", "description": "set app URL", "value": { "name": "url" } }, { "long": "api-key", "description": "set app client id", "value": { "name": "key" } } ] }
+        ]
+      },
+      { "name": "auth", "description": "manage authentication", "subcommands": [ { "name": "logout", "description": "log out of Shopify" } ] },
+      { "name": "config", "description": "manage CLI configuration", "subcommands": [ { "name": "on", "description": "enable autocorrect" }, { "name": "off", "description": "disable autocorrect" }, { "name": "status", "description": "show autocorrect status" }, { "name": "analytics", "description": "configure analytics", "options": [ { "long": "status", "description": "show status" }, { "long": "enable", "description": "enable analytics" }, { "long": "disable", "description": "disable analytics" } ] }, { "name": "feature", "description": "configure feature flags", "options": [ { "long": "status", "description": "show status" }, { "long": "enable", "description": "enable feature" }, { "long": "disable", "description": "disable feature" } ], "arguments": { "states": [ { "name": "feature", "index": 0 } ] } } ] },
+      { "name": "ngrok", "description": "manage ngrok authentication", "subcommands": [ { "name": "auth", "description": "save an ngrok token", "arguments": { "states": [ { "name": "token", "index": 0 } ] } } ] },
+      { "name": "webhook", "description": "work with webhooks", "subcommands": [ { "name": "trigger", "description": "trigger a sample webhook", "options": [ { "long": "topic", "description": "set webhook topic", "value": { "name": "topic" } }, { "long": "api-version", "description": "set API version", "value": { "name": "version" } }, { "long": "shared-secret", "description": "set shared secret", "value": { "name": "secret" } }, { "long": "delivery-method", "description": "set delivery method", "value": { "name": "method", "provider": "shopify.webhook-delivery-methods" } }, { "long": "address", "description": "set delivery address", "value": { "name": "address" } } ] } ] },
+      { "name": "login", "description": "log in to a Shopify store", "options": [ { "long": "store", "description": "set store", "value": { "name": "store" } } ] },
+      { "name": "logout", "description": "log out of Shopify" },
+      { "name": "populate", "description": "add test data to a store", "arguments": { "states": [ { "name": "type", "index": 0, "repeatable": true, "provider": "shopify.populate-types" } ] }, "options": [ { "long": "count", "description": "set record count", "value": { "name": "number" } } ] },
+      { "name": "store", "description": "show current store" },
+      { "name": "version", "description": "show Shopify CLI version" },
+      { "name": "upgrade", "description": "upgrade Shopify CLI packages" },
+      { "name": "whoami", "description": "show current Shopify identity" },
+      { "name": "switch", "description": "switch stores", "options": [ { "long": "store", "description": "set store", "value": { "name": "store" } } ] }
+    ]
+  }
+}
