@@ -1,0 +1,262 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pkill",
+    "description": "send signals to matching processes",
+    "options": [
+      {
+        "long": "signal",
+        "description": "set signal to send",
+        "inherit": false,
+        "value": {
+          "name": "signal",
+          "description": "Signal to send",
+          "provider": "pkill.signals"
+        }
+      },
+      {
+        "short": "q",
+        "long": "queue",
+        "description": "send an integer with the signal",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "short": "e",
+        "long": "echo",
+        "description": "show killed processes",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "long": "full",
+        "description": "match full command line",
+        "inherit": false
+      },
+      {
+        "short": "g",
+        "long": "pgroup",
+        "description": "match process group ids",
+        "inherit": false,
+        "value": {
+          "name": "pgid"
+        }
+      },
+      {
+        "short": "G",
+        "long": "group",
+        "description": "match real group ids",
+        "inherit": false,
+        "value": {
+          "name": "gid"
+        }
+      },
+      {
+        "short": "i",
+        "long": "ignore-case",
+        "description": "match case-insensitively",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "long": "newest",
+        "description": "select newest process",
+        "inherit": false
+      },
+      {
+        "short": "o",
+        "long": "oldest",
+        "description": "select oldest process",
+        "inherit": false
+      },
+      {
+        "short": "O",
+        "long": "older",
+        "description": "select processes older than seconds",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "short": "P",
+        "long": "parent",
+        "description": "match child processes of parent ids",
+        "inherit": false,
+        "value": {
+          "name": "ppid"
+        }
+      },
+      {
+        "short": "s",
+        "long": "session",
+        "description": "match session ids",
+        "inherit": false,
+        "value": {
+          "name": "sid"
+        }
+      },
+      {
+        "short": "t",
+        "long": "terminal",
+        "description": "match controlling terminals",
+        "inherit": false,
+        "value": {
+          "name": "tty"
+        }
+      },
+      {
+        "short": "u",
+        "long": "euid",
+        "description": "match effective user ids",
+        "inherit": false,
+        "value": {
+          "name": "id"
+        }
+      },
+      {
+        "short": "U",
+        "long": "uid",
+        "description": "match real user ids",
+        "inherit": false,
+        "value": {
+          "name": "id"
+        }
+      },
+      {
+        "short": "x",
+        "long": "exact",
+        "description": "match exact command name",
+        "inherit": false
+      },
+      {
+        "short": "F",
+        "long": "pidfile",
+        "description": "read pids from file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "L",
+        "spellings": [
+          "logpidfile"
+        ],
+        "description": "fail if pid file is not locked",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "long": "runstates",
+        "description": "match process states",
+        "inherit": false,
+        "value": {
+          "name": "state"
+        }
+      },
+      {
+        "long": "ns",
+        "description": "match namespaces of a pid",
+        "inherit": false,
+        "value": {
+          "name": "pid"
+        }
+      },
+      {
+        "long": "nslist",
+        "description": "select namespaces for --ns",
+        "inherit": false,
+        "value": {
+          "name": "ns",
+          "provider": "pkill.namespaces"
+        },
+        "requires": [
+          "--ns"
+        ]
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "pattern",
+          "description": "process name or command-line regex",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "pkill.signals": {
+        "values": [
+          "SIGABRT",
+          "SIGALRM",
+          "SIGBUS",
+          "SIGCHLD",
+          "SIGCLD",
+          "SIGCONT",
+          "SIGEMT",
+          "SIGFPE",
+          "SIGHUP",
+          "SIGILL",
+          "SIGINFO",
+          "SIGINT",
+          "SIGIO",
+          "SIGIOT",
+          "SIGKILL",
+          "SIGLOST",
+          "SIGPIPE",
+          "SIGPOLL",
+          "SIGPROF",
+          "SIGPWR",
+          "SIGQUIT",
+          "SIGSEGV",
+          "SIGSTKFLT",
+          "SIGSTOP",
+          "SIGTSTP",
+          "SIGSYS",
+          "SIGTERM",
+          "SIGTRAP",
+          "SIGTTIN",
+          "SIGTTOU",
+          "SIGUNUSED",
+          "SIGURG",
+          "SIGUSR1",
+          "SIGUSR2",
+          "SIGVTALRM",
+          "SIGXCPU",
+          "SIGXFSZ",
+          "SIGWINCH"
+        ]
+      },
+      "pkill.namespaces": {
+        "values": [
+          "ipc",
+          "mnt",
+          "net",
+          "pid",
+          "user",
+          "uts"
+        ]
+      }
+    }
+  }
+}
