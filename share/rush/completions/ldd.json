@@ -1,0 +1,60 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ldd",
+    "description": "print shared library dependencies",
+    "options": [
+      {
+        "long": "help",
+        "description": "show help for ldd",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "print version information and exit",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "long": "data-relocs",
+        "description": "process data relocations",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "long": "function-relocs",
+        "description": "process data and function relocations",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "long": "unused",
+        "description": "print unused direct dependencies",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "print all information",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "exe",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true,
+          "description": "executable or shared object"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
