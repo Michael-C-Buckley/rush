@@ -55,6 +55,9 @@ pub fn runExitTrap(shell: anytype, status: result.ExitStatus) EvalError!result.E
 
 fn runPendingTrapCheckpoint(shell: anytype) EvalError!result.EvalResult {
     if (shell.state.running_signal_trap) return .{};
+    // Fast path for the common trap-free shell: nothing can be queued and
+    // nothing is pending, so skip the polling walk.
+    if (shell.state.signal_traps.count() == 0 and shell.state.pending_traps.items.len == 0) return .{};
     try queuePolledSignalTraps(shell);
     const name = shell.state.popPendingTrap() orelse return .{};
     const action = shell.state.getSignalTrap(name) orelse return .{};
@@ -1489,7 +1492,8 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
     }
     try traceSimpleCommand(shell, &.{}, fields);
     const name = fields[0];
-    if (lookupBuiltin(shell, name)) |definition| {
+    const builtin_definition = lookupBuiltin(shell, name);
+    if (builtin_definition) |definition| {
         if (definition.kind == .special) {
             const saved_assignments = if (shell.state.options.mode == .bash)
                 try saveAssignmentVariables(shell, command.assignments)
@@ -1536,7 +1540,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
         // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
         if (shell.state.getFunction(name)) |function| return evalFunction(shell, function, command.assignments, fields[1..]);
     }
-    if (lookupBuiltin(shell, name)) |definition| {
+    if (builtin_definition) |definition| {
         if (definition.id == .cd) return evalCdBuiltin(shell, fields);
         if (definition.id == .command) {
             return evalCommandBuiltin(shell, fields, command.assignments, &redirections, &restore_redirections);
@@ -3262,7 +3266,15 @@ fn normalizeAbsolutePath(allocator: std.mem.Allocator, path: []const u8) ![]cons
 
 fn staticDeclarationBuiltinName(shell: anytype, word: ast.Word) !?builtin.Id {
     if (wordHasDynamicExpansion(word)) return null;
-    const name = try expandWordTracking(shell, word, null);
+    // Plain literal words expand to themselves unless a tilde prefix applies,
+    // so skip the expansion machinery on the per-command hot path.
+    const name = switch (word.data) {
+        .literal => |literal| if (word.quoted or tildePrefixLen(literal) == null)
+            literal
+        else
+            try expandWordTracking(shell, word, null),
+        .parts => try expandWordTracking(shell, word, null),
+    };
     if (shell.state.options.mode == .bash) {
         if (std.mem.eql(u8, name, "declare")) return .declare;
         if (std.mem.eql(u8, name, "typeset")) return .typeset;
@@ -4714,9 +4726,12 @@ fn expandWordFields(
     var fields: std.ArrayList([]const u8) = .empty;
 
     for (words) |word| {
-        const brace_expanded = try braceExpandWord(shell, word);
-        for (brace_expanded) |expanded_word| {
-            try appendExpandedWordFields(shell, &fields, expanded_word, substitution_status);
+        if (try braceExpandWord(shell, word)) |brace_expanded| {
+            for (brace_expanded) |expanded_word| {
+                try appendExpandedWordFields(shell, &fields, expanded_word, substitution_status);
+            }
+        } else {
+            try appendExpandedWordFields(shell, &fields, word, substitution_status);
         }
     }
 
@@ -4730,6 +4745,13 @@ fn appendExpandedWordFields(
     substitution_status: ?*?result.ExitStatus,
 ) EvalError!void {
     const allocator = shell.scratchAllocator();
+
+    // Fast path for plain literal words: every special-case check below only
+    // matches words built from parts, and a literal has no dynamic expansion.
+    if (word.data == .literal) {
+        try appendStaticWordField(shell, fields, word);
+        return;
+    }
 
     if (try appendUnquotedAtFields(shell, fields, word) or
         try appendUnquotedStarFields(shell, fields, word) or
@@ -4779,21 +4801,18 @@ const BraceMatch = struct {
     expansion: BraceExpansion,
 };
 
-fn braceExpandWord(shell: anytype, word: ast.Word) ![]const ast.Word {
+/// Returns null when brace expansion does not apply, leaving the word as-is.
+fn braceExpandWord(shell: anytype, word: ast.Word) !?[]const ast.Word {
     // A brace match can only start at a literal `{` byte: braceAtomsFromWord
     // produces byte atoms only from literal text and from simple parameter
     // expansions rendered as `$name`, which never contain braces. Skip the
     // per-byte atomize/reparse round trip for the common brace-free word.
-    if (shell.state.options.mode == .posix or !wordLiteralsContainBrace(word)) {
-        const words = try shell.scratchAllocator().alloc(ast.Word, 1);
-        words[0] = word;
-        return words;
-    }
+    if (shell.state.options.mode == .posix or !wordLiteralsContainBrace(word)) return null;
 
     const atoms = try braceAtomsFromWord(shell, word);
     var expanded: std.ArrayList(ast.Word) = .empty;
     try appendBraceExpandedWords(shell, &expanded, atoms, word.span, word.quoted);
-    return expanded.toOwnedSlice(shell.scratchAllocator());
+    return try expanded.toOwnedSlice(shell.scratchAllocator());
 }
 
 fn wordLiteralsContainBrace(word: ast.Word) bool {
@@ -6096,6 +6115,10 @@ fn parseArithmeticValue(shell: anytype, text: []const u8) !i64 {
 }
 
 fn expandArithmeticText(shell: anytype, text: []const u8) ![]const u8 {
+    // Expansion only rewrites `$` forms and strips quotes; text without them
+    // expands to itself, so skip the byte-by-byte copy.
+    if (std.mem.indexOfAny(u8, text, "$'\"") == null) return text;
+
     var output: std.ArrayList(u8) = .empty;
     const allocator = shell.scratchAllocator();
     var index: usize = 0;
@@ -6352,21 +6375,24 @@ fn ArithmeticParser(comptime ShellType: type) type {
         };
 
         fn parseAssignmentOperator(self: *Self) ?AssignmentOperator {
-            if (self.eatString("<<=")) return .shift_left;
-            if (self.eatString(">>=")) return .shift_right;
-            if (self.eatString("+=")) return .add;
-            if (self.eatString("-=")) return .subtract;
-            if (self.eatString("*=")) return .multiply;
-            if (self.eatString("/=")) return .divide;
-            if (self.eatString("%=")) return .remainder;
-            if (self.eatString("&=")) return .bit_and;
-            if (self.eatString("^=")) return .bit_xor;
-            if (self.eatString("|=")) return .bit_or;
-            if (self.peek() == '=' and self.peekOffset(1) != '=') {
-                self.index += 1;
-                return .assign;
+            switch (self.peek()) {
+                '<' => return if (self.eatString("<<=")) .shift_left else null,
+                '>' => return if (self.eatString(">>=")) .shift_right else null,
+                '+' => return if (self.eatString("+=")) .add else null,
+                '-' => return if (self.eatString("-=")) .subtract else null,
+                '*' => return if (self.eatString("*=")) .multiply else null,
+                '/' => return if (self.eatString("/=")) .divide else null,
+                '%' => return if (self.eatString("%=")) .remainder else null,
+                '&' => return if (self.eatString("&=")) .bit_and else null,
+                '^' => return if (self.eatString("^=")) .bit_xor else null,
+                '|' => return if (self.eatString("|=")) .bit_or else null,
+                '=' => {
+                    if (self.peekOffset(1) == '=') return null;
+                    self.index += 1;
+                    return .assign;
+                },
+                else => return null,
             }
-            return null;
         }
 
         // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
@@ -6616,6 +6642,9 @@ fn ArithmeticParser(comptime ShellType: type) type {
             const trimmed = std.mem.trim(u8, value, " \t\n");
             if (trimmed.len == 0) return 0;
             if (self.shell.state.options.mode == .bash) {
+                // Plain decimal values evaluate to themselves; skip the
+                // recursive parse that bash-mode expression values require.
+                if (plainDecimalArithmeticValue(trimmed)) |plain| return plain;
                 if (self.recursion_depth >= 64) return error.InvalidArithmetic;
                 var parser_state: ArithmeticParser(ShellType) = .{
                     .shell = self.shell,
@@ -6669,6 +6698,19 @@ fn ArithmeticParser(comptime ShellType: type) type {
             return self.text[target];
         }
     };
+}
+
+/// Parses text that the full arithmetic parser would evaluate to the same
+/// plain decimal value, or null when full parsing is required. Leading-zero
+/// (octal) and overflowing magnitudes must take the full parser path.
+fn plainDecimalArithmeticValue(text: []const u8) ?i64 {
+    const negate = text[0] == '-';
+    const digits = if (negate or text[0] == '+') text[1..] else text;
+    if (digits.len == 0) return null;
+    if (digits[0] == '0' and digits.len > 1) return null;
+    for (digits) |byte| if (!std.ascii.isDigit(byte)) return null;
+    const magnitude = std.fmt.parseInt(i64, digits, 10) catch return null;
+    return if (negate) -magnitude else magnitude;
 }
 
 fn isArithmeticNameStart(byte: u8) bool {
