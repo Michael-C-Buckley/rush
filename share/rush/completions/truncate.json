@@ -1,0 +1,68 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "truncate",
+    "description": "shrink or extend files to a specified size",
+    "options": [
+      {
+        "long": "no-create",
+        "short": "c",
+        "description": "do not create any files",
+        "inherit": false
+      },
+      {
+        "long": "io-blocks",
+        "short": "o",
+        "description": "treat SIZE as number of IO blocks instead of bytes",
+        "inherit": false
+      },
+      {
+        "long": "reference",
+        "short": "r",
+        "description": "base size on RFILE",
+        "inherit": false,
+        "value": {
+          "name": "rfile",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "size",
+        "short": "s",
+        "description": "set or adjust the file size by SIZE bytes",
+        "inherit": false,
+        "value": {
+          "name": "size",
+          "description": "integer size with optional unit"
+        }
+      },
+      {
+        "long": "help",
+        "description": "show help for truncate",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "output version information and exit",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true,
+          "description": "file to resize"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
