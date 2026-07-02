@@ -1,0 +1,209 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ts-node",
+    "description": "run TypeScript directly in Node.js",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for ts-node",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "print version information of the ts-node module",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "long": "eval",
+        "description": "evaluate script",
+        "inherit": false,
+        "value": {
+          "name": "script"
+        }
+      },
+      {
+        "short": "p",
+        "long": "print",
+        "description": "evaluate script and print result",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "long": "require",
+        "description": "require module before executing",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "module",
+          "provider": "ts-node.dependencies"
+        }
+      },
+      {
+        "short": "i",
+        "long": "interactive",
+        "description": "always open interactive REPL",
+        "inherit": false
+      },
+      {
+        "long": "show-config",
+        "description": "print resolved Typescript config to the terminal",
+        "inherit": false
+      },
+      {
+        "long": "cwd-mode",
+        "description": "resolve Typescript config based on the current working directory",
+        "inherit": false
+      },
+      {
+        "short": "T",
+        "long": "transpile-only",
+        "description": "use the Typescript transpile module mode",
+        "inherit": false
+      },
+      {
+        "short": "H",
+        "long": "compiler-host",
+        "description": "use the Typescript compiler host API",
+        "inherit": false
+      },
+      {
+        "short": "I",
+        "long": "ignore",
+        "description": "ignore patterns from Typescript compilation",
+        "inherit": false,
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "short": "P",
+        "long": "project",
+        "description": "specify TypeScript project location",
+        "inherit": false,
+        "value": {
+          "name": "project",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "C",
+        "long": "compiler",
+        "description": "use a custom compiler",
+        "inherit": false,
+        "value": {
+          "name": "compiler"
+        }
+      },
+      {
+        "long": "transpiler",
+        "description": "use a custom transpiler",
+        "inherit": false,
+        "value": {
+          "name": "transpiler"
+        }
+      },
+      {
+        "short": "D",
+        "long": "ignore-diagnostics",
+        "description": "specify Typescript diagnostic code to ignore",
+        "inherit": false,
+        "value": {
+          "name": "code"
+        }
+      },
+      {
+        "short": "O",
+        "long": "compiler-options",
+        "description": "jSON object that will be merged with the compiler options",
+        "inherit": false,
+        "value": {
+          "name": "options"
+        }
+      },
+      {
+        "long": "cwd",
+        "description": "specify working directory",
+        "inherit": false,
+        "value": {
+          "name": "cwd",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "files",
+        "description": "load files, include and exclude from Typescript config on startup",
+        "inherit": false
+      },
+      {
+        "long": "pretty",
+        "description": "use the pretty formatter for diagnostic errors",
+        "inherit": false
+      },
+      {
+        "long": "skip-project",
+        "description": "skip reading Typescript config",
+        "inherit": false
+      },
+      {
+        "long": "scope",
+        "description": "scope compilation to scope directory specified",
+        "inherit": false
+      },
+      {
+        "long": "scope-dir",
+        "description": "directory for scope parameter",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "skip-ignore",
+        "description": "skip --ignore checks",
+        "inherit": false
+      },
+      {
+        "long": "prefer-ts-exts",
+        "description": "prefer Typescript files over JavaScript files when importing files",
+        "inherit": false
+      },
+      {
+        "long": "log-error",
+        "description": "pipe Typescript errors to stderr instead of throwing exceptions",
+        "inherit": false
+      },
+      {
+        "long": "no-experimental-repl-await",
+        "description": "disable the top-level await function in REPL",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "script",
+          "provider": "builtin.files",
+          "index": 0,
+          "description": "TypeScript script"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "ts-node.dependencies": {
+        "function": "__rush_complete_ts_node_dependencies"
+      }
+    }
+  }
+}

@@ -1,0 +1,14 @@
+__rush_complete_ts_node_dependencies() {
+  test -f package.json || return
+  command -v node >/dev/null 2>&1 || return
+  node -e '
+const fs = require("fs");
+let pkg;
+try { pkg = JSON.parse(fs.readFileSync("package.json", "utf8")); } catch (_) { process.exit(0); }
+for (const section of ["dependencies", "devDependencies", "optionalDependencies", "peerDependencies"]) {
+  for (const name of Object.keys(pkg[section] || {})) console.log(name);
+}
+' 2>/dev/null | while IFS= read -r dependency; do
+    test -n "$dependency" && rush_complete candidate "$dependency" --kind plain --description dependency
+  done
+}
