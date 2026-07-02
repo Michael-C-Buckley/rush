@@ -1,0 +1,1134 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "rclone",
+    "description": "manage cloud storage with rclone",
+    "options": [
+      {
+        "long": "version",
+        "description": "view your current rclone version",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for rclone commands, flags and backends",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "about",
+        "description": "get quota information from the remote",
+        "options": [
+          {
+            "long": "full",
+            "description": "full numbers instead of SI units",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "format output as JSON",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "authorize",
+        "description": "remote authorization",
+        "options": [
+          {
+            "long": "auth-no-open-browser",
+            "description": "do not automatically open auth link in default browser",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "backend",
+        "description": "run a backend specific command",
+        "options": [
+          {
+            "long": "json",
+            "description": "format output as JSON",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "cat",
+        "description": "concatenates any files and sends them to stdout",
+        "options": [
+          {
+            "long": "discard",
+            "description": "discard the output instead of printing",
+            "inherit": false
+          },
+          {
+            "long": "count",
+            "description": "only print N characters. (default -1)",
+            "inherit": false,
+            "value": {
+              "name": "int"
+            }
+          },
+          {
+            "long": "head",
+            "description": "only print the first N characters",
+            "inherit": false,
+            "value": {
+              "name": "int"
+            }
+          },
+          {
+            "long": "offset",
+            "description": "start printing at offset N (or from end if -ve)",
+            "inherit": false,
+            "value": {
+              "name": "int"
+            }
+          },
+          {
+            "long": "tail",
+            "description": "only print the last N characters",
+            "inherit": false,
+            "value": {
+              "name": "int"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "check",
+        "description": "checks the files in the source and destination match",
+        "options": [
+          {
+            "long": "download",
+            "description": "check by downloading rather than with hash",
+            "inherit": false
+          },
+          {
+            "long": "combined",
+            "description": "write combined report",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "differ",
+            "description": "write non-matching files report",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "error",
+            "description": "write error report",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "match",
+            "description": "write matching files report",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "missing-on-dst",
+            "description": "write files missing on destination report",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "missing-on-src",
+            "description": "write files missing on source report",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "one-way",
+            "description": "check one way only",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "source",
+              "index": 0,
+              "provider": "builtin.files"
+            },
+            {
+              "name": "destination",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "cleanup",
+        "description": "clean up the remote if possible",
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "config",
+        "description": "enter an interactive configuration session",
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "Create a new remote with name, type and options",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0
+                },
+                {
+                  "name": "type",
+                  "index": 1
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "copy",
+        "description": "copy files from source to dest, skipping already copied",
+        "arguments": {
+          "states": [
+            {
+              "name": "source",
+              "index": 0,
+              "provider": "builtin.files"
+            },
+            {
+              "name": "destination",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "copyto",
+        "description": "copy files from source to dest, skipping already copied",
+        "arguments": {
+          "states": [
+            {
+              "name": "source",
+              "index": 0,
+              "provider": "builtin.files"
+            },
+            {
+              "name": "destination",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "copyurl",
+        "description": "copy url content to dest",
+        "arguments": {
+          "states": [
+            {
+              "name": "url",
+              "index": 0
+            },
+            {
+              "name": "destination",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "cryptcheck",
+        "description": "cryptcheck checks the integrity of a crypted remote",
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            },
+            {
+              "name": "crypted-remote",
+              "index": 1
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "combined",
+            "description": "write combined report",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "differ",
+            "description": "write non-matching files report",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "error",
+            "description": "write error report",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "match",
+            "description": "write matching files report",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "missing-on-dst",
+            "description": "write files missing on destination report",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "missing-on-src",
+            "description": "write files missing on source report",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "one-way",
+            "description": "check one way only",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "cryptdecode",
+        "description": "cryptdecode returns unencrypted file names",
+        "options": [
+          {
+            "long": "reverse",
+            "description": "reverse cryptdecode, encrypts filenames",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "crypted-remote",
+              "index": 0
+            },
+            {
+              "name": "encrypted-filename",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "dedupe",
+        "description": "interactively find duplicate filenames and delete/rename them",
+        "options": [
+          {
+            "long": "by-hash",
+            "description": "find identical hashes rather than names",
+            "inherit": false
+          },
+          {
+            "long": "dedupe-mode",
+            "description": "dedupe mode",
+            "inherit": false,
+            "value": {
+              "name": "mode",
+              "provider": "rclone.dedupe-modes"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "delete",
+        "description": "remove the files in path",
+        "options": [
+          {
+            "long": "rmdirs",
+            "description": "rmdirs removes empty directories but leaves root intact",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "deletefile",
+        "description": "remove a single file from remote",
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "genautocomplete",
+        "description": "output completion script for a given shell",
+        "subcommands": [
+          {
+            "name": "bash",
+            "description": "output bash completion script",
+            "arguments": {
+              "states": [
+                {
+                  "name": "output-file",
+                  "index": 0,
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "fish",
+            "description": "output fish completion script",
+            "arguments": {
+              "states": [
+                {
+                  "name": "output-file",
+                  "index": 0,
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "zsh",
+            "description": "output zsh completion script",
+            "arguments": {
+              "states": [
+                {
+                  "name": "output-file",
+                  "index": 0,
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "gendocs",
+        "description": "output markdown docs for rclone to the directory supplied",
+        "arguments": {
+          "states": [
+            {
+              "name": "output-directory",
+              "index": 0,
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "hashsum",
+        "description": "produces a hashsum file for all the objects in the path",
+        "options": [
+          {
+            "long": "base64",
+            "description": "output base64 encoded hashsum",
+            "inherit": false
+          },
+          {
+            "long": "download",
+            "description": "download the file and hash it locally; if this flag is not specified, the hash is requested from the remote",
+            "inherit": false
+          },
+          {
+            "long": "output-file",
+            "description": "output hashsums to a file rather than the terminal",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "hash",
+              "index": 0,
+              "provider": "rclone.hashes"
+            },
+            {
+              "name": "remote-path",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "show help for rclone commands, flags and backends",
+        "subcommands": [
+          {
+            "name": "flags",
+            "description": "List of global flags"
+          }
+        ]
+      },
+      {
+        "name": "link",
+        "description": "generate public link to file/folder",
+        "options": [
+          {
+            "long": "expire",
+            "description": "the amount of time that the link will be valid (default 100y)",
+            "inherit": false,
+            "value": {
+              "name": "duration"
+            }
+          },
+          {
+            "long": "unlink",
+            "description": "remove existing public link to file/folder",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "listremotes",
+        "description": "list all the remotes in the config file",
+        "options": [
+          {
+            "long": "long",
+            "description": "show the type as well as names",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "ls",
+        "description": "list the objects in the path with size and path",
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "lsd",
+        "description": "list all directories/containers/buckets in the path",
+        "options": [
+          {
+            "short": "R",
+            "long": "recursive",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "lsf",
+        "description": "list directories and objects in remote:path formatted for parsing",
+        "options": [
+          {
+            "long": "recursive",
+            "description": "recurse into the listing",
+            "inherit": false,
+            "short": "R"
+          },
+          {
+            "long": "files-only",
+            "description": "only list files",
+            "inherit": false
+          },
+          {
+            "long": "dirs-only",
+            "description": "only list directories",
+            "inherit": false
+          },
+          {
+            "long": "absolute",
+            "description": "put a leading / in front of path names",
+            "inherit": false
+          },
+          {
+            "long": "csv",
+            "description": "output in CSV format",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "dir-slash",
+            "description": "append a slash to directory names. (default true)",
+            "inherit": false
+          },
+          {
+            "long": "format",
+            "short": "F",
+            "description": "output format - see help for details (default \"p\")",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": "rclone.lsf-formats"
+            }
+          },
+          {
+            "long": "hash",
+            "description": "use this hash when h is used in the format (default \"MD5\")",
+            "inherit": false,
+            "value": {
+              "name": "hash",
+              "provider": "rclone.hashes"
+            }
+          },
+          {
+            "long": "separator",
+            "short": "s",
+            "description": "separator for the items in the format. (default \";\")",
+            "inherit": false,
+            "value": {
+              "name": "separator"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "lsjson",
+        "description": "list directories and objects in the path in JSON format",
+        "options": [
+          {
+            "long": "recursive",
+            "description": "recurse into the listing",
+            "inherit": false,
+            "short": "R"
+          },
+          {
+            "long": "files-only",
+            "description": "only list files",
+            "inherit": false
+          },
+          {
+            "long": "dirs-only",
+            "description": "only list directories",
+            "inherit": false
+          },
+          {
+            "long": "encrypted",
+            "short": "M",
+            "description": "show the encrypted names",
+            "inherit": false
+          },
+          {
+            "long": "hash",
+            "description": "include hashes in the output (may take longer)",
+            "inherit": false
+          },
+          {
+            "long": "hash-type",
+            "description": "show only this hash type (may be repeated)",
+            "inherit": false,
+            "value": {
+              "name": "hash",
+              "provider": "rclone.hashes"
+            }
+          },
+          {
+            "long": "no-mimetype",
+            "description": "don't read the mime type (can speed things up)",
+            "inherit": false
+          },
+          {
+            "long": "no-modtime",
+            "description": "don't read the modification time (can speed things up)",
+            "inherit": false
+          },
+          {
+            "long": "original",
+            "description": "show the ID of the underlying Object",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "lsl",
+        "description": "list the objects in path with modification time, size and path",
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "md5sum",
+        "description": "produces an md5sum file for all the objects in the path",
+        "options": [
+          {
+            "long": "base64",
+            "description": "output base64 encoded hashsum",
+            "inherit": false
+          },
+          {
+            "long": "download",
+            "description": "download the file and hash it locally; if this flag is not specified, the hash is requested from the remote",
+            "inherit": false
+          },
+          {
+            "long": "output-file",
+            "description": "output hashsums to a file rather than the terminal",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "mkdir",
+        "description": "make the path if it doesn't already exist",
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "mount",
+        "description": "mount the remote as file system on a mountpoint",
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            },
+            {
+              "name": "mountpoint",
+              "index": 1,
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "move",
+        "description": "move files from source to dest",
+        "arguments": {
+          "states": [
+            {
+              "name": "source",
+              "index": 0,
+              "provider": "builtin.files"
+            },
+            {
+              "name": "destination",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "moveto",
+        "description": "move file or directory from source to dest",
+        "arguments": {
+          "states": [
+            {
+              "name": "source",
+              "index": 0,
+              "provider": "builtin.files"
+            },
+            {
+              "name": "destination",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "ncdu",
+        "description": "explore a remote with a text based user interface",
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "obscure",
+        "description": "obscure password for use in the rclone config file",
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "purge",
+        "description": "remove the path and all of its contents",
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "rc",
+        "description": "run a command against a running rclone",
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "rcat",
+        "description": "copies standard input to file on remote",
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "rcd",
+        "description": "run rclone listening to remote control commands only",
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "rmdir",
+        "description": "remove the empty directory at path",
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "rmdirs",
+        "description": "remove empty directories under the path",
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "selfupdate",
+        "description": "update the rclone binary"
+      },
+      {
+        "name": "serve",
+        "description": "serve a remote over a protocol",
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "settier",
+        "description": "changes storage class/tier of objects in remote",
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "index": 0
+            },
+            {
+              "name": "value",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "sha1sum",
+        "description": "produces an sha1sum file for all the objects in the path",
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "size",
+        "description": "prints the total size and number of objects in remote:path",
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "sync",
+        "description": "make source and dest identical, modifying destination only",
+        "arguments": {
+          "states": [
+            {
+              "name": "source",
+              "index": 0,
+              "provider": "builtin.files"
+            },
+            {
+              "name": "destination",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "test",
+        "description": "run a test command",
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "touch",
+        "description": "create new file or change file modification time",
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "tree",
+        "description": "list the contents of the remote in a tree like fashion",
+        "arguments": {
+          "states": [
+            {
+              "name": "remote-path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "version",
+        "description": "show the version number"
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "rclone.hashes": {
+        "values": [
+          "MD5",
+          "SHA-1",
+          "DropboxHash",
+          "QuickXorHash",
+          "Whirlpool",
+          "CRC-32",
+          "MailruHash"
+        ]
+      },
+      "rclone.dedupe-modes": {
+        "values": [
+          "interactive",
+          "skip",
+          "rename",
+          "list",
+          "first",
+          "newest",
+          "oldest",
+          "largest",
+          "smallest"
+        ]
+      },
+      "rclone.lsf-formats": {
+        "values": [
+          {
+            "value": "p",
+            "description": "path"
+          },
+          {
+            "value": "s",
+            "description": "size"
+          },
+          {
+            "value": "t",
+            "description": "modification time"
+          },
+          {
+            "value": "h",
+            "description": "hash"
+          },
+          {
+            "value": "i",
+            "description": "ID of object"
+          },
+          {
+            "value": "o",
+            "description": "original ID"
+          },
+          {
+            "value": "m",
+            "description": "mime type"
+          }
+        ]
+      }
+    }
+  }
+}
