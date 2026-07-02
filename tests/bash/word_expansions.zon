@@ -280,6 +280,20 @@
             .status = 0,
         },
         .{
+            .name = "indexed array star expansion joins elements with IFS",
+            .script =
+            \\arr=(a b c)
+            \\IFS=:
+            \\printf '<%s>\n' "${arr[*]}"
+            ,
+            .stdout =
+            \\<a:b:c>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "parameter substring expansion supports offsets and lengths",
             .script =
             \\value=abcdef

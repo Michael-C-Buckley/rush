@@ -65,6 +65,25 @@
             .status = 0,
         },
         .{
+            .name = "indexed array assignments set and append elements",
+            .script =
+            \\arr=(a "b c" d)
+            \\arr[1]=B
+            \\arr[3]+=D
+            \\i=2
+            \\printf '<%s>\n' "${arr[0]}" "${arr[1]}" "${arr[$i]}" "${arr[3]}"
+            ,
+            .stdout =
+            \\<a>
+            \\<B>
+            \\<d>
+            \\<D>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "command substitution clears errexit by default",
             .script =
             \\set -e

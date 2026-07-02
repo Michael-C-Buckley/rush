@@ -3905,6 +3905,13 @@ fn copyParameterExpansion(allocator: std.mem.Allocator, parameter: ast.Parameter
 fn copyParameter(allocator: std.mem.Allocator, parameter: ast.Parameter) CopyError!ast.Parameter {
     return switch (parameter) {
         .variable => |name| .{ .variable = try allocator.dupe(u8, name) },
+        .array => |array| .{ .array = .{
+            .name = try allocator.dupe(u8, array.name),
+            .subscript = switch (array.subscript) {
+                .index => |index| .{ .index = try copyWord(allocator, index) },
+                .all => |special| .{ .all = special },
+            },
+        } },
         .positional => |position| .{ .positional = position },
         .special => |special| .{ .special = special },
     };
@@ -4348,14 +4355,8 @@ fn validateAssignment(shell: anytype, name: []const u8, value: []const u8) !void
 fn applyAssignmentsIgnoringReadonly(shell: anytype, assignments: []const ast.Assignment) !void {
     for (assignments) |assignment| {
         var status: ?result.ExitStatus = null;
-        const value = try expandAssignmentValue(shell, assignment, &status);
-        if (applyDynamicVariableAssignment(shell, assignment.name, value)) continue;
-        shell.state.putVariable(.{
-            .name = assignment.name,
-            .value = value,
-            .exported = assignmentExported(shell, assignment.name),
-        }) catch |err| switch (err) {
-            error.ReadonlyVariable => try writeReadonlyDiagnostic(shell, assignment.name),
+        _ = applyAssignment(shell, assignment, &status) catch |err| switch (err) {
+            error.AssignmentError => {},
             else => return err,
         };
     }
@@ -4364,19 +4365,7 @@ fn applyAssignmentsIgnoringReadonly(shell: anytype, assignments: []const ast.Ass
 fn applyAssignmentsWithStatus(shell: anytype, assignments: []const ast.Assignment) !result.ExitStatus {
     var status: ?result.ExitStatus = null;
     for (assignments) |assignment| {
-        const value = try expandAssignmentValue(shell, assignment, &status);
-        if (applyDynamicVariableAssignment(shell, assignment.name, value)) continue;
-        shell.state.putVariable(.{
-            .name = assignment.name,
-            .value = value,
-            .exported = assignmentExported(shell, assignment.name),
-        }) catch |err| switch (err) {
-            error.ReadonlyVariable => {
-                try writeReadonlyDiagnostic(shell, assignment.name);
-                return error.AssignmentError;
-            },
-            else => return err,
-        };
+        _ = try applyAssignment(shell, assignment, &status);
     }
     return status orelse 0;
 }
@@ -4386,21 +4375,65 @@ fn expandAndApplyAssignments(shell: anytype, assignments: []const ast.Assignment
     const expanded = try shell.scratchAllocator().alloc(ExpandedAssignment, assignments.len);
     for (assignments, 0..) |assignment, index| {
         var status: ?result.ExitStatus = null;
-        const value = try expandAssignmentValue(shell, assignment, &status);
-        if (!applyDynamicVariableAssignment(shell, assignment.name, value)) {
-            shell.state.putVariable(.{
-                .name = assignment.name,
-                .value = value,
-                .exported = assignmentExported(shell, assignment.name),
-            }) catch |err| switch (err) {
-                error.ReadonlyVariable => {
-                    try writeReadonlyDiagnostic(shell, assignment.name);
-                    return error.AssignmentError;
-                },
-                else => return err,
-            };
-        }
+        const value = try applyAssignment(shell, assignment, &status);
         expanded[index] = .{ .name = assignment.name, .value = value, .status = status };
+    }
+    return expanded;
+}
+
+fn applyAssignment(
+    shell: anytype,
+    assignment: ast.Assignment,
+    substitution_status: ?*?result.ExitStatus,
+) ![]const u8 {
+    if (assignment.array_values) |values| {
+        const expanded = try expandArrayAssignmentValues(shell, values, substitution_status);
+        shell.state.putArray(assignment.name, expanded) catch |err| switch (err) {
+            error.ReadonlyVariable => {
+                try writeReadonlyDiagnostic(shell, assignment.name);
+                return error.AssignmentError;
+            },
+            else => return err,
+        };
+        return joinValues(shell, expanded, " ");
+    }
+
+    const value = try expandAssignmentValue(shell, assignment, substitution_status);
+    if (assignment.index) |index_word| {
+        const index = try expandArrayIndex(shell, index_word);
+        shell.state.putArrayElement(assignment.name, index, value) catch |err| switch (err) {
+            error.ReadonlyVariable => {
+                try writeReadonlyDiagnostic(shell, assignment.name);
+                return error.AssignmentError;
+            },
+            else => return err,
+        };
+        return value;
+    }
+
+    if (applyDynamicVariableAssignment(shell, assignment.name, value)) return value;
+    shell.state.putVariable(.{
+        .name = assignment.name,
+        .value = value,
+        .exported = assignmentExported(shell, assignment.name),
+    }) catch |err| switch (err) {
+        error.ReadonlyVariable => {
+            try writeReadonlyDiagnostic(shell, assignment.name);
+            return error.AssignmentError;
+        },
+        else => return err,
+    };
+    return value;
+}
+
+fn expandArrayAssignmentValues(
+    shell: anytype,
+    values: []const ast.Word,
+    substitution_status: ?*?result.ExitStatus,
+) ![]const []const u8 {
+    const expanded = try shell.scratchAllocator().alloc([]const u8, values.len);
+    for (values, 0..) |value, index| {
+        expanded[index] = try expandAssignmentWordTracking(shell, value, substitution_status);
     }
     return expanded;
 }
@@ -4429,8 +4462,19 @@ fn expandAssignmentValue(
 ) ![]const u8 {
     const value = try expandAssignmentWordTracking(shell, assignment.value, substitution_status);
     if (!assignment.append) return value;
-    const existing = if (shell.state.getVariable(assignment.name)) |variable| variable.value else "";
+    const existing = if (assignment.index) |index_word| existing: {
+        const index = try expandArrayIndex(shell, index_word);
+        const array = shell.state.getArray(assignment.name) orelse break :existing "";
+        break :existing if (index < array.values.len) array.values[index] else "";
+    } else if (shell.state.getVariable(assignment.name)) |variable| variable.value else "";
     return std.mem.concat(shell.scratchAllocator(), u8, &.{ existing, value });
+}
+
+fn expandArrayIndex(shell: anytype, word: ast.Word) !usize {
+    const text = try expandWord(shell, word);
+    const value = try parseArithmeticValue(shell, text);
+    if (value < 0) return error.InvalidArithmetic;
+    return @intCast(value);
 }
 
 fn assignmentExported(shell: anytype, name: []const u8) bool {
@@ -4589,12 +4633,14 @@ fn unbracedParameterExpansionText(shell: anytype, expansion: ast.ParameterExpans
 
     const expected_len: usize = switch (expansion.parameter) {
         .variable => |name| 1 + name.len,
+        .array => return null,
         .positional, .special => 2,
     };
     if (expansion.span.len() != expected_len) return null;
 
     return switch (expansion.parameter) {
         .variable => |name| try std.fmt.allocPrint(shell.scratchAllocator(), "${s}", .{name}),
+        .array => null,
         .positional => |index| if (index < 10)
             try std.fmt.allocPrint(shell.scratchAllocator(), "${}", .{index})
         else
@@ -6631,6 +6677,16 @@ fn expandParameter(shell: anytype, parameter: ast.ParameterExpansion) EvalError!
             }
             return "";
         },
+        .array => parameterCurrentValue(shell, parameter.parameter) catch |err| switch (err) {
+            error.InvalidArithmetic => return error.ExpansionError,
+            else => return err,
+        } orelse {
+            if (shell.state.options.nounset) {
+                try writeExpansionDiagnostic(shell, parameter, "parameter", "parameter not set");
+                return if (shell.state.options.mode == .bash) error.FatalExpansionError else error.ExpansionError;
+            }
+            return "";
+        },
         .special => |special| switch (special) {
             .hash => try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{shell.state.positionals.len}),
             .question => try formatExitStatus(shell, shell.state.last_status),
@@ -6688,19 +6744,24 @@ fn ifsFirstCharacter(shell: anytype) []const u8 {
 fn joinPositionals(shell: anytype, separator: []const u8) ![]const u8 {
     const positionals = shell.state.positionals;
     if (positionals.len == 0) return "";
-    var total_len = std.math.mul(usize, positionals.len - 1, separator.len) catch return error.OutOfMemory;
+    return joinValues(shell, positionals, separator);
+}
+
+fn joinValues(shell: anytype, values: []const []const u8, separator: []const u8) ![]const u8 {
+    if (values.len == 0) return "";
+    var total_len = std.math.mul(usize, values.len - 1, separator.len) catch return error.OutOfMemory;
     // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-    for (positionals) |positional| total_len = std.math.add(usize, total_len, positional.len) catch return error.OutOfMemory;
+    for (values) |value| total_len = std.math.add(usize, total_len, value.len) catch return error.OutOfMemory;
 
     const output = try shell.scratchAllocator().alloc(u8, total_len);
     var cursor: usize = 0;
-    for (positionals, 0..) |positional, index| {
+    for (values, 0..) |value, index| {
         if (index != 0) {
             @memcpy(output[cursor..][0..separator.len], separator);
             cursor += separator.len;
         }
-        @memcpy(output[cursor..][0..positional.len], positional);
-        cursor += positional.len;
+        @memcpy(output[cursor..][0..value.len], value);
+        cursor += value.len;
     }
     return output;
 }
@@ -6727,7 +6788,7 @@ fn expandParameterLength(shell: anytype, parameter: ast.ParameterExpansion) Eval
 
 fn parameterSubjectToNounset(parameter: ast.Parameter) bool {
     return switch (parameter) {
-        .variable, .positional => true,
+        .variable, .array, .positional => true,
         .special => false,
     };
 }
@@ -6775,6 +6836,7 @@ fn expandParameterErrorIfUnset(shell: anytype, parameter: ast.ParameterExpansion
 fn parameterDiagnosticName(parameter: ast.Parameter) []const u8 {
     return switch (parameter) {
         .variable => |name| name,
+        .array => |array| array.name,
         .positional => "positional parameter",
         .special => "special parameter",
     };
@@ -6783,6 +6845,7 @@ fn parameterDiagnosticName(parameter: ast.Parameter) []const u8 {
 fn parameterCurrentValue(shell: anytype, parameter: ast.Parameter) !?[]const u8 {
     return switch (parameter) {
         .variable => |name| parameterValue(shell, name),
+        .array => |array| arrayParameterValue(shell, array),
         .positional => |position| positionalValue(shell, position),
         .special => |special| switch (special) {
             .at => if (shell.state.positionals.len == 0) null else try joinPositionals(shell, " "),
@@ -6796,6 +6859,21 @@ fn parameterCurrentValue(shell: anytype, parameter: ast.Parameter) !?[]const u8 
                 try std.fmt.allocPrint(shell.scratchAllocator(), "{}", .{pid})
             else
                 null,
+        },
+    };
+}
+
+fn arrayParameterValue(shell: anytype, parameter: ast.ArrayParameter) !?[]const u8 {
+    const array = shell.state.getArray(parameter.name) orelse return null;
+    return switch (parameter.subscript) {
+        .index => |word| value: {
+            const index = try expandArrayIndex(shell, word);
+            break :value if (index < array.values.len) array.values[index] else null;
+        },
+        .all => |special| if (array.values.len == 0) null else switch (special) {
+            .at => try joinValues(shell, array.values, " "),
+            .star => try joinValues(shell, array.values, ifsFirstCharacter(shell)),
+            else => unreachable,
         },
     };
 }

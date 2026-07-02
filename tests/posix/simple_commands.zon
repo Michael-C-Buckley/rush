@@ -13,6 +13,16 @@
             .status = 2,
         },
         .{
+            .name = "array assignment is rejected in POSIX mode",
+            .script =
+            \\arr=(a)
+            \\printf 'bad\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status = 2,
+        },
+        .{
             .name = "colon builtin succeeds",
             .script =
             \\:

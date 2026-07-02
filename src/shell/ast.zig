@@ -106,11 +106,15 @@ pub const Assignment = struct {
     name: []const u8,
     value: Word,
     append: bool = false,
+    index: ?Word = null,
+    array_values: ?[]const Word = null,
     span: source.Span = .{},
 
     pub fn validate(self: Assignment) void {
         std.debug.assert(self.name.len != 0);
         self.value.validate();
+        if (self.index) |index| index.validate();
+        if (self.array_values) |values| for (values) |value| value.validate();
         self.span.validate();
     }
 };
@@ -169,14 +173,38 @@ pub const CommandSubstitution = struct {
 
 pub const Parameter = union(enum) {
     variable: []const u8,
+    array: ArrayParameter,
     positional: u32,
     special: SpecialParameter,
 
     pub fn validate(self: Parameter) void {
         switch (self) {
             .variable => |name| std.debug.assert(name.len != 0),
+            .array => |array| array.validate(),
             .positional, .special => {},
         }
+    }
+};
+
+pub const ArraySubscript = union(enum) {
+    index: Word,
+    all: SpecialParameter,
+
+    pub fn validate(self: ArraySubscript) void {
+        switch (self) {
+            .index => |index| index.validate(),
+            .all => |special| std.debug.assert(special == .at or special == .star),
+        }
+    }
+};
+
+pub const ArrayParameter = struct {
+    name: []const u8,
+    subscript: ArraySubscript,
+
+    pub fn validate(self: ArrayParameter) void {
+        std.debug.assert(self.name.len != 0);
+        self.subscript.validate();
     }
 };
 

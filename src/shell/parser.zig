@@ -837,8 +837,24 @@ const Parser = struct {
         const equals_index = std.mem.indexOfScalar(u8, word_token.text, '=') orelse return null;
         const append = equals_index > 0 and word_token.text[equals_index - 1] == '+';
         const name_end = if (append) equals_index - 1 else equals_index;
-        if (!isAssignmentName(word_token.text[0..name_end])) return null;
+        const array_index = arrayAssignmentIndex(word_token.text[0..name_end]);
+        const name = if (array_index) |index| word_token.text[0..index] else word_token.text[0..name_end];
+        if (!isAssignmentName(name)) return null;
         if (append and self.mode() == .posix) return error.UnexpectedToken;
+        if ((array_index != null or self.at(.left_paren)) and self.mode() == .posix) return error.UnexpectedToken;
+
+        if (array_index == null and self.at(.left_paren)) {
+            const array_values = try self.parseArrayAssignmentValues();
+            const assignment: ast.Assignment = .{
+                .name = name,
+                .value = .{ .data = .{ .literal = "" }, .span = word_token.span },
+                .append = append,
+                .array_values = array_values,
+                .span = word_token.span,
+            };
+            assignment.validate();
+            return assignment;
+        }
 
         const value_span = spanFromRelativeOffsets(
             word_token.span,
@@ -853,13 +869,42 @@ const Parser = struct {
         value.quoted = word_token.quoted;
         value.validate();
         const assignment: ast.Assignment = .{
-            .name = word_token.text[0..name_end],
+            .name = name,
             .value = value,
             .append = append,
+            .index = if (array_index) |index| try self.parseArrayAssignmentIndex(word_token, index, name_end) else null,
             .span = word_token.span,
         };
         assignment.validate();
         return assignment;
+    }
+
+    fn parseArrayAssignmentValues(self: *Parser) ParserError![]const ast.Word {
+        try self.expect(.left_paren);
+        var values: std.ArrayList(ast.Word) = .empty;
+        errdefer values.deinit(self.allocator);
+        while (true) {
+            try self.skipLinebreak();
+            if (self.eat(.right_paren) != null) break;
+            const word_token = self.eat(.word) orelse return error.UnexpectedToken;
+            try values.append(self.allocator, try self.parseWordToken(word_token));
+        }
+        return values.toOwnedSlice(self.allocator);
+    }
+
+    fn parseArrayAssignmentIndex(
+        self: *Parser,
+        word_token: token.Token,
+        open_index: usize,
+        name_end: usize,
+    ) ParserError!ast.Word {
+        std.debug.assert(open_index < name_end);
+        std.debug.assert(word_token.text[open_index] == '[');
+        std.debug.assert(word_token.text[name_end - 1] == ']');
+        const index_start = open_index + 1;
+        const index_end = name_end - 1;
+        const index_span = spanFromRelativeOffsets(word_token.span, word_token.text, index_start, index_end);
+        return self.parseWordText(word_token.text[index_start..index_end], index_span);
     }
 
     fn parseWordToken(self: *Parser, word_token: token.Token) !ast.Word {
@@ -1136,6 +1181,7 @@ const Parser = struct {
     ) ParserError!?ast.ParameterExpansion {
         const content = try self.removeBackslashNewlines(raw_content);
         if (parseBracedSimpleParameter(content)) |parameter| return .{ .parameter = parameter, .span = span };
+        if (try self.parseBracedArrayParameter(content)) |parameter| return .{ .parameter = parameter, .span = span };
         if (content.len >= 2 and content[0] == '#') {
             const length_prefix = parseBracedParameterPrefix(content[1..]) orelse return null;
             if (length_prefix.end != content.len - 1) return null;
@@ -1168,6 +1214,25 @@ const Parser = struct {
         }
 
         return null;
+    }
+
+    fn parseBracedArrayParameter(self: *Parser, content: []const u8) ParserError!?ast.Parameter {
+        if (self.mode() == .posix) return null;
+        const open_index = std.mem.indexOfScalar(u8, content, '[') orelse return null;
+        if (open_index == 0 or content[content.len - 1] != ']') return null;
+        const name = content[0..open_index];
+        if (!isAssignmentName(name)) return null;
+        const subscript = content[open_index + 1 .. content.len - 1];
+        if (std.mem.eql(u8, subscript, "@")) return .{
+            .array = .{ .name = name, .subscript = .{ .all = .at } },
+        };
+        if (std.mem.eql(u8, subscript, "*")) return .{
+            .array = .{ .name = name, .subscript = .{ .all = .star } },
+        };
+        return .{ .array = .{
+            .name = name,
+            .subscript = .{ .index = try self.parseWordText(subscript, .{}) },
+        } };
     }
 
     fn parseBashSubstring(
@@ -1716,6 +1781,13 @@ fn isAssignmentName(name: []const u8) bool {
     if (!isNameStart(name[0])) return false;
     for (name[1..]) |byte| if (!isNameContinue(byte)) return false;
     return true;
+}
+
+fn arrayAssignmentIndex(text: []const u8) ?usize {
+    const open_index = std.mem.indexOfScalar(u8, text, '[') orelse return null;
+    if (open_index == 0 or text[text.len - 1] != ']') return null;
+    if (std.mem.indexOfScalar(u8, text[open_index + 1 .. text.len - 1], '[') != null) return null;
+    return open_index;
 }
 
 fn isParameterOperator(byte: u8) bool {
