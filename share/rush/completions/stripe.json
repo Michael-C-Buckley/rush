@@ -1,0 +1,1592 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "stripe",
+    "description": "use the Stripe CLI",
+    "subcommands": [
+      {
+        "name": "login",
+        "description": "connect to a Stripe account",
+        "options": [
+          {
+            "short": "i",
+            "long": "interactive",
+            "description": "provide an API key manually",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "tool-|-tool@version",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "config",
+        "description": "manage CLI config",
+        "options": [
+          {
+            "short": "e",
+            "long": "edit",
+            "description": "edit the config file",
+            "inherit": false
+          },
+          {
+            "long": "list",
+            "description": "list configured options",
+            "inherit": false
+          },
+          {
+            "long": "set",
+            "description": "set a config option",
+            "inherit": false,
+            "value": [
+              {
+                "name": "option",
+                "description": "Config option"
+              },
+              {
+                "name": "value",
+                "description": "Value for config option"
+              }
+            ]
+          },
+          {
+            "long": "unset",
+            "description": "unset a config option",
+            "inherit": false,
+            "value": {
+              "name": "option"
+            }
+          }
+        ]
+      },
+      {
+        "name": "completion",
+        "description": "generate shell completions",
+        "options": [
+          {
+            "long": "shell",
+            "description": "set the target shell",
+            "inherit": false,
+            "value": {
+              "name": "platform",
+              "provider": {
+                "values": [
+                  "zsh",
+                  "bash"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "logs tail",
+        "description": "tail request logs",
+        "options": [
+          {
+            "long": "filter-account",
+            "description": "Filters request logs by the source and destination account",
+            "inherit": false,
+            "value": {
+              "name": "values",
+              "provider": {
+                "values": [
+                  {
+                    "value": "connect_in",
+                    "description": "Incoming Connect requests"
+                  },
+                  {
+                    "value": "connect_out",
+                    "description": "Outgoing Connect requests"
+                  },
+                  {
+                    "value": "self",
+                    "description": "Non-Connect requests"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "filter-http-method",
+            "description": "Filters request logs by HTTP method",
+            "inherit": false,
+            "value": {
+              "name": "values",
+              "provider": {
+                "values": [
+                  {
+                    "value": "GET",
+                    "description": "HTTP GET requests"
+                  },
+                  {
+                    "value": "POST",
+                    "description": "HTTP POST requests"
+                  },
+                  {
+                    "value": "DELETE",
+                    "description": "HTTP DELETE requests"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "filter-ip-address",
+            "description": "Filters request logs by IP address",
+            "inherit": false,
+            "value": {
+              "name": "values"
+            }
+          },
+          {
+            "long": "filter-request-path",
+            "description": "Filters request logs that directly match any Stripe path",
+            "inherit": false,
+            "value": {
+              "name": "values"
+            }
+          },
+          {
+            "long": "filter-request-status",
+            "description": "Filters request logs by the response status",
+            "inherit": false,
+            "value": {
+              "name": "values",
+              "provider": {
+                "values": [
+                  {
+                    "value": "SUCCEEDED",
+                    "description": "Requests that succeeded"
+                  },
+                  {
+                    "value": "FAILED",
+                    "description": "Requests that failed"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "filter-source",
+            "description": "Filters request logs by the source of each request",
+            "inherit": false,
+            "value": {
+              "name": "values",
+              "provider": {
+                "values": [
+                  {
+                    "value": "API",
+                    "description": "Requests created with the Stripe API"
+                  },
+                  {
+                    "value": "DASHBOARD",
+                    "description": "Requests created from the Dashboard"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "filter-status-code",
+            "description": "Filters request logs by HTTP status code",
+            "inherit": false,
+            "value": {
+              "name": "values"
+            }
+          },
+          {
+            "long": "filter-status-code-type",
+            "description": "Filters request logs by the type of HTTP status code",
+            "inherit": false,
+            "value": {
+              "name": "values",
+              "provider": {
+                "values": [
+                  {
+                    "value": "2XX",
+                    "description": "HTTP 2xx status codes"
+                  },
+                  {
+                    "value": "4XX",
+                    "description": "HTTP 4xx status codes"
+                  },
+                  {
+                    "value": "5XX",
+                    "description": "HTTP 5xx status codes"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "format",
+            "description": "set output format",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "JSON",
+                    "description": "Output logs in JSON format"
+                  }
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "status",
+        "description": "show Stripe status",
+        "options": [
+          {
+            "long": "format",
+            "description": "set output format",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "default",
+                    "description": "Render the status using standard output"
+                  },
+                  {
+                    "value": "JSON",
+                    "description": "Render status as JSON"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "long": "hide-spinner",
+            "description": "hide the loading spinner",
+            "inherit": false
+          },
+          {
+            "long": "poll",
+            "description": "poll for status updates",
+            "inherit": false
+          },
+          {
+            "long": "poll-rate",
+            "description": "set status poll interval",
+            "inherit": false,
+            "value": {
+              "name": "seconds"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "show all Stripe systems",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "open",
+        "description": "open Stripe shortcuts",
+        "options": [
+          {
+            "long": "list",
+            "description": "list configured options",
+            "inherit": false
+          },
+          {
+            "long": "live",
+            "description": "use live mode",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "shortcut",
+              "provider": {
+                "values": [
+                  "api",
+                  "apiref",
+                  "cliref",
+                  "dashboard",
+                  "dashboard/apikeys",
+                  "dashboard/atlas",
+                  "dashboard/balance",
+                  "dashboard/billing",
+                  "dashboard/connect",
+                  "dashboard/connect/accounts",
+                  "dashboard/connect/collected",
+                  "dashboard/connect/transfers",
+                  "dashboard/coupons",
+                  "dashboard/customers",
+                  "dashboard/developers",
+                  "dashboard/disputes",
+                  "dashboard/events",
+                  "dashboard/invoices",
+                  "dashboard/logs",
+                  "dashboard/orders",
+                  "dashboard/orders/products",
+                  "dashboard/payments",
+                  "dashboard/radar",
+                  "dashboard/radar/list",
+                  "dashboard/radar/reviews",
+                  "dashboard/radar/rules",
+                  "dashboard/settings",
+                  "dashboard/subscriptions",
+                  "dashboard/products",
+                  "dashboard/tax",
+                  "dashboard/terminal",
+                  "dashbaord/terminal/hardware/orders",
+                  "dashboard/terminal/locations",
+                  "dashboard/topups",
+                  "dashboard/transactions",
+                  "dashboard/webhooks",
+                  "docs"
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "listen",
+        "description": "listen for webhook events",
+        "options": [
+          {
+            "long": "connect-headers",
+            "description": "set Connect webhook headers",
+            "inherit": false,
+            "value": {
+              "name": "values"
+            }
+          },
+          {
+            "short": "e",
+            "long": "events",
+            "description": "set webhook event types",
+            "inherit": false,
+            "value": {
+              "name": "events-types",
+              "provider": {
+                "values": [
+                  {
+                    "value": "account.updated",
+                    "description": "Occurs whenever an account status or property has changed"
+                  },
+                  {
+                    "value": "account.application.authorized",
+                    "description": "Occurs whenever a user authorizes an application. Sent to the related application only"
+                  },
+                  {
+                    "value": "account.application.deauthorized",
+                    "description": "Occurs whenever a user deauthorizes an application. Sent to the related application only"
+                  },
+                  {
+                    "value": "account.external_account.created",
+                    "description": "Occurs whenever an external account is created"
+                  },
+                  {
+                    "value": "account.external_account.deleted",
+                    "description": "Occurs whenever an external account is deleted"
+                  },
+                  {
+                    "value": "account.external_account.updated",
+                    "description": "Occurs whenever an external account is updated"
+                  },
+                  {
+                    "value": "application_fee.created",
+                    "description": "Occurs whenever an application fee is created on a charge"
+                  },
+                  {
+                    "value": "application_fee.refunded",
+                    "description": "Occurs whenever an application fee is refunded, whether from refunding a charge or from refunding the application fee directly. This includes partial refunds"
+                  },
+                  {
+                    "value": "application_fee.refund.updated",
+                    "description": "Occurs whenever an application fee refund is updated"
+                  },
+                  {
+                    "value": "billing_portal.configuration.created",
+                    "description": "Occurs whenever a portal configuration is created"
+                  },
+                  {
+                    "value": "billing_portal.configuration.updated",
+                    "description": "Occurs whenever a portal configuration is updated"
+                  },
+                  {
+                    "value": "capability.updated",
+                    "description": "Occurs whenever a capability has new requirements or a new status"
+                  },
+                  {
+                    "value": "charge.expired",
+                    "description": "Occurs whenever an uncaptured charge expires"
+                  },
+                  {
+                    "value": "charge.pending",
+                    "description": "Occurs whenever a pending charge is created"
+                  },
+                  {
+                    "value": "charge.updated",
+                    "description": "Occurs whenever a charge description or metadata is updated"
+                  },
+                  {
+                    "value": "charge.dispute.closed",
+                    "description": "Occurs when a dispute is closed and the dispute status changes to lost, warning_closed, or won"
+                  },
+                  {
+                    "value": "charge.dispute.funds_reinstated",
+                    "description": "Occurs when funds are reinstated to your account after a dispute is closed. This includes partially refunded payments"
+                  },
+                  {
+                    "value": "charge.dispute.funds_withdrawn",
+                    "description": "Occurs when funds are removed from your account due to a dispute"
+                  },
+                  {
+                    "value": "charge.dispute.updated",
+                    "description": "Occurs when the dispute is updated (usually with evidence)"
+                  },
+                  {
+                    "value": "charge.refund.updated",
+                    "description": "Occurs whenever a refund is updated, on selected payment methods"
+                  },
+                  {
+                    "value": "checkout.session.async_payment_failed",
+                    "description": "Occurs when a payment intent using a delayed payment method fails"
+                  },
+                  {
+                    "value": "checkout.session.async_payment_succeeded",
+                    "description": "Occurs when a payment intent using a delayed payment method finally succeeds"
+                  },
+                  {
+                    "value": "coupon.created",
+                    "description": "Occurs whenever a coupon is created"
+                  },
+                  {
+                    "value": "coupon.deleted",
+                    "description": "Occurs whenever a coupon is deleted"
+                  },
+                  {
+                    "value": "coupon.updated",
+                    "description": "Occurs whenever a coupon is updated"
+                  },
+                  {
+                    "value": "credit_note.created",
+                    "description": "Occurs whenever a credit note is created"
+                  },
+                  {
+                    "value": "credit_note.updated",
+                    "description": "Occurs whenever a credit note is updated"
+                  },
+                  {
+                    "value": "credit_note.voided",
+                    "description": "Occurs whenever a credit note is voided"
+                  },
+                  {
+                    "value": "customer.discount.created",
+                    "description": "Occurs whenever a coupon is attached to a customer"
+                  },
+                  {
+                    "value": "customer.discount.deleted",
+                    "description": "Occurs whenever a coupon is removed from a customer"
+                  },
+                  {
+                    "value": "customer.discount.updated",
+                    "description": "Occurs whenever a customer is switched from one coupon to another"
+                  },
+                  {
+                    "value": "customer.source.deleted",
+                    "description": "Occurs whenever a source is removed from a customer"
+                  },
+                  {
+                    "value": "customer.source.expiring",
+                    "description": "Occurs whenever a card or source will expire at the end of the month"
+                  },
+                  {
+                    "value": "customer.subscription.pending_update_applied",
+                    "description": "Occurs whenever a customer's subscription's pending update is applied, and the subscription is updated"
+                  },
+                  {
+                    "value": "customer.subscription.pending_update_expired",
+                    "description": "Occurs whenever a customer's subscription's pending update expires before the related invoice is paid"
+                  },
+                  {
+                    "value": "customer.subscription.trial_will_end",
+                    "description": "Occurs three days before a subscription's trial period is scheduled to end, or when a trial is ended immediately (using trial_end=now)"
+                  },
+                  {
+                    "value": "customer.tax_id.created",
+                    "description": "Occurs whenever a tax ID is created for a customer"
+                  },
+                  {
+                    "value": "customer.tax_id.deleted",
+                    "description": "Occurs whenever a tax ID is deleted from a customer"
+                  },
+                  {
+                    "value": "customer.tax_id.updated",
+                    "description": "Occurs whenever a customer's tax ID is updated"
+                  },
+                  {
+                    "value": "file.created",
+                    "description": "Occurs whenever a new Stripe-generated file is available for your account"
+                  },
+                  {
+                    "value": "identity.verification_session.canceled",
+                    "description": "Occurs whenever a VerificationSession is canceled"
+                  },
+                  {
+                    "value": "identity.verification_session.created",
+                    "description": "Occurs whenever a VerificationSession is created"
+                  },
+                  {
+                    "value": "identity.verification_session.processing",
+                    "description": "Occurs whenever a VerificationSession transitions to processing"
+                  },
+                  {
+                    "value": "identity.verification_session.redacted",
+                    "description": "Occurs whenever a VerificationSession is redacted. You must create a webhook endpoint which explicitly subscribes to this event type to access it. Webhook endpo"
+                  },
+                  {
+                    "value": "identity.verification_session.requires_input",
+                    "description": "Occurs whenever a VerificationSession transitions to require user input"
+                  },
+                  {
+                    "value": "identity.verification_session.verified",
+                    "description": "Occurs whenever a VerificationSession transitions to verified"
+                  },
+                  {
+                    "value": "invoice.deleted",
+                    "description": "Occurs whenever a draft invoice is deleted"
+                  },
+                  {
+                    "value": "invoice.finalization_failed",
+                    "description": "Occurs whenever a draft invoice cannot be finalized. See the invoice\u2019s last finalization error for details"
+                  },
+                  {
+                    "value": "invoice.marked_uncollectible",
+                    "description": "Occurs whenever an invoice is marked uncollectible"
+                  },
+                  {
+                    "value": "invoice.paid",
+                    "description": "Occurs whenever an invoice payment attempt succeeds or an invoice is marked as paid out-of-band"
+                  },
+                  {
+                    "value": "invoice.payment_action_required",
+                    "description": "Occurs whenever an invoice payment attempt requires further user action to complete"
+                  },
+                  {
+                    "value": "invoice.sent",
+                    "description": "Occurs whenever an invoice email is sent out"
+                  },
+                  {
+                    "value": "invoice.upcoming",
+                    "description": "Occurs X number of days before a subscription is scheduled to create an invoice that is automatically charged\u2014where X is determined by your subscriptions settin"
+                  },
+                  {
+                    "value": "invoice.voided",
+                    "description": "Occurs whenever an invoice is voided"
+                  },
+                  {
+                    "value": "invoiceitem.created",
+                    "description": "Occurs whenever an invoice item is created"
+                  },
+                  {
+                    "value": "invoiceitem.deleted",
+                    "description": "Occurs whenever an invoice item is deleted"
+                  },
+                  {
+                    "value": "invoiceitem.updated",
+                    "description": "Occurs whenever an invoice item is updated"
+                  },
+                  {
+                    "value": "issuing_authorization.created",
+                    "description": "Occurs whenever an authorization is created"
+                  },
+                  {
+                    "value": "issuing_authorization.updated",
+                    "description": "Occurs whenever an authorization is updated"
+                  },
+                  {
+                    "value": "issuing_card.updated",
+                    "description": "Occurs whenever a card is updated"
+                  },
+                  {
+                    "value": "issuing_cardholder.updated",
+                    "description": "Occurs whenever a cardholder is updated"
+                  },
+                  {
+                    "value": "issuing_dispute.closed",
+                    "description": "Occurs whenever a dispute is won, lost or expired"
+                  },
+                  {
+                    "value": "issuing_dispute.created",
+                    "description": "Occurs whenever a dispute is created"
+                  },
+                  {
+                    "value": "issuing_dispute.funds_reinstated",
+                    "description": "Occurs whenever funds are reinstated to your account for an Issuing dispute"
+                  },
+                  {
+                    "value": "issuing_dispute.submitted",
+                    "description": "Occurs whenever a dispute is submitted"
+                  },
+                  {
+                    "value": "issuing_dispute.updated",
+                    "description": "Occurs whenever a dispute is updated"
+                  },
+                  {
+                    "value": "issuing_transaction.created",
+                    "description": "Occurs whenever an issuing transaction is created"
+                  },
+                  {
+                    "value": "issuing_transaction.updated",
+                    "description": "Occurs whenever an issuing transaction is updated"
+                  },
+                  {
+                    "value": "mandate.updated",
+                    "description": "Occurs whenever a Mandate is updated"
+                  },
+                  {
+                    "value": "order.created",
+                    "description": "Occurs whenever an order is created"
+                  },
+                  {
+                    "value": "order.payment_failed",
+                    "description": "Occurs whenever an order payment attempt fails"
+                  },
+                  {
+                    "value": "order.payment_succeeded",
+                    "description": "Occurs whenever an order payment attempt succeeds"
+                  },
+                  {
+                    "value": "order.updated",
+                    "description": "Occurs whenever an order is updated"
+                  },
+                  {
+                    "value": "order_return.created",
+                    "description": "Occurs whenever an order return is created"
+                  },
+                  {
+                    "value": "payment_intent.processing",
+                    "description": "Occurs when a PaymentIntent has started processing"
+                  },
+                  {
+                    "value": "payment_intent.requires_action",
+                    "description": "Occurs when a PaymentIntent transitions to requires_action state"
+                  },
+                  {
+                    "value": "payment_method.automatically_updated",
+                    "description": "Occurs whenever a payment method's details are automatically updated by the network"
+                  },
+                  {
+                    "value": "payment_method.detached",
+                    "description": "Occurs whenever a payment method is detached from a customer"
+                  },
+                  {
+                    "value": "payment_method.updated",
+                    "description": "Occurs whenever a payment method is updated via the PaymentMethod update API"
+                  },
+                  {
+                    "value": "payout.canceled",
+                    "description": "Occurs whenever a payout is canceled"
+                  },
+                  {
+                    "value": "payout.created",
+                    "description": "Occurs whenever a payout is created"
+                  },
+                  {
+                    "value": "payout.failed",
+                    "description": "Occurs whenever a payout attempt fails"
+                  },
+                  {
+                    "value": "payout.paid",
+                    "description": "Occurs whenever a payout is expected to be available in the destination account. If the payout fails, a payout.failed notification is also sent, at a later time"
+                  },
+                  {
+                    "value": "payout.updated",
+                    "description": "Occurs whenever a payout is updated"
+                  },
+                  {
+                    "value": "person.created",
+                    "description": "Occurs whenever a person associated with an account is created"
+                  },
+                  {
+                    "value": "person.deleted",
+                    "description": "Occurs whenever a person associated with an account is deleted"
+                  },
+                  {
+                    "value": "person.updated",
+                    "description": "Occurs whenever a person associated with an account is updated"
+                  },
+                  {
+                    "value": "plan.created",
+                    "description": "Occurs whenever a plan is created"
+                  },
+                  {
+                    "value": "plan.deleted",
+                    "description": "Occurs whenever a plan is deleted"
+                  },
+                  {
+                    "value": "plan.updated",
+                    "description": "Occurs whenever a plan is updated"
+                  },
+                  {
+                    "value": "price.created",
+                    "description": "Occurs whenever a price is created"
+                  },
+                  {
+                    "value": "price.deleted",
+                    "description": "Occurs whenever a price is deleted"
+                  },
+                  {
+                    "value": "price.updated",
+                    "description": "Occurs whenever a price is updated"
+                  },
+                  {
+                    "value": "product.created",
+                    "description": "Occurs whenever a product is created"
+                  },
+                  {
+                    "value": "product.deleted",
+                    "description": "Occurs whenever a product is deleted"
+                  },
+                  {
+                    "value": "product.updated",
+                    "description": "Occurs whenever a product is updated"
+                  },
+                  {
+                    "value": "promotion_code.created",
+                    "description": "Occurs whenever a promotion code is created"
+                  },
+                  {
+                    "value": "promotion_code.updated",
+                    "description": "Occurs whenever a promotion code is updated"
+                  },
+                  {
+                    "value": "radar.early_fraud_warning.created",
+                    "description": "Occurs whenever an early fraud warning is created"
+                  },
+                  {
+                    "value": "radar.early_fraud_warning.updated",
+                    "description": "Occurs whenever an early fraud warning is updated"
+                  },
+                  {
+                    "value": "recipient.created",
+                    "description": "Occurs whenever a recipient is created"
+                  },
+                  {
+                    "value": "recipient.deleted",
+                    "description": "Occurs whenever a recipient is deleted"
+                  },
+                  {
+                    "value": "recipient.updated",
+                    "description": "Occurs whenever a recipient is updated"
+                  },
+                  {
+                    "value": "reporting.report_run.failed",
+                    "description": "Occurs whenever a requested ReportRun failed to complete"
+                  },
+                  {
+                    "value": "reporting.report_run.succeeded",
+                    "description": "Occurs whenever a requested ReportRun completed successfully"
+                  },
+                  {
+                    "value": "reporting.report_type.updated",
+                    "description": "Occurs whenever a ReportType is updated (typically to indicate that a new day's data has come available). You must create a webhook endpoint which explicitly su"
+                  },
+                  {
+                    "value": "review.closed",
+                    "description": "Occurs whenever a review is closed. The review's reason field indicates why: approved, disputed, refunded, or refunded_as_fraud"
+                  },
+                  {
+                    "value": "review.opened",
+                    "description": "Occurs whenever a review is opened"
+                  },
+                  {
+                    "value": "setup_intent.requires_action",
+                    "description": "Occurs when a SetupIntent is in requires_action state"
+                  },
+                  {
+                    "value": "sigma.scheduled_query_run.created",
+                    "description": "Occurs whenever a Sigma scheduled query run finishes"
+                  },
+                  {
+                    "value": "sku.created",
+                    "description": "Occurs whenever a SKU is created"
+                  },
+                  {
+                    "value": "sku.deleted",
+                    "description": "Occurs whenever a SKU is deleted"
+                  },
+                  {
+                    "value": "sku.updated",
+                    "description": "Occurs whenever a SKU is updated"
+                  },
+                  {
+                    "value": "source.canceled",
+                    "description": "Occurs whenever a source is canceled"
+                  },
+                  {
+                    "value": "source.chargeable",
+                    "description": "Occurs whenever a source transitions to chargeable"
+                  },
+                  {
+                    "value": "source.failed",
+                    "description": "Occurs whenever a source fails"
+                  },
+                  {
+                    "value": "source.mandate_notification",
+                    "description": "Occurs whenever a source mandate notification method is set to manual"
+                  },
+                  {
+                    "value": "source.refund_attributes_required",
+                    "description": "Occurs whenever the refund attributes are required on a receiver source to process a refund or a mispayment"
+                  },
+                  {
+                    "value": "source.transaction.created",
+                    "description": "Occurs whenever a source transaction is created"
+                  },
+                  {
+                    "value": "source.transaction.updated",
+                    "description": "Occurs whenever a source transaction is updated"
+                  },
+                  {
+                    "value": "subscription_schedule.aborted",
+                    "description": "Occurs whenever a subscription schedule is canceled due to the underlying subscription being canceled because of delinquency"
+                  },
+                  {
+                    "value": "subscription_schedule.canceled",
+                    "description": "Occurs whenever a subscription schedule is canceled"
+                  },
+                  {
+                    "value": "subscription_schedule.completed",
+                    "description": "Occurs whenever a new subscription schedule is completed"
+                  },
+                  {
+                    "value": "subscription_schedule.created",
+                    "description": "Occurs whenever a new subscription schedule is created"
+                  },
+                  {
+                    "value": "subscription_schedule.expiring",
+                    "description": "Occurs 7 days before a subscription schedule will expire"
+                  },
+                  {
+                    "value": "subscription_schedule.released",
+                    "description": "Occurs whenever a new subscription schedule is released"
+                  },
+                  {
+                    "value": "subscription_schedule.updated",
+                    "description": "Occurs whenever a subscription schedule is updated"
+                  },
+                  {
+                    "value": "tax_rate.created",
+                    "description": "Occurs whenever a new tax rate is created"
+                  },
+                  {
+                    "value": "tax_rate.updated",
+                    "description": "Occurs whenever a tax rate is updated"
+                  },
+                  {
+                    "value": "topup.canceled",
+                    "description": "Occurs whenever a top-up is canceled"
+                  },
+                  {
+                    "value": "topup.created",
+                    "description": "Occurs whenever a top-up is created"
+                  },
+                  {
+                    "value": "topup.failed",
+                    "description": "Occurs whenever a top-up fails"
+                  },
+                  {
+                    "value": "topup.reversed",
+                    "description": "Occurs whenever a top-up is reversed"
+                  },
+                  {
+                    "value": "topup.succeeded",
+                    "description": "Occurs whenever a top-up succeeds"
+                  },
+                  {
+                    "value": "transfer.created",
+                    "description": "Occurs whenever a transfer is created"
+                  },
+                  {
+                    "value": "transfer.failed",
+                    "description": "Occurs whenever a transfer failed"
+                  },
+                  {
+                    "value": "transfer.paid",
+                    "description": "Occurs after a transfer is paid. For Instant Payouts, the event will typically be sent within 30 minutes"
+                  },
+                  {
+                    "value": "transfer.reversed",
+                    "description": "Occurs whenever a transfer is reversed, including partial reversals"
+                  },
+                  {
+                    "value": "transfer.updated",
+                    "description": "Occurs whenever a transfer's description or metadata is updated"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "c",
+            "long": "forward-connect-to",
+            "description": "set Connect forward URL",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "short": "f",
+            "long": "forward-to",
+            "description": "set forward URL",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "short": "H",
+            "long": "headers",
+            "description": "set custom forward headers",
+            "inherit": false,
+            "value": {
+              "name": "values"
+            }
+          },
+          {
+            "short": "l",
+            "long": "latest",
+            "description": "use latest API version events",
+            "inherit": false
+          },
+          {
+            "long": "live",
+            "description": "use live mode",
+            "inherit": false
+          },
+          {
+            "short": "a",
+            "long": "load-from-webhooks-api",
+            "description": "load events from webhooks API",
+            "inherit": false
+          },
+          {
+            "short": "j",
+            "long": "print-json",
+            "description": "print JSON objects",
+            "inherit": false
+          },
+          {
+            "long": "skip-verify",
+            "description": "skip HTTPS certificate verification",
+            "priority": -10,
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "trigger",
+        "description": "trigger webhook events",
+        "options": [
+          {
+            "long": "stripe-account",
+            "description": "Sets a header identifying the connected account",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "event",
+              "description": "Webhook events",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "events resend",
+        "description": "resend an event",
+        "options": [
+          {
+            "long": "account",
+            "description": "set the Stripe account",
+            "inherit": false,
+            "value": {
+              "name": "account-id"
+            }
+          },
+          {
+            "long": "param",
+            "description": "send extra API request data",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "description": "set the webhook endpoint ID",
+            "inherit": false,
+            "value": {
+              "name": "endpoint-id"
+            },
+            "long": "webhook-endpoint"
+          },
+          {
+            "short": "s",
+            "long": "show-headers",
+            "description": "show response headers",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "confirm",
+            "description": "skip confirmation prompts",
+            "priority": -10,
+            "inherit": false
+          },
+          {
+            "long": "dark-style",
+            "description": "use a darker color scheme",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "data",
+            "description": "send additional request data",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "e",
+            "long": "expand",
+            "description": "expand response attributes",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "i",
+            "long": "idempotency",
+            "description": "set an idempotency key",
+            "inherit": false,
+            "value": {
+              "name": "key"
+            }
+          },
+          {
+            "long": "live",
+            "description": "use live mode",
+            "inherit": false
+          },
+          {
+            "long": "stripe-account",
+            "description": "set the Stripe account",
+            "inherit": false,
+            "value": {
+              "name": "account-id"
+            }
+          },
+          {
+            "short": "v",
+            "long": "stripe-version",
+            "description": "set the Stripe API version",
+            "inherit": false,
+            "value": {
+              "name": "version"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "event-id",
+              "description": "The ID of the event to resend",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "get",
+        "description": "make GET API requests",
+        "options": [
+          {
+            "short": "b",
+            "long": "ending-before",
+            "description": "Retrieves the previous page in the list",
+            "inherit": false,
+            "value": {
+              "name": "object-id"
+            }
+          },
+          {
+            "short": "l",
+            "long": "limit",
+            "description": "Number of objects to return",
+            "inherit": false,
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "short": "a",
+            "long": "starting-after",
+            "description": "Retrieves the next page in the list",
+            "inherit": false,
+            "value": {
+              "name": "object-id"
+            }
+          },
+          {
+            "short": "s",
+            "long": "show-headers",
+            "description": "show response headers",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "confirm",
+            "description": "skip confirmation prompts",
+            "priority": -10,
+            "inherit": false
+          },
+          {
+            "long": "dark-style",
+            "description": "use a darker color scheme",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "data",
+            "description": "send additional request data",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "e",
+            "long": "expand",
+            "description": "expand response attributes",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "i",
+            "long": "idempotency",
+            "description": "set an idempotency key",
+            "inherit": false,
+            "value": {
+              "name": "key"
+            }
+          },
+          {
+            "long": "live",
+            "description": "use live mode",
+            "inherit": false
+          },
+          {
+            "long": "stripe-account",
+            "description": "set the Stripe account",
+            "inherit": false,
+            "value": {
+              "name": "account-id"
+            }
+          },
+          {
+            "short": "v",
+            "long": "stripe-version",
+            "description": "set the Stripe API version",
+            "inherit": false,
+            "value": {
+              "name": "version"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "id-or-path",
+              "description": "ID or URL path of the API object to retrieve",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "post",
+        "description": "make POST API requests",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "URL path of the API object to create or update",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "s",
+            "long": "show-headers",
+            "description": "show response headers",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "confirm",
+            "description": "skip confirmation prompts",
+            "priority": -10,
+            "inherit": false
+          },
+          {
+            "long": "dark-style",
+            "description": "use a darker color scheme",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "data",
+            "description": "send additional request data",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "e",
+            "long": "expand",
+            "description": "expand response attributes",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "i",
+            "long": "idempotency",
+            "description": "set an idempotency key",
+            "inherit": false,
+            "value": {
+              "name": "key"
+            }
+          },
+          {
+            "long": "live",
+            "description": "use live mode",
+            "inherit": false
+          },
+          {
+            "long": "stripe-account",
+            "description": "set the Stripe account",
+            "inherit": false,
+            "value": {
+              "name": "account-id"
+            }
+          },
+          {
+            "short": "v",
+            "long": "stripe-version",
+            "description": "set the Stripe API version",
+            "inherit": false,
+            "value": {
+              "name": "version"
+            }
+          }
+        ]
+      },
+      {
+        "name": "delete",
+        "description": "make DELETE API requests",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "URL path of the API object to delete",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "s",
+            "long": "show-headers",
+            "description": "show response headers",
+            "inherit": false
+          },
+          {
+            "short": "c",
+            "long": "confirm",
+            "description": "skip confirmation prompts",
+            "priority": -10,
+            "inherit": false
+          },
+          {
+            "long": "dark-style",
+            "description": "use a darker color scheme",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "data",
+            "description": "send additional request data",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "e",
+            "long": "expand",
+            "description": "expand response attributes",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "i",
+            "long": "idempotency",
+            "description": "set an idempotency key",
+            "inherit": false,
+            "value": {
+              "name": "key"
+            }
+          },
+          {
+            "long": "live",
+            "description": "use live mode",
+            "inherit": false
+          },
+          {
+            "long": "stripe-account",
+            "description": "set the Stripe account",
+            "inherit": false,
+            "value": {
+              "name": "account-id"
+            }
+          },
+          {
+            "short": "v",
+            "long": "stripe-version",
+            "description": "set the Stripe API version",
+            "inherit": false,
+            "value": {
+              "name": "version"
+            }
+          }
+        ]
+      },
+      {
+        "name": "samples",
+        "description": "manage Stripe samples",
+        "subcommands": [
+          {
+            "name": "create",
+            "options": [
+              {
+                "long": "force-refresh",
+                "description": "Force a refresh of the chaced list of Stripe Samples",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "sample",
+                  "description": "Name of the sample used to create a local copy",
+                  "index": 0
+                },
+                {
+                  "name": "path",
+                  "description": "Destination path for the created sample",
+                  "index": 1,
+                  "provider": "builtin.directories"
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "Lists available Stripe Samples",
+            "options": [
+              {
+                "long": "force-refresh",
+                "description": "Force a refresh of the chaced list of Stripe Samples",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "serve",
+        "description": "serve static files",
+        "options": [
+          {
+            "long": "port",
+            "description": "set server port",
+            "inherit": false,
+            "value": {
+              "name": "port-number"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "base-path",
+              "description": "directory to serve",
+              "index": 0,
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "terminal quickstart",
+        "description": "start Stripe Terminal",
+        "options": [
+          {
+            "long": "api-key",
+            "inherit": false,
+            "value": {
+              "name": "api-key"
+            },
+            "description": ""
+          }
+        ]
+      },
+      {
+        "name": "logout",
+        "description": "remove credentials",
+        "options": [
+          {
+            "short": "a",
+            "long": "all",
+            "description": "remove all credentials",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "feedback",
+        "description": "show feedback information"
+      },
+      {
+        "name": "help",
+        "description": "show command help",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "version",
+        "description": "show version information",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "options": [
+      {
+        "long": "api-key",
+        "description": "set the API key",
+        "value": {
+          "name": "api-key"
+        }
+      },
+      {
+        "long": "color",
+        "description": "set color output",
+        "value": {
+          "name": "setting",
+          "provider": {
+            "values": [
+              "on",
+              "off",
+              "auto"
+            ]
+          }
+        }
+      },
+      {
+        "long": "config",
+        "description": "set the config file",
+        "value": {
+          "name": "config-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "device-name",
+        "description": "set the device name",
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help"
+      },
+      {
+        "long": "log-level",
+        "description": "set the log level",
+        "value": {
+          "name": "level",
+          "provider": {
+            "values": [
+              "info",
+              "debug",
+              "warn",
+              "error"
+            ]
+          }
+        }
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
