@@ -1,0 +1,12 @@
+__rush_complete_kubens_namespaces() {
+  current=$(kubens -c 2>/dev/null || true)
+  rush_complete candidate - --kind plain --description "previous namespace"
+  kubens 2>/dev/null | while IFS= read -r namespace; do
+    test -n "$namespace" || continue
+    if test "$namespace" = "$current"; then
+      rush_complete candidate "$namespace" --kind plain --description "current namespace"
+    else
+      rush_complete candidate "$namespace" --kind plain --description "Kubernetes namespace"
+    fi
+  done
+}

@@ -1,0 +1,35 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "kubens",
+    "description": "switch between Kubernetes namespaces",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for kubens",
+        "inherit": false
+      },
+      {
+        "long": "current",
+        "short": "c",
+        "description": "show current namespace",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "namespace",
+          "index": 0,
+          "description": "namespace to switch to",
+          "required": false,
+          "provider": {
+            "function": "__rush_complete_kubens_namespaces"
+          }
+        }
+      ]
+    }
+  }
+}
