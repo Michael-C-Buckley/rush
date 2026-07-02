@@ -1,0 +1,329 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "qodana",
+    "description": "run Qodana inspections",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help page for command",
+        "inherit": true
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "version for Qodana",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "init",
+        "description": "configure project for Qodana",
+        "options": [
+          {
+            "short": "i",
+            "long": "project-dir",
+            "description": "root directory of the project to configure (default \".\")",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          }
+        ]
+      },
+      {
+        "name": "scan",
+        "description": "scan a project with Qodana",
+        "options": [
+          {
+            "short": "a",
+            "long": "analysis-id",
+            "description": "unique report identifier (GUID) to be used by Qodana Cloud",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "b",
+            "long": "baseline",
+            "description": "provide the path to an existing SARIF report to be used in the baseline state calculation",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "baseline-include-absent",
+            "description": "include in the output report the results from the baseline run that are absent in the current run",
+            "inherit": false
+          },
+          {
+            "long": "cache-dir",
+            "description": "override cache directory (default <userCacheDir>/JetBrains/<linter>/cache)",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "c",
+            "long": "changes",
+            "description": "override the docker image to be used for the analysis",
+            "inherit": false
+          },
+          {
+            "long": "clear-cache",
+            "description": "clear the local Qodana cache before running the analysis",
+            "inherit": false
+          },
+          {
+            "long": "disable-sanity",
+            "description": "skip running the inspections configured by the sanity profile",
+            "inherit": false
+          },
+          {
+            "short": "e",
+            "long": "env",
+            "description": "define additional environment variables for the Qodana container (you can use the flag multiple times). CLI is not reading full host environment variables and d",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "fail-threshold",
+            "description": "set the number of problems that will serve as a quality gate. If this number is reached, the inspection run is terminated with a non-zero exit code",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "l",
+            "long": "linter",
+            "description": "override linter to use",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "port",
+            "description": "port to serve the report on (default 8080)",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "print-problems",
+            "description": "print all found problems by Qodana in the CLI output",
+            "inherit": false
+          },
+          {
+            "short": "n",
+            "long": "profile-name",
+            "description": "profile name defined in the project",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "p",
+            "long": "profile-path",
+            "description": "path to the profile file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "i",
+            "long": "project-dir",
+            "description": "root directory of the inspected project (default \".\")",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "property",
+            "description": "set a JVM property to be used while running Qodana using the --property property.name=value1,value2,...,valueN notation",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "o",
+            "long": "results-dir",
+            "description": "override directory to save Qodana inspection results to (default <userCacheDir>/JetBrains/<linter>/results)",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "run-promo",
+            "description": "set to 'true' to have the application run the inspections configured by the promo profile; set to 'false' otherwise (default: 'true' only if Qodana is executed ",
+            "inherit": false,
+            "value": {
+              "name": "bool",
+              "provider": {
+                "values": [
+                  "true",
+                  "false"
+                ]
+              }
+            }
+          },
+          {
+            "short": "s",
+            "long": "save-report",
+            "description": "generate HTML report (default true)",
+            "inherit": false
+          },
+          {
+            "long": "script",
+            "description": "override the run scenario (default \"default\")",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "send-report",
+            "description": "send the inspection report to Qodana Cloud, requires the '--token' option to be specified",
+            "inherit": false
+          },
+          {
+            "short": "w",
+            "long": "show-report",
+            "description": "serve HTML report on port",
+            "inherit": false
+          },
+          {
+            "long": "skip-pull",
+            "description": "skip pulling the latest Qodana container",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "source-directory",
+            "description": "directory inside the project-dir directory must be inspected. If not specified, the whole project is inspected",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "stub-profile",
+            "description": "absolute path to the fallback profile file. This option is applied in case the profile was not specified using any available options",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "u",
+            "long": "user",
+            "description": "user to run Qodana container as. Please specify user id \u2013 '$UID' or user id and group id $(id -u):$(id -g). Use 'root' to run as the root user (default: the cur",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "v",
+            "long": "volume",
+            "description": "define additional volumes for the Qodana container (you can use the flag multiple times)",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          }
+        ]
+      },
+      {
+        "name": "show",
+        "description": "show Qodana report",
+        "options": [
+          {
+            "short": "d",
+            "long": "dir-only",
+            "description": "open report directory only, don't serve it",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "long": "port",
+            "description": "specify port to serve report at (default 8080)",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "short": "i",
+            "long": "project-dir",
+            "description": "root directory of the inspected project (default \".\")",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "short": "r",
+            "long": "report-dir",
+            "description": "specify HTML report path (the one with index.html inside) (default <userCacheDir>/JetBrains/<linter>/results/report)",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          }
+        ]
+      },
+      {
+        "name": "view",
+        "description": "view SARIF files in CLI",
+        "options": [
+          {
+            "short": "f",
+            "long": "sarif-file",
+            "description": "path to the SARIF file (default \"./qodana.sarif.json\")",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
