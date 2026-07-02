@@ -1,0 +1,38 @@
+__rush_complete_snaplet_snapshot_lines() {
+  command -v snaplet >/dev/null 2>&1 || return
+  snaplet snapshot ls 2>/dev/null | sed -E 's/\x1b\[[0-9;]*[A-Za-z]//g' | awk '
+    NR <= 2 { next }
+    /^$/ || /^Total/ { next }
+    { print }
+  '
+}
+
+__rush_complete_snaplet_snapshots() {
+  __rush_complete_snaplet_snapshot_lines | while IFS= read -r line; do
+    set -- $line
+    name=$1
+    status=$2
+    test -n "$name" && rush_complete candidate "$name" --kind plain --description "snapshot $status"
+  done
+}
+
+__rush_complete_snaplet_cloud_snapshots() {
+  __rush_complete_snaplet_snapshot_lines | while IFS= read -r line; do
+    case "$line" in *☁*|*CLOUD*) ;; *) continue ;; esac
+    set -- $line
+    name=$1
+    status=$2
+    case "$status" in *SUCCESS*) test -n "$name" && rush_complete candidate "$name" --kind plain --description 'cloud snapshot' ;; esac
+  done
+}
+
+__rush_complete_snaplet_databases() {
+  command -v snaplet >/dev/null 2>&1 || return
+  snaplet database ls 2>/dev/null | sed -E 's/\x1b\[[0-9;]*[A-Za-z]//g' | awk '
+    NR <= 2 { next }
+    /^$/ { next }
+    { print $1 }
+  ' | while IFS= read -r database; do
+    test -n "$database" && rush_complete candidate "$database" --kind plain --description 'preview database'
+  done
+}

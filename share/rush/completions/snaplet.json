@@ -1,0 +1,783 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "snaplet",
+    "description": "manage PostgreSQL snapshots and preview databases",
+    "providers": {
+      "snaplet.snapshots": {
+        "function": "__rush_complete_snaplet_snapshots"
+      },
+      "snaplet.cloud-snapshots": {
+        "function": "__rush_complete_snaplet_cloud_snapshots"
+      },
+      "snaplet.databases": {
+        "function": "__rush_complete_snaplet_databases"
+      },
+      "snaplet.config-types": {
+        "values": [
+          {
+            "value": "typedefs"
+          },
+          {
+            "value": "transform"
+          },
+          {
+            "value": "keys"
+          },
+          {
+            "value": "seed"
+          }
+        ]
+      },
+      "snaplet.environments": {
+        "values": [
+          {
+            "value": "cloud"
+          },
+          {
+            "value": "local"
+          }
+        ]
+      },
+      "snaplet.transform-modes": {
+        "values": [
+          {
+            "value": "strict"
+          },
+          {
+            "value": "unsafe"
+          },
+          {
+            "value": "auto"
+          }
+        ]
+      },
+      "snaplet.regions": {
+        "values": [
+          {
+            "value": "ams"
+          },
+          {
+            "value": "cdg"
+          },
+          {
+            "value": "den"
+          },
+          {
+            "value": "dfw"
+          },
+          {
+            "value": "ewr"
+          },
+          {
+            "value": "fra"
+          },
+          {
+            "value": "gru"
+          },
+          {
+            "value": "hkg"
+          },
+          {
+            "value": "iad"
+          },
+          {
+            "value": "jnb"
+          },
+          {
+            "value": "lax"
+          },
+          {
+            "value": "lhr"
+          },
+          {
+            "value": "maa"
+          },
+          {
+            "value": "mad"
+          },
+          {
+            "value": "mia"
+          },
+          {
+            "value": "nrt"
+          },
+          {
+            "value": "ord"
+          },
+          {
+            "value": "otp"
+          },
+          {
+            "value": "scl"
+          },
+          {
+            "value": "sea"
+          },
+          {
+            "value": "sin"
+          },
+          {
+            "value": "sjc"
+          },
+          {
+            "value": "syd"
+          },
+          {
+            "value": "waw"
+          },
+          {
+            "value": "yul"
+          },
+          {
+            "value": "yyz"
+          }
+        ]
+      }
+    },
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": true
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "auth",
+        "description": "manage authentication",
+        "subcommands": [
+          {
+            "name": "login",
+            "aliases": [
+              "setup"
+            ],
+            "description": "log in with an access token",
+            "arguments": {
+              "states": [
+                {
+                  "name": "access-token",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "config",
+        "description": "manage configuration",
+        "subcommands": [
+          {
+            "name": "generate",
+            "description": "generate transform files",
+            "options": [
+              {
+                "long": "dry-run",
+                "description": "show changes without writing files"
+              },
+              {
+                "long": "type",
+                "description": "set config type",
+                "short": "t",
+                "value": {
+                  "name": "type",
+                  "provider": "snaplet.config-types"
+                }
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "aliases": [
+              "ls"
+            ],
+            "description": "list config variables"
+          },
+          {
+            "name": "pull",
+            "description": "pull cloud config",
+            "options": [
+              {
+                "long": "type",
+                "description": "set config type",
+                "short": "t",
+                "value": {
+                  "name": "type",
+                  "provider": "snaplet.config-types"
+                }
+              }
+            ]
+          },
+          {
+            "name": "push",
+            "description": "push local config",
+            "options": [
+              {
+                "long": "type",
+                "description": "set config type",
+                "short": "t",
+                "value": {
+                  "name": "type",
+                  "provider": "snaplet.config-types"
+                }
+              }
+            ]
+          },
+          {
+            "name": "setup",
+            "description": "setup local configuration",
+            "options": [
+              {
+                "long": "generate",
+                "description": "generate config files"
+              },
+              {
+                "long": "no-generate",
+                "description": "do not generate config files"
+              },
+              {
+                "long": "yes",
+                "description": "accept prompts"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "targetDatabaseUrl",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "database",
+        "aliases": [
+          "db"
+        ],
+        "description": "manage preview databases",
+        "subcommands": [
+          {
+            "name": "cache",
+            "aliases": [
+              "ca"
+            ],
+            "description": "cache a cloud snapshot",
+            "arguments": {
+              "states": [
+                {
+                  "name": "snapshot",
+                  "index": 0,
+                  "provider": "snaplet.cloud-snapshots"
+                }
+              ]
+            },
+            "options": [
+              {
+                "long": "tags",
+                "description": "set snapshot tags",
+                "value": {
+                  "name": "tags"
+                }
+              },
+              {
+                "long": "latest",
+                "description": "use latest snapshot"
+              },
+              {
+                "long": "clear",
+                "description": "clear cached snapshot"
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "aliases": [
+              "c"
+            ],
+            "description": "create a preview database",
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                },
+                {
+                  "name": "snapshot",
+                  "index": 1,
+                  "provider": "snaplet.cloud-snapshots"
+                }
+              ]
+            },
+            "options": [
+              {
+                "long": "tags",
+                "description": "set snapshot tags",
+                "value": {
+                  "name": "tags"
+                }
+              },
+              {
+                "long": "latest",
+                "description": "use latest snapshot"
+              },
+              {
+                "long": "git",
+                "description": "infer database name from current git branch"
+              },
+              {
+                "long": "no-snapshot",
+                "description": "create empty database"
+              },
+              {
+                "long": "force",
+                "description": "recreate existing database"
+              }
+            ]
+          },
+          {
+            "name": "drop",
+            "aliases": [
+              "delete",
+              "d"
+            ],
+            "description": "drop a preview database",
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0,
+                  "provider": "snaplet.databases"
+                }
+              ]
+            },
+            "options": [
+              {
+                "long": "git",
+                "description": "infer database name from current git branch"
+              }
+            ]
+          },
+          {
+            "name": "url",
+            "aliases": [
+              "u"
+            ],
+            "description": "show a preview database URL",
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0,
+                  "provider": "snaplet.databases"
+                }
+              ]
+            },
+            "options": [
+              {
+                "long": "git",
+                "description": "infer database name from current git branch"
+              }
+            ]
+          },
+          {
+            "name": "destroy",
+            "aliases": [
+              "ds"
+            ],
+            "description": "destroy the database server",
+            "options": [
+              {
+                "long": "yes",
+                "description": "accept prompts"
+              }
+            ]
+          },
+          {
+            "name": "setup",
+            "aliases": [
+              "s"
+            ],
+            "description": "create a preview database server",
+            "options": [
+              {
+                "long": "region",
+                "description": "set Fly.io region",
+                "value": {
+                  "name": "region",
+                  "provider": "snaplet.regions"
+                }
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "aliases": [
+              "ls"
+            ],
+            "description": "list preview databases"
+          }
+        ]
+      },
+      {
+        "name": "discord",
+        "aliases": [
+          "chat"
+        ],
+        "description": "open Snaplet Discord"
+      },
+      {
+        "name": "documentation",
+        "aliases": [
+          "docs"
+        ],
+        "description": "open Snaplet documentation"
+      },
+      {
+        "name": "project",
+        "description": "manage projects",
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create a project",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "long": "team",
+                "description": "set team name",
+                "short": "t",
+                "value": {
+                  "name": "team"
+                }
+              }
+            ]
+          },
+          {
+            "name": "invite",
+            "description": "create a project invite URL"
+          },
+          {
+            "name": "setup",
+            "description": "set up a project",
+            "arguments": {
+              "states": [
+                {
+                  "name": "project-id",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "proxy",
+        "aliases": [
+          "dev"
+        ],
+        "description": "start a database proxy"
+      },
+      {
+        "name": "seed",
+        "aliases": [
+          "gen",
+          "generate"
+        ],
+        "description": "populate an empty database",
+        "options": [
+          {
+            "short": "i",
+            "long": "interactive",
+            "description": "show interactive prompts"
+          },
+          {
+            "long": "entriesPerTable",
+            "description": "set entries per table",
+            "short": "n",
+            "value": {
+              "name": "number"
+            }
+          }
+        ]
+      },
+      {
+        "name": "snapshot",
+        "aliases": [
+          "ss"
+        ],
+        "description": "manage snapshots",
+        "subcommands": [
+          {
+            "name": "capture",
+            "aliases": [
+              "c"
+            ],
+            "description": "capture a snapshot",
+            "arguments": {
+              "states": [
+                {
+                  "name": "destination",
+                  "index": 0,
+                  "provider": "builtin.directories"
+                }
+              ]
+            },
+            "options": [
+              {
+                "long": "env",
+                "description": "set environment",
+                "value": {
+                  "name": "environment",
+                  "provider": "snaplet.environments"
+                }
+              },
+              {
+                "long": "message",
+                "description": "set snapshot message",
+                "short": "m",
+                "value": {
+                  "name": "message"
+                }
+              },
+              {
+                "long": "subset-path",
+                "description": "set subset config file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "tags",
+                "description": "set snapshot tags",
+                "value": {
+                  "name": "tags"
+                }
+              },
+              {
+                "long": "transform-mode",
+                "description": "set transform mode",
+                "short": "t",
+                "value": {
+                  "name": "mode",
+                  "provider": "snaplet.transform-modes"
+                }
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "description": "create cloud snapshot",
+            "options": [
+              {
+                "long": "json",
+                "description": "output JSON"
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "aliases": [
+              "ls"
+            ],
+            "description": "list snapshots",
+            "options": [
+              {
+                "long": "tags",
+                "description": "set snapshot tags",
+                "value": {
+                  "name": "tags"
+                }
+              }
+            ]
+          },
+          {
+            "name": "restore",
+            "aliases": [
+              "r"
+            ],
+            "description": "restore a snapshot",
+            "arguments": {
+              "states": [
+                {
+                  "name": "snapshot",
+                  "index": 0,
+                  "provider": "snaplet.snapshots"
+                }
+              ]
+            },
+            "options": [
+              {
+                "long": "no-data",
+                "description": "skip data restore"
+              },
+              {
+                "long": "no-schema",
+                "description": "skip schema restore"
+              },
+              {
+                "long": "no-reset",
+                "description": "do not reset database"
+              },
+              {
+                "long": "tags",
+                "description": "set snapshot tags",
+                "value": {
+                  "name": "tags"
+                }
+              },
+              {
+                "long": "latest",
+                "description": "use latest snapshot"
+              },
+              {
+                "long": "yes",
+                "description": "accept prompts"
+              },
+              {
+                "long": "schema-only",
+                "description": "restore schema only"
+              },
+              {
+                "long": "data-only",
+                "description": "restore data only"
+              }
+            ]
+          },
+          {
+            "name": "share",
+            "aliases": [
+              "upload"
+            ],
+            "description": "share a snapshot",
+            "arguments": {
+              "states": [
+                {
+                  "name": "snapshot",
+                  "index": 0,
+                  "provider": "snaplet.snapshots"
+                }
+              ]
+            },
+            "options": [
+              {
+                "long": "no-encrypt",
+                "description": "disable encryption"
+              },
+              {
+                "long": "tags",
+                "description": "set snapshot tags",
+                "value": {
+                  "name": "tags"
+                }
+              },
+              {
+                "long": "latest",
+                "description": "use latest snapshot"
+              }
+            ]
+          },
+          {
+            "name": "sample",
+            "aliases": [
+              "s"
+            ],
+            "description": "create a database sample",
+            "arguments": {
+              "states": [
+                {
+                  "name": "destination",
+                  "index": 0,
+                  "provider": "builtin.directories"
+                }
+              ]
+            },
+            "options": [
+              {
+                "long": "env",
+                "description": "set environment",
+                "value": {
+                  "name": "environment",
+                  "provider": "snaplet.environments"
+                }
+              },
+              {
+                "long": "sample-config-path",
+                "description": "set sample config file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "f",
+                "long": "force",
+                "description": "overwrite existing sample"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "subset",
+        "aliases": [
+          "subsetting"
+        ],
+        "description": "manage subsetting",
+        "subcommands": [
+          {
+            "name": "setup",
+            "aliases": [
+              "configure",
+              "config"
+            ],
+            "description": "configure subsetting"
+          }
+        ]
+      },
+      {
+        "name": "team",
+        "description": "manage teams",
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create a team",
+            "arguments": {
+              "states": [
+                {
+                  "name": "team",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "upgrade",
+        "description": "upgrade snaplet"
+      },
+      {
+        "name": "completion",
+        "description": "generate completion script"
+      }
+    ]
+  }
+}
