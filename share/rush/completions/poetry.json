@@ -1,0 +1,3270 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "poetry",
+    "description": "manage Python packages and projects",
+    "subcommands": [
+      {
+        "name": "about",
+        "description": "shows information about poetry",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          }
+        ]
+      },
+      {
+        "name": "add",
+        "description": "adds a new dependency to pyproject.toml",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "long": "group",
+            "description": "the group to add the dependency to",
+            "inherit": false
+          },
+          {
+            "long": "dev",
+            "description": "add as a development dependency. (Deprecated) Use --group=dev instead",
+            "inherit": false
+          },
+          {
+            "long": "editable",
+            "description": "add vcs/path dependencies as editable",
+            "inherit": false
+          },
+          {
+            "long": "extras",
+            "description": "extras to activate for the dependency",
+            "inherit": false
+          },
+          {
+            "long": "optional",
+            "description": "add as an optional dependency",
+            "inherit": false
+          },
+          {
+            "long": "python",
+            "description": "python version for which the dependency must be installed",
+            "inherit": false
+          },
+          {
+            "long": "platform",
+            "description": "platforms for which the dependency must be installed",
+            "inherit": false
+          },
+          {
+            "long": "source",
+            "description": "name of the source to use to install the package",
+            "inherit": false
+          },
+          {
+            "long": "allow-prereleases",
+            "description": "accept prereleases",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "output the operations but do not execute anything (implicitly enables --verbose)",
+            "inherit": false
+          },
+          {
+            "long": "lock",
+            "description": "do not perform operations (only update the lockfile)",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "the packages to add",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "build",
+        "description": "builds a package, as a tarball and a wheel by default",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "long": "format",
+            "description": "limit the format to either sdist or wheel",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "cache",
+        "description": "the cache command regroups sub commands to interact with poetry's cache",
+        "subcommands": [
+          {
+            "name": "clear",
+            "description": "clears a poetry cache by name",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "increase verbosity",
+                "inherit": false,
+                "long": "verbose",
+                "short": "v"
+              },
+              {
+                "description": "show version",
+                "inherit": false,
+                "short": "V"
+              },
+              {
+                "description": "force ANSI output",
+                "inherit": false,
+                "long": "ansi"
+              },
+              {
+                "description": "disable ANSI output",
+                "inherit": false,
+                "long": "no-ansi"
+              },
+              {
+                "description": "do not ask questions",
+                "inherit": false,
+                "long": "no-interaction",
+                "short": "n"
+              },
+              {
+                "description": "disable plugins",
+                "inherit": false,
+                "long": "no-plugins"
+              },
+              {
+                "description": "disable source caches",
+                "inherit": false,
+                "long": "no-cache"
+              },
+              {
+                "description": "set working directory",
+                "inherit": false,
+                "long": "directory",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "suppress output",
+                "inherit": false,
+                "long": "quiet",
+                "short": "q"
+              },
+              {
+                "long": "all",
+                "description": "clear all entries in the cache",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "cache",
+                  "description": "the name of the cache to clear",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list poetry's caches",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "increase verbosity",
+                "inherit": false,
+                "long": "verbose",
+                "short": "v"
+              },
+              {
+                "description": "show version",
+                "inherit": false,
+                "short": "V"
+              },
+              {
+                "description": "force ANSI output",
+                "inherit": false,
+                "long": "ansi"
+              },
+              {
+                "description": "disable ANSI output",
+                "inherit": false,
+                "long": "no-ansi"
+              },
+              {
+                "description": "do not ask questions",
+                "inherit": false,
+                "long": "no-interaction",
+                "short": "n"
+              },
+              {
+                "description": "disable plugins",
+                "inherit": false,
+                "long": "no-plugins"
+              },
+              {
+                "description": "disable source caches",
+                "inherit": false,
+                "long": "no-cache"
+              },
+              {
+                "description": "set working directory",
+                "inherit": false,
+                "long": "directory",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "suppress output",
+                "inherit": false,
+                "long": "quiet",
+                "short": "q"
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          }
+        ]
+      },
+      {
+        "name": "check",
+        "description": "checks the validity of the pyproject.toml file",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          }
+        ]
+      },
+      {
+        "name": "config",
+        "description": "manages configuration settings",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "long": "list",
+            "description": "list configuration settings",
+            "inherit": false
+          },
+          {
+            "long": "unset",
+            "description": "unset configuration setting",
+            "inherit": false
+          },
+          {
+            "long": "local",
+            "description": "set/Get from the project's local configuration",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "key",
+              "description": "setting key",
+              "index": 0
+            },
+            {
+              "name": "value",
+              "description": "setting value",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "debug",
+        "description": "the debug command regroups sub commands to interact with debug session",
+        "subcommands": [
+          {
+            "name": "info",
+            "description": "shows debug information",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "increase verbosity",
+                "inherit": false,
+                "long": "verbose",
+                "short": "v"
+              },
+              {
+                "description": "show version",
+                "inherit": false,
+                "short": "V"
+              },
+              {
+                "description": "force ANSI output",
+                "inherit": false,
+                "long": "ansi"
+              },
+              {
+                "description": "disable ANSI output",
+                "inherit": false,
+                "long": "no-ansi"
+              },
+              {
+                "description": "do not ask questions",
+                "inherit": false,
+                "long": "no-interaction",
+                "short": "n"
+              },
+              {
+                "description": "disable plugins",
+                "inherit": false,
+                "long": "no-plugins"
+              },
+              {
+                "description": "disable source caches",
+                "inherit": false,
+                "long": "no-cache"
+              },
+              {
+                "description": "set working directory",
+                "inherit": false,
+                "long": "directory",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "suppress output",
+                "inherit": false,
+                "long": "quiet",
+                "short": "q"
+              }
+            ]
+          },
+          {
+            "name": "resolve",
+            "description": "debugs dependency resolution",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "increase verbosity",
+                "inherit": false,
+                "long": "verbose",
+                "short": "v"
+              },
+              {
+                "description": "show version",
+                "inherit": false,
+                "short": "V"
+              },
+              {
+                "description": "force ANSI output",
+                "inherit": false,
+                "long": "ansi"
+              },
+              {
+                "description": "disable ANSI output",
+                "inherit": false,
+                "long": "no-ansi"
+              },
+              {
+                "description": "do not ask questions",
+                "inherit": false,
+                "long": "no-interaction",
+                "short": "n"
+              },
+              {
+                "description": "disable plugins",
+                "inherit": false,
+                "long": "no-plugins"
+              },
+              {
+                "description": "disable source caches",
+                "inherit": false,
+                "long": "no-cache"
+              },
+              {
+                "description": "set working directory",
+                "inherit": false,
+                "long": "directory",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "suppress output",
+                "inherit": false,
+                "long": "quiet",
+                "short": "q"
+              },
+              {
+                "long": "extras",
+                "description": "extras to activate for the dependency",
+                "inherit": false
+              },
+              {
+                "long": "python",
+                "description": "python version(s) to use for resolution",
+                "inherit": false
+              },
+              {
+                "long": "tree",
+                "description": "display the dependency tree",
+                "inherit": false
+              },
+              {
+                "long": "install",
+                "description": "show what would be installed for the current system",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "package",
+                  "description": "the packages to resolve",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ],
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          }
+        ]
+      },
+      {
+        "name": "env",
+        "description": "the env command regroups sub commands to interact with the virtualenvs associ...",
+        "subcommands": [
+          {
+            "name": "info",
+            "description": "displays information about the current environment",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "increase verbosity",
+                "inherit": false,
+                "long": "verbose",
+                "short": "v"
+              },
+              {
+                "description": "show version",
+                "inherit": false,
+                "short": "V"
+              },
+              {
+                "description": "force ANSI output",
+                "inherit": false,
+                "long": "ansi"
+              },
+              {
+                "description": "disable ANSI output",
+                "inherit": false,
+                "long": "no-ansi"
+              },
+              {
+                "description": "do not ask questions",
+                "inherit": false,
+                "long": "no-interaction",
+                "short": "n"
+              },
+              {
+                "description": "disable plugins",
+                "inherit": false,
+                "long": "no-plugins"
+              },
+              {
+                "description": "disable source caches",
+                "inherit": false,
+                "long": "no-cache"
+              },
+              {
+                "description": "set working directory",
+                "inherit": false,
+                "long": "directory",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "suppress output",
+                "inherit": false,
+                "long": "quiet",
+                "short": "q"
+              },
+              {
+                "long": "path",
+                "description": "only display the environment's path",
+                "inherit": false
+              },
+              {
+                "long": "executable",
+                "description": "only display the environment's python executable path",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "lists all virtualenvs associated with the current project",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "increase verbosity",
+                "inherit": false,
+                "long": "verbose",
+                "short": "v"
+              },
+              {
+                "description": "show version",
+                "inherit": false,
+                "short": "V"
+              },
+              {
+                "description": "force ANSI output",
+                "inherit": false,
+                "long": "ansi"
+              },
+              {
+                "description": "disable ANSI output",
+                "inherit": false,
+                "long": "no-ansi"
+              },
+              {
+                "description": "do not ask questions",
+                "inherit": false,
+                "long": "no-interaction",
+                "short": "n"
+              },
+              {
+                "description": "disable plugins",
+                "inherit": false,
+                "long": "no-plugins"
+              },
+              {
+                "description": "disable source caches",
+                "inherit": false,
+                "long": "no-cache"
+              },
+              {
+                "description": "set working directory",
+                "inherit": false,
+                "long": "directory",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "suppress output",
+                "inherit": false,
+                "long": "quiet",
+                "short": "q"
+              },
+              {
+                "long": "full-path",
+                "description": "output the full paths of the virtualenvs",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "remove",
+            "description": "remove virtual environments associated with the project",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "increase verbosity",
+                "inherit": false,
+                "long": "verbose",
+                "short": "v"
+              },
+              {
+                "description": "show version",
+                "inherit": false,
+                "short": "V"
+              },
+              {
+                "description": "force ANSI output",
+                "inherit": false,
+                "long": "ansi"
+              },
+              {
+                "description": "disable ANSI output",
+                "inherit": false,
+                "long": "no-ansi"
+              },
+              {
+                "description": "do not ask questions",
+                "inherit": false,
+                "long": "no-interaction",
+                "short": "n"
+              },
+              {
+                "description": "disable plugins",
+                "inherit": false,
+                "long": "no-plugins"
+              },
+              {
+                "description": "disable source caches",
+                "inherit": false,
+                "long": "no-cache"
+              },
+              {
+                "description": "set working directory",
+                "inherit": false,
+                "long": "directory",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "suppress output",
+                "inherit": false,
+                "long": "quiet",
+                "short": "q"
+              },
+              {
+                "long": "all",
+                "description": "remove all managed virtual environments associated with the project",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "python",
+                  "description": "the python executables associated with, or names of the virtual environments...",
+                  "index": 0,
+                  "provider": "builtin.executables"
+                }
+              ]
+            }
+          },
+          {
+            "name": "use",
+            "description": "activates or creates a new virtualenv for the current project",
+            "arguments": {
+              "states": [
+                {
+                  "name": "python",
+                  "description": "the python executable to use",
+                  "index": 0,
+                  "provider": "builtin.executables"
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "increase verbosity",
+                "inherit": false,
+                "long": "verbose",
+                "short": "v"
+              },
+              {
+                "description": "show version",
+                "inherit": false,
+                "short": "V"
+              },
+              {
+                "description": "force ANSI output",
+                "inherit": false,
+                "long": "ansi"
+              },
+              {
+                "description": "disable ANSI output",
+                "inherit": false,
+                "long": "no-ansi"
+              },
+              {
+                "description": "do not ask questions",
+                "inherit": false,
+                "long": "no-interaction",
+                "short": "n"
+              },
+              {
+                "description": "disable plugins",
+                "inherit": false,
+                "long": "no-plugins"
+              },
+              {
+                "description": "disable source caches",
+                "inherit": false,
+                "long": "no-cache"
+              },
+              {
+                "description": "set working directory",
+                "inherit": false,
+                "long": "directory",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "suppress output",
+                "inherit": false,
+                "long": "quiet",
+                "short": "q"
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "creates a basic pyproject.toml file in the current directory",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "long": "name",
+            "description": "name of the package",
+            "inherit": false
+          },
+          {
+            "long": "description",
+            "description": "description of the package",
+            "inherit": false
+          },
+          {
+            "long": "author",
+            "description": "author name of the package",
+            "inherit": false
+          },
+          {
+            "long": "python",
+            "description": "compatible Python versions",
+            "inherit": false
+          },
+          {
+            "long": "dependency",
+            "description": "package to require, with an optional version constraint, e.g. requests:^2.10....",
+            "inherit": false
+          },
+          {
+            "long": "dev-dependency",
+            "description": "package to require for development, with an optional version constraint, e.g....",
+            "inherit": false
+          },
+          {
+            "long": "license",
+            "description": "license of the package",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "installs the project dependencies",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "long": "without",
+            "description": "the dependency groups to ignore",
+            "inherit": false
+          },
+          {
+            "long": "with",
+            "description": "the optional dependency groups to include",
+            "inherit": false
+          },
+          {
+            "long": "only",
+            "description": "the only dependency groups to include",
+            "inherit": false
+          },
+          {
+            "long": "no-dev",
+            "description": "do not install the development dependencies. (Deprecated)",
+            "inherit": false
+          },
+          {
+            "long": "sync",
+            "description": "synchronize the environment with the locked packages and the specified groups",
+            "inherit": false
+          },
+          {
+            "long": "no-root",
+            "description": "do not install the root package (the current project)",
+            "inherit": false
+          },
+          {
+            "long": "no-directory",
+            "description": "do not install any directory path dependencies; useful to install dependencie...",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "output the operations but do not execute anything (implicitly enables --verbose)",
+            "inherit": false
+          },
+          {
+            "long": "remove-untracked",
+            "description": "removes packages not present in the lock file. (Deprecated)",
+            "inherit": false
+          },
+          {
+            "long": "extras",
+            "description": "extra sets of dependencies to install",
+            "inherit": false
+          },
+          {
+            "long": "all-extras",
+            "description": "install all extra dependencies",
+            "inherit": false
+          },
+          {
+            "long": "only-root",
+            "description": "exclude all dependencies",
+            "inherit": false
+          },
+          {
+            "long": "compile",
+            "description": "compile Python source files to bytecode. (This option has no effect if modern...",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "lock",
+        "description": "locks the project dependencies",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "long": "no-update",
+            "description": "do not update locked versions, only refresh lock file",
+            "inherit": false
+          },
+          {
+            "long": "check",
+            "description": "check that the poetry.lock file corresponds to the current version of pyproje...",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "new",
+        "description": "creates a new Python project at <path>",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "long": "name",
+            "description": "set the resulting package name",
+            "inherit": false
+          },
+          {
+            "long": "src",
+            "description": "use the src layout for the project",
+            "inherit": false
+          },
+          {
+            "long": "readme",
+            "description": "specify the readme file format. One of md (default) or rst",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "the path to create the project at",
+              "index": 0,
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "publish",
+        "description": "publishes a package to a remote repository",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "long": "repository",
+            "description": "the repository to publish the package to",
+            "inherit": false
+          },
+          {
+            "long": "username",
+            "description": "the username to access the repository",
+            "inherit": false
+          },
+          {
+            "long": "password",
+            "description": "the password to access the repository",
+            "inherit": false
+          },
+          {
+            "long": "cert",
+            "description": "certificate authority to access the repository",
+            "inherit": false
+          },
+          {
+            "long": "client-cert",
+            "description": "client certificate to access the repository",
+            "inherit": false
+          },
+          {
+            "long": "build",
+            "description": "build the package before publishing",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "perform all actions except upload the package",
+            "inherit": false
+          },
+          {
+            "long": "skip-existing",
+            "description": "ignore errors from files already existing in the repository",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "remove",
+        "description": "removes a package from the project dependencies",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "long": "group",
+            "description": "the group to remove the dependency from",
+            "inherit": false
+          },
+          {
+            "long": "dev",
+            "description": "remove a package from the development dependencies. (Deprecated) Use --group=...",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "output the operations but do not execute anything (implicitly enables --verbose)",
+            "inherit": false
+          },
+          {
+            "long": "lock",
+            "description": "do not perform operations (only update the lockfile)",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "packages",
+              "description": "the packages to remove",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "run",
+        "description": "runs a command in the appropriate environment",
+        "arguments": {
+          "states": [
+            {
+              "name": "args",
+              "description": "the command and arguments/options to run",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          }
+        ]
+      },
+      {
+        "name": "search",
+        "description": "searches for packages on remote repositories",
+        "arguments": {
+          "states": [
+            {
+              "name": "tokens",
+              "description": "the tokens to search for",
+              "index": 0
+            }
+          ]
+        },
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          }
+        ]
+      },
+      {
+        "name": "self",
+        "description": "the self namespace regroups sub commands to manage the poetry installation it...",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add additional packages to poetry's runtime environment",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "increase verbosity",
+                "inherit": false,
+                "long": "verbose",
+                "short": "v"
+              },
+              {
+                "description": "show version",
+                "inherit": false,
+                "short": "V"
+              },
+              {
+                "description": "force ANSI output",
+                "inherit": false,
+                "long": "ansi"
+              },
+              {
+                "description": "disable ANSI output",
+                "inherit": false,
+                "long": "no-ansi"
+              },
+              {
+                "description": "do not ask questions",
+                "inherit": false,
+                "long": "no-interaction",
+                "short": "n"
+              },
+              {
+                "description": "disable plugins",
+                "inherit": false,
+                "long": "no-plugins"
+              },
+              {
+                "description": "disable source caches",
+                "inherit": false,
+                "long": "no-cache"
+              },
+              {
+                "description": "set working directory",
+                "inherit": false,
+                "long": "directory",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "suppress output",
+                "inherit": false,
+                "long": "quiet",
+                "short": "q"
+              },
+              {
+                "long": "editable",
+                "description": "add vcs/path dependencies as editable",
+                "inherit": false
+              },
+              {
+                "long": "extras",
+                "description": "extras to activate for the dependency",
+                "inherit": false
+              },
+              {
+                "long": "source",
+                "description": "name of the source to use to install the package",
+                "inherit": false
+              },
+              {
+                "long": "allow-prereleases",
+                "description": "accept prereleases",
+                "inherit": false
+              },
+              {
+                "long": "dry-run",
+                "description": "output the operations but do not execute anything (implicitly enables --verbose)",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "the packages to add",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "install",
+            "description": "install locked packages (incl. addons) required by this poetry installation",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "increase verbosity",
+                "inherit": false,
+                "long": "verbose",
+                "short": "v"
+              },
+              {
+                "description": "show version",
+                "inherit": false,
+                "short": "V"
+              },
+              {
+                "description": "force ANSI output",
+                "inherit": false,
+                "long": "ansi"
+              },
+              {
+                "description": "disable ANSI output",
+                "inherit": false,
+                "long": "no-ansi"
+              },
+              {
+                "description": "do not ask questions",
+                "inherit": false,
+                "long": "no-interaction",
+                "short": "n"
+              },
+              {
+                "description": "disable plugins",
+                "inherit": false,
+                "long": "no-plugins"
+              },
+              {
+                "description": "disable source caches",
+                "inherit": false,
+                "long": "no-cache"
+              },
+              {
+                "description": "set working directory",
+                "inherit": false,
+                "long": "directory",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "suppress output",
+                "inherit": false,
+                "long": "quiet",
+                "short": "q"
+              },
+              {
+                "long": "sync",
+                "description": "synchronize the environment with the locked packages and the specified groups",
+                "inherit": false
+              },
+              {
+                "long": "dry-run",
+                "description": "output the operations but do not execute anything (implicitly enables --verbose)",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "lock",
+            "description": "lock the poetry installation's system requirements",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "increase verbosity",
+                "inherit": false,
+                "long": "verbose",
+                "short": "v"
+              },
+              {
+                "description": "show version",
+                "inherit": false,
+                "short": "V"
+              },
+              {
+                "description": "force ANSI output",
+                "inherit": false,
+                "long": "ansi"
+              },
+              {
+                "description": "disable ANSI output",
+                "inherit": false,
+                "long": "no-ansi"
+              },
+              {
+                "description": "do not ask questions",
+                "inherit": false,
+                "long": "no-interaction",
+                "short": "n"
+              },
+              {
+                "description": "disable plugins",
+                "inherit": false,
+                "long": "no-plugins"
+              },
+              {
+                "description": "disable source caches",
+                "inherit": false,
+                "long": "no-cache"
+              },
+              {
+                "description": "set working directory",
+                "inherit": false,
+                "long": "directory",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "suppress output",
+                "inherit": false,
+                "long": "quiet",
+                "short": "q"
+              },
+              {
+                "long": "no-update",
+                "description": "do not update locked versions, only refresh lock file",
+                "inherit": false
+              },
+              {
+                "long": "check",
+                "description": "check that the poetry.lock file corresponds to the current version of pyproje...",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "remove",
+            "description": "remove additional packages from poetry's runtime environment",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "increase verbosity",
+                "inherit": false,
+                "long": "verbose",
+                "short": "v"
+              },
+              {
+                "description": "show version",
+                "inherit": false,
+                "short": "V"
+              },
+              {
+                "description": "force ANSI output",
+                "inherit": false,
+                "long": "ansi"
+              },
+              {
+                "description": "disable ANSI output",
+                "inherit": false,
+                "long": "no-ansi"
+              },
+              {
+                "description": "do not ask questions",
+                "inherit": false,
+                "long": "no-interaction",
+                "short": "n"
+              },
+              {
+                "description": "disable plugins",
+                "inherit": false,
+                "long": "no-plugins"
+              },
+              {
+                "description": "disable source caches",
+                "inherit": false,
+                "long": "no-cache"
+              },
+              {
+                "description": "set working directory",
+                "inherit": false,
+                "long": "directory",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "suppress output",
+                "inherit": false,
+                "long": "quiet",
+                "short": "q"
+              },
+              {
+                "long": "dry-run",
+                "description": "output the operations but do not execute anything (implicitly enables --verbose)",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "packages",
+                  "description": "the packages to remove",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "show",
+            "description": "show packages from poetry's runtime environment",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "increase verbosity",
+                "inherit": false,
+                "long": "verbose",
+                "short": "v"
+              },
+              {
+                "description": "show version",
+                "inherit": false,
+                "short": "V"
+              },
+              {
+                "description": "force ANSI output",
+                "inherit": false,
+                "long": "ansi"
+              },
+              {
+                "description": "disable ANSI output",
+                "inherit": false,
+                "long": "no-ansi"
+              },
+              {
+                "description": "do not ask questions",
+                "inherit": false,
+                "long": "no-interaction",
+                "short": "n"
+              },
+              {
+                "description": "disable plugins",
+                "inherit": false,
+                "long": "no-plugins"
+              },
+              {
+                "description": "disable source caches",
+                "inherit": false,
+                "long": "no-cache"
+              },
+              {
+                "description": "set working directory",
+                "inherit": false,
+                "long": "directory",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "suppress output",
+                "inherit": false,
+                "long": "quiet",
+                "short": "q"
+              },
+              {
+                "long": "addons",
+                "description": "list only add-on packages installed",
+                "inherit": false
+              },
+              {
+                "long": "tree",
+                "description": "list the dependencies as a tree",
+                "inherit": false
+              },
+              {
+                "long": "latest",
+                "description": "show the latest version",
+                "inherit": false
+              },
+              {
+                "long": "outdated",
+                "description": "show the latest version but only for packages that are outdated",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "package",
+                  "description": "the package to inspect",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "update",
+            "description": "updates poetry to the latest version",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "increase verbosity",
+                "inherit": false,
+                "long": "verbose",
+                "short": "v"
+              },
+              {
+                "description": "show version",
+                "inherit": false,
+                "short": "V"
+              },
+              {
+                "description": "force ANSI output",
+                "inherit": false,
+                "long": "ansi"
+              },
+              {
+                "description": "disable ANSI output",
+                "inherit": false,
+                "long": "no-ansi"
+              },
+              {
+                "description": "do not ask questions",
+                "inherit": false,
+                "long": "no-interaction",
+                "short": "n"
+              },
+              {
+                "description": "disable plugins",
+                "inherit": false,
+                "long": "no-plugins"
+              },
+              {
+                "description": "disable source caches",
+                "inherit": false,
+                "long": "no-cache"
+              },
+              {
+                "description": "set working directory",
+                "inherit": false,
+                "long": "directory",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "suppress output",
+                "inherit": false,
+                "long": "quiet",
+                "short": "q"
+              },
+              {
+                "long": "preview",
+                "description": "allow the installation of pre-release versions",
+                "inherit": false
+              },
+              {
+                "long": "dry-run",
+                "description": "output the operations but do not execute anything (implicitly enables --verbose)",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "version",
+                  "description": "the version to update to",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ],
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          }
+        ]
+      },
+      {
+        "name": "shell",
+        "description": "spawns a shell within the virtual environment",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          }
+        ]
+      },
+      {
+        "name": "show",
+        "description": "shows information about packages",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "long": "without",
+            "description": "the dependency groups to ignore",
+            "inherit": false
+          },
+          {
+            "long": "with",
+            "description": "the optional dependency groups to include",
+            "inherit": false
+          },
+          {
+            "long": "only",
+            "description": "the only dependency groups to include",
+            "inherit": false
+          },
+          {
+            "long": "no-dev",
+            "description": "do not list the development dependencies. (Deprecated)",
+            "inherit": false
+          },
+          {
+            "long": "tree",
+            "description": "list the dependencies as a tree",
+            "inherit": false
+          },
+          {
+            "long": "why",
+            "description": "when showing the full list, or a --tree for a single package, also display wh...",
+            "inherit": false
+          },
+          {
+            "long": "latest",
+            "description": "show the latest version",
+            "inherit": false
+          },
+          {
+            "long": "outdated",
+            "description": "show the latest version but only for packages that are outdated",
+            "inherit": false
+          },
+          {
+            "long": "all",
+            "description": "show all packages (even those not compatible with current system)",
+            "inherit": false
+          },
+          {
+            "long": "top-level",
+            "description": "show only top-level dependencies",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "the package to inspect",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "source",
+        "description": "the source namespace regroups sub commands to manage repository sources for a...",
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "add source configuration for project",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "increase verbosity",
+                "inherit": false,
+                "long": "verbose",
+                "short": "v"
+              },
+              {
+                "description": "show version",
+                "inherit": false,
+                "short": "V"
+              },
+              {
+                "description": "force ANSI output",
+                "inherit": false,
+                "long": "ansi"
+              },
+              {
+                "description": "disable ANSI output",
+                "inherit": false,
+                "long": "no-ansi"
+              },
+              {
+                "description": "do not ask questions",
+                "inherit": false,
+                "long": "no-interaction",
+                "short": "n"
+              },
+              {
+                "description": "disable plugins",
+                "inherit": false,
+                "long": "no-plugins"
+              },
+              {
+                "description": "disable source caches",
+                "inherit": false,
+                "long": "no-cache"
+              },
+              {
+                "description": "set working directory",
+                "inherit": false,
+                "long": "directory",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "suppress output",
+                "inherit": false,
+                "long": "quiet",
+                "short": "q"
+              },
+              {
+                "long": "default",
+                "description": "set this source as the default (disable PyPI). A default source will also be...",
+                "inherit": false
+              },
+              {
+                "long": "secondary",
+                "description": "set this source as secondary. (Deprecated, use --priority)",
+                "inherit": false
+              },
+              {
+                "long": "priority",
+                "description": "set the priority of this source. One of: default, primary, secondary, supplem...",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "source repository name",
+                  "index": 0
+                },
+                {
+                  "name": "url",
+                  "description": "source repository URL. Required, except for PyPI, for which it is not allowed",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove",
+            "description": "remove source configured for the project",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "source repository name",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "increase verbosity",
+                "inherit": false,
+                "long": "verbose",
+                "short": "v"
+              },
+              {
+                "description": "show version",
+                "inherit": false,
+                "short": "V"
+              },
+              {
+                "description": "force ANSI output",
+                "inherit": false,
+                "long": "ansi"
+              },
+              {
+                "description": "disable ANSI output",
+                "inherit": false,
+                "long": "no-ansi"
+              },
+              {
+                "description": "do not ask questions",
+                "inherit": false,
+                "long": "no-interaction",
+                "short": "n"
+              },
+              {
+                "description": "disable plugins",
+                "inherit": false,
+                "long": "no-plugins"
+              },
+              {
+                "description": "disable source caches",
+                "inherit": false,
+                "long": "no-cache"
+              },
+              {
+                "description": "set working directory",
+                "inherit": false,
+                "long": "directory",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "suppress output",
+                "inherit": false,
+                "long": "quiet",
+                "short": "q"
+              }
+            ]
+          },
+          {
+            "name": "show",
+            "description": "show information about sources configured for the project",
+            "arguments": {
+              "states": [
+                {
+                  "name": "source",
+                  "description": "source(s) to show information for. Defaults to showing all sources",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "increase verbosity",
+                "inherit": false,
+                "long": "verbose",
+                "short": "v"
+              },
+              {
+                "description": "show version",
+                "inherit": false,
+                "short": "V"
+              },
+              {
+                "description": "force ANSI output",
+                "inherit": false,
+                "long": "ansi"
+              },
+              {
+                "description": "disable ANSI output",
+                "inherit": false,
+                "long": "no-ansi"
+              },
+              {
+                "description": "do not ask questions",
+                "inherit": false,
+                "long": "no-interaction",
+                "short": "n"
+              },
+              {
+                "description": "disable plugins",
+                "inherit": false,
+                "long": "no-plugins"
+              },
+              {
+                "description": "disable source caches",
+                "inherit": false,
+                "long": "no-cache"
+              },
+              {
+                "description": "set working directory",
+                "inherit": false,
+                "long": "directory",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "description": "suppress output",
+                "inherit": false,
+                "long": "quiet",
+                "short": "q"
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          }
+        ]
+      },
+      {
+        "name": "update",
+        "description": "update the dependencies as according to the pyproject.toml file",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "long": "without",
+            "description": "the dependency groups to ignore",
+            "inherit": false
+          },
+          {
+            "long": "with",
+            "description": "the optional dependency groups to include",
+            "inherit": false
+          },
+          {
+            "long": "only",
+            "description": "the only dependency groups to include",
+            "inherit": false
+          },
+          {
+            "long": "no-dev",
+            "description": "do not update the development dependencies. (Deprecated)",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "output the operations but do not execute anything (implicitly enables --verbose)",
+            "inherit": false
+          },
+          {
+            "long": "lock",
+            "description": "do not perform operations (only update the lockfile)",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "packages",
+              "description": "the packages to update",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "version",
+        "description": "shows the version of the project or bumps it when a valid bump rule is provided",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "increase verbosity",
+            "inherit": false,
+            "long": "verbose",
+            "short": "v"
+          },
+          {
+            "description": "show version",
+            "inherit": false,
+            "short": "V"
+          },
+          {
+            "description": "force ANSI output",
+            "inherit": false,
+            "long": "ansi"
+          },
+          {
+            "description": "disable ANSI output",
+            "inherit": false,
+            "long": "no-ansi"
+          },
+          {
+            "description": "do not ask questions",
+            "inherit": false,
+            "long": "no-interaction",
+            "short": "n"
+          },
+          {
+            "description": "disable plugins",
+            "inherit": false,
+            "long": "no-plugins"
+          },
+          {
+            "description": "disable source caches",
+            "inherit": false,
+            "long": "no-cache"
+          },
+          {
+            "description": "set working directory",
+            "inherit": false,
+            "long": "directory",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "description": "suppress output",
+            "inherit": false,
+            "long": "quiet",
+            "short": "q"
+          },
+          {
+            "long": "short",
+            "description": "output the version number only",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "do not update pyproject.toml file",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "description": "the version number or the rule to update the version",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "options": [
+      {
+        "description": "show help",
+        "inherit": false,
+        "long": "help",
+        "short": "h"
+      },
+      {
+        "description": "increase verbosity",
+        "inherit": false,
+        "long": "verbose",
+        "short": "v"
+      },
+      {
+        "description": "show version",
+        "inherit": false,
+        "short": "V"
+      },
+      {
+        "description": "force ANSI output",
+        "inherit": false,
+        "long": "ansi"
+      },
+      {
+        "description": "disable ANSI output",
+        "inherit": false,
+        "long": "no-ansi"
+      },
+      {
+        "description": "do not ask questions",
+        "inherit": false,
+        "long": "no-interaction",
+        "short": "n"
+      },
+      {
+        "description": "disable plugins",
+        "inherit": false,
+        "long": "no-plugins"
+      },
+      {
+        "description": "disable source caches",
+        "inherit": false,
+        "long": "no-cache"
+      },
+      {
+        "description": "set working directory",
+        "inherit": false,
+        "long": "directory",
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "description": "suppress output",
+        "inherit": false,
+        "long": "quiet",
+        "short": "q"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      }
+    }
+  }
+}
