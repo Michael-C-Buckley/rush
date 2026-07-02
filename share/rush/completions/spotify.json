@@ -1,0 +1,192 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "spotify",
+    "description": "control Spotify from the command line",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for spotify",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "play",
+        "description": "resume playback where Spotify last left off",
+        "arguments": {
+          "states": [
+            {
+              "name": "song-name",
+              "description": "the name of the song to start playing",
+              "index": 0
+            }
+          ]
+        },
+        "subcommands": [
+          {
+            "name": "album",
+            "description": "find an album by name and play it",
+            "arguments": {
+              "states": [
+                {
+                  "name": "album-name",
+                  "description": "the album name you want to play",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "artist",
+            "description": "find an artist by name and play it",
+            "arguments": {
+              "states": [
+                {
+                  "name": "artist-name",
+                  "description": "the artist name you want to play",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "find a playlist by name and plays it",
+            "arguments": {
+              "states": [
+                {
+                  "name": "playlist-name",
+                  "description": "the playlist name you want to play",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "uri",
+            "description": "play songs from specific uri",
+            "arguments": {
+              "states": [
+                {
+                  "name": "uri",
+                  "description": "the uri of the song you want to play",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "next",
+        "description": "skip to the next song in a playlist"
+      },
+      {
+        "name": "prev",
+        "description": "return to the previous song in a playlist"
+      },
+      {
+        "name": "replay",
+        "description": "replay the current track from the beginning"
+      },
+      {
+        "name": "pos",
+        "description": "jump to a time (in secs) in the current song",
+        "arguments": {
+          "states": [
+            {
+              "name": "time",
+              "description": "exact time in secs to jump in",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "pause",
+        "description": "pause (or resume) Spotify playback"
+      },
+      {
+        "name": "stop",
+        "description": "stop playback"
+      },
+      {
+        "name": "quit",
+        "description": "stop playback and quit Spotify"
+      },
+      {
+        "name": "vol",
+        "description": "show the current Spotify volume",
+        "arguments": {
+          "states": [
+            {
+              "name": "amount",
+              "description": "set the volume to an amount between 0 and 100",
+              "provider": {
+                "values": [
+                  {
+                    "value": "up",
+                    "description": "increase the volume by 10%"
+                  },
+                  {
+                    "value": "down",
+                    "description": "decrease the volume by 10%"
+                  }
+                ]
+              },
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "status",
+        "description": "show the current player status",
+        "subcommands": [
+          {
+            "name": "artist",
+            "description": "show the currently playing artist"
+          },
+          {
+            "name": "album",
+            "description": "show the currently playing album"
+          },
+          {
+            "name": "track",
+            "description": "show the currently playing track"
+          }
+        ]
+      },
+      {
+        "name": "share",
+        "description": "display the current song's Spotify URL and URI",
+        "subcommands": [
+          {
+            "name": "url",
+            "description": "display the current song's Spotify URL and copies it to the clipboard"
+          },
+          {
+            "name": "uri",
+            "description": "display the current song's Spotify URI and copies it to the clipboard"
+          }
+        ]
+      },
+      {
+        "name": "toggle",
+        "subcommands": [
+          {
+            "name": "shuffle",
+            "description": "toggle shuffle playback mode"
+          },
+          {
+            "name": "repeat",
+            "description": "toggle repeat playback mode"
+          }
+        ]
+      }
+    ]
+  }
+}
