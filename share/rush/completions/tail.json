@@ -1,0 +1,36 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "tail",
+    "description": "display the end of files",
+    "options": [
+      {
+        "short": "f",
+        "description": "follow appended data",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "description": "display in reverse order",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true,
+          "description": "file to read"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
