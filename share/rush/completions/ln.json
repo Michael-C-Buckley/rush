@@ -1,0 +1,67 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ln",
+    "description": "create hard or symbolic links",
+    "options": [
+      {
+        "short": "s",
+        "description": "create a symbolic link",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "description": "verbose",
+        "inherit": false
+      },
+      {
+        "short": "F",
+        "description": "if link name already exists replace it",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "description": "don't follow symbolic links",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "description": "if link name already exists unlink the old one before creating the new one",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "description": "prompt if proposed link already exists",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "description": "same as -h don't follow symbolic links",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "source-file",
+          "description": "source file or directory",
+          "index": 0,
+          "provider": "builtin.files"
+        },
+        {
+          "name": "link-name",
+          "description": "link name or directory",
+          "index": 1,
+          "required": false,
+          "provider": "builtin.files"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
