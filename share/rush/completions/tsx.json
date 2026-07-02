@@ -1,0 +1,72 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "tsx",
+    "description": "run TypeScript files with tsx",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for tsx",
+        "inherit": true
+      },
+      {
+        "long": "no-cache",
+        "description": "disable caching",
+        "inherit": true
+      },
+      {
+        "long": "clear-screen",
+        "description": "disable clearing the screen on rerun",
+        "inherit": true
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "long": "tsconfig",
+        "description": "custom tsconfig.json path",
+        "inherit": false,
+        "value": {
+          "name": "tsconfig",
+          "provider": "builtin.files"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "watch",
+        "description": "run the script and watch for changes",
+        "arguments": {
+          "states": [
+            {
+              "name": "script",
+              "index": 0,
+              "provider": "builtin.files",
+              "description": "TypeScript script"
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    },
+    "arguments": {
+      "states": [
+        {
+          "name": "script",
+          "index": 0,
+          "provider": "builtin.files",
+          "description": "TypeScript script"
+        }
+      ]
+    }
+  }
+}
