@@ -1,0 +1,95 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "sapphire",
+    "description": "generate Sapphire framework projects and pieces",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for sapphire",
+        "inherit": true
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "output the version number",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "new",
+        "aliases": [
+          "n"
+        ],
+        "description": "creates a new Sapphire project",
+        "options": [
+          {
+            "short": "v",
+            "long": "verbose",
+            "description": "enable verbose logging",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "project name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "generate",
+        "aliases": [
+          "g"
+        ],
+        "description": "generates a component/piece",
+        "arguments": {
+          "states": [
+            {
+              "name": "component",
+              "description": "component/piece name",
+              "index": 0
+            },
+            {
+              "name": "name",
+              "description": "file name",
+              "provider": "builtin.files",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "init",
+        "aliases": [
+          "i"
+        ],
+        "description": "creates a config file on an existing Sapphire project"
+      },
+      {
+        "name": "help",
+        "description": "display help for command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "description": "command to display help for",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
