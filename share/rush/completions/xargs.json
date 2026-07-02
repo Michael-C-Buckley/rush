@@ -1,0 +1,115 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "xargs",
+    "description": "execute a command using input as arguments",
+    "options": [
+      {
+        "short": "0",
+        "description": "use NUL (0x00) as a separator, instead of whitespace"
+      },
+      {
+        "short": "E",
+        "description": "use this string as a logical EOF marker",
+        "value": {
+          "name": "eof-str",
+          "description": "The string to use that marks EOF"
+        }
+      },
+      {
+        "short": "I",
+        "description": "replace occurrences of this string with the input",
+        "value": {
+          "name": "replacement-str",
+          "description": "The string to replace"
+        }
+      },
+      {
+        "short": "J",
+        "description": "replace an argument exactly equal to this string with the input",
+        "value": {
+          "name": "replacement-str",
+          "description": "The string to replace"
+        }
+      },
+      {
+        "short": "L",
+        "description": "run the program each time this many lines of input are read",
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "short": "n",
+        "description": "the maximum number of arguments that can be taken from stdin on each run",
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "short": "o",
+        "description": "reopen stdin as /dev/tty (useful for running interactive applications)"
+      },
+      {
+        "short": "P",
+        "description": "run up to this many commands in parallel (as many as possible if 0)",
+        "value": {
+          "name": "max-procs"
+        }
+      },
+      {
+        "short": "p",
+        "description": "prompt to run each command"
+      },
+      {
+        "short": "r",
+        "description": "run the command once if there's no input (compatible with GNU xargs)"
+      },
+      {
+        "short": "R",
+        "description": "specify the maximum number of occurrences that -I will replace",
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "short": "S",
+        "description": "specify the maximum size in bytes that -I can use for replacements (default: 255)",
+        "value": {
+          "name": "replacement-size"
+        }
+      },
+      {
+        "short": "s",
+        "description": "maximum number of bytes that can be provided to the program (default: 4096)",
+        "value": {
+          "name": "max-args-size"
+        }
+      },
+      {
+        "short": "t",
+        "description": "echo the command to stderr before it's executed"
+      },
+      {
+        "short": "x",
+        "description": "terminate if the arguments will not fit in the maximum line length"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "utility",
+          "description": "Run this program for each line of stdin (default: echo)",
+          "provider": "builtin.executables",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "builtin.executables": {
+        "builtin": "executables"
+      }
+    }
+  }
+}
