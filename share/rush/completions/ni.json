@@ -1,0 +1,72 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ni",
+    "description": "install packages with the detected package manager",
+    "options": [
+      {
+        "short": "g",
+        "description": "install packages globally",
+        "inherit": false
+      },
+      {
+        "short": "D",
+        "description": "save packages to devDependencies",
+        "inherit": false
+      },
+      {
+        "short": "P",
+        "description": "save packages to peerDependencies",
+        "inherit": false
+      },
+      {
+        "short": "O",
+        "description": "save packages to optionalDependencies",
+        "inherit": false
+      },
+      {
+        "long": "frozen",
+        "description": "Don't generate a lockfile and fail if an update is needed",
+        "inherit": false
+      },
+      {
+        "short": "C",
+        "description": "Change directory",
+        "inherit": false,
+        "value": [
+          {
+            "name": "directory",
+            "description": "The directory to move",
+            "provider": "builtin.directories"
+          },
+          {
+            "name": "target",
+            "description": "The target directory",
+            "provider": "builtin.directories"
+          }
+        ]
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "package",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
