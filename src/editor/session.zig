@@ -129,6 +129,8 @@ const PendingRemovableSuffix = struct {
 
 const UndoKind = enum {
     insertion,
+    delete_backward,
+    delete_forward,
     edit,
 };
 
@@ -276,10 +278,11 @@ pub const LineSession = struct {
         return switch (event.key) {
             .text => if (event.text.len == 0) null else .insertion,
             .enter => if (event.modifiers.shift) .insertion else null,
-            .ctrl_c,
-            .ctrl_d,
-            .backspace,
+            .backspace => .delete_backward,
             .delete,
+            .ctrl_d,
+            => .delete_forward,
+            .ctrl_c,
             .delete_to_start,
             .delete_to_end,
             .delete_previous_word,
@@ -298,9 +301,9 @@ pub const LineSession = struct {
             .insert, .replace => switch (event.key) {
                 .text => if (event.text.len == 0) null else .insertion,
                 .enter => if (event.modifiers.shift) .insertion else null,
+                .backspace => .delete_backward,
+                .ctrl_d => .delete_forward,
                 .ctrl_c,
-                .ctrl_d,
-                .backspace,
                 .delete_previous_word,
                 .delete_next_word,
                 .delete_to_start,
@@ -322,7 +325,9 @@ pub const LineSession = struct {
             .none, .find, .alias, .history_search => {},
         }
         return switch (command) {
-            'r', 'x', 'X', 'D', 'C', 'S', 'd', 'c', 'p', 'P', '~', '_', '.', '#' => .edit,
+            'x' => .delete_forward,
+            'X' => .delete_backward,
+            'r', 'D', 'C', 'S', 'd', 'c', 'p', 'P', '~', '_', '.', '#' => .edit,
             else => null,
         };
     }
@@ -1756,9 +1761,9 @@ pub const LineSession = struct {
         }
 
         self.clearRedoHistory();
-        if (kind == .insertion and self.undo_stack.items.len != 0) {
+        if (undoKindCoalesces(kind) and self.undo_stack.items.len != 0) {
             const last = &self.undo_stack.items[self.undo_stack.items.len - 1];
-            if (last.kind == .insertion and snapshotsEqual(last.after, before)) {
+            if (last.kind == kind and snapshotsEqual(last.after, before)) {
                 last.after.deinit(self.allocator);
                 last.after = after;
                 before.deinit(self.allocator);
@@ -1766,6 +1771,13 @@ pub const LineSession = struct {
             }
         }
         try self.undo_stack.append(self.allocator, .{ .before = before, .after = after, .kind = kind });
+    }
+
+    fn undoKindCoalesces(kind: UndoKind) bool {
+        return switch (kind) {
+            .insertion, .delete_backward, .delete_forward => true,
+            .edit => false,
+        };
     }
 
     fn undoEdit(self: *LineSession) !void {
@@ -2721,6 +2733,35 @@ test "line session undo coalesces consecutive text insertions and supports redo"
     try std.testing.expectEqualStrings("", session.editor.buffer.text());
     try session.handleKey(.{ .key = .redo });
     try std.testing.expectEqualStrings("abc", session.editor.buffer.text());
+}
+
+test "line session undo coalesces consecutive character deletes" {
+    var backward = try LineSession.init(std.testing.allocator, "");
+    defer backward.deinit();
+
+    try backward.handleKey(.{ .key = .text, .text = "a" });
+    try backward.handleKey(.{ .key = .text, .text = "b" });
+    try backward.handleKey(.{ .key = .text, .text = "c" });
+    try backward.handleKey(.{ .key = .backspace });
+    try backward.handleKey(.{ .key = .backspace });
+
+    try std.testing.expectEqualStrings("a", backward.editor.buffer.text());
+    try backward.handleKey(.{ .key = .undo });
+    try std.testing.expectEqualStrings("abc", backward.editor.buffer.text());
+    try backward.handleKey(.{ .key = .undo });
+    try std.testing.expectEqualStrings("", backward.editor.buffer.text());
+
+    var forward = try LineSession.init(std.testing.allocator, "");
+    defer forward.deinit();
+    try forward.editor.buffer.replace("abc");
+    forward.editor.buffer.moveHome();
+
+    try forward.handleKey(.{ .key = .delete });
+    try forward.handleKey(.{ .key = .delete });
+
+    try std.testing.expectEqualStrings("c", forward.editor.buffer.text());
+    try forward.handleKey(.{ .key = .undo });
+    try std.testing.expectEqualStrings("abc", forward.editor.buffer.text());
 }
 
 test "line session undo restores completion edits as one step" {
