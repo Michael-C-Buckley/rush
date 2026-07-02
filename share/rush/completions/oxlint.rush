@@ -1,0 +1,15 @@
+__rush_complete_oxlint_lints() {
+  for category in all correctness suspicious restriction perf pedantic style nursery; do
+    rush_complete candidate "$category" --kind plain --description 'lint category' --priority 35
+  done
+  command -v oxlint >/dev/null 2>&1 || return
+  oxlint --rules 2>/dev/null | while IFS= read -r line; do
+    case "$line" in '| '*) ;;
+      *) continue ;;
+    esac
+    rule=$(printf '%s\n' "$line" | awk -F '|' '{gsub(/^ +| +$/, "", $2); print $2}')
+    plugin=$(printf '%s\n' "$line" | awk -F '|' '{gsub(/^ +| +$/, "", $3); print $3}')
+    case "$rule" in ''|Rule|---*) continue ;; esac
+    rush_complete candidate "$rule" --kind plain --description "${plugin:-lint rule}" --priority 25
+  done
+}

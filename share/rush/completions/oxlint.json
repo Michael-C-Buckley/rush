@@ -1,0 +1,238 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "oxlint",
+    "description": "high performance javascript linter",
+    "options": [
+      {
+        "short": "c",
+        "long": "config",
+        "description": "Path to Oxlint JSON configuration file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "tsconfig",
+        "description": "Path to tsconfig.json path for reading path aliases and project references for import plugin",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "ignore-path",
+        "description": "Specify the file to use as your .eslintignore",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "ignore-pattern",
+        "description": "Specify file patterns to ignore (in addition to those in .eslintignore)",
+        "inherit": false,
+        "value": {
+          "name": "pattern",
+          "description": "Glob pattern"
+        }
+      },
+      {
+        "long": "no-ignore",
+        "description": "Disable exluding of files from .eslintignore files, --ignore-path, and --ignore-pattern",
+        "inherit": false
+      },
+      {
+        "long": "symlinks",
+        "description": "Follow symlinks when linting, which are ignored by default",
+        "inherit": false
+      },
+      {
+        "long": "jsdoc-plugin",
+        "description": "enable the JSDoc plugin",
+        "inherit": false
+      },
+      {
+        "long": "jest-plugin",
+        "description": "enable the Jest plugin",
+        "inherit": false
+      },
+      {
+        "long": "vitest-plugin",
+        "description": "enable the Vitest plugin",
+        "inherit": false
+      },
+      {
+        "long": "nextjs-plugin",
+        "description": "enable the Next.js plugin",
+        "inherit": false
+      },
+      {
+        "long": "react-perf-plugin",
+        "description": "enable the React Performance plugin",
+        "inherit": false
+      },
+      {
+        "long": "promise-plugin",
+        "description": "enable the Promise plugin",
+        "inherit": false
+      },
+      {
+        "long": "disable-react-plugin",
+        "description": "disable the React plugin",
+        "inherit": false
+      },
+      {
+        "long": "disable-unicorn-plugin",
+        "description": "disable the Unicorn plugin",
+        "inherit": false
+      },
+      {
+        "long": "disable-oxc-plugin",
+        "description": "disable the Oxc plugin",
+        "inherit": false
+      },
+      {
+        "long": "disable-typescript-plugin",
+        "description": "disable the TypeScript plugin",
+        "inherit": false
+      },
+      {
+        "long": "disable-import-plugin",
+        "description": "disable the Import plugin",
+        "inherit": false
+      },
+      {
+        "short": "D",
+        "long": "deny",
+        "description": "Deny a lint rule or category (enable a lint as an error)",
+        "inherit": false,
+        "value": {
+          "name": "lint",
+          "provider": "oxlint.lints"
+        }
+      },
+      {
+        "short": "W",
+        "long": "warn",
+        "description": "Warn about a lint rule or category (enable a lint as a warning)",
+        "inherit": false,
+        "value": {
+          "name": "lint",
+          "provider": "oxlint.lints"
+        }
+      },
+      {
+        "short": "A",
+        "long": "allow",
+        "description": "Allow a lint rule or category (suppress a lint)",
+        "inherit": false,
+        "value": {
+          "name": "lint",
+          "provider": "oxlint.lints"
+        }
+      },
+      {
+        "long": "fix",
+        "description": "Fix as many issues as possible. Only unfixed issues are reported in the output",
+        "inherit": false
+      },
+      {
+        "long": "silent",
+        "description": "Do not display any diagnostics",
+        "inherit": false
+      },
+      {
+        "long": "deny-warnings",
+        "description": "Exit with a non-zero code if there are any warnings",
+        "inherit": false
+      },
+      {
+        "long": "max-warnings",
+        "description": "Exit with a non-zero code if there are more than `max` warnings",
+        "inherit": false,
+        "value": {
+          "name": "max",
+          "description": "The maximum number of warnings"
+        }
+      },
+      {
+        "short": "f",
+        "long": "format",
+        "description": "Use a specific output format",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "provider": {
+            "values": [
+              "default",
+              "json",
+              "unix",
+              "checkstyle",
+              {
+                "value": "github",
+                "description": "GitHub Actions Annotations"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "threads",
+        "description": "Number of threads to use. Set to 1 to use only 1 CPU core",
+        "inherit": false,
+        "value": {
+          "name": "int",
+          "description": "Number of threads (positive int)"
+        }
+      },
+      {
+        "long": "rules",
+        "description": "List all available rules",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "Show help",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "Show version",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file|dir|glob",
+          "description": "File(s) to lint",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "oxlint.lints": {
+        "function": "__rush_complete_oxlint_lints"
+      }
+    }
+  }
+}
