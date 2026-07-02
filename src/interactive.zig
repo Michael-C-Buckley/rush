@@ -1155,12 +1155,21 @@ fn unixTimestamp(io: std.Io) i64 {
 
 test "interactive history cwd remains valid after prompt read" {
     const path = "rush-interactive-history-cwd-lifetime-test.sqlite";
-    std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
-    std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
-    std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+    const cleanup = struct {
+        fn deleteIfFound(file_path: []const u8) !void {
+            std.Io.Dir.cwd().deleteFile(std.testing.io, file_path) catch |err| switch (err) {
+                error.FileNotFound => return,
+                else => return err,
+            };
+        }
+    };
+
+    try cleanup.deleteIfFound(path);
+    try cleanup.deleteIfFound(path ++ "-wal");
+    try cleanup.deleteIfFound(path ++ "-shm");
+    defer cleanup.deleteIfFound(path) catch |err| std.debug.panic("failed to delete test db: {}", .{err});
+    defer cleanup.deleteIfFound(path ++ "-wal") catch |err| std.debug.panic("failed to delete test db wal: {}", .{err});
+    defer cleanup.deleteIfFound(path ++ "-shm") catch |err| std.debug.panic("failed to delete test db shm: {}", .{err});
 
     var sh = RushShell.init(std.testing.allocator, .{}, .{});
     defer sh.deinit();
@@ -1186,7 +1195,12 @@ test "interactive history cwd remains valid after prompt read" {
     try history_service.addCommand(std.testing.io, "echo previous", 0, 10, 1);
 
     const view = history_service.lineEditorView(std.testing.io);
-    const entry = (try view.previous.?(view.context.?, std.testing.allocator, "", null)) orelse return error.TestExpectedEqual;
+    const entry = (try view.previous.?(
+        view.context.?,
+        std.testing.allocator,
+        "",
+        null,
+    )) orelse return error.TestExpectedEqual;
     defer entry.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("echo previous", entry.text);
 }

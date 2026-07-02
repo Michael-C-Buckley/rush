@@ -6340,11 +6340,12 @@ fn externalCommandText(shell: anytype, fields: []const []const u8) ![]const u8 {
 }
 
 fn writeCommandNotFoundDiagnostic(shell: anytype, command: []const u8, search_path: ?[]const u8) !void {
-    var suggestions = CommandSuggestions{};
+    var suggestions: CommandSuggestions = .{};
     defer suggestions.deinit(shell.scratchAllocator());
     try collectCommandSuggestions(shell, command, search_path, &suggestions);
     if (suggestions.count == 0) {
-        try shell.host.writeAll(.stderr, try std.fmt.allocPrint(shell.scratchAllocator(), "{s}: not found\n", .{command}));
+        const message = try std.fmt.allocPrint(shell.scratchAllocator(), "{s}: not found\n", .{command});
+        try shell.host.writeAll(.stderr, message);
         return;
     }
 
@@ -6385,13 +6386,13 @@ fn collectCommandSuggestions(
         try suggestions.consider(allocator, &distance, command, name);
     }
 
-    try collectAbbreviationSuggestions(shell, allocator, &distance, command, suggestions);
-    try collectPathCommandSuggestions(shell, allocator, &distance, command, search_path, suggestions);
+    try collectAbbreviationSuggestions(allocator, shell, &distance, command, suggestions);
+    try collectPathCommandSuggestions(allocator, shell, &distance, command, search_path, suggestions);
 }
 
 fn collectAbbreviationSuggestions(
-    shell: anytype,
     allocator: std.mem.Allocator,
+    shell: anytype,
     distance: *EditDistance,
     command: []const u8,
     suggestions: *CommandSuggestions,
@@ -6404,8 +6405,8 @@ fn collectAbbreviationSuggestions(
 }
 
 fn collectPathCommandSuggestions(
-    shell: anytype,
     allocator: std.mem.Allocator,
+    shell: anytype,
     distance: *EditDistance,
     command: []const u8,
     search_path: ?[]const u8,
@@ -6465,14 +6466,21 @@ const CommandSuggestions = struct {
     ) !void {
         if (candidate.len == 0) return;
         if (self.contains(candidate)) return;
-        const candidate_distance = try distance.atMost(allocator, command, candidate, command_suggestion_max_distance) orelse return;
+        const candidate_distance = try distance.atMost(
+            allocator,
+            command,
+            candidate,
+            command_suggestion_max_distance,
+        ) orelse return;
         const suggestion: CommandSuggestion = .{
             .name = try allocator.dupe(u8, candidate),
             .distance = candidate_distance,
         };
 
         var insert_index: usize = 0;
-        while (insert_index < self.count and suggestionAfter(self.items[insert_index], suggestion)) : (insert_index += 1) {}
+        while (insert_index < self.count and
+            suggestionAfter(self.items[insert_index], suggestion)) : (insert_index += 1)
+        {}
         if (insert_index >= command_suggestion_limit) {
             allocator.free(suggestion.name);
             return;
@@ -6840,7 +6848,7 @@ test "bounded edit distance returns distances within cutoff" {
 test "command suggestions keep the two nearest stable candidates" {
     var distance: EditDistance = .{};
     defer distance.deinit(std.testing.allocator);
-    var suggestions = CommandSuggestions{};
+    var suggestions: CommandSuggestions = .{};
     defer suggestions.deinit(std.testing.allocator);
 
     try suggestions.consider(std.testing.allocator, &distance, "gti", "gta");
