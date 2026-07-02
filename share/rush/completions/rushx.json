@@ -1,0 +1,25 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "rushx",
+    "description": "run package scripts in a Rush project",
+    "providers": {
+      "rushx.scripts": { "function": "__rush_complete_rushx_scripts" }
+    },
+    "options": [
+      { "short": "h", "long": "help", "description": "show help" },
+      { "short": "q", "long": "quiet", "description": "hide startup information" }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "script",
+          "index": 0,
+          "provider": "rushx.scripts",
+          "description": "package script to run"
+        }
+      ]
+    }
+  }
+}

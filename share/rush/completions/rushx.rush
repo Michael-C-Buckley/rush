@@ -1,0 +1,15 @@
+__rush_complete_rushx_scripts() {
+  command -v node >/dev/null 2>&1 || return
+  node -e '
+const fs = require("fs");
+let pkg;
+try {
+  pkg = JSON.parse(fs.readFileSync("package.json", "utf8"));
+} catch (_) {
+  process.exit(0);
+}
+for (const name of Object.keys(pkg.scripts || {})) console.log(name);
+' 2>/dev/null | while IFS= read -r script; do
+    test -n "$script" && rush_complete candidate "$script" --kind plain --description 'package script'
+  done
+}
