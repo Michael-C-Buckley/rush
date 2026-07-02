@@ -1,0 +1,177 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "wasm-bindgen",
+    "description": "generate WebAssembly JavaScript bindings",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for wasm-bindgen"
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "show version for wasm-bindgen"
+      },
+      {
+        "long": "out-dir",
+        "description": "output directory",
+        "value": {
+          "name": "directory",
+          "description": "Target directory to emit JS bindings, TS definitions, .wasm binaries, etc",
+          "provider": "directories"
+        }
+      },
+      {
+        "long": "out-name",
+        "description": "set a custom output filename (Without extension. Defaults to crate name)",
+        "value": {
+          "name": "filename",
+          "description": "Output filename",
+          "provider": "files"
+        }
+      },
+      {
+        "long": "target",
+        "description": "what type of output to generate",
+        "value": {
+          "name": "target",
+          "provider": "targets"
+        }
+      },
+      {
+        "long": "no-modules-global",
+        "description": "name of global to assign generated bindings to",
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "browser",
+        "description": "hint that JS should only be compatible with a browser"
+      },
+      {
+        "long": "typescript",
+        "description": "output a TypeScript definition file (on by default)"
+      },
+      {
+        "long": "no-typescript",
+        "description": "don't emit a *.d.ts file"
+      },
+      {
+        "long": "omit-imports",
+        "description": "don't emit imports in generated JavaScript"
+      },
+      {
+        "long": "debug",
+        "description": "include otherwise-extraneous debug checks in output"
+      },
+      {
+        "long": "no-demangle",
+        "description": "don't demangle Rust symbol names"
+      },
+      {
+        "long": "keep-debug",
+        "description": "keep debug sections in wasm files"
+      },
+      {
+        "long": "remove-name-section",
+        "description": "remove the debugging `name` section of the file"
+      },
+      {
+        "long": "remove-producers-section",
+        "description": "remove the telemetry `producers` section"
+      },
+      {
+        "long": "omit-default-module-path",
+        "description": "don't add WebAssembly fallback imports in generated JavaScript"
+      },
+      {
+        "long": "encode-into",
+        "description": "whether or not to use TextEncoder#encodeInto()",
+        "value": {
+          "name": "option",
+          "provider": "encodeInto"
+        }
+      },
+      {
+        "long": "nodejs",
+        "description": "deprecated, use `--target nodejs`"
+      },
+      {
+        "long": "web",
+        "description": "deprecated, use `--target web`"
+      },
+      {
+        "long": "no-modules",
+        "description": "deprecated, use `--target no-modules`"
+      },
+      {
+        "long": "weak-refs",
+        "description": "enable usage of the JS weak references proposal"
+      },
+      {
+        "long": "reference-types",
+        "description": "enable usage of WebAssembly reference types"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "input",
+          "description": "File name to output the compiled binary bindings",
+          "provider": "files"
+        }
+      ]
+    },
+    "providers": {
+      "files": {
+        "builtin": "files"
+      },
+      "directories": {
+        "builtin": "directories"
+      },
+      "targets": {
+        "values": [
+          {
+            "value": "web",
+            "description": "load in a web browser"
+          },
+          {
+            "value": "bundler",
+            "description": "load with bundlers"
+          },
+          {
+            "value": "nodejs",
+            "description": "load with Node.js require"
+          },
+          {
+            "value": "no-modules",
+            "description": "browser output without ES modules"
+          },
+          {
+            "value": "deno",
+            "description": "load with Deno imports"
+          }
+        ]
+      },
+      "encodeInto": {
+        "values": [
+          {
+            "value": "test"
+          },
+          {
+            "value": "always",
+            "description": "always use encodeInto"
+          },
+          {
+            "value": "never",
+            "description": "never use encodeInto"
+          }
+        ]
+      }
+    }
+  }
+}
