@@ -1,0 +1,213 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ghq",
+    "description": "organize remote repository clones under a root directory",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "spellings": [
+          "h",
+          "help"
+        ],
+        "description": "show help",
+        "inherit": true,
+        "excludes": [
+          "--version",
+          "-v"
+        ]
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "print the version",
+        "inherit": false,
+        "excludes": [
+          "--help",
+          "-h",
+          "help",
+          "h"
+        ]
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "get",
+        "description": "clone/sync with a remote repository",
+        "options": [
+          {
+            "short": "u",
+            "long": "update",
+            "description": "update local repository if cloned already (default: false)",
+            "inherit": false
+          },
+          {
+            "short": "p",
+            "description": "clone with SSH (default: false)",
+            "inherit": false
+          },
+          {
+            "long": "shallow",
+            "description": "do a shallow clone (default: false)",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "long": "look",
+            "description": "look after get (default: false)",
+            "inherit": false
+          },
+          {
+            "long": "vcs",
+            "description": "specify vcs backend for cloning",
+            "inherit": false,
+            "value": {
+              "name": "vcs",
+              "provider": "ghq.vcs"
+            }
+          },
+          {
+            "short": "s",
+            "long": "silent",
+            "description": "clone or update silently (default: false)",
+            "inherit": false
+          },
+          {
+            "long": "no-recursive",
+            "description": "prevent recursive fetching (default: false)",
+            "inherit": false
+          },
+          {
+            "short": "b",
+            "long": "branch",
+            "description": "specify branch name. This flag implies --single-branch on Git",
+            "inherit": false,
+            "value": {
+              "name": "branch"
+            }
+          },
+          {
+            "short": "P",
+            "long": "parallel",
+            "description": "import parallelly (default: false)",
+            "inherit": false
+          },
+          {
+            "long": "bare",
+            "description": "do a bare clone (default: false)",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "repository",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "list local repositories",
+        "options": [
+          {
+            "short": "e",
+            "long": "exact",
+            "description": "perform an exact match (default: false)",
+            "inherit": false
+          },
+          {
+            "long": "vcs",
+            "description": "specify vcs backend for matching",
+            "inherit": false,
+            "value": {
+              "name": "vcs",
+              "provider": "ghq.vcs"
+            }
+          },
+          {
+            "short": "p",
+            "long": "full-path",
+            "description": "print full paths (default: false)",
+            "inherit": false,
+            "excludes": [
+              "--unique"
+            ]
+          },
+          {
+            "long": "unique",
+            "description": "print unique subpaths (default: false)",
+            "inherit": false,
+            "excludes": [
+              "--full-path",
+              "-p"
+            ]
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "query",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "root",
+        "description": "show repositories' root",
+        "options": [
+          {
+            "long": "all",
+            "description": "show all roots (default: false)",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "create",
+        "description": "create a new repository",
+        "options": [
+          {
+            "long": "vcs",
+            "description": "specify vcs backend explicitly",
+            "inherit": false,
+            "value": {
+              "name": "vcs",
+              "provider": "ghq.vcs"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "repository",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "ghq.vcs": {
+        "candidates": [
+          {
+            "value": "git"
+          },
+          {
+            "value": "hg"
+          },
+          {
+            "value": "svn"
+          },
+          {
+            "value": "bzr"
+          }
+        ]
+      }
+    }
+  }
+}
