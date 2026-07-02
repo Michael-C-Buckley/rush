@@ -1,0 +1,748 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "mysql",
+    "description": "connect to a MySQL server",
+    "options": [
+      {
+        "long": "auto-rehash",
+        "description": "Enable automatic rehashing",
+        "inherit": false
+      },
+      {
+        "long": "auto-vertical-output",
+        "description": "Enable automatic vertical result set display",
+        "inherit": false
+      },
+      {
+        "long": "batch",
+        "short": "B",
+        "description": "Do not use history file",
+        "inherit": false
+      },
+      {
+        "long": "binary-as-hex",
+        "description": "Display binary values in hexadecimal notation",
+        "inherit": false
+      },
+      {
+        "long": "binary-mode",
+        "description": "Disable \\r\\n - to - \\n translation and treatment of \\0 as end-of-query",
+        "inherit": false
+      },
+      {
+        "long": "bind-address",
+        "description": "Use specified network interface to connect to MySQL Server",
+        "inherit": false,
+        "value": {
+          "name": "ip_address"
+        }
+      },
+      {
+        "long": "character-sets-dir",
+        "description": "Directory where character sets are installed",
+        "inherit": false,
+        "value": {
+          "name": "dir_name",
+          "description": "Directory where character sets are installed",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "column-names",
+        "description": "Write column names in results",
+        "inherit": false
+      },
+      {
+        "long": "column-type-info",
+        "description": "Display result set metadata",
+        "inherit": false
+      },
+      {
+        "long": "comments",
+        "short": "c",
+        "description": "Whether to retain or strip comments in statements sent to the server",
+        "inherit": false
+      },
+      {
+        "long": "compress",
+        "short": "C",
+        "description": "Compress all information sent between client and server",
+        "inherit": false
+      },
+      {
+        "long": "compression-algorithms",
+        "description": "Permitted compression algorithms for connections to server",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": {
+            "values": [
+              {
+                "value": "zlib"
+              },
+              {
+                "value": "zstd"
+              },
+              {
+                "value": "uncompressed"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "connect-expired-password",
+        "description": "Indicate to server that client can handle expired-password sandbox mode",
+        "inherit": false
+      },
+      {
+        "long": "connect-timeout",
+        "description": "Number of seconds before connection timeout",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "short": "D",
+        "long": "database",
+        "description": "database to use",
+        "inherit": false,
+        "value": {
+          "name": "db_name"
+        }
+      },
+      {
+        "long": "debug",
+        "description": "Write debugging log; supported only if MySQL was built with debugging support",
+        "inherit": false
+      },
+      {
+        "long": "debug-check",
+        "description": "Print debugging information when program exits",
+        "inherit": false
+      },
+      {
+        "short": "T",
+        "long": "debug-info",
+        "description": "Print debugging information, memory, and CPU statistics when program exits",
+        "inherit": false
+      },
+      {
+        "long": "default-auth",
+        "description": "Authentication plugin to use",
+        "inherit": false,
+        "value": {
+          "name": "plugin"
+        }
+      },
+      {
+        "long": "default-character-set",
+        "description": "Specify default character set",
+        "inherit": false,
+        "value": {
+          "name": "charset_name"
+        }
+      },
+      {
+        "long": "defaults-extra-file",
+        "description": "Read named option file in addition to usual option files",
+        "inherit": false,
+        "value": {
+          "name": "file_name",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "defaults-file",
+        "description": "Read only named option file",
+        "inherit": false,
+        "value": {
+          "name": "file_name",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "defaults-group-suffix",
+        "description": "Option group suffix value",
+        "inherit": false,
+        "value": {
+          "name": "str"
+        }
+      },
+      {
+        "long": "delimiter",
+        "description": "Set the statement delimiter",
+        "inherit": false,
+        "value": {
+          "name": "str"
+        }
+      },
+      {
+        "long": "disable-named-commands",
+        "description": "Disable named commands. Use the \\* form only, or use named commands only at the beginning of a line ending with a semicolon (;). mysql starts with this option e",
+        "inherit": false
+      },
+      {
+        "long": "dns-srv-name",
+        "description": "Use DNS SRV lookup for host information",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "enable-cleartext-plugin",
+        "description": "Enable cleartext authentication plugin",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "long": "execute",
+        "description": "execute SQL statement and quit",
+        "inherit": false,
+        "value": {
+          "name": "statement"
+        }
+      },
+      {
+        "short": "f",
+        "long": "force",
+        "description": "Continue even if an SQL error occurs",
+        "inherit": false
+      },
+      {
+        "long": "get-server-public-key",
+        "description": "Request RSA public key from server",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "short": "?",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "histignore",
+        "description": "Patterns specifying which statements to ignore for logging",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "host",
+        "description": "MySQL server host",
+        "inherit": false,
+        "value": {
+          "name": "host_name"
+        }
+      },
+      {
+        "short": "H",
+        "long": "html",
+        "description": "Produce HTML output",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "long": "ignore-spaces",
+        "description": "Ignore spaces after function names",
+        "inherit": false
+      },
+      {
+        "long": "init-command",
+        "description": "SQL statement to execute after connecting",
+        "inherit": false,
+        "value": {
+          "name": "command"
+        }
+      },
+      {
+        "long": "line-numbers",
+        "description": "Write line numbers for errors",
+        "inherit": false
+      },
+      {
+        "long": "load-data-local-dir",
+        "description": "Directory for files named in LOAD DATA LOCAL statements",
+        "inherit": false,
+        "value": {
+          "name": "dir_name",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "local-infile",
+        "description": "Enable or disable for LOCAL capability for LOAD DATA",
+        "inherit": false,
+        "value": {
+          "name": "is-local-inflie",
+          "provider": {
+            "values": [
+              {
+                "value": "0",
+                "description": "Disable"
+              },
+              {
+                "value": "1",
+                "description": "Enable"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "login-path",
+        "description": "Read login path options from .mylogin.cnf",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "max-allowed-packet",
+        "description": "Maximum packet length to send to or receive from server",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "max-join-size",
+        "description": "The automatic limit for rows in a join when using --safe-updates",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "short": "G",
+        "long": "named-commands",
+        "description": "Enable named mysql commands",
+        "inherit": false
+      },
+      {
+        "long": "net-buffer-length",
+        "description": "Buffer size for TCP/IP and socket communication",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "network-namespace",
+        "description": "Specify network namespace",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "short": "A",
+        "long": "no-auto-rehash",
+        "description": "Disable automatic rehashing",
+        "inherit": false
+      },
+      {
+        "long": "no-beep",
+        "short": "b",
+        "description": "Do not beep when errors occur",
+        "inherit": false
+      },
+      {
+        "long": "no-defaults",
+        "description": "Read no option files",
+        "inherit": false
+      },
+      {
+        "short": "o",
+        "long": "one-database",
+        "description": "Ignore statements except those for the default database named on the command line",
+        "inherit": false
+      },
+      {
+        "long": "pager",
+        "description": "Use the given command for paging query output",
+        "inherit": false,
+        "value": {
+          "name": "command"
+        }
+      },
+      {
+        "short": "p",
+        "long": "password",
+        "description": "password for the MySQL user",
+        "inherit": false,
+        "value": {
+          "name": "password"
+        }
+      },
+      {
+        "long": "pipe",
+        "short": "W",
+        "description": "Connect to server using named pipe (Windows only)",
+        "inherit": false
+      },
+      {
+        "long": "plugin-dir",
+        "description": "Directory where plugins are installed",
+        "inherit": false,
+        "value": {
+          "name": "dir_name",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "P",
+        "long": "port",
+        "description": "TCP/IP port number for connection",
+        "inherit": false,
+        "value": {
+          "name": "port_num"
+        }
+      },
+      {
+        "long": "print-defaults",
+        "description": "Print default options",
+        "inherit": false
+      },
+      {
+        "long": "prompt",
+        "description": "Set the prompt to the specified format",
+        "inherit": false,
+        "value": {
+          "name": "format_str"
+        }
+      },
+      {
+        "long": "protocol",
+        "description": "Transport protocol to use",
+        "inherit": false,
+        "value": {
+          "name": "format_str",
+          "provider": {
+            "values": [
+              {
+                "value": "TCP"
+              },
+              {
+                "value": "SOCKET"
+              },
+              {
+                "value": "PIPE"
+              },
+              {
+                "value": "MEMORY"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "q",
+        "long": "quick",
+        "description": "Do not cache each query result",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "long": "raw",
+        "description": "Write column values without escape conversion",
+        "inherit": false
+      },
+      {
+        "long": "reconnect",
+        "description": "If the connection to the server is lost, automatically try to reconnect",
+        "inherit": false
+      },
+      {
+        "short": "U",
+        "long": "safe-updates",
+        "aliases": [
+          "i-am-a-dummy"
+        ],
+        "description": "Allow only UPDATE and DELETE statements that specify key values",
+        "inherit": false
+      },
+      {
+        "long": "select-limit",
+        "description": "The automatic limit for SELECT statements when using --safe-updates",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "server-public-key-path",
+        "description": "Path name to file containing RSA public key",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "shared-memory-base-name",
+        "description": "Shared-memory name for shared-memory connections (Windows only)",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "show-warnings",
+        "description": "Show warnings after each statement if there are any",
+        "inherit": false
+      },
+      {
+        "long": "sigint-ignore",
+        "description": "Ignore SIGINT signals (typically the result of typing Control+C)",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "silent",
+        "description": "Silent mode. Produce less output. This option can be given multiple times to produce less and less output",
+        "repeatable": true,
+        "inherit": false
+      },
+      {
+        "long": "skip-auto-rehash",
+        "description": "Disable automatic rehashing",
+        "inherit": false
+      },
+      {
+        "short": "N",
+        "long": "skip-column-names",
+        "description": "Do not write column names in results",
+        "inherit": false
+      },
+      {
+        "short": "L",
+        "long": "skip-line-numbers",
+        "description": "Skip line numbers for errors",
+        "inherit": false
+      },
+      {
+        "long": "skip-named-commands",
+        "description": "Disable named mysql commands",
+        "inherit": false
+      },
+      {
+        "long": "skip-pager",
+        "description": "Disable paging",
+        "inherit": false
+      },
+      {
+        "long": "skip-reconnect",
+        "description": "Disable reconnecting",
+        "inherit": false
+      },
+      {
+        "short": "S",
+        "long": "socket",
+        "description": "Unix socket file or Windows named pipe",
+        "inherit": false,
+        "value": {
+          "name": "name",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "ssl-ca",
+        "description": "File that contains list of trusted SSL Certificate Authorities",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "ssl-capath",
+        "description": "Directory that contains trusted SSL Certificate Authority certificate files",
+        "inherit": false,
+        "value": {
+          "name": "dirname",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "ssl-cert",
+        "description": "File that contains X.509 certificate",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "ssl-cipher",
+        "description": "Permissible ciphers for connection encryption",
+        "inherit": false
+      },
+      {
+        "long": "ssl-crl",
+        "description": "File that contains certificate revocation lists",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "ssl-crlpath",
+        "description": "Directory that contains certificate revocation-list files",
+        "inherit": false,
+        "value": {
+          "name": "dirname",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "ssl-fips-mode",
+        "description": "Whether to enable FIPS mode on client side",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              {
+                "value": "OFF"
+              },
+              {
+                "value": "ON"
+              },
+              {
+                "value": "STRICT"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "ssl-key",
+        "description": "File that contains X.509 key",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "ssl-mode",
+        "description": "Desired security state of connection to server",
+        "inherit": false
+      },
+      {
+        "short": "j",
+        "long": "syslog",
+        "description": "Log interactive statements to syslog",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "long": "table",
+        "description": "Display output in tabular format",
+        "inherit": false
+      },
+      {
+        "long": "tee",
+        "description": "Append a copy of output to named file",
+        "inherit": false,
+        "value": {
+          "name": "file_name",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "tls-ciphersuites",
+        "description": "Permissible TLSv1.3 ciphersuites for encrypted connections",
+        "inherit": false,
+        "value": {
+          "name": "ciphersuite_list"
+        }
+      },
+      {
+        "long": "tls-version",
+        "description": "Permissible TLS protocols for encrypted connections",
+        "inherit": false,
+        "value": {
+          "name": "protocol_list"
+        }
+      },
+      {
+        "short": "n",
+        "long": "unbuffered",
+        "description": "Flush the buffer after each query",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "long": "user",
+        "description": "MySQL user name",
+        "inherit": false,
+        "value": {
+          "name": "user_name"
+        }
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "Verbose mode",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "show version information",
+        "inherit": false
+      },
+      {
+        "short": "E",
+        "long": "vertical",
+        "description": "Print query output rows vertically (one line per column value)",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "wait",
+        "description": "If the connection cannot be established, wait and retry instead of aborting",
+        "inherit": false
+      },
+      {
+        "short": "X",
+        "long": "xml",
+        "description": "Produce XML output",
+        "inherit": false
+      },
+      {
+        "long": "zstd-compression-level",
+        "description": "Compression level for connections to server that use zstd compression",
+        "inherit": false,
+        "value": {
+          "name": "level",
+          "description": "Compression level between 1-22. The default zstd compression level is 3. The compression level setting has no effect on connections that do not use zstd compres"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "database",
+          "index": 0,
+          "description": "database to use",
+          "required": false
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
