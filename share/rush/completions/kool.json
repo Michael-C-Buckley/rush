@@ -1,0 +1,621 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "kool",
+    "description": "cloud and docker environments made easy",
+    "options": [
+      {
+        "long": "verbose",
+        "description": "increase output verbosity",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "create",
+        "description": "create a new project using a preset",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "increase output verbosity",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "preset",
+              "description": "preset that will be used to create the project",
+              "index": 0
+            },
+            {
+              "name": "folder",
+              "description": "folder where the project will be created",
+              "provider": "builtin.directories",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "deploy",
+        "description": "deploy a local application to a Kool Cloud environment",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "increase output verbosity",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "destroy",
+            "description": "destroy an environment deployed to Kool Cloud",
+            "options": [
+              {
+                "long": "verbose",
+                "description": "increase output verbosity",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "exec",
+            "description": "execute a command inside a running service container deployed to Kool Cloud",
+            "options": [
+              {
+                "long": "verbose",
+                "description": "increase output verbosity",
+                "inherit": false
+              },
+              {
+                "long": "container",
+                "short": "c",
+                "description": "container target",
+                "inherit": false,
+                "value": {
+                  "name": "container"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "logs",
+            "description": "see the logs of running service container deployed to Kool Cloud",
+            "options": [
+              {
+                "long": "verbose",
+                "description": "increase output verbosity",
+                "inherit": false
+              },
+              {
+                "long": "container",
+                "short": "c",
+                "description": "container target",
+                "inherit": false,
+                "value": {
+                  "name": "container"
+                }
+              },
+              {
+                "long": "follow",
+                "short": "f",
+                "description": "follow log output",
+                "inherit": false
+              },
+              {
+                "long": "tail",
+                "short": "t",
+                "description": "number of lines to show from the end of the logs for each container. A value equal to 0 will show all lines",
+                "inherit": false,
+                "value": {
+                  "name": "tail"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "docker",
+        "description": "create a new container (a powered up 'docker run')",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "increase output verbosity",
+            "inherit": false
+          },
+          {
+            "long": "env",
+            "short": "e",
+            "description": "environment variables",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "env"
+            }
+          },
+          {
+            "long": "network",
+            "short": "n",
+            "description": "connect a container to a network",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "network"
+            }
+          },
+          {
+            "long": "publish",
+            "short": "p",
+            "description": "publish a container's port(s) to the host",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "publish"
+            }
+          },
+          {
+            "long": "volume",
+            "short": "v",
+            "description": "bind mount a volume",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "volume"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "image",
+              "description": "docker image",
+              "index": 0
+            },
+            {
+              "name": "command",
+              "description": "command to execute inside the container",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "exec",
+        "description": "execute a command inside a running service container",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "increase output verbosity",
+            "inherit": false
+          },
+          {
+            "long": "detach",
+            "short": "d",
+            "description": "detached mode: Run command in the background",
+            "inherit": false
+          },
+          {
+            "long": "env",
+            "short": "e",
+            "description": "environment variables",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "env"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "description": "service you want to execute a command",
+              "index": 0
+            },
+            {
+              "name": "command",
+              "description": "command to execute inside the container",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "info",
+        "description": "print out information about the local environment",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "increase output verbosity",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "logs",
+        "description": "display log output from running service containers",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "increase output verbosity",
+            "inherit": false
+          },
+          {
+            "long": "follow",
+            "short": "f",
+            "description": "follow log output",
+            "inherit": false
+          },
+          {
+            "long": "tail",
+            "short": "t",
+            "description": "number of lines to show from the end of the logs for each container. A value equal to 0 will show all lines",
+            "inherit": false,
+            "value": {
+              "name": "tail"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "description": "service to get logs from",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "preset",
+        "description": "install configuration files customized for Kool in the current directory",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "increase output verbosity",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "preset",
+              "description": "preset that will be used to configure the project",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "recipe",
+        "description": "adds configuration for some recipe in the current work directory",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "increase output verbosity",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "recipe",
+              "description": "recipe that will be used to add configuration",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "restart",
+        "description": "restart running service containers (the same as 'kool stop' followed by 'kool start')",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "increase output verbosity",
+            "inherit": false
+          },
+          {
+            "long": "purge",
+            "description": "remove all persistent data from volume mounts on containers",
+            "inherit": false
+          },
+          {
+            "long": "rebuild",
+            "description": "updates and builds service's images",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "description": "service you want to restart",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "run",
+        "description": "execute a script defined in kool.yml",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "increase output verbosity",
+            "inherit": false
+          },
+          {
+            "long": "env",
+            "short": "e",
+            "description": "environment variables",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "env"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "script",
+              "description": "script to be executed",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "self-update",
+        "description": "update kool to the latest version",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "increase output verbosity",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "share",
+        "description": "live share your local environment on the Internet using an HTTP tunnel",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "increase output verbosity",
+            "inherit": false
+          },
+          {
+            "long": "port",
+            "description": "the port from the target service that should be shared. If not provided, it will default to port 80",
+            "inherit": false,
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "service",
+            "description": "the name of the local service container you want to share",
+            "inherit": false,
+            "value": {
+              "name": "service"
+            }
+          },
+          {
+            "long": "subdomain",
+            "description": "the subdomain used to generate your public https://subdomain.kool.live URL",
+            "inherit": false,
+            "value": {
+              "name": "subdomain"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "start",
+        "description": "start service containers defined in docker-compose.yml",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "increase output verbosity",
+            "inherit": false
+          },
+          {
+            "long": "foreground",
+            "short": "f",
+            "description": "start containers in foreground mode",
+            "inherit": false
+          },
+          {
+            "long": "profile",
+            "description": "specify a profile to enable",
+            "inherit": false,
+            "value": {
+              "name": "profile"
+            }
+          },
+          {
+            "long": "rebuild",
+            "short": "b",
+            "description": "updates and builds service's images",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "description": "service you want to start",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "status",
+        "description": "show the status of all service containers",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "increase output verbosity",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "stop",
+        "description": "stop and destroy running service containers",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "increase output verbosity",
+            "inherit": false
+          },
+          {
+            "long": "purge",
+            "description": "remove all persistent data from volume mounts on containers",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "service",
+              "description": "service you want to stop",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
