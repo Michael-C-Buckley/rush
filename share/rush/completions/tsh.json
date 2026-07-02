@@ -1,0 +1,4988 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "tsh",
+    "description": "Teleport authentication gateway client",
+    "subcommands": [
+      {
+        "name": "version",
+        "description": "print the version"
+      },
+      {
+        "name": "ssh",
+        "description": "run shell or execute a command on a remote SSH node",
+        "arguments": {
+          "states": [
+            {
+              "name": "user@hostname",
+              "index": 0,
+              "provider": "tsh.hosts",
+              "description": "remote host"
+            }
+          ]
+        },
+        "options": [
+          {
+            "short": "l",
+            "long": "login",
+            "description": "remote host login",
+            "value": {
+              "name": "login"
+            }
+          },
+          {
+            "long": "proxy",
+            "description": "sSH proxy address",
+            "value": {
+              "name": "proxy",
+              "provider": "tsh.clusters"
+            }
+          },
+          {
+            "long": "user",
+            "description": "sSH proxy user",
+            "value": {
+              "name": "user",
+              "provider": "tsh.users"
+            }
+          },
+          {
+            "long": "ttl",
+            "description": "minutes to live for SSH session",
+            "value": {
+              "name": "time"
+            }
+          },
+          {
+            "short": "i",
+            "long": "identity",
+            "description": "identity file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-format",
+            "description": "sSH certificate format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "insecure",
+            "description": "don't verify server certificate or host name"
+          },
+          {
+            "long": "auth",
+            "description": "authentication connector",
+            "value": {
+              "name": "connector"
+            }
+          },
+          {
+            "long": "skip-version-check",
+            "description": "skip server/client version check"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "verbose logging to stdout"
+          },
+          {
+            "short": "k",
+            "long": "add-keys-to-agent",
+            "description": "control key handling",
+            "value": {
+              "name": "mode",
+              "provider": "tsh.key-agent-modes"
+            }
+          },
+          {
+            "long": "enable-escape-sequences",
+            "description": "enable SSH escape sequences"
+          },
+          {
+            "long": "bind-addr",
+            "description": "browser login bind address",
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "short": "J",
+            "long": "jumphost",
+            "description": "sSH jumphost",
+            "value": {
+              "name": "host"
+            }
+          }
+        ]
+      },
+      {
+        "name": "aws",
+        "description": "access AWS API",
+        "options": [
+          {
+            "short": "l",
+            "long": "login",
+            "description": "remote host login",
+            "value": {
+              "name": "login"
+            }
+          },
+          {
+            "long": "proxy",
+            "description": "sSH proxy address",
+            "value": {
+              "name": "proxy",
+              "provider": "tsh.clusters"
+            }
+          },
+          {
+            "long": "user",
+            "description": "sSH proxy user",
+            "value": {
+              "name": "user",
+              "provider": "tsh.users"
+            }
+          },
+          {
+            "long": "ttl",
+            "description": "minutes to live for SSH session",
+            "value": {
+              "name": "time"
+            }
+          },
+          {
+            "short": "i",
+            "long": "identity",
+            "description": "identity file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-format",
+            "description": "sSH certificate format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "insecure",
+            "description": "don't verify server certificate or host name"
+          },
+          {
+            "long": "auth",
+            "description": "authentication connector",
+            "value": {
+              "name": "connector"
+            }
+          },
+          {
+            "long": "skip-version-check",
+            "description": "skip server/client version check"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "verbose logging to stdout"
+          },
+          {
+            "short": "k",
+            "long": "add-keys-to-agent",
+            "description": "control key handling",
+            "value": {
+              "name": "mode",
+              "provider": "tsh.key-agent-modes"
+            }
+          },
+          {
+            "long": "enable-escape-sequences",
+            "description": "enable SSH escape sequences"
+          },
+          {
+            "long": "bind-addr",
+            "description": "browser login bind address",
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "short": "J",
+            "long": "jumphost",
+            "description": "sSH jumphost",
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "short": "f",
+            "long": "format",
+            "description": "output format",
+            "value": {
+              "name": "format",
+              "provider": "tsh.formats"
+            }
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "quiet mode"
+          }
+        ]
+      },
+      {
+        "name": "apps",
+        "description": "view and control proxied applications",
+        "subcommands": [
+          {
+            "name": "ls",
+            "description": "List available applications",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          },
+          {
+            "name": "login",
+            "description": "Retrieve short-lived certificate for an app",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          },
+          {
+            "name": "logout",
+            "description": "Remove app certificate",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          },
+          {
+            "name": "config",
+            "description": "Print app connection information",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "short": "l",
+            "long": "login",
+            "description": "remote host login",
+            "value": {
+              "name": "login"
+            }
+          },
+          {
+            "long": "proxy",
+            "description": "sSH proxy address",
+            "value": {
+              "name": "proxy",
+              "provider": "tsh.clusters"
+            }
+          },
+          {
+            "long": "user",
+            "description": "sSH proxy user",
+            "value": {
+              "name": "user",
+              "provider": "tsh.users"
+            }
+          },
+          {
+            "long": "ttl",
+            "description": "minutes to live for SSH session",
+            "value": {
+              "name": "time"
+            }
+          },
+          {
+            "short": "i",
+            "long": "identity",
+            "description": "identity file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-format",
+            "description": "sSH certificate format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "insecure",
+            "description": "don't verify server certificate or host name"
+          },
+          {
+            "long": "auth",
+            "description": "authentication connector",
+            "value": {
+              "name": "connector"
+            }
+          },
+          {
+            "long": "skip-version-check",
+            "description": "skip server/client version check"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "verbose logging to stdout"
+          },
+          {
+            "short": "k",
+            "long": "add-keys-to-agent",
+            "description": "control key handling",
+            "value": {
+              "name": "mode",
+              "provider": "tsh.key-agent-modes"
+            }
+          },
+          {
+            "long": "enable-escape-sequences",
+            "description": "enable SSH escape sequences"
+          },
+          {
+            "long": "bind-addr",
+            "description": "browser login bind address",
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "short": "J",
+            "long": "jumphost",
+            "description": "sSH jumphost",
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "short": "f",
+            "long": "format",
+            "description": "output format",
+            "value": {
+              "name": "format",
+              "provider": "tsh.formats"
+            }
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "quiet mode"
+          }
+        ]
+      },
+      {
+        "name": "proxy",
+        "description": "run local TLS proxy allowing connecting to Teleport in single-port mode",
+        "subcommands": [
+          {
+            "name": "ssh",
+            "description": "Start local TLS proxy for ssh connections when using Teleport in single-port mode",
+            "arguments": {
+              "states": [
+                {
+                  "name": "user@hostname",
+                  "index": 0,
+                  "provider": "tsh.hosts",
+                  "description": "remote host"
+                }
+              ]
+            },
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              }
+            ]
+          },
+          {
+            "name": "db",
+            "description": "Start local TLS proxy for database connections when using Teleport in single-port mode",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "short": "l",
+            "long": "login",
+            "description": "remote host login",
+            "value": {
+              "name": "login"
+            }
+          },
+          {
+            "long": "proxy",
+            "description": "sSH proxy address",
+            "value": {
+              "name": "proxy",
+              "provider": "tsh.clusters"
+            }
+          },
+          {
+            "long": "user",
+            "description": "sSH proxy user",
+            "value": {
+              "name": "user",
+              "provider": "tsh.users"
+            }
+          },
+          {
+            "long": "ttl",
+            "description": "minutes to live for SSH session",
+            "value": {
+              "name": "time"
+            }
+          },
+          {
+            "short": "i",
+            "long": "identity",
+            "description": "identity file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-format",
+            "description": "sSH certificate format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "insecure",
+            "description": "don't verify server certificate or host name"
+          },
+          {
+            "long": "auth",
+            "description": "authentication connector",
+            "value": {
+              "name": "connector"
+            }
+          },
+          {
+            "long": "skip-version-check",
+            "description": "skip server/client version check"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "verbose logging to stdout"
+          },
+          {
+            "short": "k",
+            "long": "add-keys-to-agent",
+            "description": "control key handling",
+            "value": {
+              "name": "mode",
+              "provider": "tsh.key-agent-modes"
+            }
+          },
+          {
+            "long": "enable-escape-sequences",
+            "description": "enable SSH escape sequences"
+          },
+          {
+            "long": "bind-addr",
+            "description": "browser login bind address",
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "short": "J",
+            "long": "jumphost",
+            "description": "sSH jumphost",
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "short": "f",
+            "long": "format",
+            "description": "output format",
+            "value": {
+              "name": "format",
+              "provider": "tsh.formats"
+            }
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "quiet mode"
+          }
+        ]
+      },
+      {
+        "name": "db",
+        "description": "view and control proxied databases",
+        "subcommands": [
+          {
+            "name": "ls",
+            "description": "List all available databases",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          },
+          {
+            "name": "login",
+            "description": "Retrieve credentials for a database",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          },
+          {
+            "name": "logout",
+            "description": "Remove database credentials",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          },
+          {
+            "name": "env",
+            "description": "Print environment variables for the configured database",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          },
+          {
+            "name": "config",
+            "description": "Print database connection information. Useful when configuring GUI clients",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          },
+          {
+            "name": "connect",
+            "description": "Connect Connect to a database",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "short": "l",
+            "long": "login",
+            "description": "remote host login",
+            "value": {
+              "name": "login"
+            }
+          },
+          {
+            "long": "proxy",
+            "description": "sSH proxy address",
+            "value": {
+              "name": "proxy",
+              "provider": "tsh.clusters"
+            }
+          },
+          {
+            "long": "user",
+            "description": "sSH proxy user",
+            "value": {
+              "name": "user",
+              "provider": "tsh.users"
+            }
+          },
+          {
+            "long": "ttl",
+            "description": "minutes to live for SSH session",
+            "value": {
+              "name": "time"
+            }
+          },
+          {
+            "short": "i",
+            "long": "identity",
+            "description": "identity file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-format",
+            "description": "sSH certificate format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "insecure",
+            "description": "don't verify server certificate or host name"
+          },
+          {
+            "long": "auth",
+            "description": "authentication connector",
+            "value": {
+              "name": "connector"
+            }
+          },
+          {
+            "long": "skip-version-check",
+            "description": "skip server/client version check"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "verbose logging to stdout"
+          },
+          {
+            "short": "k",
+            "long": "add-keys-to-agent",
+            "description": "control key handling",
+            "value": {
+              "name": "mode",
+              "provider": "tsh.key-agent-modes"
+            }
+          },
+          {
+            "long": "enable-escape-sequences",
+            "description": "enable SSH escape sequences"
+          },
+          {
+            "long": "bind-addr",
+            "description": "browser login bind address",
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "short": "J",
+            "long": "jumphost",
+            "description": "sSH jumphost",
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "short": "f",
+            "long": "format",
+            "description": "output format",
+            "value": {
+              "name": "format",
+              "provider": "tsh.formats"
+            }
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "quiet mode"
+          }
+        ]
+      },
+      {
+        "name": "join",
+        "description": "join the active SSH session",
+        "options": [
+          {
+            "short": "l",
+            "long": "login",
+            "description": "remote host login",
+            "value": {
+              "name": "login"
+            }
+          },
+          {
+            "long": "proxy",
+            "description": "sSH proxy address",
+            "value": {
+              "name": "proxy",
+              "provider": "tsh.clusters"
+            }
+          },
+          {
+            "long": "user",
+            "description": "sSH proxy user",
+            "value": {
+              "name": "user",
+              "provider": "tsh.users"
+            }
+          },
+          {
+            "long": "ttl",
+            "description": "minutes to live for SSH session",
+            "value": {
+              "name": "time"
+            }
+          },
+          {
+            "short": "i",
+            "long": "identity",
+            "description": "identity file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-format",
+            "description": "sSH certificate format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "insecure",
+            "description": "don't verify server certificate or host name"
+          },
+          {
+            "long": "auth",
+            "description": "authentication connector",
+            "value": {
+              "name": "connector"
+            }
+          },
+          {
+            "long": "skip-version-check",
+            "description": "skip server/client version check"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "verbose logging to stdout"
+          },
+          {
+            "short": "k",
+            "long": "add-keys-to-agent",
+            "description": "control key handling",
+            "value": {
+              "name": "mode",
+              "provider": "tsh.key-agent-modes"
+            }
+          },
+          {
+            "long": "enable-escape-sequences",
+            "description": "enable SSH escape sequences"
+          },
+          {
+            "long": "bind-addr",
+            "description": "browser login bind address",
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "short": "J",
+            "long": "jumphost",
+            "description": "sSH jumphost",
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "short": "f",
+            "long": "format",
+            "description": "output format",
+            "value": {
+              "name": "format",
+              "provider": "tsh.formats"
+            }
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "quiet mode"
+          }
+        ]
+      },
+      {
+        "name": "play",
+        "description": "replay the recorded SSH session",
+        "options": [
+          {
+            "short": "l",
+            "long": "login",
+            "description": "remote host login",
+            "value": {
+              "name": "login"
+            }
+          },
+          {
+            "long": "proxy",
+            "description": "sSH proxy address",
+            "value": {
+              "name": "proxy",
+              "provider": "tsh.clusters"
+            }
+          },
+          {
+            "long": "user",
+            "description": "sSH proxy user",
+            "value": {
+              "name": "user",
+              "provider": "tsh.users"
+            }
+          },
+          {
+            "long": "ttl",
+            "description": "minutes to live for SSH session",
+            "value": {
+              "name": "time"
+            }
+          },
+          {
+            "short": "i",
+            "long": "identity",
+            "description": "identity file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-format",
+            "description": "sSH certificate format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "insecure",
+            "description": "don't verify server certificate or host name"
+          },
+          {
+            "long": "auth",
+            "description": "authentication connector",
+            "value": {
+              "name": "connector"
+            }
+          },
+          {
+            "long": "skip-version-check",
+            "description": "skip server/client version check"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "verbose logging to stdout"
+          },
+          {
+            "short": "k",
+            "long": "add-keys-to-agent",
+            "description": "control key handling",
+            "value": {
+              "name": "mode",
+              "provider": "tsh.key-agent-modes"
+            }
+          },
+          {
+            "long": "enable-escape-sequences",
+            "description": "enable SSH escape sequences"
+          },
+          {
+            "long": "bind-addr",
+            "description": "browser login bind address",
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "short": "J",
+            "long": "jumphost",
+            "description": "sSH jumphost",
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "short": "f",
+            "long": "format",
+            "description": "output format",
+            "value": {
+              "name": "format",
+              "provider": "tsh.formats"
+            }
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "quiet mode"
+          }
+        ]
+      },
+      {
+        "name": "scp",
+        "description": "secure file copy",
+        "options": [
+          {
+            "short": "l",
+            "long": "login",
+            "description": "remote host login",
+            "value": {
+              "name": "login"
+            }
+          },
+          {
+            "long": "proxy",
+            "description": "sSH proxy address",
+            "value": {
+              "name": "proxy",
+              "provider": "tsh.clusters"
+            }
+          },
+          {
+            "long": "user",
+            "description": "sSH proxy user",
+            "value": {
+              "name": "user",
+              "provider": "tsh.users"
+            }
+          },
+          {
+            "long": "ttl",
+            "description": "minutes to live for SSH session",
+            "value": {
+              "name": "time"
+            }
+          },
+          {
+            "short": "i",
+            "long": "identity",
+            "description": "identity file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-format",
+            "description": "sSH certificate format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "insecure",
+            "description": "don't verify server certificate or host name"
+          },
+          {
+            "long": "auth",
+            "description": "authentication connector",
+            "value": {
+              "name": "connector"
+            }
+          },
+          {
+            "long": "skip-version-check",
+            "description": "skip server/client version check"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "verbose logging to stdout"
+          },
+          {
+            "short": "k",
+            "long": "add-keys-to-agent",
+            "description": "control key handling",
+            "value": {
+              "name": "mode",
+              "provider": "tsh.key-agent-modes"
+            }
+          },
+          {
+            "long": "enable-escape-sequences",
+            "description": "enable SSH escape sequences"
+          },
+          {
+            "long": "bind-addr",
+            "description": "browser login bind address",
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "short": "J",
+            "long": "jumphost",
+            "description": "sSH jumphost",
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "short": "f",
+            "long": "format",
+            "description": "output format",
+            "value": {
+              "name": "format",
+              "provider": "tsh.formats"
+            }
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "quiet mode"
+          }
+        ]
+      },
+      {
+        "name": "ls",
+        "description": "list remote SSH nodes",
+        "options": [
+          {
+            "short": "l",
+            "long": "login",
+            "description": "remote host login",
+            "value": {
+              "name": "login"
+            }
+          },
+          {
+            "long": "proxy",
+            "description": "sSH proxy address",
+            "value": {
+              "name": "proxy",
+              "provider": "tsh.clusters"
+            }
+          },
+          {
+            "long": "user",
+            "description": "sSH proxy user",
+            "value": {
+              "name": "user",
+              "provider": "tsh.users"
+            }
+          },
+          {
+            "long": "ttl",
+            "description": "minutes to live for SSH session",
+            "value": {
+              "name": "time"
+            }
+          },
+          {
+            "short": "i",
+            "long": "identity",
+            "description": "identity file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-format",
+            "description": "sSH certificate format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "insecure",
+            "description": "don't verify server certificate or host name"
+          },
+          {
+            "long": "auth",
+            "description": "authentication connector",
+            "value": {
+              "name": "connector"
+            }
+          },
+          {
+            "long": "skip-version-check",
+            "description": "skip server/client version check"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "verbose logging to stdout"
+          },
+          {
+            "short": "k",
+            "long": "add-keys-to-agent",
+            "description": "control key handling",
+            "value": {
+              "name": "mode",
+              "provider": "tsh.key-agent-modes"
+            }
+          },
+          {
+            "long": "enable-escape-sequences",
+            "description": "enable SSH escape sequences"
+          },
+          {
+            "long": "bind-addr",
+            "description": "browser login bind address",
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "short": "J",
+            "long": "jumphost",
+            "description": "sSH jumphost",
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "short": "f",
+            "long": "format",
+            "description": "output format",
+            "value": {
+              "name": "format",
+              "provider": "tsh.formats"
+            }
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "quiet mode"
+          }
+        ]
+      },
+      {
+        "name": "clusters",
+        "description": "list available Teleport clusters",
+        "options": [
+          {
+            "short": "l",
+            "long": "login",
+            "description": "remote host login",
+            "value": {
+              "name": "login"
+            }
+          },
+          {
+            "long": "proxy",
+            "description": "sSH proxy address",
+            "value": {
+              "name": "proxy",
+              "provider": "tsh.clusters"
+            }
+          },
+          {
+            "long": "user",
+            "description": "sSH proxy user",
+            "value": {
+              "name": "user",
+              "provider": "tsh.users"
+            }
+          },
+          {
+            "long": "ttl",
+            "description": "minutes to live for SSH session",
+            "value": {
+              "name": "time"
+            }
+          },
+          {
+            "short": "i",
+            "long": "identity",
+            "description": "identity file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-format",
+            "description": "sSH certificate format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "insecure",
+            "description": "don't verify server certificate or host name"
+          },
+          {
+            "long": "auth",
+            "description": "authentication connector",
+            "value": {
+              "name": "connector"
+            }
+          },
+          {
+            "long": "skip-version-check",
+            "description": "skip server/client version check"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "verbose logging to stdout"
+          },
+          {
+            "short": "k",
+            "long": "add-keys-to-agent",
+            "description": "control key handling",
+            "value": {
+              "name": "mode",
+              "provider": "tsh.key-agent-modes"
+            }
+          },
+          {
+            "long": "enable-escape-sequences",
+            "description": "enable SSH escape sequences"
+          },
+          {
+            "long": "bind-addr",
+            "description": "browser login bind address",
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "short": "J",
+            "long": "jumphost",
+            "description": "sSH jumphost",
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "short": "f",
+            "long": "format",
+            "description": "output format",
+            "value": {
+              "name": "format",
+              "provider": "tsh.formats"
+            }
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "quiet mode"
+          }
+        ]
+      },
+      {
+        "name": "login",
+        "description": "log in to a cluster and retrieve the session certificate",
+        "options": [
+          {
+            "short": "l",
+            "long": "login",
+            "description": "remote host login",
+            "value": {
+              "name": "login"
+            }
+          },
+          {
+            "long": "proxy",
+            "description": "sSH proxy address",
+            "value": {
+              "name": "proxy",
+              "provider": "tsh.clusters"
+            }
+          },
+          {
+            "long": "user",
+            "description": "sSH proxy user",
+            "value": {
+              "name": "user",
+              "provider": "tsh.users"
+            }
+          },
+          {
+            "long": "ttl",
+            "description": "minutes to live for SSH session",
+            "value": {
+              "name": "time"
+            }
+          },
+          {
+            "short": "i",
+            "long": "identity",
+            "description": "identity file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-format",
+            "description": "sSH certificate format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "insecure",
+            "description": "don't verify server certificate or host name"
+          },
+          {
+            "long": "auth",
+            "description": "authentication connector",
+            "value": {
+              "name": "connector"
+            }
+          },
+          {
+            "long": "skip-version-check",
+            "description": "skip server/client version check"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "verbose logging to stdout"
+          },
+          {
+            "short": "k",
+            "long": "add-keys-to-agent",
+            "description": "control key handling",
+            "value": {
+              "name": "mode",
+              "provider": "tsh.key-agent-modes"
+            }
+          },
+          {
+            "long": "enable-escape-sequences",
+            "description": "enable SSH escape sequences"
+          },
+          {
+            "long": "bind-addr",
+            "description": "browser login bind address",
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "short": "J",
+            "long": "jumphost",
+            "description": "sSH jumphost",
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "short": "f",
+            "long": "format",
+            "description": "output format",
+            "value": {
+              "name": "format",
+              "provider": "tsh.formats"
+            }
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "quiet mode"
+          }
+        ]
+      },
+      {
+        "name": "logout",
+        "description": "delete a cluster certificate",
+        "options": [
+          {
+            "short": "l",
+            "long": "login",
+            "description": "remote host login",
+            "value": {
+              "name": "login"
+            }
+          },
+          {
+            "long": "proxy",
+            "description": "sSH proxy address",
+            "value": {
+              "name": "proxy",
+              "provider": "tsh.clusters"
+            }
+          },
+          {
+            "long": "user",
+            "description": "sSH proxy user",
+            "value": {
+              "name": "user",
+              "provider": "tsh.users"
+            }
+          },
+          {
+            "long": "ttl",
+            "description": "minutes to live for SSH session",
+            "value": {
+              "name": "time"
+            }
+          },
+          {
+            "short": "i",
+            "long": "identity",
+            "description": "identity file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-format",
+            "description": "sSH certificate format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "insecure",
+            "description": "don't verify server certificate or host name"
+          },
+          {
+            "long": "auth",
+            "description": "authentication connector",
+            "value": {
+              "name": "connector"
+            }
+          },
+          {
+            "long": "skip-version-check",
+            "description": "skip server/client version check"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "verbose logging to stdout"
+          },
+          {
+            "short": "k",
+            "long": "add-keys-to-agent",
+            "description": "control key handling",
+            "value": {
+              "name": "mode",
+              "provider": "tsh.key-agent-modes"
+            }
+          },
+          {
+            "long": "enable-escape-sequences",
+            "description": "enable SSH escape sequences"
+          },
+          {
+            "long": "bind-addr",
+            "description": "browser login bind address",
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "short": "J",
+            "long": "jumphost",
+            "description": "sSH jumphost",
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "short": "f",
+            "long": "format",
+            "description": "output format",
+            "value": {
+              "name": "format",
+              "provider": "tsh.formats"
+            }
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "quiet mode"
+          }
+        ]
+      },
+      {
+        "name": "status",
+        "description": "display the list of proxy servers and retrieved certificates",
+        "options": [
+          {
+            "short": "l",
+            "long": "login",
+            "description": "remote host login",
+            "value": {
+              "name": "login"
+            }
+          },
+          {
+            "long": "proxy",
+            "description": "sSH proxy address",
+            "value": {
+              "name": "proxy",
+              "provider": "tsh.clusters"
+            }
+          },
+          {
+            "long": "user",
+            "description": "sSH proxy user",
+            "value": {
+              "name": "user",
+              "provider": "tsh.users"
+            }
+          },
+          {
+            "long": "ttl",
+            "description": "minutes to live for SSH session",
+            "value": {
+              "name": "time"
+            }
+          },
+          {
+            "short": "i",
+            "long": "identity",
+            "description": "identity file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-format",
+            "description": "sSH certificate format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "insecure",
+            "description": "don't verify server certificate or host name"
+          },
+          {
+            "long": "auth",
+            "description": "authentication connector",
+            "value": {
+              "name": "connector"
+            }
+          },
+          {
+            "long": "skip-version-check",
+            "description": "skip server/client version check"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "verbose logging to stdout"
+          },
+          {
+            "short": "k",
+            "long": "add-keys-to-agent",
+            "description": "control key handling",
+            "value": {
+              "name": "mode",
+              "provider": "tsh.key-agent-modes"
+            }
+          },
+          {
+            "long": "enable-escape-sequences",
+            "description": "enable SSH escape sequences"
+          },
+          {
+            "long": "bind-addr",
+            "description": "browser login bind address",
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "short": "J",
+            "long": "jumphost",
+            "description": "sSH jumphost",
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "short": "f",
+            "long": "format",
+            "description": "output format",
+            "value": {
+              "name": "format",
+              "provider": "tsh.formats"
+            }
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "quiet mode"
+          }
+        ]
+      },
+      {
+        "name": "env",
+        "description": "print commands to set Teleport session environment variables",
+        "options": [
+          {
+            "short": "l",
+            "long": "login",
+            "description": "remote host login",
+            "value": {
+              "name": "login"
+            }
+          },
+          {
+            "long": "proxy",
+            "description": "sSH proxy address",
+            "value": {
+              "name": "proxy",
+              "provider": "tsh.clusters"
+            }
+          },
+          {
+            "long": "user",
+            "description": "sSH proxy user",
+            "value": {
+              "name": "user",
+              "provider": "tsh.users"
+            }
+          },
+          {
+            "long": "ttl",
+            "description": "minutes to live for SSH session",
+            "value": {
+              "name": "time"
+            }
+          },
+          {
+            "short": "i",
+            "long": "identity",
+            "description": "identity file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-format",
+            "description": "sSH certificate format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "insecure",
+            "description": "don't verify server certificate or host name"
+          },
+          {
+            "long": "auth",
+            "description": "authentication connector",
+            "value": {
+              "name": "connector"
+            }
+          },
+          {
+            "long": "skip-version-check",
+            "description": "skip server/client version check"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "verbose logging to stdout"
+          },
+          {
+            "short": "k",
+            "long": "add-keys-to-agent",
+            "description": "control key handling",
+            "value": {
+              "name": "mode",
+              "provider": "tsh.key-agent-modes"
+            }
+          },
+          {
+            "long": "enable-escape-sequences",
+            "description": "enable SSH escape sequences"
+          },
+          {
+            "long": "bind-addr",
+            "description": "browser login bind address",
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "short": "J",
+            "long": "jumphost",
+            "description": "sSH jumphost",
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "short": "f",
+            "long": "format",
+            "description": "output format",
+            "value": {
+              "name": "format",
+              "provider": "tsh.formats"
+            }
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "quiet mode"
+          }
+        ]
+      },
+      {
+        "name": "request",
+        "description": "manage access requests",
+        "subcommands": [
+          {
+            "name": "ls",
+            "description": "List access requests",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          },
+          {
+            "name": "show",
+            "description": "Show request details",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          },
+          {
+            "name": "new",
+            "description": "Create a new access request",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          },
+          {
+            "name": "review",
+            "description": "Review an access request",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "short": "l",
+            "long": "login",
+            "description": "remote host login",
+            "value": {
+              "name": "login"
+            }
+          },
+          {
+            "long": "proxy",
+            "description": "sSH proxy address",
+            "value": {
+              "name": "proxy",
+              "provider": "tsh.clusters"
+            }
+          },
+          {
+            "long": "user",
+            "description": "sSH proxy user",
+            "value": {
+              "name": "user",
+              "provider": "tsh.users"
+            }
+          },
+          {
+            "long": "ttl",
+            "description": "minutes to live for SSH session",
+            "value": {
+              "name": "time"
+            }
+          },
+          {
+            "short": "i",
+            "long": "identity",
+            "description": "identity file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-format",
+            "description": "sSH certificate format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "insecure",
+            "description": "don't verify server certificate or host name"
+          },
+          {
+            "long": "auth",
+            "description": "authentication connector",
+            "value": {
+              "name": "connector"
+            }
+          },
+          {
+            "long": "skip-version-check",
+            "description": "skip server/client version check"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "verbose logging to stdout"
+          },
+          {
+            "short": "k",
+            "long": "add-keys-to-agent",
+            "description": "control key handling",
+            "value": {
+              "name": "mode",
+              "provider": "tsh.key-agent-modes"
+            }
+          },
+          {
+            "long": "enable-escape-sequences",
+            "description": "enable SSH escape sequences"
+          },
+          {
+            "long": "bind-addr",
+            "description": "browser login bind address",
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "short": "J",
+            "long": "jumphost",
+            "description": "sSH jumphost",
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "short": "f",
+            "long": "format",
+            "description": "output format",
+            "value": {
+              "name": "format",
+              "provider": "tsh.formats"
+            }
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "quiet mode"
+          }
+        ]
+      },
+      {
+        "name": "kube",
+        "description": "manage available kubernetes clusters",
+        "subcommands": [
+          {
+            "name": "ls",
+            "description": "Get a list of kubernetes clusters",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          },
+          {
+            "name": "login",
+            "description": "Login to a kubernetes cluster",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          },
+          {
+            "name": "sessions",
+            "description": "Get a list of active kubernetes sessions",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          },
+          {
+            "name": "exec",
+            "description": "Execute a command in a kubernetes pod",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          },
+          {
+            "name": "join",
+            "description": "Join an active Kubernetes session",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "short": "l",
+            "long": "login",
+            "description": "remote host login",
+            "value": {
+              "name": "login"
+            }
+          },
+          {
+            "long": "proxy",
+            "description": "sSH proxy address",
+            "value": {
+              "name": "proxy",
+              "provider": "tsh.clusters"
+            }
+          },
+          {
+            "long": "user",
+            "description": "sSH proxy user",
+            "value": {
+              "name": "user",
+              "provider": "tsh.users"
+            }
+          },
+          {
+            "long": "ttl",
+            "description": "minutes to live for SSH session",
+            "value": {
+              "name": "time"
+            }
+          },
+          {
+            "short": "i",
+            "long": "identity",
+            "description": "identity file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-format",
+            "description": "sSH certificate format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "insecure",
+            "description": "don't verify server certificate or host name"
+          },
+          {
+            "long": "auth",
+            "description": "authentication connector",
+            "value": {
+              "name": "connector"
+            }
+          },
+          {
+            "long": "skip-version-check",
+            "description": "skip server/client version check"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "verbose logging to stdout"
+          },
+          {
+            "short": "k",
+            "long": "add-keys-to-agent",
+            "description": "control key handling",
+            "value": {
+              "name": "mode",
+              "provider": "tsh.key-agent-modes"
+            }
+          },
+          {
+            "long": "enable-escape-sequences",
+            "description": "enable SSH escape sequences"
+          },
+          {
+            "long": "bind-addr",
+            "description": "browser login bind address",
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "short": "J",
+            "long": "jumphost",
+            "description": "sSH jumphost",
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "short": "f",
+            "long": "format",
+            "description": "output format",
+            "value": {
+              "name": "format",
+              "provider": "tsh.formats"
+            }
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "quiet mode"
+          }
+        ]
+      },
+      {
+        "name": "mfa",
+        "description": "manage multi-factor authentication (MFA) devices",
+        "subcommands": [
+          {
+            "name": "ls",
+            "description": "Get a list of registered MFA devices",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          },
+          {
+            "name": "add",
+            "description": "Add a new MFA device",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          },
+          {
+            "name": "rm",
+            "description": "Remove a MFA device",
+            "options": [
+              {
+                "short": "l",
+                "long": "login",
+                "description": "remote host login",
+                "value": {
+                  "name": "login"
+                }
+              },
+              {
+                "long": "proxy",
+                "description": "sSH proxy address",
+                "value": {
+                  "name": "proxy",
+                  "provider": "tsh.clusters"
+                }
+              },
+              {
+                "long": "user",
+                "description": "sSH proxy user",
+                "value": {
+                  "name": "user",
+                  "provider": "tsh.users"
+                }
+              },
+              {
+                "long": "ttl",
+                "description": "minutes to live for SSH session",
+                "value": {
+                  "name": "time"
+                }
+              },
+              {
+                "short": "i",
+                "long": "identity",
+                "description": "identity file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "cert-format",
+                "description": "sSH certificate format",
+                "value": {
+                  "name": "format"
+                }
+              },
+              {
+                "long": "insecure",
+                "description": "don't verify server certificate or host name"
+              },
+              {
+                "long": "auth",
+                "description": "authentication connector",
+                "value": {
+                  "name": "connector"
+                }
+              },
+              {
+                "long": "skip-version-check",
+                "description": "skip server/client version check"
+              },
+              {
+                "short": "d",
+                "long": "debug",
+                "description": "verbose logging to stdout"
+              },
+              {
+                "short": "k",
+                "long": "add-keys-to-agent",
+                "description": "control key handling",
+                "value": {
+                  "name": "mode",
+                  "provider": "tsh.key-agent-modes"
+                }
+              },
+              {
+                "long": "enable-escape-sequences",
+                "description": "enable SSH escape sequences"
+              },
+              {
+                "long": "bind-addr",
+                "description": "browser login bind address",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "short": "J",
+                "long": "jumphost",
+                "description": "sSH jumphost",
+                "value": {
+                  "name": "host"
+                }
+              },
+              {
+                "short": "f",
+                "long": "format",
+                "description": "output format",
+                "value": {
+                  "name": "format",
+                  "provider": "tsh.formats"
+                }
+              },
+              {
+                "short": "q",
+                "long": "quiet",
+                "description": "quiet mode"
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "short": "l",
+            "long": "login",
+            "description": "remote host login",
+            "value": {
+              "name": "login"
+            }
+          },
+          {
+            "long": "proxy",
+            "description": "sSH proxy address",
+            "value": {
+              "name": "proxy",
+              "provider": "tsh.clusters"
+            }
+          },
+          {
+            "long": "user",
+            "description": "sSH proxy user",
+            "value": {
+              "name": "user",
+              "provider": "tsh.users"
+            }
+          },
+          {
+            "long": "ttl",
+            "description": "minutes to live for SSH session",
+            "value": {
+              "name": "time"
+            }
+          },
+          {
+            "short": "i",
+            "long": "identity",
+            "description": "identity file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-format",
+            "description": "sSH certificate format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "insecure",
+            "description": "don't verify server certificate or host name"
+          },
+          {
+            "long": "auth",
+            "description": "authentication connector",
+            "value": {
+              "name": "connector"
+            }
+          },
+          {
+            "long": "skip-version-check",
+            "description": "skip server/client version check"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "verbose logging to stdout"
+          },
+          {
+            "short": "k",
+            "long": "add-keys-to-agent",
+            "description": "control key handling",
+            "value": {
+              "name": "mode",
+              "provider": "tsh.key-agent-modes"
+            }
+          },
+          {
+            "long": "enable-escape-sequences",
+            "description": "enable SSH escape sequences"
+          },
+          {
+            "long": "bind-addr",
+            "description": "browser login bind address",
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "short": "J",
+            "long": "jumphost",
+            "description": "sSH jumphost",
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "short": "f",
+            "long": "format",
+            "description": "output format",
+            "value": {
+              "name": "format",
+              "provider": "tsh.formats"
+            }
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "quiet mode"
+          }
+        ]
+      },
+      {
+        "name": "config",
+        "description": "print OpenSSH configuration details",
+        "options": [
+          {
+            "short": "l",
+            "long": "login",
+            "description": "remote host login",
+            "value": {
+              "name": "login"
+            }
+          },
+          {
+            "long": "proxy",
+            "description": "sSH proxy address",
+            "value": {
+              "name": "proxy",
+              "provider": "tsh.clusters"
+            }
+          },
+          {
+            "long": "user",
+            "description": "sSH proxy user",
+            "value": {
+              "name": "user",
+              "provider": "tsh.users"
+            }
+          },
+          {
+            "long": "ttl",
+            "description": "minutes to live for SSH session",
+            "value": {
+              "name": "time"
+            }
+          },
+          {
+            "short": "i",
+            "long": "identity",
+            "description": "identity file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "cert-format",
+            "description": "sSH certificate format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "long": "insecure",
+            "description": "don't verify server certificate or host name"
+          },
+          {
+            "long": "auth",
+            "description": "authentication connector",
+            "value": {
+              "name": "connector"
+            }
+          },
+          {
+            "long": "skip-version-check",
+            "description": "skip server/client version check"
+          },
+          {
+            "short": "d",
+            "long": "debug",
+            "description": "verbose logging to stdout"
+          },
+          {
+            "short": "k",
+            "long": "add-keys-to-agent",
+            "description": "control key handling",
+            "value": {
+              "name": "mode",
+              "provider": "tsh.key-agent-modes"
+            }
+          },
+          {
+            "long": "enable-escape-sequences",
+            "description": "enable SSH escape sequences"
+          },
+          {
+            "long": "bind-addr",
+            "description": "browser login bind address",
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "short": "J",
+            "long": "jumphost",
+            "description": "sSH jumphost",
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "short": "f",
+            "long": "format",
+            "description": "output format",
+            "value": {
+              "name": "format",
+              "provider": "tsh.formats"
+            }
+          },
+          {
+            "short": "q",
+            "long": "quiet",
+            "description": "quiet mode"
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "tsh.formats": {
+        "values": [
+          "text",
+          "json",
+          "yaml"
+        ]
+      },
+      "tsh.key-agent-modes": {
+        "values": [
+          "auto",
+          "no",
+          "yes",
+          "only"
+        ]
+      },
+      "tsh.hosts": {
+        "function": "__rush_complete_tsh_hosts"
+      },
+      "tsh.clusters": {
+        "function": "__rush_complete_tsh_clusters"
+      },
+      "tsh.users": {
+        "function": "__rush_complete_tsh_users"
+      }
+    },
+    "options": [
+      {
+        "short": "l",
+        "long": "login",
+        "description": "remote host login",
+        "value": {
+          "name": "login"
+        },
+        "inherit": true
+      },
+      {
+        "long": "proxy",
+        "description": "SSH proxy address",
+        "value": {
+          "name": "proxy",
+          "provider": "tsh.clusters"
+        },
+        "inherit": true
+      },
+      {
+        "long": "user",
+        "description": "SSH proxy user",
+        "value": {
+          "name": "user",
+          "provider": "tsh.users"
+        },
+        "inherit": true
+      },
+      {
+        "long": "ttl",
+        "description": "minutes to live for SSH session",
+        "value": {
+          "name": "time"
+        },
+        "inherit": true
+      },
+      {
+        "short": "i",
+        "long": "identity",
+        "description": "identity file",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        },
+        "inherit": true
+      },
+      {
+        "long": "cert-format",
+        "description": "SSH certificate format",
+        "value": {
+          "name": "format"
+        },
+        "inherit": true
+      },
+      {
+        "long": "insecure",
+        "description": "don't verify server certificate or host name",
+        "inherit": true
+      },
+      {
+        "long": "auth",
+        "description": "authentication connector",
+        "value": {
+          "name": "connector"
+        },
+        "inherit": true
+      },
+      {
+        "long": "skip-version-check",
+        "description": "skip server/client version check",
+        "inherit": true
+      },
+      {
+        "short": "d",
+        "long": "debug",
+        "description": "verbose logging to stdout",
+        "inherit": true
+      },
+      {
+        "short": "k",
+        "long": "add-keys-to-agent",
+        "description": "control key handling",
+        "value": {
+          "name": "mode",
+          "provider": "tsh.key-agent-modes"
+        },
+        "inherit": true
+      },
+      {
+        "long": "enable-escape-sequences",
+        "description": "enable SSH escape sequences",
+        "inherit": true
+      },
+      {
+        "long": "bind-addr",
+        "description": "browser login bind address",
+        "value": {
+          "name": "address"
+        },
+        "inherit": true
+      },
+      {
+        "short": "J",
+        "long": "jumphost",
+        "description": "SSH jumphost",
+        "value": {
+          "name": "host"
+        },
+        "inherit": true
+      }
+    ]
+  }
+}

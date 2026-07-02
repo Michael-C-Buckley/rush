@@ -1,0 +1,41 @@
+__rush_complete_tsh_clusters() {
+  command -v tsh >/dev/null 2>&1 || return
+  tsh clusters --format=json 2>/dev/null | python3 -c 'import json,sys
+try: data=json.load(sys.stdin)
+except Exception: data=[]
+for item in data: print(item.get("cluster_name", ""))
+' | while IFS= read -r cluster; do
+    test -n "$cluster" && rush_complete candidate "$cluster" --kind plain --description cluster
+  done
+}
+
+__rush_complete_tsh_users() {
+  command -v tsh >/dev/null 2>&1 || return
+  tsh status --format json 2>/dev/null | python3 -c 'import json,sys
+try: print(json.load(sys.stdin).get("active", {}).get("username", ""))
+except Exception: pass
+' | while IFS= read -r user; do
+    test -n "$user" && rush_complete candidate "$user" --kind plain --description user
+  done
+}
+
+__rush_complete_tsh_hosts() {
+  command -v tsh >/dev/null 2>&1 || return
+  tsh ls --format=json 2>/dev/null | python3 -c 'import json,sys
+try: data=json.load(sys.stdin)
+except Exception: data=[]
+for item in data:
+    spec=item.get("spec", {})
+    meta=item.get("metadata", {})
+    host=spec.get("hostname", "")
+    expires=meta.get("expires", "")
+    if host: print(host + "\t" + expires)
+' | while IFS='\t' read -r host expires; do
+    test -n "$host" || continue
+    if test -n "$expires"; then
+      rush_complete candidate "$host" --kind plain --description "access expires: $expires"
+    else
+      rush_complete candidate "$host" --kind plain --description host
+    fi
+  done
+}
