@@ -1,0 +1,58 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "yo",
+    "description": "run Yeoman generators",
+    "options": [
+      {
+        "long": "help",
+        "description": "print info and generator's options and usage"
+      },
+      {
+        "short": "f",
+        "long": "force",
+        "description": "overwrite files that already exist",
+        "priority": -10
+      },
+      {
+        "long": "version",
+        "description": "print version"
+      },
+      {
+        "long": "no-color",
+        "description": "disable color"
+      },
+      {
+        "long": "insight",
+        "description": "enable anonymous tracking"
+      },
+      {
+        "long": "no-insight",
+        "description": "disable anonymous tracking"
+      },
+      {
+        "long": "generators",
+        "description": "print available generators"
+      },
+      {
+        "long": "local-only",
+        "description": "disable lookup of globally-installed generators"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "generator",
+          "provider": "yo.generators",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "yo.generators": {
+        "function": "__rush_complete_yo_generators"
+      }
+    }
+  }
+}

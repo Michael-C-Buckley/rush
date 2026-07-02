@@ -1,0 +1,13 @@
+__rush_complete_yo_generators() {
+    rush_complete candidate doctor --kind subcommand --description 'run sanity checks'
+    rush_complete candidate completion --kind subcommand --description 'enable shell completion'
+
+    command -v yo >/dev/null 2>&1 || return 0
+    yo --generators 2>/dev/null | while IFS= read -r generator; do
+        generator=${generator#${generator%%[![:space:]]*}}
+        generator=${generator%${generator##*[![:space:]]}}
+        [ -n "$generator" ] || continue
+        [ "$generator" = 'Available Generators:' ] && continue
+        rush_complete candidate "$generator" --kind subcommand --description 'Yeoman generator'
+    done
+}
