@@ -1,0 +1,2999 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "hasura",
+    "description": "hasura GraphQL Engine CLI",
+    "subcommands": [
+      {
+        "name": "actions",
+        "description": "manage Hasura actions",
+        "subcommands": [
+          {
+            "name": "codegen",
+            "description": "generate code for actions",
+            "options": [
+              {
+                "long": "derive-from",
+                "description": "derive action from a hasura operation",
+                "inherit": false
+              },
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "action-name",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "create",
+            "description": "create a Hasura action",
+            "options": [
+              {
+                "long": "derive-from",
+                "description": "derive action from a Hasura operation",
+                "inherit": false
+              },
+              {
+                "long": "kind",
+                "description": "kind to use in action",
+                "inherit": false,
+                "value": {
+                  "name": "kind",
+                  "required": false,
+                  "style": "optional",
+                  "provider": "hasura.action-kinds"
+                }
+              },
+              {
+                "long": "webhook",
+                "description": "webhook to use in action",
+                "inherit": false,
+                "value": {
+                  "name": "webhook",
+                  "required": false,
+                  "style": "optional"
+                }
+              },
+              {
+                "long": "with-codegen",
+                "description": "create action along with codegen",
+                "inherit": false
+              },
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "action-name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "use-codegen",
+            "description": "use the codegen to generate code for Hasura actions",
+            "options": [
+              {
+                "long": "framework",
+                "description": "framework to be used by codegen",
+                "inherit": false
+              },
+              {
+                "long": "output-dir",
+                "description": "directory to create the codegen files",
+                "inherit": false,
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "with-starter-kit",
+                "description": "clone starter kit for a framework",
+                "inherit": false
+              },
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "long": "admin-secret",
+            "description": "admin secret for Hasura GraphQL Engine",
+            "value": {
+              "name": "secret"
+            }
+          },
+          {
+            "long": "certificate-authority",
+            "description": "path to certificate authority file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "endpoint",
+            "description": "Hasura GraphQL Engine endpoint",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "insecure-skip-tls-verify",
+            "description": "skip TLS verification"
+          },
+          {
+            "long": "envfile",
+            "description": "load environment variables from file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "log-level",
+            "description": "set log level",
+            "value": {
+              "name": "level",
+              "provider": "hasura.log-levels"
+            }
+          },
+          {
+            "long": "no-color",
+            "description": "do not colorize output"
+          },
+          {
+            "long": "project",
+            "description": "directory where commands are executed",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "skip-update-check",
+            "description": "skip automatic update check"
+          }
+        ]
+      },
+      {
+        "name": "completions",
+        "description": "generate auto completion code",
+        "options": [
+          {
+            "long": "file",
+            "description": "file to which output has to be written",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "envfile",
+            "description": "load environment variables from file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "log-level",
+            "description": "set log level",
+            "value": {
+              "name": "level",
+              "provider": "hasura.log-levels"
+            }
+          },
+          {
+            "long": "no-color",
+            "description": "do not colorize output"
+          },
+          {
+            "long": "project",
+            "description": "directory where commands are executed",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "skip-update-check",
+            "description": "skip automatic update check"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "shell",
+              "provider": "hasura.shells",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "console",
+        "description": "open the console to manage the database and try out APIs",
+        "options": [
+          {
+            "long": "address",
+            "description": "address to serve console and migration API from",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "api-port",
+            "description": "port for serving migrate api",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "browser",
+            "description": "open console in a specific browser",
+            "inherit": false
+          },
+          {
+            "long": "console-port",
+            "description": "port for serving console",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "insecure-skip-tls-verify",
+            "description": "skip TLS verification and disable cert checking",
+            "inherit": false
+          },
+          {
+            "long": "no-browser",
+            "description": "do not automatically open console in browser",
+            "inherit": false
+          },
+          {
+            "long": "static-dir",
+            "description": "directory where static assets mentioned in the console html template can be served from",
+            "inherit": false,
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "use-server-assets",
+            "description": "when rendering console, use assets provided by HGE server",
+            "inherit": false
+          },
+          {
+            "long": "admin-secret",
+            "description": "admin secret for Hasura GraphQL Engine",
+            "value": {
+              "name": "secret"
+            }
+          },
+          {
+            "long": "certificate-authority",
+            "description": "path to certificate authority file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "endpoint",
+            "description": "Hasura GraphQL Engine endpoint",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "envfile",
+            "description": "load environment variables from file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "log-level",
+            "description": "set log level",
+            "value": {
+              "name": "level",
+              "provider": "hasura.log-levels"
+            }
+          },
+          {
+            "long": "no-color",
+            "description": "do not colorize output"
+          },
+          {
+            "long": "project",
+            "description": "directory where commands are executed",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "skip-update-check",
+            "description": "skip automatic update check"
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "initialize a directory for Hasura GraphQL engine migrations",
+        "options": [
+          {
+            "long": "install-manifest",
+            "description": "install manifest to be cloned",
+            "inherit": false
+          },
+          {
+            "long": "version",
+            "description": "config version to be used",
+            "inherit": false,
+            "value": {
+              "name": "int"
+            }
+          },
+          {
+            "long": "admin-secret",
+            "description": "admin secret for Hasura GraphQL Engine",
+            "value": {
+              "name": "secret"
+            }
+          },
+          {
+            "long": "certificate-authority",
+            "description": "path to certificate authority file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "endpoint",
+            "description": "Hasura GraphQL Engine endpoint",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "insecure-skip-tls-verify",
+            "description": "skip TLS verification"
+          },
+          {
+            "long": "envfile",
+            "description": "load environment variables from file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "log-level",
+            "description": "set log level",
+            "value": {
+              "name": "level",
+              "provider": "hasura.log-levels"
+            }
+          },
+          {
+            "long": "no-color",
+            "description": "do not colorize output"
+          },
+          {
+            "long": "project",
+            "description": "directory where commands are executed",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "skip-update-check",
+            "description": "skip automatic update check"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "directory-name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "md",
+        "aliases": [
+          "metadata"
+        ],
+        "subcommands": [
+          {
+            "name": "apply",
+            "description": "apply Hasura metadata on a database",
+            "options": [
+              {
+                "long": "dry-run",
+                "description": "show metadata generated from project directory without applying to server",
+                "inherit": false
+              },
+              {
+                "short": "o",
+                "long": "output",
+                "description": "specify an output format to show applied metadata",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "required": false,
+                  "style": "optional",
+                  "provider": {
+                    "values": [
+                      "json",
+                      "yaml"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ]
+          },
+          {
+            "name": "clear",
+            "description": "clear Hasura GraphQL engine metadata on the database",
+            "options": [
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ]
+          },
+          {
+            "name": "diff",
+            "description": "show a highlighted diff of Hasura metadata",
+            "arguments": {
+              "states": [
+                {
+                  "name": "file1",
+                  "provider": "builtin.files",
+                  "index": 0
+                },
+                {
+                  "name": "file2",
+                  "provider": "builtin.files",
+                  "index": 1
+                }
+              ]
+            },
+            "options": [
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ]
+          },
+          {
+            "name": "export",
+            "description": "export Hasura GraphQL engine metadata from the database",
+            "options": [
+              {
+                "short": "o",
+                "long": "output",
+                "description": "specify an output format for exported metadata",
+                "inherit": false
+              },
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ]
+          },
+          {
+            "name": "ic",
+            "aliases": [
+              "inconsistency",
+              "inconsistencies"
+            ],
+            "description": "manage inconsistent objects in Hasura metadata",
+            "subcommands": [
+              {
+                "name": "drop",
+                "description": "drop inconsistent objects from the metadata",
+                "options": [
+                  {
+                    "long": "admin-secret",
+                    "description": "admin secret for Hasura GraphQL Engine",
+                    "value": {
+                      "name": "secret"
+                    }
+                  },
+                  {
+                    "long": "certificate-authority",
+                    "description": "path to certificate authority file",
+                    "value": {
+                      "name": "file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "endpoint",
+                    "description": "Hasura GraphQL Engine endpoint",
+                    "value": {
+                      "name": "url"
+                    }
+                  },
+                  {
+                    "long": "insecure-skip-tls-verify",
+                    "description": "skip TLS verification"
+                  },
+                  {
+                    "long": "envfile",
+                    "description": "load environment variables from file",
+                    "value": {
+                      "name": "file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help"
+                  },
+                  {
+                    "long": "log-level",
+                    "description": "set log level",
+                    "value": {
+                      "name": "level",
+                      "provider": "hasura.log-levels"
+                    }
+                  },
+                  {
+                    "long": "no-color",
+                    "description": "do not colorize output"
+                  },
+                  {
+                    "long": "project",
+                    "description": "directory where commands are executed",
+                    "value": {
+                      "name": "directory",
+                      "provider": "builtin.directories"
+                    }
+                  },
+                  {
+                    "long": "skip-update-check",
+                    "description": "skip automatic update check"
+                  }
+                ]
+              },
+              {
+                "name": "ls",
+                "aliases": [
+                  "list"
+                ],
+                "description": "list all inconsistent objects from the metadata",
+                "options": [
+                  {
+                    "long": "admin-secret",
+                    "description": "admin secret for Hasura GraphQL Engine",
+                    "value": {
+                      "name": "secret"
+                    }
+                  },
+                  {
+                    "long": "certificate-authority",
+                    "description": "path to certificate authority file",
+                    "value": {
+                      "name": "file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "endpoint",
+                    "description": "Hasura GraphQL Engine endpoint",
+                    "value": {
+                      "name": "url"
+                    }
+                  },
+                  {
+                    "long": "insecure-skip-tls-verify",
+                    "description": "skip TLS verification"
+                  },
+                  {
+                    "long": "envfile",
+                    "description": "load environment variables from file",
+                    "value": {
+                      "name": "file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help"
+                  },
+                  {
+                    "long": "log-level",
+                    "description": "set log level",
+                    "value": {
+                      "name": "level",
+                      "provider": "hasura.log-levels"
+                    }
+                  },
+                  {
+                    "long": "no-color",
+                    "description": "do not colorize output"
+                  },
+                  {
+                    "long": "project",
+                    "description": "directory where commands are executed",
+                    "value": {
+                      "name": "directory",
+                      "provider": "builtin.directories"
+                    }
+                  },
+                  {
+                    "long": "skip-update-check",
+                    "description": "skip automatic update check"
+                  }
+                ]
+              },
+              {
+                "name": "status",
+                "description": "check if the metadata is inconsistent or not",
+                "options": [
+                  {
+                    "long": "admin-secret",
+                    "description": "admin secret for Hasura GraphQL Engine",
+                    "value": {
+                      "name": "secret"
+                    }
+                  },
+                  {
+                    "long": "certificate-authority",
+                    "description": "path to certificate authority file",
+                    "value": {
+                      "name": "file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "endpoint",
+                    "description": "Hasura GraphQL Engine endpoint",
+                    "value": {
+                      "name": "url"
+                    }
+                  },
+                  {
+                    "long": "insecure-skip-tls-verify",
+                    "description": "skip TLS verification"
+                  },
+                  {
+                    "long": "envfile",
+                    "description": "load environment variables from file",
+                    "value": {
+                      "name": "file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "short": "h",
+                    "long": "help",
+                    "description": "show help"
+                  },
+                  {
+                    "long": "log-level",
+                    "description": "set log level",
+                    "value": {
+                      "name": "level",
+                      "provider": "hasura.log-levels"
+                    }
+                  },
+                  {
+                    "long": "no-color",
+                    "description": "do not colorize output"
+                  },
+                  {
+                    "long": "project",
+                    "description": "directory where commands are executed",
+                    "value": {
+                      "name": "directory",
+                      "provider": "builtin.directories"
+                    }
+                  },
+                  {
+                    "long": "skip-update-check",
+                    "description": "skip automatic update check"
+                  }
+                ]
+              }
+            ],
+            "options": [
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ]
+          },
+          {
+            "name": "reload",
+            "description": "reload Hasura GraphQL engine metadata on the database",
+            "options": [
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "long": "admin-secret",
+            "description": "admin secret for Hasura GraphQL Engine",
+            "value": {
+              "name": "secret"
+            }
+          },
+          {
+            "long": "certificate-authority",
+            "description": "path to certificate authority file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "endpoint",
+            "description": "Hasura GraphQL Engine endpoint",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "insecure-skip-tls-verify",
+            "description": "skip TLS verification"
+          },
+          {
+            "long": "envfile",
+            "description": "load environment variables from file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "log-level",
+            "description": "set log level",
+            "value": {
+              "name": "level",
+              "provider": "hasura.log-levels"
+            }
+          },
+          {
+            "long": "no-color",
+            "description": "do not colorize output"
+          },
+          {
+            "long": "project",
+            "description": "directory where commands are executed",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "skip-update-check",
+            "description": "skip automatic update check"
+          }
+        ]
+      },
+      {
+        "name": "migrate",
+        "description": "manage migrations on the database",
+        "subcommands": [
+          {
+            "name": "apply",
+            "description": "apply migrations on the database",
+            "options": [
+              {
+                "long": "up",
+                "description": "apply all or N up migration steps",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "required": false,
+                  "style": "optional"
+                }
+              },
+              {
+                "long": "down",
+                "description": "apply all or N up migration steps",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "required": false,
+                  "style": "optional"
+                }
+              },
+              {
+                "spellings": [
+                  "goto"
+                ],
+                "description": "apply migration chain up to to the version specified",
+                "inherit": false
+              },
+              {
+                "long": "version",
+                "description": "only apply this particular migration",
+                "inherit": false
+              },
+              {
+                "long": "skip-execution",
+                "description": "skip executing the migration action, but mark them as applied",
+                "inherit": false
+              },
+              {
+                "long": "type",
+                "description": "type of migration to be used with version flag",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": {
+                    "values": [
+                      "up",
+                      "down"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "dry-run",
+                "description": "print the names of migrations which are going to be applied",
+                "inherit": false
+              },
+              {
+                "long": "all-databases",
+                "description": "set this flag to attempt to apply migrations on all databases present on server",
+                "inherit": false
+              },
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "description": "create files required for a migration",
+            "options": [
+              {
+                "long": "down-sql",
+                "description": "sql string/query that is to be used to create a down migration",
+                "inherit": false
+              },
+              {
+                "long": "from-server",
+                "description": "take pg_dump of schema and Hasura metadata from the server",
+                "inherit": false
+              },
+              {
+                "long": "metadata-from-file",
+                "description": "path to a hasura metadata file to be used for up actions",
+                "inherit": false,
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "metadata-from-server",
+                "description": "take metadata from the server and write it as an up migration file",
+                "inherit": false
+              },
+              {
+                "long": "schema",
+                "description": "name of Postgres schema to export as a migration",
+                "inherit": false,
+                "value": {
+                  "name": "strings"
+                }
+              },
+              {
+                "long": "sql-from-file",
+                "description": "path to an SQL file which contains the SQL statements",
+                "inherit": false,
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "sql-from-server",
+                "description": "take pg_dump from the server and save it as a migration",
+                "inherit": false
+              },
+              {
+                "long": "up-sql",
+                "description": "sql string/query that is to be used to create an up migration",
+                "inherit": false
+              },
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "migration-name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "clear migrations from local project and server",
+            "options": [
+              {
+                "long": "all",
+                "description": "clears all migrations for selected database",
+                "inherit": false
+              },
+              {
+                "long": "force",
+                "description": "executes operation without any confirmation",
+                "priority": -10,
+                "inherit": false
+              },
+              {
+                "long": "version",
+                "description": "deletes the specified version in migrations",
+                "inherit": false,
+                "value": {
+                  "name": "uint"
+                }
+              },
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ]
+          },
+          {
+            "name": "squash",
+            "description": "squash multiple migrations into a single one",
+            "options": [
+              {
+                "long": "delete-source",
+                "description": "delete the source files after squashing without any confirmation",
+                "inherit": false
+              },
+              {
+                "long": "from",
+                "description": "start squashing from this version",
+                "inherit": false,
+                "value": {
+                  "name": "uint"
+                }
+              },
+              {
+                "long": "name",
+                "description": "name for the new squashed migration",
+                "inherit": false,
+                "value": {
+                  "name": "value"
+                }
+              },
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ]
+          },
+          {
+            "name": "status",
+            "description": "display current status of migrations on a database",
+            "options": [
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "long": "admin-secret",
+            "description": "admin secret for Hasura GraphQL Engine",
+            "value": {
+              "name": "secret"
+            }
+          },
+          {
+            "long": "certificate-authority",
+            "description": "path to certificate authority file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "endpoint",
+            "description": "Hasura GraphQL Engine endpoint",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "insecure-skip-tls-verify",
+            "description": "skip TLS verification"
+          },
+          {
+            "long": "envfile",
+            "description": "load environment variables from file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "log-level",
+            "description": "set log level",
+            "value": {
+              "name": "level",
+              "provider": "hasura.log-levels"
+            }
+          },
+          {
+            "long": "no-color",
+            "description": "do not colorize output"
+          },
+          {
+            "long": "project",
+            "description": "directory where commands are executed",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "skip-update-check",
+            "description": "skip automatic update check"
+          }
+        ]
+      },
+      {
+        "name": "plugin",
+        "aliases": [
+          "plugins"
+        ],
+        "description": "manage plugins for the CLI",
+        "subcommands": [
+          {
+            "name": "install",
+            "description": "install a plugin from the index",
+            "options": [
+              {
+                "long": "version",
+                "description": "version to be installed",
+                "inherit": false
+              },
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "plugin-name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list all available plugins from index, versions and installation status",
+            "options": [
+              {
+                "long": "dont-update-index",
+                "description": "do not update the plugin index local cache, only show the list",
+                "inherit": false
+              },
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ]
+          },
+          {
+            "name": "uninstall",
+            "description": "uninstall a plugin",
+            "arguments": {
+              "states": [
+                {
+                  "name": "plugin-name",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ]
+          },
+          {
+            "name": "upgrade",
+            "description": "upgrade a plugin to a newer version",
+            "options": [
+              {
+                "long": "version",
+                "description": "version to be upgraded",
+                "inherit": false
+              },
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "plugin-name",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ],
+        "options": [
+          {
+            "long": "admin-secret",
+            "description": "admin secret for Hasura GraphQL Engine",
+            "value": {
+              "name": "secret"
+            }
+          },
+          {
+            "long": "certificate-authority",
+            "description": "path to certificate authority file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "endpoint",
+            "description": "Hasura GraphQL Engine endpoint",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "insecure-skip-tls-verify",
+            "description": "skip TLS verification"
+          },
+          {
+            "long": "envfile",
+            "description": "load environment variables from file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "log-level",
+            "description": "set log level",
+            "value": {
+              "name": "level",
+              "provider": "hasura.log-levels"
+            }
+          },
+          {
+            "long": "no-color",
+            "description": "do not colorize output"
+          },
+          {
+            "long": "project",
+            "description": "directory where commands are executed",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "skip-update-check",
+            "description": "skip automatic update check"
+          }
+        ]
+      },
+      {
+        "name": "scripts",
+        "description": "execute helper scripts to manage Hasura projects",
+        "subcommands": [
+          {
+            "name": "update-project-v2",
+            "description": "update the Hasura project from config v1 to v2",
+            "options": [
+              {
+                "long": "metadata-dir",
+                "description": "metadata directory",
+                "inherit": false,
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ]
+          },
+          {
+            "name": "update-project-v3",
+            "description": "update the Hasura project from config v2 to v3",
+            "options": [
+              {
+                "long": "database-name",
+                "description": "database name for which the current migrations / seeds belong to",
+                "inherit": false
+              },
+              {
+                "long": "force",
+                "description": "do not ask for confirmation",
+                "priority": -10,
+                "inherit": false
+              },
+              {
+                "long": "move-state-only",
+                "description": "do only a state migration from old hdb_catalog",
+                "inherit": false
+              },
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "long": "admin-secret",
+            "description": "admin secret for Hasura GraphQL Engine",
+            "value": {
+              "name": "secret"
+            }
+          },
+          {
+            "long": "certificate-authority",
+            "description": "path to certificate authority file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "endpoint",
+            "description": "Hasura GraphQL Engine endpoint",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "insecure-skip-tls-verify",
+            "description": "skip TLS verification"
+          },
+          {
+            "long": "envfile",
+            "description": "load environment variables from file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "log-level",
+            "description": "set log level",
+            "value": {
+              "name": "level",
+              "provider": "hasura.log-levels"
+            }
+          },
+          {
+            "long": "no-color",
+            "description": "do not colorize output"
+          },
+          {
+            "long": "project",
+            "description": "directory where commands are executed",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "skip-update-check",
+            "description": "skip automatic update check"
+          }
+        ]
+      },
+      {
+        "name": "sd",
+        "aliases": [
+          "seed",
+          "seeds"
+        ],
+        "description": "manage seed data",
+        "options": [
+          {
+            "long": "database-name",
+            "description": "database name for which the current migrations / seeds belong to",
+            "inherit": false
+          },
+          {
+            "long": "admin-secret",
+            "description": "admin secret for Hasura GraphQL Engine",
+            "value": {
+              "name": "secret"
+            }
+          },
+          {
+            "long": "certificate-authority",
+            "description": "path to certificate authority file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "endpoint",
+            "description": "Hasura GraphQL Engine endpoint",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "insecure-skip-tls-verify",
+            "description": "skip TLS verification"
+          },
+          {
+            "long": "envfile",
+            "description": "load environment variables from file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "log-level",
+            "description": "set log level",
+            "value": {
+              "name": "level",
+              "provider": "hasura.log-levels"
+            }
+          },
+          {
+            "long": "no-color",
+            "description": "do not colorize output"
+          },
+          {
+            "long": "project",
+            "description": "directory where commands are executed",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "skip-update-check",
+            "description": "skip automatic update check"
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "apply",
+            "description": "apply seed data",
+            "options": [
+              {
+                "short": "f",
+                "long": "file",
+                "description": "seed file to apply",
+                "inherit": false,
+                "value": {
+                  "name": "string-array",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "description": "create a new seed file",
+            "options": [
+              {
+                "long": "from-table",
+                "description": "name of table from which seed file has to be initialized",
+                "inherit": false,
+                "value": {
+                  "name": "string-array"
+                }
+              },
+              {
+                "long": "admin-secret",
+                "description": "admin secret for Hasura GraphQL Engine",
+                "value": {
+                  "name": "secret"
+                }
+              },
+              {
+                "long": "certificate-authority",
+                "description": "path to certificate authority file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "endpoint",
+                "description": "Hasura GraphQL Engine endpoint",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "long": "insecure-skip-tls-verify",
+                "description": "skip TLS verification"
+              },
+              {
+                "long": "envfile",
+                "description": "load environment variables from file",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "show help"
+              },
+              {
+                "long": "log-level",
+                "description": "set log level",
+                "value": {
+                  "name": "level",
+                  "provider": "hasura.log-levels"
+                }
+              },
+              {
+                "long": "no-color",
+                "description": "do not colorize output"
+              },
+              {
+                "long": "project",
+                "description": "directory where commands are executed",
+                "value": {
+                  "name": "directory",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "skip-update-check",
+                "description": "skip automatic update check"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "seed-name",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "update-cli",
+        "description": "update the CLI to latest or a specific version",
+        "options": [
+          {
+            "long": "version",
+            "description": "a specific version to install",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "envfile",
+            "description": "load environment variables from file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "log-level",
+            "description": "set log level",
+            "value": {
+              "name": "level",
+              "provider": "hasura.log-levels"
+            }
+          },
+          {
+            "long": "no-color",
+            "description": "do not colorize output"
+          },
+          {
+            "long": "project",
+            "description": "directory where commands are executed",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "skip-update-check",
+            "description": "skip automatic update check"
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "print the CLI version",
+        "options": [
+          {
+            "long": "envfile",
+            "description": "load environment variables from file",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "show help"
+          },
+          {
+            "long": "log-level",
+            "description": "set log level",
+            "value": {
+              "name": "level",
+              "provider": "hasura.log-levels"
+            }
+          },
+          {
+            "long": "no-color",
+            "description": "do not colorize output"
+          },
+          {
+            "long": "project",
+            "description": "directory where commands are executed",
+            "value": {
+              "name": "directory",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "skip-update-check",
+            "description": "skip automatic update check"
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "hasura.log-levels": {
+        "candidates": [
+          {
+            "value": "DEBUG"
+          },
+          {
+            "value": "INFO"
+          },
+          {
+            "value": "WARN"
+          },
+          {
+            "value": "ERROR"
+          },
+          {
+            "value": "FATAL"
+          }
+        ]
+      },
+      "hasura.shells": {
+        "candidates": [
+          {
+            "value": "bash"
+          },
+          {
+            "value": "zsh"
+          }
+        ]
+      },
+      "hasura.action-kinds": {
+        "candidates": [
+          {
+            "value": "synchronous"
+          },
+          {
+            "value": "asynchronous"
+          }
+        ]
+      }
+    },
+    "options": [
+      {
+        "long": "envfile",
+        "description": "load environment variables from file",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help"
+      },
+      {
+        "long": "log-level",
+        "description": "set log level",
+        "value": {
+          "name": "level",
+          "provider": "hasura.log-levels"
+        }
+      },
+      {
+        "long": "no-color",
+        "description": "do not colorize output"
+      },
+      {
+        "long": "project",
+        "description": "directory where commands are executed",
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "skip-update-check",
+        "description": "skip automatic update check"
+      }
+    ]
+  }
+}
