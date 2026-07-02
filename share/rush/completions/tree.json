@@ -1,0 +1,328 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "tree",
+    "description": "display directories as trees",
+    "options": [
+      {
+        "short": "a",
+        "description": "all files are listed",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "description": "list directories only",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "description": "follow symbolic links like directories",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "description": "print the full path prefix for each file",
+        "inherit": false
+      },
+      {
+        "short": "x",
+        "description": "stay on current filesystem only",
+        "inherit": false
+      },
+      {
+        "short": "L",
+        "description": "descend only level directories deep",
+        "inherit": false,
+        "value": {
+          "name": "level"
+        }
+      },
+      {
+        "short": "R",
+        "description": "rerun tree when max dir level reached",
+        "inherit": false
+      },
+      {
+        "short": "P",
+        "description": "list only those files that match the pattern given",
+        "inherit": false,
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "short": "I",
+        "description": "do not list files that match the given pattern",
+        "inherit": false,
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "long": "ignore-case",
+        "description": "ignore case when pattern matching",
+        "inherit": false
+      },
+      {
+        "long": "matchdirs",
+        "description": "include directory names in -P pattern matching",
+        "inherit": false
+      },
+      {
+        "long": "noreport",
+        "description": "turn off file/directory count at end of tree listing",
+        "inherit": false
+      },
+      {
+        "long": "charset",
+        "description": "use charset X for terminal/HTML and indentation line output",
+        "inherit": false,
+        "value": {
+          "name": "charset"
+        }
+      },
+      {
+        "long": "filelimit",
+        "description": "do not descend dirs with more than # files in them",
+        "inherit": false,
+        "value": {
+          "name": "number",
+          "description": "Number of files"
+        }
+      },
+      {
+        "long": "timefmt",
+        "description": "print and format time according to the format <f>",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "description": "Format in strftime syntax"
+        }
+      },
+      {
+        "short": "o",
+        "description": "output to file instead of stdout",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "q",
+        "description": "print non-printable characters as '?'",
+        "inherit": false
+      },
+      {
+        "short": "N",
+        "description": "print non-printable characters as is",
+        "inherit": false
+      },
+      {
+        "short": "Q",
+        "description": "quote filenames with double quotes",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "description": "print the protections for each file",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "description": "displays file owner or UID number",
+        "inherit": false
+      },
+      {
+        "short": "g",
+        "description": "displays file group owner or GID number",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "print the size in bytes of each file",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "description": "print the size in a more human readable way",
+        "inherit": false
+      },
+      {
+        "long": "si",
+        "description": "like -h but use SI units (powers of 1000) instead",
+        "inherit": false
+      },
+      {
+        "long": "du",
+        "description": "report each directory size as accumulated size of contents",
+        "inherit": false
+      },
+      {
+        "short": "D",
+        "description": "print the date of the last modification time or if -c is used, the last status change time for the file listed",
+        "inherit": false
+      },
+      {
+        "short": "F",
+        "description": "appends '/', '=', '*', '@', '|' or '>' as per ls -F",
+        "inherit": false
+      },
+      {
+        "long": "inodes",
+        "description": "print inode number of each file",
+        "inherit": false
+      },
+      {
+        "long": "device",
+        "description": "print device ID number to which each file belongs",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "description": "sort files alphanumerically by version",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "description": "sort files by last modification time",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "description": "sort files by last status change time",
+        "inherit": false
+      },
+      {
+        "short": "U",
+        "description": "leave files unsorted",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "description": "reverse the order of the sort",
+        "inherit": false
+      },
+      {
+        "long": "dirsfirst",
+        "description": "list directories before files (-U disables)",
+        "inherit": false
+      },
+      {
+        "long": "sort",
+        "description": "select sort",
+        "inherit": false,
+        "value": {
+          "name": "type",
+          "provider": "tree.sorts"
+        }
+      },
+      {
+        "short": "i",
+        "description": "don't print indentation lines",
+        "inherit": false
+      },
+      {
+        "short": "A",
+        "description": "print ANSI lines graphic indentation lines",
+        "inherit": false
+      },
+      {
+        "short": "S",
+        "description": "print with CP437 (console) graphics indentation lines",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "description": "turn colorization off always (-C overrides)",
+        "inherit": false
+      },
+      {
+        "short": "C",
+        "description": "turn colorization on always",
+        "inherit": false
+      },
+      {
+        "short": "X",
+        "description": "prints out an XML representation of the tree",
+        "inherit": false
+      },
+      {
+        "short": "J",
+        "description": "print JSON representation of the tree",
+        "inherit": false
+      },
+      {
+        "short": "H",
+        "description": "prints out HTML format with baseHREF as top directory",
+        "inherit": false,
+        "value": {
+          "name": "baseHREF"
+        }
+      },
+      {
+        "short": "T",
+        "description": "replace the default HTML title and H1 header with string",
+        "inherit": false,
+        "value": {
+          "name": "title"
+        }
+      },
+      {
+        "long": "nolinks",
+        "description": "turn off hyperlinks in HTML output",
+        "inherit": false
+      },
+      {
+        "long": "fromfile",
+        "description": "reads paths from files",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "print version and exit",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "description": "print usage and this help message and exit",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "--"
+        ],
+        "description": "options processing terminator",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "directory",
+          "provider": "builtin.directories",
+          "index": 0,
+          "description": "directory to display"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "tree.sorts": {
+        "values": [
+          "name",
+          "version",
+          "size",
+          "mtime",
+          "ctime"
+        ]
+      }
+    }
+  }
+}
