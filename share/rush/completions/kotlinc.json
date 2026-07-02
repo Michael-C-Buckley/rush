@@ -1,0 +1,264 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "kotlinc",
+    "description": "compile Kotlin for JVM",
+    "options": [
+      {
+        "long": "version",
+        "spellings": [
+          "-version"
+        ],
+        "description": "display the compiler version",
+        "inherit": false
+      },
+      {
+        "long": "nowarn",
+        "spellings": [
+          "-nowarn"
+        ],
+        "description": "suppress compiler warnings",
+        "inherit": false
+      },
+      {
+        "long": "Werror",
+        "spellings": [
+          "-Werror"
+        ],
+        "description": "turn warnings into errors",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "spellings": [
+          "-verbose"
+        ],
+        "description": "enable verbose compiler logging",
+        "inherit": false
+      },
+      {
+        "long": "script",
+        "spellings": [
+          "-script"
+        ],
+        "description": "evaluate a Kotlin script file",
+        "inherit": false,
+        "value": {
+          "name": "script-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "spellings": [
+          "-help"
+        ],
+        "description": "display usage information",
+        "inherit": false
+      },
+      {
+        "short": "X",
+        "spellings": [
+          "-X"
+        ],
+        "description": "display advanced option information",
+        "inherit": false
+      },
+      {
+        "long": "kotlin-home",
+        "spellings": [
+          "-kotlin-home"
+        ],
+        "description": "set the Kotlin compiler home path",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "P",
+        "spellings": [
+          "-P"
+        ],
+        "description": "pass an option to a Kotlin compiler plugin",
+        "inherit": false,
+        "value": {
+          "name": "plugin:pluginId:optionName=value"
+        }
+      },
+      {
+        "long": "language-version",
+        "spellings": [
+          "-language-version"
+        ],
+        "description": "set Kotlin source compatibility version",
+        "inherit": false,
+        "value": {
+          "name": "version"
+        }
+      },
+      {
+        "long": "api-version",
+        "spellings": [
+          "-api-version"
+        ],
+        "description": "restrict declarations to a Kotlin API version",
+        "inherit": false,
+        "value": {
+          "name": "version"
+        }
+      },
+      {
+        "long": "progressive",
+        "spellings": [
+          "-progressive"
+        ],
+        "description": "enable progressive compiler mode",
+        "inherit": false
+      },
+      {
+        "long": "opt-in",
+        "spellings": [
+          "-opt-in"
+        ],
+        "description": "enable an opt-in API annotation",
+        "inherit": false,
+        "value": {
+          "name": "annotation"
+        }
+      },
+      {
+        "long": "classpath",
+        "spellings": [
+          "-classpath",
+          "-cp"
+        ],
+        "description": "set the classpath search path",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "d",
+        "spellings": [
+          "-d"
+        ],
+        "description": "set the output directory, zip, or jar path",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "include-runtime",
+        "spellings": [
+          "-include-runtime"
+        ],
+        "description": "include the Kotlin runtime in the resulting jar",
+        "inherit": false
+      },
+      {
+        "long": "jdk-home",
+        "spellings": [
+          "-jdk-home"
+        ],
+        "description": "set the custom JDK home directory",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "jvm-target",
+        "spellings": [
+          "-jvm-target"
+        ],
+        "description": "set the generated JVM bytecode target version",
+        "inherit": false,
+        "value": {
+          "name": "version"
+        }
+      },
+      {
+        "long": "java-parameters",
+        "spellings": [
+          "-java-parameters"
+        ],
+        "description": "generate Java reflection metadata for parameters",
+        "inherit": false
+      },
+      {
+        "long": "module-name",
+        "spellings": [
+          "-module-name"
+        ],
+        "description": "set the generated .kotlin_module name",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "no-jdk",
+        "spellings": [
+          "-no-jdk"
+        ],
+        "description": "do not automatically include the Java runtime",
+        "inherit": false
+      },
+      {
+        "long": "no-reflect",
+        "spellings": [
+          "-no-reflect"
+        ],
+        "description": "do not automatically include Kotlin reflection",
+        "inherit": false
+      },
+      {
+        "long": "no-stdlib",
+        "spellings": [
+          "-no-stdlib"
+        ],
+        "description": "do not automatically include Kotlin/JVM stdlib or reflection",
+        "inherit": false
+      },
+      {
+        "long": "script-templates",
+        "spellings": [
+          "-script-templates"
+        ],
+        "description": "set script definition template classes",
+        "inherit": false,
+        "value": {
+          "name": "classnames"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "source-file",
+          "description": "Kotlin source file",
+          "index": 0,
+          "repeatable": true,
+          "provider": "builtin.files"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
