@@ -1,0 +1,249 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "rojo",
+    "description": "use Rojo for Roblox development",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "print help information",
+        "inherit": true
+      },
+      {
+        "long": "color",
+        "description": "set color behavior. Valid values are auto, always, and never [default: auto]",
+        "inherit": true,
+        "value": {
+          "name": "color",
+          "provider": {
+            "values": [
+              "auto",
+              "always",
+              "never"
+            ]
+          }
+        }
+      },
+      {
+        "long": "verbose",
+        "short": "v",
+        "description": "sets verbosity level. Can be specified multiple times",
+        "inherit": true
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "print version information",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "help",
+        "description": "print this message or the help of the given subcommand(s)",
+        "arguments": {
+          "states": [
+            {
+              "name": "subcommand",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "build",
+        "description": "generates a model or place file from the Rojo project",
+        "options": [
+          {
+            "long": "output",
+            "short": "o",
+            "description": "where to output the result. Should end in .rbxm, .rbxl, .rbxmx, or .rbxlx",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "description": "Where to output the result. Should end in .rbxm, .rbxl, .rbxmx, or .rbxlx",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "watch",
+            "description": "whether to automatically rebuild when any input files change",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "project",
+              "description": "path to the project to serve. Defaults to the current directory [default: ]",
+              "index": 0,
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "doc",
+        "description": "open Rojo's documentation in your browser"
+      },
+      {
+        "name": "fmt-project",
+        "description": "reformat a Rojo project using the standard JSON formatting rules",
+        "arguments": {
+          "states": [
+            {
+              "name": "project",
+              "description": "path to the project to format. Defaults to the current directory [default: ]",
+              "index": 0,
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "init",
+        "description": "initializes a new Rojo project",
+        "options": [
+          {
+            "long": "kind",
+            "description": "the kind of project to create, 'place' or 'model'. Defaults to place",
+            "inherit": false,
+            "value": {
+              "name": "kind",
+              "description": "The kind of project to create, 'place' or 'model'. Defaults to place",
+              "provider": {
+                "values": [
+                  "place",
+                  "model"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "path to the place to create the project. Defaults to the current directory [default: ]",
+              "index": 0,
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "plugin",
+        "description": "install Rojo's plugin"
+      },
+      {
+        "name": "serve",
+        "description": "expose a Rojo project to the Rojo Studio plugin",
+        "options": [
+          {
+            "spellings": [
+              "address"
+            ],
+            "description": "the IP address to listen on. Defaults to `127.0.0.1`",
+            "inherit": false,
+            "value": {
+              "name": "address",
+              "description": "The IP address to listen on. Defaults to `127.0.0.1`"
+            }
+          }
+        ]
+      },
+      {
+        "name": "sourcemap",
+        "description": "generates a sourcemap file from the Rojo project",
+        "options": [
+          {
+            "long": "include-non-scripts",
+            "description": "if non-script files should be included or not. Defaults to false",
+            "inherit": false
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "where to output the sourcemap. Omit this to use stdout instead of writing to a file. Should end in .json",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "description": "Where to output the sourcemap. Omit this to use stdout instead of writing to a file. Should end in .json",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "project",
+              "description": "path to the project to use for the sourcemap. Defaults to the current directory [default: ]",
+              "index": 0,
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "upload",
+        "description": "builds the project and uploads it to Roblox",
+        "options": [
+          {
+            "long": "api-key",
+            "description": "aPI key obtained from create.roblox.com/credentials. Rojo will use the Open Cloud API when this is provided. Only supports uploading to a place",
+            "inherit": false,
+            "value": {
+              "name": "api-key",
+              "description": "API key obtained from create.roblox.com/credentials. Rojo will use the Open Cloud API when this is provided. Only supports uploading to a place"
+            }
+          },
+          {
+            "long": "asset_id",
+            "description": "asset ID to upload to",
+            "inherit": false,
+            "value": {
+              "name": "asset-id",
+              "description": "Asset ID to upload to"
+            }
+          },
+          {
+            "long": "cookie",
+            "description": "authenication cookie to use. If not specified, Rojo will attempt to find one from the system automatically",
+            "inherit": false,
+            "value": {
+              "name": "cookie",
+              "description": "Authenication cookie to use. If not specified, Rojo will attempt to find one from the system automatically"
+            }
+          },
+          {
+            "long": "universe_id",
+            "description": "the Universe ID of the given place. Required when using the Open Cloud API",
+            "inherit": false,
+            "value": {
+              "name": "universe-id",
+              "description": "The Universe ID of the given place. Required when using the Open Cloud API"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
