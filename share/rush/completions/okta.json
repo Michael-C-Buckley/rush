@@ -1,0 +1,204 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "okta",
+    "description": "okta cli",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for okta cli",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "print version information",
+        "inherit": false
+      },
+      {
+        "long": "verbose",
+        "description": "verbose logging",
+        "inherit": false
+      },
+      {
+        "long": "batch",
+        "description": "batch mode, will not prompt for user input",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "register",
+        "description": "sign up for a new Okta account",
+        "options": [
+          {
+            "long": "company",
+            "description": "company/organization used when registering a new Okta account",
+            "inherit": false,
+            "value": {
+              "name": "company"
+            }
+          },
+          {
+            "long": "email",
+            "description": "email used when registering a new Okta account",
+            "inherit": false,
+            "value": {
+              "name": "email"
+            }
+          },
+          {
+            "long": "first-name",
+            "description": "first name used when registering a new Okta account",
+            "inherit": false,
+            "value": {
+              "name": "first_name"
+            }
+          },
+          {
+            "long": "last-name",
+            "description": "last name used when registering a new Okta account",
+            "inherit": false,
+            "value": {
+              "name": "last_name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "login",
+        "description": "authorizes the Okta CLI tool"
+      },
+      {
+        "name": "apps",
+        "description": "manage Okta apps",
+        "subcommands": [
+          {
+            "name": "config",
+            "description": "Show an Okta app's configuration",
+            "options": [
+              {
+                "long": "app",
+                "description": "the App ID",
+                "inherit": false,
+                "value": {
+                  "name": "app"
+                }
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "description": "Create a new Okta app",
+            "options": [
+              {
+                "long": "app-name",
+                "description": "application name to be created, defaults to current directory name",
+                "inherit": false,
+                "value": {
+                  "name": "app_name"
+                }
+              },
+              {
+                "long": "authorization-server-id",
+                "description": "okta Authorization Server Id",
+                "inherit": false,
+                "value": {
+                  "name": "authorization_server_id"
+                }
+              },
+              {
+                "long": "config-file",
+                "description": "application config file",
+                "inherit": false,
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "redirect-uri",
+                "description": "oIDC Redirect URI",
+                "inherit": false,
+                "value": {
+                  "name": "redirect_uri"
+                }
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "Deletes an Okta app",
+            "options": [
+              {
+                "short": "f",
+                "long": "force",
+                "description": "deactivate and delete applications without confirmation",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "appIds",
+                  "description": "List of application IDs to be deleted",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "start",
+        "description": "creates an Okta Sample Application",
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "The name of the sample app to create",
+              "index": 0,
+              "required": false
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "displays help information about the specified command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0,
+              "provider": "okta.commands",
+              "required": false
+            }
+          ]
+        }
+      },
+      {
+        "name": "generate-completion",
+        "description": "generate bash/zsh completion script for Okta",
+        "hidden": true
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "okta.commands": {
+        "values": [
+          "register",
+          "login",
+          "apps",
+          "start",
+          "help",
+          "generate-completion"
+        ]
+      }
+    }
+  }
+}
