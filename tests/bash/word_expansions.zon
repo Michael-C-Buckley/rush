@@ -84,6 +84,44 @@
             .status = 0,
         },
         .{
+            .name = "RANDOM is a seeded dynamic parameter",
+            .script =
+            \\RANDOM=7
+            \\first=$RANDOM
+            \\second=$RANDOM
+            \\RANDOM=7
+            \\repeat=$RANDOM
+            \\if [ "$first" -ge 0 ] && [ "$first" -le 32767 ]; then printf 'range=<ok>\n'; else printf 'range=<bad:%s>\n' "$first"; fi
+            \\if [ "$first" = "$repeat" ]; then printf 'seed=<ok>\n'; else printf 'seed=<bad:%s:%s>\n' "$first" "$repeat"; fi
+            \\if [ "$first" != "$second" ]; then printf 'advance=<ok>\n'; else printf 'advance=<bad:%s:%s>\n' "$first" "$second"; fi
+            ,
+            .stdout =
+            \\range=<ok>
+            \\seed=<ok>
+            \\advance=<ok>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "SECONDS and EPOCH variables are dynamic parameters",
+            .script =
+            \\SECONDS=7
+            \\printf 'seconds=<%s>\n' "$SECONDS"
+            \\case "$EPOCHSECONDS" in ''|*[!0123456789]*) printf 'epoch-seconds=<bad:%s>\n' "$EPOCHSECONDS" ;; *) printf 'epoch-seconds=<ok>\n' ;; esac
+            \\case "$EPOCHREALTIME" in *.*) printf 'epoch-real=<ok>\n' ;; *) printf 'epoch-real=<bad:%s>\n' "$EPOCHREALTIME" ;; esac
+            ,
+            .stdout =
+            \\seconds=<7>
+            \\epoch-seconds=<ok>
+            \\epoch-real=<ok>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "arithmetic expansion error in assignment-only command returns from a function",
             .script =
             \\f() { x=$((1/0)); printf bad; }

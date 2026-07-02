@@ -303,6 +303,10 @@ pub const RealHost = struct {
         platform.restoreTerminalMode(fd, mode);
     }
 
+    pub fn wallTimeNs(_: *RealHost) i128 {
+        return platform.wallTimeNs();
+    }
+
     pub fn writeAll(_: *RealHost, fd: Fd, bytes: []const u8) platform.WriteError!void {
         try platform.writeAll(fd, bytes);
     }

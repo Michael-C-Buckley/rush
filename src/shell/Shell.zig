@@ -52,6 +52,7 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
             };
             shell.state.putVariable(.{ .name = "PS4", .value = "+ " }) catch unreachable;
             shell.state.putVariable(.{ .name = "IFS", .value = " \t\n" }) catch unreachable;
+            if (comptime @hasDecl(Host, "wallTimeNs")) shell.state.resetStartTime(shell.host.wallTimeNs());
             shell.state.arg_zero = options.arg_zero;
             shell.state.positionals = options.positionals;
             return shell;

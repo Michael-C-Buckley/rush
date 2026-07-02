@@ -186,6 +186,10 @@ pub const State = struct {
     running_signal_trap: bool = false,
     shell_pid: ?host.Pid = null,
     parent_pid: ?host.Pid = null,
+    start_time_ns: i128 = 0,
+    seconds_base_time_ns: i128 = 0,
+    seconds_offset: i64 = 0,
+    random_state: u64 = 1,
     arg_zero: []const u8 = "rush",
     positionals: []const []const u8 = &.{},
     owned_positionals: []const []const u8 = &.{},
@@ -251,6 +255,42 @@ pub const State = struct {
     pub fn getVariableAttributes(self: State, name: []const u8) ?VariableAttributes {
         std.debug.assert(name.len != 0);
         return self.variable_attributes.get(name);
+    }
+
+    pub fn resetStartTime(self: *State, now_ns: i128) void {
+        self.start_time_ns = now_ns;
+        self.seconds_base_time_ns = now_ns;
+        self.random_state = @intCast(@as(u64, @truncate(@as(u128, @bitCast(now_ns)))) | 1);
+    }
+
+    pub fn setRandomSeed(self: *State, text: []const u8) void {
+        const parsed = std.fmt.parseInt(i64, text, 10) catch 0;
+        const seed = absSeed(parsed);
+        self.random_state = if (seed == 0) 1 else seed;
+        self.removeVariable("RANDOM");
+    }
+
+    fn absSeed(value: i64) u64 {
+        if (value >= 0) return @intCast(value);
+        return @as(u64, @intCast(-(value + 1))) + 1;
+    }
+
+    pub fn nextRandom(self: *State) u15 {
+        const modulus: u64 = 2147483647;
+        self.random_state = (self.random_state * 16807) % modulus;
+        if (self.random_state == 0) self.random_state = 1;
+        return @intCast(self.random_state % 32768);
+    }
+
+    pub fn resetSeconds(self: *State, text: []const u8, now_ns: i128) void {
+        self.seconds_offset = std.fmt.parseInt(i64, text, 10) catch 0;
+        self.seconds_base_time_ns = now_ns;
+        self.removeVariable("SECONDS");
+    }
+
+    pub fn secondsValue(self: State, now_ns: i128) i64 {
+        const elapsed_ns = @max(now_ns - self.seconds_base_time_ns, 0);
+        return self.seconds_offset + @as(i64, @intCast(@divFloor(elapsed_ns, std.time.ns_per_s)));
     }
 
     pub fn putVariable(self: *State, variable: Variable) !void {

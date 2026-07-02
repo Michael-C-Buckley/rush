@@ -43,6 +43,22 @@
             .status = 0,
         },
         .{
+            .name = "bash dynamic variable names are ordinary POSIX variables",
+            .script =
+            \\RANDOM=literal
+            \\SECONDS=5
+            \\EPOCHSECONDS=bad
+            \\EPOCHREALTIME=also-bad
+            \\printf '<%s>:<%s>:<%s>:<%s>\n' "$RANDOM" "$SECONDS" "$EPOCHSECONDS" "$EPOCHREALTIME"
+            ,
+            .stdout =
+            \\<literal>:<5>:<bad>:<also-bad>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "parameter expansion removes backslash newline in parameter name",
             .script = "A=ok; printf '<%s>\\n' ${A\\\n}\n",
             .stdout =

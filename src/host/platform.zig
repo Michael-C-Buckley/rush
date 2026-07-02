@@ -25,6 +25,26 @@ pub const WriteError = error{
     Unexpected,
 };
 
+pub fn wallTimeNs() i128 {
+    return clockTimeNs(.REALTIME) orelse 0;
+}
+
+fn clockTimeNs(clock: std.c.clockid_t) ?i128 {
+    var timespec: std.c.timespec = undefined;
+    switch (builtin.os.tag) {
+        .linux => switch (std.os.linux.errno(std.os.linux.clock_gettime(clock, &timespec))) {
+            .SUCCESS => {},
+            else => return null,
+        },
+        .macos, .freebsd, .openbsd, .netbsd => switch (std.c.errno(std.c.clock_gettime(clock, &timespec))) {
+            .SUCCESS => {},
+            else => return null,
+        },
+        else => return null,
+    }
+    return @as(i128, timespec.sec) * std.time.ns_per_s + timespec.nsec;
+}
+
 pub const OpenError = error{
     AccessDenied,
     FileNotFound,
@@ -134,6 +154,7 @@ pub fn disableTerminalEcho(fd: host.Fd) ?TerminalMode {
 
 pub fn restoreTerminalMode(fd: host.Fd, mode: TerminalMode) void {
     const raw_fd: std.posix.fd_t = @intCast(fd.raw());
+    // ziglint-ignore: Z026 best-effort terminal cleanup cannot report through this API
     std.posix.tcsetattr(raw_fd, .DRAIN, mode) catch {};
 }
 

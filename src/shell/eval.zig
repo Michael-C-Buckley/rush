@@ -3341,6 +3341,7 @@ fn applyDeclaredVariable(
     options: DeclarationOptions,
     status: *result.ExitStatus,
 ) !void {
+    if (applyDynamicVariableAssignment(shell, name, value)) return;
     const existing = shell.state.getVariable(name);
     if (declareUsesLocalScope(shell, options)) {
         shell.state.declareLocalWithAttributes(.{
@@ -4348,6 +4349,7 @@ fn applyAssignmentsIgnoringReadonly(shell: anytype, assignments: []const ast.Ass
     for (assignments) |assignment| {
         var status: ?result.ExitStatus = null;
         const value = try expandAssignmentValue(shell, assignment, &status);
+        if (applyDynamicVariableAssignment(shell, assignment.name, value)) continue;
         shell.state.putVariable(.{
             .name = assignment.name,
             .value = value,
@@ -4363,6 +4365,7 @@ fn applyAssignmentsWithStatus(shell: anytype, assignments: []const ast.Assignmen
     var status: ?result.ExitStatus = null;
     for (assignments) |assignment| {
         const value = try expandAssignmentValue(shell, assignment, &status);
+        if (applyDynamicVariableAssignment(shell, assignment.name, value)) continue;
         shell.state.putVariable(.{
             .name = assignment.name,
             .value = value,
@@ -4384,20 +4387,39 @@ fn expandAndApplyAssignments(shell: anytype, assignments: []const ast.Assignment
     for (assignments, 0..) |assignment, index| {
         var status: ?result.ExitStatus = null;
         const value = try expandAssignmentValue(shell, assignment, &status);
-        shell.state.putVariable(.{
-            .name = assignment.name,
-            .value = value,
-            .exported = assignmentExported(shell, assignment.name),
-        }) catch |err| switch (err) {
-            error.ReadonlyVariable => {
-                try writeReadonlyDiagnostic(shell, assignment.name);
-                return error.AssignmentError;
-            },
-            else => return err,
-        };
+        if (!applyDynamicVariableAssignment(shell, assignment.name, value)) {
+            shell.state.putVariable(.{
+                .name = assignment.name,
+                .value = value,
+                .exported = assignmentExported(shell, assignment.name),
+            }) catch |err| switch (err) {
+                error.ReadonlyVariable => {
+                    try writeReadonlyDiagnostic(shell, assignment.name);
+                    return error.AssignmentError;
+                },
+                else => return err,
+            };
+        }
         expanded[index] = .{ .name = assignment.name, .value = value, .status = status };
     }
     return expanded;
+}
+
+fn applyDynamicVariableAssignment(shell: anytype, name: []const u8, value: []const u8) bool {
+    if (shell.state.options.mode != .bash) return false;
+    if (std.mem.eql(u8, name, "RANDOM")) {
+        shell.state.setRandomSeed(value);
+        return true;
+    }
+    if (std.mem.eql(u8, name, "SECONDS")) {
+        shell.state.resetSeconds(value, currentWallTimeNs(shell));
+        return true;
+    }
+    if (std.mem.eql(u8, name, "EPOCHSECONDS") or std.mem.eql(u8, name, "EPOCHREALTIME")) {
+        shell.state.removeVariable(name);
+        return true;
+    }
+    return false;
 }
 
 fn expandAssignmentValue(
@@ -7076,6 +7098,7 @@ fn writeExpansionDiagnostic(
 }
 
 fn parameterValue(shell: anytype, name: []const u8) ?[]const u8 {
+    if (dynamicParameterValue(shell, name)) |value| return value;
     if (shell.state.getVariable(name)) |variable| return variable.value;
     if (std.mem.eql(u8, name, "PPID")) return std.fmt.allocPrint(
         shell.scratchAllocator(),
@@ -7088,6 +7111,46 @@ fn parameterValue(shell: anytype, name: []const u8) ?[]const u8 {
         }
     }
     return envValue(shell.env, name);
+}
+
+fn dynamicParameterValue(shell: anytype, name: []const u8) ?[]const u8 {
+    if (shell.state.options.mode != .bash) return null;
+    if (std.mem.eql(u8, name, "RANDOM")) return std.fmt.allocPrint(
+        shell.scratchAllocator(),
+        "{}",
+        .{shell.state.nextRandom()},
+    ) catch null;
+    if (std.mem.eql(u8, name, "SECONDS")) return std.fmt.allocPrint(
+        shell.scratchAllocator(),
+        "{}",
+        .{shell.state.secondsValue(currentWallTimeNs(shell))},
+    ) catch null;
+    if (std.mem.eql(u8, name, "EPOCHSECONDS")) return std.fmt.allocPrint(
+        shell.scratchAllocator(),
+        "{}",
+        .{@divFloor(currentWallTimeNs(shell), std.time.ns_per_s)},
+    ) catch null;
+    if (std.mem.eql(u8, name, "EPOCHREALTIME")) {
+        const now_ns = currentWallTimeNs(shell);
+        return std.fmt.allocPrint(
+            shell.scratchAllocator(),
+            "{}.{d:0>6}",
+            .{
+                @divFloor(now_ns, std.time.ns_per_s),
+                @divFloor(@mod(now_ns, std.time.ns_per_s), std.time.ns_per_us),
+            },
+        ) catch null;
+    }
+    return null;
+}
+
+fn currentWallTimeNs(shell: anytype) i128 {
+    const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell.host),
+    };
+    if (comptime @hasDecl(HostType, "wallTimeNs")) return shell.host.wallTimeNs();
+    return shell.state.start_time_ns;
 }
 
 fn formatExitStatus(shell: anytype, status: result.ExitStatus) ![]const u8 {
