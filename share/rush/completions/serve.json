@@ -1,0 +1,162 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "serve",
+    "description": "serve static files",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "shows help message",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "displays the current version of serve",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "long": "listen",
+        "description": "specify a URI endpoint on which to listen - more than one may be specified to listen in multiple places",
+        "inherit": false,
+        "value": {
+          "name": "listen_uri",
+          "provider": {
+            "values": [
+              {
+                "value": "port",
+                "description": "e.g. serve --listen 1234",
+                "priority": 100
+              },
+              {
+                "value": "host/port",
+                "description": "e.g. serve --listen tcp://hostname:1234",
+                "priority": 76
+              },
+              {
+                "value": "unix domain",
+                "description": "e.g. serve --listen unix:/path/to/socket.sock"
+              },
+              {
+                "value": "windows pipe",
+                "description": "e.g. serve -l pipe:\\.pipePipeName"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "p",
+        "description": "specify custom port",
+        "inherit": false,
+        "value": {
+          "name": "port"
+        }
+      },
+      {
+        "short": "d",
+        "long": "debug",
+        "description": "show debugging information",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "single",
+        "description": "rewrite all not-found requests to `index.html`",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "long": "config",
+        "description": "specify custom path to `serve.json`",
+        "inherit": false,
+        "value": {
+          "name": "path-to-config-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "C",
+        "long": "cors",
+        "description": "enable CORS, sets `Access-Control-Allow-Origin` to `*`",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "long": "no-clipboard",
+        "description": "do not copy the local address to the clipboard",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "long": "no-compression",
+        "description": "do not compress files",
+        "inherit": false
+      },
+      {
+        "long": "no-etag",
+        "description": "send `Last-Modified` header instead of `ETag`",
+        "inherit": false
+      },
+      {
+        "short": "S",
+        "long": "symlinks",
+        "description": "resolve symlinks instead of showing 404 errors",
+        "inherit": false
+      },
+      {
+        "long": "ssl-cert",
+        "description": "optional path to an SSL/TLS certificate to serve with HTTPS",
+        "inherit": false,
+        "value": {
+          "name": "path-to-SSL/TLS-certificate",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "ssl-key",
+        "description": "optional path to the SSL/TLS certificate's private key",
+        "inherit": false,
+        "value": {
+          "name": "path-to-private-key",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "ssl-pass",
+        "description": "optional path to the SSL/TLS certificate's passphrase",
+        "inherit": false,
+        "value": {
+          "name": "path-to-passphrase",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "no-port-switching",
+        "description": "do not open a port other than the one specified when it's taken",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "location",
+          "provider": "builtin.directories",
+          "index": 0,
+          "description": "directory to serve"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
