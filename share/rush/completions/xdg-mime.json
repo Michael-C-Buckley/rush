@@ -1,0 +1,127 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "xdg-mime",
+    "description": "query and configure desktop MIME type handling",
+    "options": [
+      {
+        "long": "help",
+        "description": "show command synopsis"
+      },
+      {
+        "long": "manual",
+        "description": "show manual page"
+      },
+      {
+        "long": "version",
+        "description": "show the xdg-utils version information"
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "query",
+        "description": "returns information related to file types",
+        "arguments": {
+          "states": [
+            {
+              "name": "mode",
+              "index": 0,
+              "provider": {
+                "values": [
+                  "filetype",
+                  "default"
+                ]
+              }
+            },
+            {
+              "name": "file-or-mimetype",
+              "index": 1,
+              "provider": "builtin.files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "default",
+        "description": "ask the desktop environment to make application the default application for opening files of type mimetype",
+        "arguments": {
+          "states": [
+            {
+              "name": "application",
+              "index": 0
+            },
+            {
+              "name": "mimetype(s)",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "install",
+        "description": "adds the file type descriptions provided in mimetypes-file to the desktop environment",
+        "options": [
+          {
+            "long": "mode",
+            "value": {
+              "name": "mode",
+              "provider": {
+                "values": [
+                  "user",
+                  "system"
+                ]
+              }
+            }
+          },
+          {
+            "long": "novendor",
+            "description": "disables xdg-mime checks that the mimetypes-file to be installed has a proper vendor prefix"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "mimetypes-file",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "uninstall",
+        "description": "removes the file type descriptions provided in mimetypes-file and previously added with xdg-mime install from the desktop environment",
+        "options": [
+          {
+            "long": "mode",
+            "value": {
+              "name": "mode",
+              "provider": {
+                "values": [
+                  "user",
+                  "system"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "mimetypes-file",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
