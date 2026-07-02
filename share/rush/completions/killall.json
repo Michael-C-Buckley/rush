@@ -1,0 +1,308 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "killall",
+    "description": "kill processes by name",
+    "options": [
+      {
+        "short": "d",
+        "description": "be verbose dry run and display process count",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "description": "match effective user ID with -u",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-help"
+        ],
+        "description": "display help and exit",
+        "inherit": false
+      },
+      {
+        "short": "I",
+        "description": "confirm before killing each process",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "description": "list available signals",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "description": "match process name as a regular expression",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "description": "be verbose",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "be verbose dry run",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGHUP"
+        ],
+        "description": "send HUP instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGINT"
+        ],
+        "description": "send INT instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGQUIT"
+        ],
+        "description": "send QUIT instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGILL"
+        ],
+        "description": "send ILL instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGTRAP"
+        ],
+        "description": "send TRAP instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGABRT"
+        ],
+        "description": "send ABRT instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGEMT"
+        ],
+        "description": "send EMT instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGFPE"
+        ],
+        "description": "send FPE instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGKILL"
+        ],
+        "description": "send KILL instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGBUS"
+        ],
+        "description": "send BUS instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGSEGV"
+        ],
+        "description": "send SEGV instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGSYS"
+        ],
+        "description": "send SYS instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGPIPE"
+        ],
+        "description": "send PIPE instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGALRM"
+        ],
+        "description": "send ALRM instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGURG"
+        ],
+        "description": "send URG instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGSTOP"
+        ],
+        "description": "send STOP instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGTSTP"
+        ],
+        "description": "send TSTP instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGCONT"
+        ],
+        "description": "send CONT instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGCHLD"
+        ],
+        "description": "send CHLD instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGTTIN"
+        ],
+        "description": "send TTIN instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGTTOU"
+        ],
+        "description": "send TTOU instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGIO"
+        ],
+        "description": "send IO instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGXCPU"
+        ],
+        "description": "send XCPU instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGXFSZ"
+        ],
+        "description": "send XFSZ instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGVTALRM"
+        ],
+        "description": "send VTALRM instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGPROF"
+        ],
+        "description": "send PROF instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGWINCH"
+        ],
+        "description": "send WINCH instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGINFO"
+        ],
+        "description": "send INFO instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGUSR1"
+        ],
+        "description": "send USR1 instead of TERM",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "-SIGUSR2"
+        ],
+        "description": "send USR2 instead of TERM",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "description": "limit matches to processes owned by user",
+        "inherit": false,
+        "value": {
+          "name": "user"
+        }
+      },
+      {
+        "short": "t",
+        "description": "limit matches to processes on TTY",
+        "inherit": false,
+        "value": {
+          "name": "tty"
+        }
+      },
+      {
+        "short": "c",
+        "description": "limit matches to process name",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "short": "q",
+        "description": "suppress errors when no processes match",
+        "inherit": false
+      },
+      {
+        "short": "z",
+        "description": "do not skip zombies",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "process-name",
+          "index": 0,
+          "repeatable": true,
+          "provider": {
+            "function": "__rush_complete_killall_process_names"
+          }
+        }
+      ]
+    }
+  }
+}
