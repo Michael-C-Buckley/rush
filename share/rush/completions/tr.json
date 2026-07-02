@@ -1,0 +1,84 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "tr",
+    "description": "translate characters",
+    "options": [
+      {
+        "short": "C",
+        "description": "complement the set of characters in string1, that is '-C ab' includes every character except for 'a' and 'b'",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "description": "same as '-C' but complement the set of values in string1",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "description": "delete characters in string1 from the input",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "squeeze repeated output characters after deletion and translation",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "description": "guarantee that any output is unbuffered",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "string1",
+          "description": "candidate string",
+          "index": 0,
+          "provider": "tr.strings"
+        },
+        {
+          "name": "string2",
+          "description": "replacement string",
+          "index": 1,
+          "provider": "tr.strings"
+        }
+      ]
+    },
+    "providers": {
+      "tr.strings": {
+        "values": [
+          "a",
+          "\\a",
+          "\\b",
+          "\\f",
+          "\\n",
+          "\\r",
+          "\\t",
+          "\\v",
+          "c-c",
+          "[:alnum:]",
+          "[:alpha:]",
+          "[:blank:]",
+          "[:cntrl:]",
+          "[:digit:]",
+          "[:graph:]",
+          "[:ideogram:]",
+          "[:lower:]",
+          "[:phonogram:]",
+          "[:print:]",
+          "[:punct:]",
+          "[:rune:]",
+          "[:space:]",
+          "[:special:]",
+          "[:upper:]",
+          "[:xdigit:]",
+          "[=equiv=]",
+          "[#*n]"
+        ]
+      }
+    }
+  }
+}
