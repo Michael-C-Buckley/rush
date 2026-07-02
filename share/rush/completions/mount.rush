@@ -1,0 +1,16 @@
+__rush_complete_mount_devices() {
+  if test -r /proc/partitions; then
+    while IFS= read -r major minor blocks name; do
+      test -n "$name" || continue
+      case "$name" in name) continue ;; esac
+      rush_complete candidate "/dev/$name" --kind file --description "block device"
+    done < /proc/partitions
+  fi
+
+  if test -d /dev/mapper; then
+    for device in /dev/mapper/*; do
+      test -e "$device" || continue
+      rush_complete candidate "$device" --kind file --description "mapped block device"
+    done
+  fi
+}

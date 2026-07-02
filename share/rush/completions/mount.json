@@ -1,0 +1,279 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "mount",
+    "description": "mount filesystems and manage subtrees",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "short": "a",
+        "long": "all",
+        "description": "Mount all filesystems in fstab",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "long": "no-canonicalize",
+        "description": "Don't canonicalize paths",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "long": "fake",
+        "description": "Dry run; skip the mount(2) syscall",
+        "inherit": false
+      },
+      {
+        "short": "F",
+        "long": "fork",
+        "description": "Fork off for each device (use with -a)",
+        "inherit": false
+      },
+      {
+        "short": "T",
+        "long": "fstab",
+        "description": "Alternative file to /etc/fstab",
+        "inherit": false,
+        "value": {
+          "name": "fstab",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "i",
+        "long": "internal-only",
+        "description": "Don't call the mount.<type> helpers",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "long": "show-labels",
+        "description": "Show also filesystem labels",
+        "inherit": false
+      },
+      {
+        "short": "m",
+        "long": "mkdir",
+        "description": "create the target directory if needed",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "long": "no-mtab",
+        "description": "Don't write to /etc/mtab",
+        "inherit": false
+      },
+      {
+        "long": "options-mode",
+        "description": "What to do with options loaded from fstab",
+        "inherit": false,
+        "value": {
+          "name": "mode"
+        }
+      },
+      {
+        "long": "options-source",
+        "description": "Mount options source",
+        "inherit": false,
+        "value": {
+          "name": "source",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "options-source-force",
+        "description": "Force use of options from fstab/mtab",
+        "inherit": false
+      },
+      {
+        "short": "o",
+        "long": "options",
+        "description": "Comma-separated list of mount options",
+        "inherit": false,
+        "value": {
+          "name": "list"
+        }
+      },
+      {
+        "short": "O",
+        "long": "test-opts",
+        "description": "Limit the set of filesystems (use with -a)",
+        "inherit": false,
+        "value": {
+          "name": "list"
+        }
+      },
+      {
+        "short": "r",
+        "long": "read-only",
+        "description": "Mount the filesystem read-only (same as -o ro)",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "long": "types",
+        "description": "Limit the set of filesystem types",
+        "inherit": false,
+        "value": {
+          "name": "list"
+        }
+      },
+      {
+        "long": "source",
+        "description": "Explicitly specifies source",
+        "inherit": false,
+        "value": {
+          "name": "source",
+          "provider": {
+            "values": [
+              "path",
+              "label",
+              "uuid"
+            ]
+          }
+        }
+      },
+      {
+        "long": "target",
+        "description": "Explicitly specifies mountpoint",
+        "inherit": false,
+        "value": {
+          "name": "mountpoint",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "target-prefix",
+        "description": "Specifies path used for all mountpoints",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "Say what is being done",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "rw",
+        "aliases": [
+          "read-write"
+        ],
+        "description": "Mount the filesystem read-write (default)",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "show version information",
+        "inherit": false
+      },
+      {
+        "short": "B",
+        "long": "bind",
+        "description": "Mount a subtree somewhere else (same as -o bind)",
+        "inherit": false
+      },
+      {
+        "short": "M",
+        "long": "move",
+        "description": "Move a subtree to some other place",
+        "inherit": false
+      },
+      {
+        "short": "R",
+        "spellings": [
+          "-rbind"
+        ],
+        "description": "Mount a subtree and all submounts somewhere else",
+        "inherit": false
+      },
+      {
+        "long": "make-shared",
+        "description": "Mark a subtree as shared",
+        "inherit": false
+      },
+      {
+        "long": "make-slave",
+        "description": "Mark a subtree as slave",
+        "inherit": false
+      },
+      {
+        "long": "make-private",
+        "description": "Mark a subtree as private",
+        "inherit": false
+      },
+      {
+        "long": "make-unbindable",
+        "description": "Mark a subtree as unbindable",
+        "inherit": false
+      },
+      {
+        "long": "make-rshared",
+        "description": "Recursively mark a whole subtree as shared",
+        "inherit": false
+      },
+      {
+        "long": "make-rslave",
+        "description": "Recursively mark a whole subtree as slave",
+        "inherit": false
+      },
+      {
+        "long": "make-rprivate",
+        "description": "Recursively mark a whole subtree as private",
+        "inherit": false
+      },
+      {
+        "long": "make-runbindable",
+        "description": "Recursively mark a whole subtree as unbindable",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "source",
+          "provider": [
+            {
+              "function": "__rush_complete_mount_devices"
+            },
+            "builtin.files"
+          ],
+          "index": 0
+        },
+        {
+          "name": "mountpoint",
+          "provider": [
+            "mount.mountpoints",
+            "builtin.directories"
+          ],
+          "index": 1
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "mount.mountpoints": {
+        "values": [
+          "/mnt",
+          "/run/media/"
+        ]
+      }
+    }
+  }
+}
