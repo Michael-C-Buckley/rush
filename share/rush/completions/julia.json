@@ -1,0 +1,501 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "julia",
+    "description": "Julia programming language",
+    "options": [
+      {
+        "short": "v",
+        "long": "version",
+        "description": "display version information",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "print help message for julia (--help-hidden for more)",
+        "inherit": false
+      },
+      {
+        "long": "help-hidden",
+        "description": "uncommon options not shown by `-h`",
+        "inherit": false
+      },
+      {
+        "long": "project",
+        "description": "set given directory as the home project/environment",
+        "inherit": false,
+        "value": {
+          "name": "project-folder",
+          "description": "Julia project/environment",
+          "required": false,
+          "style": "optional",
+          "provider": {
+            "values": [
+              {
+                "value": "@.",
+                "description": "Search through parent directories until a Project.toml or JuliaProject.toml file is found",
+                "priority": 75
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "J",
+        "long": "sysimage",
+        "description": "start up with the given system image file",
+        "inherit": false,
+        "value": {
+          "name": "system-image",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "H",
+        "long": "home",
+        "description": "set location of `julia` executable",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "startup-file",
+        "description": "load `~/.julia/config/startup.jl`",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "julia-yes-no"
+        }
+      },
+      {
+        "long": "handle-signals",
+        "description": "enable or disable Julia's default signal handlers",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "julia-yes-no"
+        }
+      },
+      {
+        "long": "sysimage-native-code",
+        "description": "use native code from system image if available",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "julia-yes-no"
+        }
+      },
+      {
+        "long": "compiled-modules",
+        "description": "enable or disable incremental precompilation of modules",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "julia-yes-no"
+        }
+      },
+      {
+        "short": "e",
+        "long": "eval",
+        "description": "evaluate given expr",
+        "inherit": false,
+        "value": {
+          "name": "expr"
+        }
+      },
+      {
+        "short": "E",
+        "long": "print",
+        "description": "evaluate given expr and display the result",
+        "inherit": false,
+        "value": {
+          "name": "expr"
+        }
+      },
+      {
+        "short": "L",
+        "long": "load",
+        "description": "load given file immediately on all processors",
+        "inherit": false,
+        "value": {
+          "name": "julia-script",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "t",
+        "long": "threads",
+        "description": "enable N threads; \"auto\" sets N to the number of local CPU threads",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "description": "Number of threads",
+          "provider": "julia-auto"
+        }
+      },
+      {
+        "short": "p",
+        "long": "procs",
+        "description": "integer value N launches N additional local worker processes \"auto\" launches as many workers as the number of local CPU threads",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "description": "Number of additional local worker processes",
+          "provider": "julia-auto"
+        }
+      },
+      {
+        "long": "machine-file",
+        "description": "run processes on hosts listed in given file",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "i",
+        "description": "interactive mode; REPL runs and isinteractive() is true",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "quiet startup: no banner, suppress REPL warnings",
+        "inherit": false
+      },
+      {
+        "long": "banner",
+        "description": "enable or disable startup banner",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "julia-yes-no-auto"
+        }
+      },
+      {
+        "long": "color",
+        "description": "enable or disable color text",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "julia-yes-no-auto"
+        }
+      },
+      {
+        "long": "history-file",
+        "description": "load or save history",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "julia-yes-no"
+        }
+      },
+      {
+        "long": "depwarn",
+        "description": "enable or disable syntax and method deprecation warnings (\"error\" turns warnings into errors)",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "julia-depwarn"
+        }
+      },
+      {
+        "long": "warn-overwrite",
+        "description": "enable or disable method overwrite warnings",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "julia-yes-no"
+        }
+      },
+      {
+        "long": "warn-scope",
+        "description": "enable or disable warning for ambiguous top-level scope",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "julia-yes-no"
+        }
+      },
+      {
+        "short": "C",
+        "long": "cpu-target",
+        "description": "limit usage of CPU features up to <target>; set to \"help\" to see the available options",
+        "inherit": false,
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "short": "O",
+        "long": "optimize",
+        "description": "set the optimization level (default level is 2 if unspecified or 3 if used without a level)",
+        "inherit": false,
+        "value": {
+          "name": "level",
+          "description": "Level of optimization",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "short": "g",
+        "description": "enable / Set the level of debug info generation",
+        "inherit": false,
+        "value": {
+          "name": "level",
+          "description": "Level of debug info generation",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "inline",
+        "description": "control whether inlining is permitted, including overriding @inline declarations",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "julia-yes-no"
+        }
+      },
+      {
+        "long": "check-bounds",
+        "description": "emit bounds checks always, never, or respect @inbounds declarations",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "julia-yes-no-auto"
+        }
+      },
+      {
+        "long": "polly",
+        "description": "enable or disable the polyhedral optimizer Polly (overrides @polly declaration)",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "julia-yes-no"
+        }
+      },
+      {
+        "long": "math-mode",
+        "description": "disallow or enable unsafe floating point optimizations (overrides @fastmath declaration)",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "julia-math-modes"
+        }
+      },
+      {
+        "long": "code-coverage",
+        "description": "count executions of source lines (omitting setting is equivalent to \"user\")",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional",
+          "provider": "julia-coverage-modes"
+        }
+      },
+      {
+        "long": "track-allocation",
+        "description": "count bytes allocated by each source line (omitting setting is equivalent to \"user\")",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "required": false,
+          "style": "optional",
+          "provider": "julia-coverage-modes"
+        }
+      },
+      {
+        "long": "bug-report",
+        "description": "launch a bug report session",
+        "inherit": false,
+        "value": {
+          "name": "kind"
+        }
+      },
+      {
+        "long": "compile",
+        "description": "enable or disable JIT compiler, or request exhaustive or minimal compilation",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "julia-compile-modes"
+        }
+      },
+      {
+        "long": "output-o",
+        "description": "generate an object file (including system image data)",
+        "inherit": false,
+        "value": {
+          "name": "name",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "output-ji",
+        "description": "generate a system image data file (.ji)",
+        "inherit": false,
+        "value": {
+          "name": "name",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "output-unopt-bc",
+        "description": "generate unoptimized LLVM bitcode (.bc)",
+        "inherit": false,
+        "value": {
+          "name": "name",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "output-jit-bc",
+        "description": "dump all IR generated by the frontend (not including system image)",
+        "inherit": false,
+        "value": {
+          "name": "name",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "output-bc",
+        "description": "generate LLVM bitcode (.bc)",
+        "inherit": false,
+        "value": {
+          "name": "name",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "output-asm",
+        "description": "generate an assembly file (.s)",
+        "inherit": false,
+        "value": {
+          "name": "name",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "output-incremental",
+        "description": "generate an incremental output file (rather than complete)",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "julia-yes-no"
+        }
+      },
+      {
+        "long": "image-codegen",
+        "description": "force generate code in imaging mode",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "julia-script",
+          "provider": "builtin.files",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "julia-yes-no": {
+        "values": [
+          {
+            "value": "yes"
+          },
+          {
+            "value": "no"
+          }
+        ]
+      },
+      "julia-yes-no-auto": {
+        "values": [
+          {
+            "value": "yes"
+          },
+          {
+            "value": "no"
+          },
+          {
+            "value": "auto"
+          }
+        ]
+      },
+      "julia-auto": {
+        "values": [
+          {
+            "value": "auto"
+          }
+        ]
+      },
+      "julia-depwarn": {
+        "values": [
+          {
+            "value": "yes"
+          },
+          {
+            "value": "no"
+          },
+          {
+            "value": "error"
+          }
+        ]
+      },
+      "julia-math-modes": {
+        "values": [
+          {
+            "value": "ieee"
+          },
+          {
+            "value": "fast"
+          }
+        ]
+      },
+      "julia-coverage-modes": {
+        "values": [
+          {
+            "value": "none"
+          },
+          {
+            "value": "user"
+          },
+          {
+            "value": "all"
+          }
+        ]
+      },
+      "julia-compile-modes": {
+        "values": [
+          {
+            "value": "yes"
+          },
+          {
+            "value": "no"
+          },
+          {
+            "value": "all"
+          },
+          {
+            "value": "min"
+          }
+        ]
+      }
+    }
+  }
+}
