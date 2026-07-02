@@ -1,0 +1,83 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "java",
+    "description": "launch a Java application",
+    "options": [
+      {
+        "spellings": [
+          "-jar"
+        ],
+        "description": "to launch the main class in a JAR file",
+        "inherit": false,
+        "value": {
+          "name": "jar-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "D",
+        "description": "set a system property, -D<NAME>=<VALUE>",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "spellings": [
+          "-?"
+        ],
+        "description": "show help for java",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "spellings": [
+          "-version"
+        ],
+        "description": "print product version to the error stream and exit",
+        "inherit": false
+      },
+      {
+        "long": "show-version",
+        "spellings": [
+          "-showversion"
+        ],
+        "description": "print product version to the output stream and continue",
+        "inherit": false
+      },
+      {
+        "long": "dry-run",
+        "description": "create VM and load main class but do not execute main method",
+        "inherit": false
+      },
+      {
+        "long": "classpath",
+        "spellings": [
+          "-cp"
+        ],
+        "description": "class search path of directories and zip/jar files",
+        "inherit": false,
+        "value": {
+          "name": "search-files",
+          "provider": "builtin.files"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "main-class",
+          "description": "class or source file to launch",
+          "index": 0,
+          "provider": "builtin.files"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
