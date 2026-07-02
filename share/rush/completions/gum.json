@@ -1,0 +1,761 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "gum",
+    "description": "build glamorous shell scripts",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show context-sensitive help",
+        "inherit": true
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "print the version number",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "choose",
+        "description": "choose an option from a list of choices",
+        "options": [
+          {
+            "long": "height",
+            "description": "height of the list",
+            "inherit": false,
+            "value": {
+              "name": "lines"
+            }
+          },
+          {
+            "long": "cursor",
+            "description": "prefix to show on item that corresponds to the cursor position",
+            "inherit": false,
+            "value": {
+              "name": "symbol"
+            }
+          },
+          {
+            "long": "cursor-prefix",
+            "description": "prefix to show on the cursor item",
+            "inherit": false,
+            "value": {
+              "name": "symbol"
+            }
+          },
+          {
+            "long": "selected-prefix",
+            "description": "prefix to show on selected items",
+            "inherit": false,
+            "value": {
+              "name": "symbol"
+            }
+          },
+          {
+            "long": "unselected-prefix",
+            "description": "prefix to show on unselected items",
+            "inherit": false,
+            "value": {
+              "name": "symbol"
+            }
+          },
+          {
+            "long": "selected",
+            "description": "options that should start as selected",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "option"
+            }
+          },
+          {
+            "long": "limit",
+            "description": "maximum number of options to pick",
+            "inherit": false,
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "long": "no-limit",
+            "description": "pick unlimited number of options (ignores limit)",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "options",
+              "description": "options to choose from",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "confirm",
+        "description": "ask a user to confirm an action",
+        "options": [
+          {
+            "long": "affirmative",
+            "description": "the title of the affirmative action",
+            "inherit": false,
+            "value": {
+              "name": "title"
+            }
+          },
+          {
+            "long": "negative",
+            "description": "the title of the negative action",
+            "inherit": false,
+            "value": {
+              "name": "title"
+            }
+          },
+          {
+            "long": "default",
+            "description": "default confirmation action",
+            "inherit": false
+          },
+          {
+            "long": "timeout",
+            "description": "timeout for confirmation",
+            "inherit": false,
+            "value": {
+              "name": "duration"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "prompt",
+              "description": "prompt to display",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "filter",
+        "description": "filter items from a list",
+        "options": [
+          {
+            "long": "indicator",
+            "description": "character for selection",
+            "inherit": false,
+            "value": {
+              "name": "symbol"
+            }
+          },
+          {
+            "long": "selected-prefix",
+            "description": "character to indicate selected items",
+            "inherit": false,
+            "value": {
+              "name": "symbol"
+            }
+          },
+          {
+            "long": "unselected-prefix",
+            "description": "character to indicate unselected items",
+            "inherit": false,
+            "value": {
+              "name": "symbol"
+            }
+          },
+          {
+            "long": "placeholder",
+            "description": "placeholder value",
+            "inherit": false,
+            "value": {
+              "name": "placeholder"
+            }
+          },
+          {
+            "long": "prompt",
+            "description": "prompt to display",
+            "inherit": false,
+            "value": {
+              "name": "prompt"
+            }
+          },
+          {
+            "long": "width",
+            "description": "input width",
+            "inherit": false,
+            "value": {
+              "name": "width"
+            }
+          },
+          {
+            "long": "height",
+            "description": "input height",
+            "inherit": false,
+            "value": {
+              "name": "lines"
+            }
+          },
+          {
+            "long": "value",
+            "description": "initial filter",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "reverse",
+            "description": "display from the bottom of the screen",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "format",
+        "description": "format a string using a template",
+        "options": [
+          {
+            "long": "type",
+            "short": "t",
+            "description": "format to use",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "gum.format-types"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "template",
+              "description": "template string to format",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "input",
+        "description": "prompt for some input",
+        "options": [
+          {
+            "long": "placeholder",
+            "description": "placeholder value",
+            "inherit": false,
+            "value": {
+              "name": "placeholder"
+            }
+          },
+          {
+            "long": "prompt",
+            "description": "prompt to display",
+            "inherit": false,
+            "value": {
+              "name": "prompt"
+            }
+          },
+          {
+            "long": "value",
+            "description": "initial value",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "char-limit",
+            "description": "maximum value length",
+            "inherit": false,
+            "value": {
+              "name": "limit"
+            }
+          },
+          {
+            "long": "width",
+            "description": "input width",
+            "inherit": false,
+            "value": {
+              "name": "width"
+            }
+          },
+          {
+            "long": "password",
+            "description": "mask input characters",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "join",
+        "description": "join text vertically or horizontally",
+        "options": [
+          {
+            "long": "align",
+            "description": "text alignment",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "gum.alignments"
+            }
+          },
+          {
+            "long": "horizontal",
+            "description": "join (potentially multi-line) strings horizontally",
+            "inherit": false
+          },
+          {
+            "long": "vertical",
+            "description": "join (potentially multi-line) strings vertically",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "text",
+              "description": "text to join",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "spin",
+        "description": "display spinner while running a command",
+        "options": [
+          {
+            "long": "show-output",
+            "description": "show output of command",
+            "inherit": false
+          },
+          {
+            "long": "spinner",
+            "short": "s",
+            "description": "spinner type",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "gum.spinners"
+            }
+          },
+          {
+            "long": "title",
+            "description": "text to display to user while spinning",
+            "inherit": false,
+            "value": {
+              "name": "text"
+            }
+          },
+          {
+            "long": "align",
+            "short": "a",
+            "description": "alignment of spinner with regard to the title",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "gum.alignments"
+            }
+          }
+        ]
+      },
+      {
+        "name": "style",
+        "description": "apply coloring, borders, spacing to text",
+        "arguments": {
+          "states": [
+            {
+              "name": "text",
+              "description": "text to which to apply the style",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        },
+        "options": [
+          {
+            "long": "background",
+            "description": "background color",
+            "value": {
+              "name": "color"
+            }
+          },
+          {
+            "long": "foreground",
+            "description": "foreground color",
+            "value": {
+              "name": "color"
+            }
+          },
+          {
+            "long": "border",
+            "description": "border style",
+            "value": {
+              "name": "style",
+              "provider": "gum.borders"
+            }
+          },
+          {
+            "long": "border-background",
+            "description": "border background color",
+            "value": {
+              "name": "color"
+            }
+          },
+          {
+            "long": "border-foreground",
+            "description": "border foreground color",
+            "value": {
+              "name": "color"
+            }
+          },
+          {
+            "long": "align",
+            "description": "text alignment",
+            "value": {
+              "name": "alignment",
+              "provider": "gum.alignments"
+            }
+          },
+          {
+            "long": "height",
+            "description": "text height",
+            "value": {
+              "name": "lines"
+            }
+          },
+          {
+            "long": "width",
+            "description": "text width",
+            "value": {
+              "name": "width"
+            }
+          },
+          {
+            "long": "margin",
+            "description": "text margin",
+            "value": {
+              "name": "margin"
+            }
+          },
+          {
+            "long": "padding",
+            "description": "text padding",
+            "value": {
+              "name": "padding"
+            }
+          },
+          {
+            "long": "bold",
+            "description": "bold text"
+          },
+          {
+            "long": "faint",
+            "description": "faint text"
+          },
+          {
+            "long": "italic",
+            "description": "italicize text"
+          },
+          {
+            "long": "strikethrough",
+            "description": "strikethrough text"
+          },
+          {
+            "long": "underline",
+            "description": "underline text"
+          }
+        ]
+      },
+      {
+        "name": "write",
+        "description": "prompt for long-form text",
+        "options": [
+          {
+            "long": "width",
+            "description": "text area width",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "height",
+            "description": "text area height",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "placeholder",
+            "description": "placeholder value",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "prompt",
+            "description": "prompt to display",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "show-cursor-line",
+            "description": "show cursor line",
+            "inherit": false
+          },
+          {
+            "long": "show-line-numbers",
+            "description": "show line numbers",
+            "inherit": false
+          },
+          {
+            "long": "value",
+            "description": "initial value (can be passed via stdin)",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "char-limit",
+            "description": "maximum value length (0 for no limit)",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "header",
+            "description": "header value",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "file",
+        "description": "pick a file from a folder",
+        "options": [
+          {
+            "long": "cursor",
+            "short": "c",
+            "description": "the cursor character",
+            "inherit": false,
+            "value": {
+              "name": "cursor"
+            }
+          },
+          {
+            "long": "all",
+            "short": "a",
+            "description": "show hidden and 'dot' files",
+            "inherit": false
+          },
+          {
+            "long": "height",
+            "description": "maximum number of files to display",
+            "inherit": false,
+            "value": {
+              "name": "lines"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "description": "the path to the folder to begin traversing",
+              "index": 0,
+              "provider": "builtin.directories"
+            }
+          ]
+        }
+      },
+      {
+        "name": "table",
+        "description": "render a table of data",
+        "options": [
+          {
+            "long": "separator",
+            "short": "s",
+            "description": "row separator",
+            "inherit": false,
+            "value": {
+              "name": "separator"
+            }
+          },
+          {
+            "long": "columns",
+            "short": "c",
+            "description": "column names",
+            "inherit": false,
+            "value": {
+              "name": "names"
+            }
+          },
+          {
+            "long": "widths",
+            "short": "w",
+            "description": "column widths",
+            "inherit": false,
+            "value": {
+              "name": "widths"
+            }
+          },
+          {
+            "long": "height",
+            "description": "table height",
+            "inherit": false,
+            "value": {
+              "name": "lines"
+            }
+          },
+          {
+            "long": "file",
+            "short": "f",
+            "description": "file path",
+            "inherit": false,
+            "value": {
+              "name": "filename",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "pager",
+        "description": "scroll through a file",
+        "options": [
+          {
+            "long": "show-line-numbers",
+            "description": "show line numbers",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "content",
+              "description": "display content to scroll",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "gum.alignments": {
+        "candidates": [
+          {
+            "value": "left"
+          },
+          {
+            "value": "center"
+          },
+          {
+            "value": "right"
+          },
+          {
+            "value": "bottom"
+          },
+          {
+            "value": "middle"
+          },
+          {
+            "value": "top"
+          }
+        ]
+      },
+      "gum.borders": {
+        "candidates": [
+          {
+            "value": "none"
+          },
+          {
+            "value": "hidden"
+          },
+          {
+            "value": "normal"
+          },
+          {
+            "value": "rounded"
+          },
+          {
+            "value": "thick"
+          },
+          {
+            "value": "double"
+          }
+        ]
+      },
+      "gum.format-types": {
+        "candidates": [
+          {
+            "value": "markdown"
+          },
+          {
+            "value": "template"
+          },
+          {
+            "value": "code"
+          },
+          {
+            "value": "emoji"
+          }
+        ]
+      },
+      "gum.spinners": {
+        "candidates": [
+          {
+            "value": "line"
+          },
+          {
+            "value": "dot"
+          },
+          {
+            "value": "minidot"
+          },
+          {
+            "value": "jump"
+          },
+          {
+            "value": "pulse"
+          },
+          {
+            "value": "points"
+          },
+          {
+            "value": "globe"
+          },
+          {
+            "value": "moon"
+          },
+          {
+            "value": "monkey"
+          },
+          {
+            "value": "meter"
+          },
+          {
+            "value": "hamburger"
+          }
+        ]
+      }
+    }
+  }
+}
