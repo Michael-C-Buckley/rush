@@ -1,0 +1,157 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "grex",
+    "description": "generate regular expressions from test cases",
+    "options": [
+      {
+        "short": "d",
+        "long": "digits",
+        "description": "converts any Unicode decimal digit to \\d",
+        "inherit": false
+      },
+      {
+        "short": "D",
+        "long": "non-digits",
+        "description": "converts any character which is not a Unicode decimal digit to \\D",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "spaces",
+        "description": "converts any Unicode whitespace character to \\s",
+        "inherit": false
+      },
+      {
+        "short": "S",
+        "long": "non-spaces",
+        "description": "converts any character which is not a Unicode whitespace character to \\S",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "words",
+        "description": "converts any Unicode word character to \\w",
+        "inherit": false
+      },
+      {
+        "short": "W",
+        "long": "non-words",
+        "description": "converts any character which is not a Unicode word character to \\W",
+        "inherit": false
+      },
+      {
+        "short": "r",
+        "long": "repetitions",
+        "description": "detects repeated non-overlapping substrings and converts them to {min,max} quantifier notation",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "long": "escape",
+        "description": "replaces all non-ASCII characters with unicode escape sequences",
+        "inherit": false
+      },
+      {
+        "long": "with-surrogates",
+        "description": "converts astral code points to surrogate pairs if --escape is set",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "long": "ignore-case",
+        "description": "performs case-insensitive matching, letters match both upper and lower case",
+        "inherit": false
+      },
+      {
+        "short": "g",
+        "long": "capture-groups",
+        "description": "replaces non-capturing groups by capturing ones",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "long": "colorize",
+        "description": "provides syntax highlighting for the resulting regular expression",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "prints help information",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "prints version information",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "long": "file",
+        "description": "reads test cases on separate lines from a file",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "min-repetitions",
+        "description": "specifies the minimum quantity of substring repetitions to be converted if --repetitions is set [default: 1]",
+        "inherit": false,
+        "value": {
+          "name": "quantity",
+          "provider": "grex.small-numbers"
+        }
+      },
+      {
+        "long": "min-substring-length",
+        "description": "specifies the minimum length a repeated substring must have in order to be converted if --repetitions is set [default: 1]",
+        "inherit": false,
+        "value": {
+          "name": "length",
+          "provider": "grex.small-numbers"
+        }
+      }
+    ],
+    "providers": {
+      "grex.small-numbers": {
+        "candidates": [
+          {
+            "value": "1"
+          },
+          {
+            "value": "2"
+          },
+          {
+            "value": "3"
+          },
+          {
+            "value": "4"
+          },
+          {
+            "value": "5"
+          },
+          {
+            "value": "6"
+          },
+          {
+            "value": "7"
+          },
+          {
+            "value": "8"
+          },
+          {
+            "value": "9"
+          },
+          {
+            "value": "10"
+          }
+        ]
+      }
+    }
+  }
+}
