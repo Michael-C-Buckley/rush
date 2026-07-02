@@ -1,0 +1,15 @@
+__rush_complete_tmuxinator_projects() {
+  command -v tmuxinator >/dev/null 2>&1 || return
+  tmuxinator list -n 2>/dev/null | awk 'NR > 1 && $0 != "" { print }' | while IFS= read -r project; do
+    rush_complete candidate "$project" --kind plain --description project
+  done
+}
+
+__rush_complete_tmuxinator_tmux_sessions() {
+  command -v tmux >/dev/null 2>&1 || return
+  tmux ls 2>/dev/null | while IFS= read -r line; do
+    session=${line%%:*}
+    test -n "$session" || continue
+    rush_complete candidate "$session" --kind plain --description "tmux session"
+  done
+}
