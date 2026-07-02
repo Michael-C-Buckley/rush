@@ -1,0 +1,19 @@
+__rush_complete_okteto_contexts() {
+  command -v okteto >/dev/null 2>&1 || return
+  okteto context list 2>/dev/null | tail -n +2 | while IFS= read -r line; do
+    set -- $line
+    name=${1#\*}
+    name=${name#* }
+    test -n "$name" && rush_complete candidate "$name" --kind plain --description context --priority 35
+  done
+}
+
+__rush_complete_okteto_namespaces() {
+  command -v okteto >/dev/null 2>&1 || return
+  okteto namespace list 2>/dev/null | tail -n +2 | while IFS= read -r line; do
+    set -- $line
+    name=${1#\*}
+    name=${name#* }
+    test -n "$name" && rush_complete candidate "$name" --kind plain --description namespace --priority 35
+  done
+}

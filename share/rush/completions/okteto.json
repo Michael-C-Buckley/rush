@@ -1,0 +1,3963 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "okteto",
+    "description": "Okteto - Remote Development Environments powered by Kubernetes",
+    "options": [
+      {
+        "long": "loglevel",
+        "short": "l",
+        "description": "Amount of information outputted (debug, info, warn, error)",
+        "inherit": false,
+        "value": {
+          "name": "loglevel",
+          "provider": "okteto.loglevels"
+        }
+      },
+      {
+        "long": "output",
+        "short": "o",
+        "description": "Output format (tty, plain, json)",
+        "inherit": false,
+        "value": {
+          "name": "output",
+          "provider": "okteto.outputs"
+        }
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "Help for okteto",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "analytics",
+        "description": "Enable / Disable analytics",
+        "options": [
+          {
+            "long": "loglevel",
+            "short": "l",
+            "description": "Amount of information outputted (debug, info, warn, error)",
+            "inherit": false,
+            "value": {
+              "name": "loglevel",
+              "provider": "okteto.loglevels"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "Output format (tty, plain, json)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "okteto.outputs"
+            }
+          },
+          {
+            "long": "disable",
+            "short": "d",
+            "description": "Disable analytics",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for analytics",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "build",
+        "description": "Build (and optionally push) a Docker image",
+        "options": [
+          {
+            "long": "loglevel",
+            "short": "l",
+            "description": "Amount of information outputted (debug, info, warn, error)",
+            "inherit": false,
+            "value": {
+              "name": "loglevel",
+              "provider": "okteto.loglevels"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "Output format (tty, plain, json)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "okteto.outputs"
+            }
+          },
+          {
+            "long": "build-arg",
+            "description": "Set build-time variables",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "build-arg"
+            }
+          },
+          {
+            "long": "cache-from",
+            "description": "Cache source images",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "cache-from"
+            }
+          },
+          {
+            "long": "file",
+            "short": "f",
+            "description": "Name of the Dockerfile (Default is 'PATH/Dockerfile')",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "namespace",
+            "description": "Namespace against which the image will be consumed. Default is the one defined at okteto context or okteto manifest",
+            "inherit": false,
+            "value": {
+              "name": "namespace"
+            }
+          },
+          {
+            "long": "no-cache",
+            "description": "Do not use cache when building the image",
+            "inherit": false
+          },
+          {
+            "long": "progress",
+            "description": "Show plain/tty build output",
+            "inherit": false,
+            "value": {
+              "name": "progress"
+            }
+          },
+          {
+            "long": "secret",
+            "description": "Secret files exposed to the build. Format: id=mysecret,src=/local/secret",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "secret"
+            }
+          },
+          {
+            "long": "tag",
+            "short": "t",
+            "description": "Name and optionally a tag in the 'name:tag' format (it is automatically pushed)",
+            "inherit": false,
+            "value": {
+              "name": "tag"
+            }
+          },
+          {
+            "long": "target",
+            "description": "Set the target build stage to build",
+            "inherit": false,
+            "value": {
+              "name": "target"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for build",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "completion",
+        "description": "Generate the autocompletion script for the specified shell",
+        "options": [
+          {
+            "long": "loglevel",
+            "short": "l",
+            "description": "Amount of information outputted (debug, info, warn, error)",
+            "inherit": false,
+            "value": {
+              "name": "loglevel",
+              "provider": "okteto.loglevels"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "Output format (tty, plain, json)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "okteto.outputs"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for completion",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "bash",
+            "description": "Generate the autocompletion script for bash",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "no-descriptions",
+                "description": "Disable completion descriptions",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for bash",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "fish",
+            "description": "Generate the autocompletion script for fish",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "no-descriptions",
+                "description": "Disable completion descriptions",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for fish",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "powershell",
+            "description": "Generate the autocompletion script for powershell",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "no-descriptions",
+                "description": "Disable completion descriptions",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for powershell",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "zsh",
+            "description": "Generate the autocompletion script for zsh",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "no-descriptions",
+                "description": "Disable completion descriptions",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for zsh",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "ctx",
+        "aliases": [
+          "context"
+        ],
+        "description": "Set the default context",
+        "options": [
+          {
+            "long": "loglevel",
+            "short": "l",
+            "description": "Amount of information outputted (debug, info, warn, error)",
+            "inherit": false,
+            "value": {
+              "name": "loglevel",
+              "provider": "okteto.loglevels"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "Output format (tty, plain, json)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "okteto.outputs"
+            }
+          },
+          {
+            "long": "builder",
+            "short": "b",
+            "description": "Url of the builder service",
+            "inherit": false,
+            "value": {
+              "name": "builder"
+            }
+          },
+          {
+            "long": "namespace",
+            "short": "n",
+            "description": "Namespace of your okteto context",
+            "inherit": false,
+            "value": {
+              "name": "namespace"
+            }
+          },
+          {
+            "long": "okteto",
+            "description": "Only shows okteto cluster options",
+            "inherit": false
+          },
+          {
+            "long": "token",
+            "short": "t",
+            "description": "API token for authentication",
+            "inherit": false,
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for context",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "delete",
+            "description": "Delete a context",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for delete",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "context",
+                  "index": 0,
+                  "provider": "okteto.contexts"
+                }
+              ]
+            }
+          },
+          {
+            "name": "ls",
+            "aliases": [
+              "list"
+            ],
+            "description": "List available contexts",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for list",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "show",
+            "description": "Print the current context",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for show",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "use",
+            "description": "Set the default context",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "builder",
+                "short": "b",
+                "description": "Url of the builder service",
+                "inherit": false,
+                "value": {
+                  "name": "builder"
+                }
+              },
+              {
+                "long": "namespace",
+                "short": "n",
+                "description": "Namespace of your okteto context",
+                "inherit": false,
+                "value": {
+                  "name": "namespace"
+                }
+              },
+              {
+                "long": "okteto",
+                "description": "Only shows okteto cluster options",
+                "inherit": false
+              },
+              {
+                "long": "token",
+                "short": "t",
+                "description": "API token for authentication",
+                "inherit": false,
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for use",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "context",
+                  "index": 0,
+                  "provider": "okteto.contexts"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "doctor",
+        "description": "Generate a zip file with the okteto logs",
+        "options": [
+          {
+            "long": "loglevel",
+            "short": "l",
+            "description": "Amount of information outputted (debug, info, warn, error)",
+            "inherit": false,
+            "value": {
+              "name": "loglevel",
+              "provider": "okteto.loglevels"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "Output format (tty, plain, json)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "okteto.outputs"
+            }
+          },
+          {
+            "long": "context",
+            "short": "c",
+            "description": "Context where the up command was executing",
+            "inherit": false,
+            "value": {
+              "name": "context"
+            }
+          },
+          {
+            "long": "file",
+            "short": "f",
+            "description": "Path to the manifest file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "namespace",
+            "short": "n",
+            "description": "Namespace where the up command was executing",
+            "inherit": false,
+            "value": {
+              "name": "namespace"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for doctor",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "down",
+        "description": "Deactivate your development container",
+        "options": [
+          {
+            "long": "loglevel",
+            "short": "l",
+            "description": "Amount of information outputted (debug, info, warn, error)",
+            "inherit": false,
+            "value": {
+              "name": "loglevel",
+              "provider": "okteto.loglevels"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "Output format (tty, plain, json)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "okteto.outputs"
+            }
+          },
+          {
+            "long": "context",
+            "short": "c",
+            "description": "Context where the down command is executed",
+            "inherit": false,
+            "value": {
+              "name": "context"
+            }
+          },
+          {
+            "long": "file",
+            "short": "f",
+            "description": "Path to the manifest file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "namespace",
+            "short": "n",
+            "description": "Namespace where the down command is executed",
+            "inherit": false,
+            "value": {
+              "name": "namespace"
+            }
+          },
+          {
+            "long": "volumes",
+            "short": "v",
+            "description": "Remove persistent volume",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for down",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "exec",
+        "description": "Execute a command in your development container",
+        "options": [
+          {
+            "long": "loglevel",
+            "short": "l",
+            "description": "Amount of information outputted (debug, info, warn, error)",
+            "inherit": false,
+            "value": {
+              "name": "loglevel",
+              "provider": "okteto.loglevels"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "Output format (tty, plain, json)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "okteto.outputs"
+            }
+          },
+          {
+            "long": "context",
+            "short": "c",
+            "description": "Context where the exec command is executed",
+            "inherit": false,
+            "value": {
+              "name": "context"
+            }
+          },
+          {
+            "long": "file",
+            "short": "f",
+            "description": "Path to the manifest file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "namespace",
+            "short": "n",
+            "description": "Namespace where the exec command is executed",
+            "inherit": false,
+            "value": {
+              "name": "namespace"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for exec",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "Automatically generate your okteto manifest file",
+        "options": [
+          {
+            "long": "loglevel",
+            "short": "l",
+            "description": "Amount of information outputted (debug, info, warn, error)",
+            "inherit": false,
+            "value": {
+              "name": "loglevel",
+              "provider": "okteto.loglevels"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "Output format (tty, plain, json)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "okteto.outputs"
+            }
+          },
+          {
+            "long": "context",
+            "short": "c",
+            "description": "Context target for generating the okteto manifest",
+            "inherit": false,
+            "value": {
+              "name": "context"
+            }
+          },
+          {
+            "long": "file",
+            "short": "f",
+            "description": "Path to the manifest file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "namespace",
+            "short": "n",
+            "description": "Namespace target for generating the okteto manifest",
+            "inherit": false,
+            "value": {
+              "name": "namespace"
+            }
+          },
+          {
+            "long": "overwrite",
+            "description": "Overwrite existing manifest file",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for init",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "kubeconfig",
+        "description": "Download credentials for the Kubernetes cluster selected via 'okteto context'",
+        "options": [
+          {
+            "long": "loglevel",
+            "short": "l",
+            "description": "Amount of information outputted (debug, info, warn, error)",
+            "inherit": false,
+            "value": {
+              "name": "loglevel",
+              "provider": "okteto.loglevels"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "Output format (tty, plain, json)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "okteto.outputs"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for kubeconfig",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "ns",
+        "aliases": [
+          "namespace"
+        ],
+        "description": "Configure the current namespace of the okteto context",
+        "options": [
+          {
+            "long": "loglevel",
+            "short": "l",
+            "description": "Amount of information outputted (debug, info, warn, error)",
+            "inherit": false,
+            "value": {
+              "name": "loglevel",
+              "provider": "okteto.loglevels"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "Output format (tty, plain, json)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "okteto.outputs"
+            }
+          },
+          {
+            "long": "personal",
+            "description": "Load personal account",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for namespace",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "Create a namespace",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "members",
+                "short": "m",
+                "description": "Members of the namespace, it can the username or email",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "members"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for create",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "Delete a namespace",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for delete",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "namespace",
+                  "index": 0,
+                  "provider": "okteto.namespaces"
+                }
+              ]
+            }
+          },
+          {
+            "name": "ls",
+            "aliases": [
+              "list"
+            ],
+            "description": "List namespaces managed by Okteto in your current context",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for list",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "ns",
+            "aliases": [
+              "use"
+            ],
+            "description": "Configure the current namespace of the okteto context",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "personal",
+                "description": "Load personal account",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for use",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "namespace",
+                  "index": 0,
+                  "provider": "okteto.namespaces"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "pipeline",
+        "description": "Pipeline management commands",
+        "options": [
+          {
+            "long": "loglevel",
+            "short": "l",
+            "description": "Amount of information outputted (debug, info, warn, error)",
+            "inherit": false,
+            "value": {
+              "name": "loglevel",
+              "provider": "okteto.loglevels"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "Output format (tty, plain, json)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "okteto.outputs"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for pipeline",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "deploy",
+            "description": "Deploy an okteto pipeline",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "branch",
+                "short": "b",
+                "description": "The branch to deploy (defaults to the current branch)",
+                "inherit": false,
+                "value": {
+                  "name": "branch"
+                }
+              },
+              {
+                "long": "file",
+                "short": "f",
+                "description": "Relative path within the repository to the manifest file (default to okteto-pipeline.yaml or .okteto/okteto-pipeline.yaml)",
+                "inherit": false,
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "filename",
+                "description": "Relative path within the repository to the manifest file (default to okteto-pipeline.yaml or .okteto/okteto-pipeline.yaml)",
+                "inherit": false,
+                "value": {
+                  "name": "filename",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "name",
+                "short": "p",
+                "description": "Name of the pipeline (defaults to the git config name)",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "namespace",
+                "short": "n",
+                "description": "Namespace where the up command is executed (defaults to the current namespace)",
+                "inherit": false,
+                "value": {
+                  "name": "namespace"
+                }
+              },
+              {
+                "long": "repository",
+                "short": "r",
+                "description": "The repository to deploy (defaults to the current repository)",
+                "inherit": false,
+                "value": {
+                  "name": "repository"
+                }
+              },
+              {
+                "long": "skip-if-exists",
+                "description": "Skip the pipeline deployment if the pipeline already exists in the namespace (defaults to false)",
+                "inherit": false
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "The length of time to wait for completion, zero means never. Any other values should contain a corresponding time unit e.g. 1s, 2m, 3h",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "var",
+                "short": "v",
+                "description": "Set a pipeline variable (can be set more than once)",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "var"
+                }
+              },
+              {
+                "long": "wait",
+                "short": "w",
+                "description": "Wait until the pipeline finishes (defaults to false)",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for deploy",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "destroy",
+            "description": "Destroy an okteto pipeline",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "name",
+                "short": "p",
+                "description": "Name of the pipeline (defaults to the git config name)",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "namespace",
+                "short": "n",
+                "description": "Namespace where the up command is executed (defaults to the current namespace)",
+                "inherit": false,
+                "value": {
+                  "name": "namespace"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "The length of time to wait for completion, zero means never. Any other values should contain a corresponding time unit e.g. 1s, 2m, 3h",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "volumes",
+                "short": "v",
+                "description": "Destroy persistent volumes created by the pipeline (defaults to false)",
+                "inherit": false
+              },
+              {
+                "long": "wait",
+                "short": "w",
+                "description": "Wait until the pipeline finishes (defaults to false)",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for destroy",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "preview",
+        "description": "Preview environment management commands",
+        "options": [
+          {
+            "long": "loglevel",
+            "short": "l",
+            "description": "Amount of information outputted (debug, info, warn, error)",
+            "inherit": false,
+            "value": {
+              "name": "loglevel",
+              "provider": "okteto.loglevels"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "Output format (tty, plain, json)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "okteto.outputs"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for preview",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "deploy",
+            "description": "Deploy a preview environment",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "branch",
+                "short": "b",
+                "description": "The branch to deploy (defaults to the current branch)",
+                "inherit": false,
+                "value": {
+                  "name": "branch"
+                }
+              },
+              {
+                "long": "file",
+                "short": "f",
+                "description": "Relative path within the repository to the manifest file (default to okteto-pipeline.yaml or .okteto/okteto-pipeline.yaml)",
+                "inherit": false,
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "filename",
+                "description": "Relative path within the repository to the manifest file (default to okteto-pipeline.yaml or .okteto/okteto-pipeline.yaml)",
+                "inherit": false,
+                "value": {
+                  "name": "filename",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "repository",
+                "short": "r",
+                "description": "The repository to deploy (defaults to the current repository)",
+                "inherit": false,
+                "value": {
+                  "name": "repository"
+                }
+              },
+              {
+                "long": "scope",
+                "short": "s",
+                "description": "The scope of preview environment to create. Accepted values are ['personal', 'global']",
+                "inherit": false,
+                "value": {
+                  "name": "scope"
+                }
+              },
+              {
+                "long": "sourceUrl",
+                "description": "The URL of the original pull/merge request",
+                "inherit": false,
+                "value": {
+                  "name": "sourceUrl"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "The length of time to wait for completion, zero means never. Any other values should contain a corresponding time unit e.g. 1s, 2m, 3h",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "var",
+                "short": "v",
+                "description": "Set a pipeline variable (can be set more than once)",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "var"
+                }
+              },
+              {
+                "long": "wait",
+                "short": "w",
+                "description": "Wait until the preview environment deployment finishes (defaults to false)",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for deploy",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "destroy",
+            "description": "Destroy a preview environment",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for destroy",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "endpoints",
+            "description": "Show endpoints for a preview environment",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for endpoints",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "List all preview environments",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for list",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "push",
+        "description": "Build, push and redeploy source code to the target app",
+        "options": [
+          {
+            "long": "loglevel",
+            "short": "l",
+            "description": "Amount of information outputted (debug, info, warn, error)",
+            "inherit": false,
+            "value": {
+              "name": "loglevel",
+              "provider": "okteto.loglevels"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "Output format (tty, plain, json)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "okteto.outputs"
+            }
+          },
+          {
+            "long": "context",
+            "short": "c",
+            "description": "Context where the push command is executed",
+            "inherit": false,
+            "value": {
+              "name": "context"
+            }
+          },
+          {
+            "long": "deploy",
+            "short": "d",
+            "description": "Create deployment when the app doesn't exist in a namespace",
+            "inherit": false
+          },
+          {
+            "long": "file",
+            "short": "f",
+            "description": "Path to the manifest file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "name",
+            "description": "Name of the app to push to",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "namespace",
+            "short": "n",
+            "description": "Namespace where the push command is executed",
+            "inherit": false,
+            "value": {
+              "name": "namespace"
+            }
+          },
+          {
+            "long": "no-cache",
+            "description": "Do not use cache when building the image",
+            "inherit": false
+          },
+          {
+            "long": "progress",
+            "description": "Show plain/tty build output",
+            "inherit": false,
+            "value": {
+              "name": "progress"
+            }
+          },
+          {
+            "long": "tag",
+            "short": "t",
+            "description": "Image tag to build, push and redeploy",
+            "inherit": false,
+            "value": {
+              "name": "tag"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for push",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "restart",
+        "description": "Restart the deployments listed in the services field of the okteto manifest",
+        "options": [
+          {
+            "long": "loglevel",
+            "short": "l",
+            "description": "Amount of information outputted (debug, info, warn, error)",
+            "inherit": false,
+            "value": {
+              "name": "loglevel",
+              "provider": "okteto.loglevels"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "Output format (tty, plain, json)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "okteto.outputs"
+            }
+          },
+          {
+            "long": "context",
+            "short": "c",
+            "description": "Context where the restart command is executed",
+            "inherit": false,
+            "value": {
+              "name": "context"
+            }
+          },
+          {
+            "long": "file",
+            "short": "f",
+            "description": "Path to the manifest file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "namespace",
+            "short": "n",
+            "description": "Namespace where the restart command is executed",
+            "inherit": false,
+            "value": {
+              "name": "namespace"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for restart",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "stack",
+        "description": "Stack management commands",
+        "options": [
+          {
+            "long": "loglevel",
+            "short": "l",
+            "description": "Amount of information outputted (debug, info, warn, error)",
+            "inherit": false,
+            "value": {
+              "name": "loglevel",
+              "provider": "okteto.loglevels"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "Output format (tty, plain, json)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "okteto.outputs"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for stack",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "deploy",
+            "description": "Deploy a stack",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "build",
+                "description": "Build images before starting any Stack service",
+                "inherit": false
+              },
+              {
+                "long": "file",
+                "short": "f",
+                "description": "Path to the stack manifest files. If more than one is passed the latest will overwrite the fields from the previous",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "name",
+                "description": "Overwrites the stack name",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "namespace",
+                "short": "n",
+                "description": "Overwrites the stack namespace where the stack is deployed",
+                "inherit": false,
+                "value": {
+                  "name": "namespace"
+                }
+              },
+              {
+                "long": "no-cache",
+                "description": "Do not use cache when building the image",
+                "inherit": false
+              },
+              {
+                "long": "progress",
+                "description": "Show plain/tty build output (default \"tty\")",
+                "inherit": false,
+                "value": {
+                  "name": "progress"
+                }
+              },
+              {
+                "long": "timeout",
+                "short": "t",
+                "description": "The length of time to wait for completion, zero means never. Any other values should contain a corresponding time unit e.g. 1s, 2m, 3h",
+                "inherit": false,
+                "value": {
+                  "name": "timeout"
+                }
+              },
+              {
+                "long": "wait",
+                "description": "Wait until a minimum number of containers are in a ready state for every service",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for deploy",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "destroy",
+            "description": "Destroy a stack",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "file",
+                "short": "f",
+                "description": "Path to the stack manifest file",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "name",
+                "description": "Overwrites the stack name",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "namespace",
+                "short": "n",
+                "description": "Overwrites the stack namespace where the stack is destroyed",
+                "inherit": false,
+                "value": {
+                  "name": "namespace"
+                }
+              },
+              {
+                "long": "volumes",
+                "short": "v",
+                "description": "Remove persistent volumes",
+                "inherit": false
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for destroy",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "endpoints",
+            "description": "Show endpoints for a stack",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "file",
+                "short": "f",
+                "description": "Path to the stack manifest files. If more than one is passed the latest will overwrite the fields from the previous",
+                "repeatable": true,
+                "inherit": false,
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "long": "name",
+                "description": "Overwrites the stack name",
+                "inherit": false,
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "namespace",
+                "short": "n",
+                "description": "Overwrites the stack namespace where the stack is deployed",
+                "inherit": false,
+                "value": {
+                  "name": "namespace"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for endpoints",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "status",
+        "description": "Status of the synchronization process",
+        "options": [
+          {
+            "long": "loglevel",
+            "short": "l",
+            "description": "Amount of information outputted (debug, info, warn, error)",
+            "inherit": false,
+            "value": {
+              "name": "loglevel",
+              "provider": "okteto.loglevels"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "Output format (tty, plain, json)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "okteto.outputs"
+            }
+          },
+          {
+            "long": "context",
+            "short": "c",
+            "description": "Context where the up command is executing",
+            "inherit": false,
+            "value": {
+              "name": "context"
+            }
+          },
+          {
+            "long": "file",
+            "short": "f",
+            "description": "Path to the manifest file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "info",
+            "short": "i",
+            "description": "Show syncthing links for troubleshooting the synchronization service",
+            "inherit": false
+          },
+          {
+            "long": "namespace",
+            "short": "n",
+            "description": "Namespace where the up command is executing",
+            "inherit": false,
+            "value": {
+              "name": "namespace"
+            }
+          },
+          {
+            "long": "watch",
+            "short": "w",
+            "description": "Watch for changes",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for status",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "up",
+        "description": "Activate your development container",
+        "options": [
+          {
+            "long": "loglevel",
+            "short": "l",
+            "description": "Amount of information outputted (debug, info, warn, error)",
+            "inherit": false,
+            "value": {
+              "name": "loglevel",
+              "provider": "okteto.loglevels"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "Output format (tty, plain, json)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "okteto.outputs"
+            }
+          },
+          {
+            "long": "build",
+            "description": "Build on-the-fly the dev image using the info provided by the 'build' okteto manifest field",
+            "inherit": false
+          },
+          {
+            "long": "context",
+            "short": "c",
+            "description": "Context where the up command is executed",
+            "inherit": false,
+            "value": {
+              "name": "context"
+            }
+          },
+          {
+            "long": "deploy",
+            "short": "d",
+            "description": "Create deployment when it doesn't exist in a namespace",
+            "inherit": false
+          },
+          {
+            "long": "file",
+            "short": "f",
+            "description": "Path to the manifest file",
+            "inherit": false,
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "namespace",
+            "short": "n",
+            "description": "Namespace where the up command is executed",
+            "inherit": false,
+            "value": {
+              "name": "namespace"
+            }
+          },
+          {
+            "long": "pull",
+            "description": "Force dev image pull",
+            "inherit": false
+          },
+          {
+            "long": "remote",
+            "short": "r",
+            "description": "Configures remote execution on the specified port",
+            "inherit": false,
+            "value": {
+              "name": "remote"
+            }
+          },
+          {
+            "long": "reset",
+            "description": "Reset the file synchronization database",
+            "inherit": false
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for up",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "update",
+        "description": "Update okteto version",
+        "options": [
+          {
+            "long": "loglevel",
+            "short": "l",
+            "description": "Amount of information outputted (debug, info, warn, error)",
+            "inherit": false,
+            "value": {
+              "name": "loglevel",
+              "provider": "okteto.loglevels"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "Output format (tty, plain, json)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "okteto.outputs"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for update",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "View the version of the okteto binary",
+        "options": [
+          {
+            "long": "loglevel",
+            "short": "l",
+            "description": "Amount of information outputted (debug, info, warn, error)",
+            "inherit": false,
+            "value": {
+              "name": "loglevel",
+              "provider": "okteto.loglevels"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "Output format (tty, plain, json)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "okteto.outputs"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for version",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "Help about any command",
+        "options": [
+          {
+            "long": "loglevel",
+            "short": "l",
+            "description": "Amount of information outputted (debug, info, warn, error)",
+            "inherit": false,
+            "value": {
+              "name": "loglevel",
+              "provider": "okteto.loglevels"
+            }
+          },
+          {
+            "long": "output",
+            "short": "o",
+            "description": "Output format (tty, plain, json)",
+            "inherit": false,
+            "value": {
+              "name": "output",
+              "provider": "okteto.outputs"
+            }
+          },
+          {
+            "long": "help",
+            "short": "h",
+            "description": "Help for help",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "analytics",
+            "description": "Enable / Disable analytics",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for analytics",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "build",
+            "description": "Build (and optionally push) a Docker image",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for build",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "completion",
+            "description": "Generate the autocompletion script for the specified shell",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for completion",
+                "inherit": false
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "bash",
+                "description": "Generate the autocompletion script for bash",
+                "options": [
+                  {
+                    "long": "loglevel",
+                    "short": "l",
+                    "description": "Amount of information outputted (debug, info, warn, error)",
+                    "inherit": false,
+                    "value": {
+                      "name": "loglevel",
+                      "provider": "okteto.loglevels"
+                    }
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "Output format (tty, plain, json)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "okteto.outputs"
+                    }
+                  },
+                  {
+                    "long": "no-descriptions",
+                    "description": "Disable completion descriptions",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for bash",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "fish",
+                "description": "Generate the autocompletion script for fish",
+                "options": [
+                  {
+                    "long": "loglevel",
+                    "short": "l",
+                    "description": "Amount of information outputted (debug, info, warn, error)",
+                    "inherit": false,
+                    "value": {
+                      "name": "loglevel",
+                      "provider": "okteto.loglevels"
+                    }
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "Output format (tty, plain, json)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "okteto.outputs"
+                    }
+                  },
+                  {
+                    "long": "no-descriptions",
+                    "description": "Disable completion descriptions",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for fish",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "powershell",
+                "description": "Generate the autocompletion script for powershell",
+                "options": [
+                  {
+                    "long": "loglevel",
+                    "short": "l",
+                    "description": "Amount of information outputted (debug, info, warn, error)",
+                    "inherit": false,
+                    "value": {
+                      "name": "loglevel",
+                      "provider": "okteto.loglevels"
+                    }
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "Output format (tty, plain, json)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "okteto.outputs"
+                    }
+                  },
+                  {
+                    "long": "no-descriptions",
+                    "description": "Disable completion descriptions",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for powershell",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "zsh",
+                "description": "Generate the autocompletion script for zsh",
+                "options": [
+                  {
+                    "long": "loglevel",
+                    "short": "l",
+                    "description": "Amount of information outputted (debug, info, warn, error)",
+                    "inherit": false,
+                    "value": {
+                      "name": "loglevel",
+                      "provider": "okteto.loglevels"
+                    }
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "Output format (tty, plain, json)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "okteto.outputs"
+                    }
+                  },
+                  {
+                    "long": "no-descriptions",
+                    "description": "Disable completion descriptions",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for zsh",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "ctx",
+            "aliases": [
+              "context"
+            ],
+            "description": "Set the default context",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for context",
+                "inherit": false
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "delete",
+                "description": "Delete a context",
+                "options": [
+                  {
+                    "long": "loglevel",
+                    "short": "l",
+                    "description": "Amount of information outputted (debug, info, warn, error)",
+                    "inherit": false,
+                    "value": {
+                      "name": "loglevel",
+                      "provider": "okteto.loglevels"
+                    }
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "Output format (tty, plain, json)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "okteto.outputs"
+                    }
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for delete",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "ls",
+                "aliases": [
+                  "list"
+                ],
+                "description": "List available contexts",
+                "options": [
+                  {
+                    "long": "loglevel",
+                    "short": "l",
+                    "description": "Amount of information outputted (debug, info, warn, error)",
+                    "inherit": false,
+                    "value": {
+                      "name": "loglevel",
+                      "provider": "okteto.loglevels"
+                    }
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "Output format (tty, plain, json)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "okteto.outputs"
+                    }
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for list",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "show",
+                "description": "Print the current context",
+                "options": [
+                  {
+                    "long": "loglevel",
+                    "short": "l",
+                    "description": "Amount of information outputted (debug, info, warn, error)",
+                    "inherit": false,
+                    "value": {
+                      "name": "loglevel",
+                      "provider": "okteto.loglevels"
+                    }
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "Output format (tty, plain, json)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "okteto.outputs"
+                    }
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for show",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "use",
+                "description": "Set the default context",
+                "options": [
+                  {
+                    "long": "loglevel",
+                    "short": "l",
+                    "description": "Amount of information outputted (debug, info, warn, error)",
+                    "inherit": false,
+                    "value": {
+                      "name": "loglevel",
+                      "provider": "okteto.loglevels"
+                    }
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "Output format (tty, plain, json)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "okteto.outputs"
+                    }
+                  },
+                  {
+                    "long": "builder",
+                    "short": "b",
+                    "description": "Url of the builder service",
+                    "inherit": false,
+                    "value": {
+                      "name": "builder"
+                    }
+                  },
+                  {
+                    "long": "namespace",
+                    "short": "n",
+                    "description": "Namespace of your okteto context",
+                    "inherit": false,
+                    "value": {
+                      "name": "namespace"
+                    }
+                  },
+                  {
+                    "long": "okteto",
+                    "description": "Only shows okteto cluster options",
+                    "inherit": false
+                  },
+                  {
+                    "long": "token",
+                    "short": "t",
+                    "description": "API token for authentication",
+                    "inherit": false,
+                    "value": {
+                      "name": "token"
+                    }
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for use",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "doctor",
+            "description": "Generate a zip file with the okteto logs",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for doctor",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "down",
+            "description": "Deactivate your development container",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for down",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "exec",
+            "description": "Execute a command in your development container",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for exec",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "init",
+            "description": "Automatically generate your okteto manifest file",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for init",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "kubeconfig",
+            "description": "Download credentials for the Kubernetes cluster selected via 'okteto context'",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for kubeconfig",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "ns",
+            "aliases": [
+              "namespace"
+            ],
+            "description": "Configure the current namespace of the okteto context",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for namespace",
+                "inherit": false
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "create",
+                "description": "Create a namespace",
+                "options": [
+                  {
+                    "long": "loglevel",
+                    "short": "l",
+                    "description": "Amount of information outputted (debug, info, warn, error)",
+                    "inherit": false,
+                    "value": {
+                      "name": "loglevel",
+                      "provider": "okteto.loglevels"
+                    }
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "Output format (tty, plain, json)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "okteto.outputs"
+                    }
+                  },
+                  {
+                    "long": "members",
+                    "short": "m",
+                    "description": "Members of the namespace, it can the username or email",
+                    "repeatable": true,
+                    "inherit": false,
+                    "value": {
+                      "name": "members"
+                    }
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for create",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "delete",
+                "description": "Delete a namespace",
+                "options": [
+                  {
+                    "long": "loglevel",
+                    "short": "l",
+                    "description": "Amount of information outputted (debug, info, warn, error)",
+                    "inherit": false,
+                    "value": {
+                      "name": "loglevel",
+                      "provider": "okteto.loglevels"
+                    }
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "Output format (tty, plain, json)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "okteto.outputs"
+                    }
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for delete",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "ls",
+                "aliases": [
+                  "list"
+                ],
+                "description": "List namespaces managed by Okteto in your current context",
+                "options": [
+                  {
+                    "long": "loglevel",
+                    "short": "l",
+                    "description": "Amount of information outputted (debug, info, warn, error)",
+                    "inherit": false,
+                    "value": {
+                      "name": "loglevel",
+                      "provider": "okteto.loglevels"
+                    }
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "Output format (tty, plain, json)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "okteto.outputs"
+                    }
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for list",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "ns",
+                "aliases": [
+                  "use"
+                ],
+                "description": "Configure the current namespace of the okteto context",
+                "options": [
+                  {
+                    "long": "loglevel",
+                    "short": "l",
+                    "description": "Amount of information outputted (debug, info, warn, error)",
+                    "inherit": false,
+                    "value": {
+                      "name": "loglevel",
+                      "provider": "okteto.loglevels"
+                    }
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "Output format (tty, plain, json)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "okteto.outputs"
+                    }
+                  },
+                  {
+                    "long": "personal",
+                    "description": "Load personal account",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for use",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "pipeline",
+            "description": "Pipeline management commands",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for pipeline",
+                "inherit": false
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "deploy",
+                "description": "Deploy an okteto pipeline",
+                "options": [
+                  {
+                    "long": "loglevel",
+                    "short": "l",
+                    "description": "Amount of information outputted (debug, info, warn, error)",
+                    "inherit": false,
+                    "value": {
+                      "name": "loglevel",
+                      "provider": "okteto.loglevels"
+                    }
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "Output format (tty, plain, json)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "okteto.outputs"
+                    }
+                  },
+                  {
+                    "long": "branch",
+                    "short": "b",
+                    "description": "The branch to deploy (defaults to the current branch)",
+                    "inherit": false,
+                    "value": {
+                      "name": "branch"
+                    }
+                  },
+                  {
+                    "long": "file",
+                    "short": "f",
+                    "description": "Relative path within the repository to the manifest file (default to okteto-pipeline.yaml or .okteto/okteto-pipeline.yaml)",
+                    "inherit": false,
+                    "value": {
+                      "name": "file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "filename",
+                    "description": "Relative path within the repository to the manifest file (default to okteto-pipeline.yaml or .okteto/okteto-pipeline.yaml)",
+                    "inherit": false,
+                    "value": {
+                      "name": "filename",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "name",
+                    "short": "p",
+                    "description": "Name of the pipeline (defaults to the git config name)",
+                    "inherit": false,
+                    "value": {
+                      "name": "name"
+                    }
+                  },
+                  {
+                    "long": "namespace",
+                    "short": "n",
+                    "description": "Namespace where the up command is executed (defaults to the current namespace)",
+                    "inherit": false,
+                    "value": {
+                      "name": "namespace"
+                    }
+                  },
+                  {
+                    "long": "repository",
+                    "short": "r",
+                    "description": "The repository to deploy (defaults to the current repository)",
+                    "inherit": false,
+                    "value": {
+                      "name": "repository"
+                    }
+                  },
+                  {
+                    "long": "skip-if-exists",
+                    "description": "Skip the pipeline deployment if the pipeline already exists in the namespace (defaults to false)",
+                    "inherit": false
+                  },
+                  {
+                    "long": "timeout",
+                    "short": "t",
+                    "description": "The length of time to wait for completion, zero means never. Any other values should contain a corresponding time unit e.g. 1s, 2m, 3h",
+                    "inherit": false,
+                    "value": {
+                      "name": "timeout"
+                    }
+                  },
+                  {
+                    "long": "var",
+                    "short": "v",
+                    "description": "Set a pipeline variable (can be set more than once)",
+                    "repeatable": true,
+                    "inherit": false,
+                    "value": {
+                      "name": "var"
+                    }
+                  },
+                  {
+                    "long": "wait",
+                    "short": "w",
+                    "description": "Wait until the pipeline finishes (defaults to false)",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for deploy",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "destroy",
+                "description": "Destroy an okteto pipeline",
+                "options": [
+                  {
+                    "long": "loglevel",
+                    "short": "l",
+                    "description": "Amount of information outputted (debug, info, warn, error)",
+                    "inherit": false,
+                    "value": {
+                      "name": "loglevel",
+                      "provider": "okteto.loglevels"
+                    }
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "Output format (tty, plain, json)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "okteto.outputs"
+                    }
+                  },
+                  {
+                    "long": "name",
+                    "short": "p",
+                    "description": "Name of the pipeline (defaults to the git config name)",
+                    "inherit": false,
+                    "value": {
+                      "name": "name"
+                    }
+                  },
+                  {
+                    "long": "namespace",
+                    "short": "n",
+                    "description": "Namespace where the up command is executed (defaults to the current namespace)",
+                    "inherit": false,
+                    "value": {
+                      "name": "namespace"
+                    }
+                  },
+                  {
+                    "long": "timeout",
+                    "short": "t",
+                    "description": "The length of time to wait for completion, zero means never. Any other values should contain a corresponding time unit e.g. 1s, 2m, 3h",
+                    "inherit": false,
+                    "value": {
+                      "name": "timeout"
+                    }
+                  },
+                  {
+                    "long": "volumes",
+                    "short": "v",
+                    "description": "Destroy persistent volumes created by the pipeline (defaults to false)",
+                    "inherit": false
+                  },
+                  {
+                    "long": "wait",
+                    "short": "w",
+                    "description": "Wait until the pipeline finishes (defaults to false)",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for destroy",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "preview",
+            "description": "Preview environment management commands",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for preview",
+                "inherit": false
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "deploy",
+                "description": "Deploy a preview environment",
+                "options": [
+                  {
+                    "long": "loglevel",
+                    "short": "l",
+                    "description": "Amount of information outputted (debug, info, warn, error)",
+                    "inherit": false,
+                    "value": {
+                      "name": "loglevel",
+                      "provider": "okteto.loglevels"
+                    }
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "Output format (tty, plain, json)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "okteto.outputs"
+                    }
+                  },
+                  {
+                    "long": "branch",
+                    "short": "b",
+                    "description": "The branch to deploy (defaults to the current branch)",
+                    "inherit": false,
+                    "value": {
+                      "name": "branch"
+                    }
+                  },
+                  {
+                    "long": "file",
+                    "short": "f",
+                    "description": "Relative path within the repository to the manifest file (default to okteto-pipeline.yaml or .okteto/okteto-pipeline.yaml)",
+                    "inherit": false,
+                    "value": {
+                      "name": "file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "filename",
+                    "description": "Relative path within the repository to the manifest file (default to okteto-pipeline.yaml or .okteto/okteto-pipeline.yaml)",
+                    "inherit": false,
+                    "value": {
+                      "name": "filename",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "repository",
+                    "short": "r",
+                    "description": "The repository to deploy (defaults to the current repository)",
+                    "inherit": false,
+                    "value": {
+                      "name": "repository"
+                    }
+                  },
+                  {
+                    "long": "scope",
+                    "short": "s",
+                    "description": "The scope of preview environment to create. Accepted values are ['personal', 'global']",
+                    "inherit": false,
+                    "value": {
+                      "name": "scope"
+                    }
+                  },
+                  {
+                    "long": "sourceUrl",
+                    "description": "The URL of the original pull/merge request",
+                    "inherit": false,
+                    "value": {
+                      "name": "sourceUrl"
+                    }
+                  },
+                  {
+                    "long": "timeout",
+                    "short": "t",
+                    "description": "The length of time to wait for completion, zero means never. Any other values should contain a corresponding time unit e.g. 1s, 2m, 3h",
+                    "inherit": false,
+                    "value": {
+                      "name": "timeout"
+                    }
+                  },
+                  {
+                    "long": "var",
+                    "short": "v",
+                    "description": "Set a pipeline variable (can be set more than once)",
+                    "repeatable": true,
+                    "inherit": false,
+                    "value": {
+                      "name": "var"
+                    }
+                  },
+                  {
+                    "long": "wait",
+                    "short": "w",
+                    "description": "Wait until the preview environment deployment finishes (defaults to false)",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for deploy",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "destroy",
+                "description": "Destroy a preview environment",
+                "options": [
+                  {
+                    "long": "loglevel",
+                    "short": "l",
+                    "description": "Amount of information outputted (debug, info, warn, error)",
+                    "inherit": false,
+                    "value": {
+                      "name": "loglevel",
+                      "provider": "okteto.loglevels"
+                    }
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "Output format (tty, plain, json)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "okteto.outputs"
+                    }
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for destroy",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "endpoints",
+                "description": "Show endpoints for a preview environment",
+                "options": [
+                  {
+                    "long": "loglevel",
+                    "short": "l",
+                    "description": "Amount of information outputted (debug, info, warn, error)",
+                    "inherit": false,
+                    "value": {
+                      "name": "loglevel",
+                      "provider": "okteto.loglevels"
+                    }
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "Output format (tty, plain, json)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "okteto.outputs"
+                    }
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for endpoints",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "list",
+                "description": "List all preview environments",
+                "options": [
+                  {
+                    "long": "loglevel",
+                    "short": "l",
+                    "description": "Amount of information outputted (debug, info, warn, error)",
+                    "inherit": false,
+                    "value": {
+                      "name": "loglevel",
+                      "provider": "okteto.loglevels"
+                    }
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "Output format (tty, plain, json)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "okteto.outputs"
+                    }
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for list",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "push",
+            "description": "Build, push and redeploy source code to the target app",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for push",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "restart",
+            "description": "Restart the deployments listed in the services field of the okteto manifest",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for restart",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "stack",
+            "description": "Stack management commands",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for stack",
+                "inherit": false
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "deploy",
+                "description": "Deploy a stack",
+                "options": [
+                  {
+                    "long": "loglevel",
+                    "short": "l",
+                    "description": "Amount of information outputted (debug, info, warn, error)",
+                    "inherit": false,
+                    "value": {
+                      "name": "loglevel",
+                      "provider": "okteto.loglevels"
+                    }
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "Output format (tty, plain, json)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "okteto.outputs"
+                    }
+                  },
+                  {
+                    "long": "build",
+                    "description": "Build images before starting any Stack service",
+                    "inherit": false
+                  },
+                  {
+                    "long": "file",
+                    "short": "f",
+                    "description": "Path to the stack manifest files. If more than one is passed the latest will overwrite the fields from the previous",
+                    "repeatable": true,
+                    "inherit": false,
+                    "value": {
+                      "name": "file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "name",
+                    "description": "Overwrites the stack name",
+                    "inherit": false,
+                    "value": {
+                      "name": "name"
+                    }
+                  },
+                  {
+                    "long": "namespace",
+                    "short": "n",
+                    "description": "Overwrites the stack namespace where the stack is deployed",
+                    "inherit": false,
+                    "value": {
+                      "name": "namespace"
+                    }
+                  },
+                  {
+                    "long": "no-cache",
+                    "description": "Do not use cache when building the image",
+                    "inherit": false
+                  },
+                  {
+                    "long": "progress",
+                    "description": "Show plain/tty build output (default \"tty\")",
+                    "inherit": false,
+                    "value": {
+                      "name": "progress"
+                    }
+                  },
+                  {
+                    "long": "timeout",
+                    "short": "t",
+                    "description": "The length of time to wait for completion, zero means never. Any other values should contain a corresponding time unit e.g. 1s, 2m, 3h",
+                    "inherit": false,
+                    "value": {
+                      "name": "timeout"
+                    }
+                  },
+                  {
+                    "long": "wait",
+                    "description": "Wait until a minimum number of containers are in a ready state for every service",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for deploy",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "destroy",
+                "description": "Destroy a stack",
+                "options": [
+                  {
+                    "long": "loglevel",
+                    "short": "l",
+                    "description": "Amount of information outputted (debug, info, warn, error)",
+                    "inherit": false,
+                    "value": {
+                      "name": "loglevel",
+                      "provider": "okteto.loglevels"
+                    }
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "Output format (tty, plain, json)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "okteto.outputs"
+                    }
+                  },
+                  {
+                    "long": "file",
+                    "short": "f",
+                    "description": "Path to the stack manifest file",
+                    "repeatable": true,
+                    "inherit": false,
+                    "value": {
+                      "name": "file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "name",
+                    "description": "Overwrites the stack name",
+                    "inherit": false,
+                    "value": {
+                      "name": "name"
+                    }
+                  },
+                  {
+                    "long": "namespace",
+                    "short": "n",
+                    "description": "Overwrites the stack namespace where the stack is destroyed",
+                    "inherit": false,
+                    "value": {
+                      "name": "namespace"
+                    }
+                  },
+                  {
+                    "long": "volumes",
+                    "short": "v",
+                    "description": "Remove persistent volumes",
+                    "inherit": false
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for destroy",
+                    "inherit": false
+                  }
+                ]
+              },
+              {
+                "name": "endpoints",
+                "description": "Show endpoints for a stack",
+                "options": [
+                  {
+                    "long": "loglevel",
+                    "short": "l",
+                    "description": "Amount of information outputted (debug, info, warn, error)",
+                    "inherit": false,
+                    "value": {
+                      "name": "loglevel",
+                      "provider": "okteto.loglevels"
+                    }
+                  },
+                  {
+                    "long": "output",
+                    "short": "o",
+                    "description": "Output format (tty, plain, json)",
+                    "inherit": false,
+                    "value": {
+                      "name": "output",
+                      "provider": "okteto.outputs"
+                    }
+                  },
+                  {
+                    "long": "file",
+                    "short": "f",
+                    "description": "Path to the stack manifest files. If more than one is passed the latest will overwrite the fields from the previous",
+                    "repeatable": true,
+                    "inherit": false,
+                    "value": {
+                      "name": "file",
+                      "provider": "builtin.files"
+                    }
+                  },
+                  {
+                    "long": "name",
+                    "description": "Overwrites the stack name",
+                    "inherit": false,
+                    "value": {
+                      "name": "name"
+                    }
+                  },
+                  {
+                    "long": "namespace",
+                    "short": "n",
+                    "description": "Overwrites the stack namespace where the stack is deployed",
+                    "inherit": false,
+                    "value": {
+                      "name": "namespace"
+                    }
+                  },
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "Help for endpoints",
+                    "inherit": false
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "status",
+            "description": "Status of the synchronization process",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for status",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "up",
+            "description": "Activate your development container",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for up",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "update",
+            "description": "Update okteto version",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for update",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "version",
+            "description": "View the version of the okteto binary",
+            "options": [
+              {
+                "long": "loglevel",
+                "short": "l",
+                "description": "Amount of information outputted (debug, info, warn, error)",
+                "inherit": false,
+                "value": {
+                  "name": "loglevel",
+                  "provider": "okteto.loglevels"
+                }
+              },
+              {
+                "long": "output",
+                "short": "o",
+                "description": "Output format (tty, plain, json)",
+                "inherit": false,
+                "value": {
+                  "name": "output",
+                  "provider": "okteto.outputs"
+                }
+              },
+              {
+                "long": "help",
+                "short": "h",
+                "description": "Help for version",
+                "inherit": false
+              }
+            ]
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "okteto.contexts": {
+        "function": "__rush_complete_okteto_contexts"
+      },
+      "okteto.namespaces": {
+        "function": "__rush_complete_okteto_namespaces"
+      },
+      "okteto.loglevels": {
+        "values": [
+          "debug",
+          "info",
+          "warn",
+          "error"
+        ]
+      },
+      "okteto.outputs": {
+        "values": [
+          "tty",
+          "plain",
+          "json"
+        ]
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
