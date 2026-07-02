@@ -1,0 +1,391 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ssh-keygen",
+    "description": "generate and manage SSH keys",
+    "options": [
+      {
+        "short": "A",
+        "description": "for each of the key types (rsa, dsa, ecdsa and ed25519) for which host keys do not exist, generate the host keys with the default key file path, an empty passph",
+        "inherit": false
+      },
+      {
+        "short": "a",
+        "description": "when saving a private key, this option specifies the number of KDF",
+        "inherit": false,
+        "value": {
+          "name": "rounds",
+          "description": "number of rounds being used",
+          "required": false,
+          "style": "optional",
+          "provider": {
+            "values": [
+              "16"
+            ]
+          }
+        }
+      },
+      {
+        "short": "B",
+        "description": "show the bubblebabble digest of specified private or public key file",
+        "inherit": false
+      },
+      {
+        "short": "b",
+        "description": "specifies the number of bits in the key to create",
+        "inherit": false,
+        "value": {
+          "name": "bits",
+          "description": "number of bits in the key",
+          "provider": {
+            "values": [
+              "3072"
+            ]
+          }
+        }
+      },
+      {
+        "short": "C",
+        "description": "provides a new comment",
+        "inherit": false,
+        "value": {
+          "name": "comment",
+          "description": "new comment value"
+        }
+      },
+      {
+        "short": "c",
+        "description": "requests changing the comment in the private and public key files",
+        "inherit": false
+      },
+      {
+        "short": "D",
+        "description": "download the public keys provided by the PKCS#11",
+        "inherit": false,
+        "value": {
+          "name": "pkcs11",
+          "description": "pKCS#11 public keys"
+        }
+      },
+      {
+        "short": "E",
+        "description": "specifies the hash algorithm used",
+        "inherit": false,
+        "value": {
+          "name": "fingerprint_hash",
+          "description": "hash algorithm value",
+          "provider": {
+            "values": [
+              {
+                "value": "md5"
+              },
+              {
+                "value": "sha256"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "e",
+        "description": "read a OpenSSH key file and print to stdout",
+        "inherit": false
+      },
+      {
+        "short": "F",
+        "description": "search for the specified hostname (with optional port number)",
+        "inherit": false,
+        "value": {
+          "name": "hostname",
+          "description": "hostname with optional port number"
+        }
+      },
+      {
+        "short": "f",
+        "description": "specifies the filename of the key file",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "description": "filename of the key file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "g",
+        "description": "use generic DNS format when printing fingerprint resource records",
+        "inherit": false
+      },
+      {
+        "short": "H",
+        "description": "hash a known_hosts file",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "description": "create a host certificate instead of a user",
+        "inherit": false
+      },
+      {
+        "short": "I",
+        "description": "specify the key identity when signing a public key",
+        "inherit": false,
+        "value": {
+          "name": "certificate_identity",
+          "description": "key identity value",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "i",
+        "description": "read an unencrypted private (or public) key file",
+        "inherit": false
+      },
+      {
+        "short": "K",
+        "description": "download resident keys from a FIDO authenticator",
+        "inherit": false
+      },
+      {
+        "short": "k",
+        "description": "generate a KRL file",
+        "inherit": false
+      },
+      {
+        "short": "L",
+        "description": "generate a KRL file",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "description": "show fingerprint of specified public key file",
+        "inherit": false
+      },
+      {
+        "short": "M",
+        "description": "use for Moduli generation",
+        "inherit": false,
+        "value": {
+          "name": "command",
+          "description": "use generate or screen",
+          "provider": {
+            "values": [
+              {
+                "value": "generate"
+              },
+              {
+                "value": "screen"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "m",
+        "description": "specify a key format for key generation",
+        "inherit": false,
+        "value": {
+          "name": "key_format",
+          "description": "key format for key generation",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "N",
+        "description": "provides the new passphrase",
+        "inherit": false,
+        "value": {
+          "name": "new_passphrase",
+          "description": "new passphrase value"
+        }
+      },
+      {
+        "short": "n",
+        "description": "specify one or more principals (user or host names) to be included in a certificate when signing a key",
+        "inherit": false,
+        "value": {
+          "name": "principals",
+          "description": "principals to be included in a certificate when signing a key"
+        }
+      },
+      {
+        "short": "O",
+        "description": "specify a key/value option",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "option",
+          "description": "value for option"
+        }
+      },
+      {
+        "short": "P",
+        "description": "provides the (old) passphrase",
+        "inherit": false,
+        "value": {
+          "name": "passphrase",
+          "description": "(Old) passphrase value"
+        }
+      },
+      {
+        "short": "p",
+        "description": "requests changing the passphrase of a private key file instead of creating a new private key",
+        "inherit": false
+      },
+      {
+        "short": "Q",
+        "description": "test whether keys have been revoked in a KRL",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "description": "silence ssh-keygen",
+        "inherit": false
+      },
+      {
+        "short": "R",
+        "description": "removes all keys belonging to hostname",
+        "inherit": false,
+        "value": {
+          "name": "hostname",
+          "description": "hostname to remove keys from a known_hosts file"
+        }
+      },
+      {
+        "short": "r",
+        "description": "print the SSHFP fingerprint resource record named hostname for the specified public key file",
+        "inherit": false,
+        "value": {
+          "name": "hostname",
+          "description": "hostname for the specified public key file"
+        }
+      },
+      {
+        "short": "s",
+        "description": "certify (sign) a public key using the specified CA key",
+        "inherit": false,
+        "value": {
+          "name": "ca_key",
+          "description": "hostname for the specified public key file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "t",
+        "description": "specifies the type of key to create",
+        "inherit": false,
+        "value": {
+          "name": "command",
+          "provider": {
+            "values": [
+              {
+                "value": "dsa"
+              },
+              {
+                "value": "ecdsa-sk"
+              },
+              {
+                "value": "ed25519"
+              },
+              {
+                "value": "ed25519-sk"
+              },
+              {
+                "value": "rsa"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "U",
+        "description": "when used in combination with -s, this option indicates that a CA key resides in a ssh-agent(1)",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "description": "update a KRL",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "description": "specify a validity interval when signing a certificate",
+        "inherit": false,
+        "value": {
+          "name": "validity_interval",
+          "description": "value for validity interval"
+        }
+      },
+      {
+        "short": "v",
+        "description": "verbose mode",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "description": "specifies a path to a library that will be used when creating FIDO authenticator-hosted keys",
+        "inherit": false,
+        "value": {
+          "name": "provider",
+          "description": "path to library to be used when creating FIDO authenticator-hosted keys"
+        }
+      },
+      {
+        "short": "Y",
+        "description": "multiple functions: find principals, match principals, check novalidate, sign, verify",
+        "inherit": false,
+        "value": {
+          "name": "command",
+          "provider": {
+            "values": [
+              {
+                "value": "find-principals",
+                "description": "find the principal(s) associated with the public key of a signature"
+              },
+              {
+                "value": "check-novalidate",
+                "description": "checks that a signature generated using ssh-keygen -Y sign has a valid structure"
+              },
+              {
+                "value": "sign",
+                "description": "cryptographically sign a file or some data using a SSH key"
+              },
+              {
+                "value": "verify",
+                "description": "request to verify a signature generated using ssh-keygen -Y"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "y",
+        "description": "read a private OpenSSH format file and print an OpenSSH public key to stdout",
+        "inherit": false
+      },
+      {
+        "short": "Z",
+        "description": "specifies the cipher to use for encryption when writing an OpenSSH-format private key file",
+        "inherit": false,
+        "value": {
+          "name": "cipher",
+          "description": "cipher to use for encryption"
+        }
+      },
+      {
+        "short": "z",
+        "description": "specifies a serial number to be embedded in the certificate to distinguish this certificate from others from the same CA",
+        "inherit": false,
+        "value": {
+          "name": "serial_number",
+          "description": "serial number to distinguish this certificate"
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
