@@ -1,0 +1,681 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "molecule",
+    "description": "develop and test Ansible roles",
+    "options": [
+      {
+        "long": "help",
+        "description": "show help",
+        "inherit": true
+      },
+      {
+        "long": "version",
+        "description": "show molecule version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "check",
+        "description": "dry-run the default test sequence",
+        "options": [
+          {
+            "long": "scenario-name",
+            "description": "target scenario",
+            "inherit": false,
+            "short": "s",
+            "value": {
+              "name": "scenario"
+            }
+          },
+          {
+            "long": "parallel",
+            "description": "enable parallel mode",
+            "inherit": false,
+            "excludes": [
+              "no-parallel"
+            ]
+          },
+          {
+            "long": "no-parallel",
+            "description": "disable parallel mode",
+            "inherit": false,
+            "excludes": [
+              "parallel"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "cleanup",
+        "description": "clean up external test-system changes",
+        "options": [
+          {
+            "long": "scenario-name",
+            "description": "target scenario",
+            "inherit": false,
+            "short": "s",
+            "value": {
+              "name": "scenario"
+            }
+          }
+        ]
+      },
+      {
+        "name": "converge",
+        "description": "configure instances with the provisioner",
+        "options": [
+          {
+            "long": "scenario-name",
+            "description": "target scenario",
+            "inherit": false,
+            "short": "s",
+            "value": {
+              "name": "scenario"
+            }
+          }
+        ]
+      },
+      {
+        "name": "create",
+        "description": "start instances",
+        "options": [
+          {
+            "long": "scenario-name",
+            "description": "target scenario",
+            "inherit": false,
+            "short": "s",
+            "value": {
+              "name": "scenario"
+            }
+          },
+          {
+            "long": "driver-name",
+            "description": "driver to use",
+            "inherit": false,
+            "short": "d",
+            "value": {
+              "name": "driver",
+              "provider": {
+                "values": [
+                  "delegated",
+                  "docker",
+                  "podman",
+                  "vagrant",
+                  "azure",
+                  "hetzner"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "dependency",
+        "description": "manage role dependencies",
+        "options": [
+          {
+            "long": "scenario-name",
+            "description": "target scenario",
+            "inherit": false,
+            "short": "s",
+            "value": {
+              "name": "scenario"
+            }
+          }
+        ]
+      },
+      {
+        "name": "destroy",
+        "description": "destroy instances",
+        "options": [
+          {
+            "long": "scenario-name",
+            "description": "target scenario",
+            "inherit": false,
+            "short": "s",
+            "value": {
+              "name": "scenario"
+            }
+          },
+          {
+            "long": "driver-name",
+            "description": "driver to use",
+            "inherit": false,
+            "short": "d",
+            "value": {
+              "name": "driver",
+              "provider": {
+                "values": [
+                  "delegated",
+                  "docker",
+                  "podman",
+                  "vagrant",
+                  "azure",
+                  "hetzner"
+                ]
+              }
+            }
+          },
+          {
+            "long": "all",
+            "description": "include all scenarios",
+            "inherit": false,
+            "excludes": [
+              "no-all"
+            ]
+          },
+          {
+            "long": "no-all",
+            "description": "do not include all scenarios",
+            "inherit": false,
+            "excludes": [
+              "all"
+            ]
+          },
+          {
+            "long": "parallel",
+            "description": "enable parallel mode",
+            "inherit": false,
+            "excludes": [
+              "no-parallel"
+            ]
+          },
+          {
+            "long": "no-parallel",
+            "description": "disable parallel mode",
+            "inherit": false,
+            "excludes": [
+              "parallel"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "drivers",
+        "description": "list drivers",
+        "options": [
+          {
+            "long": "format",
+            "description": "set output format",
+            "inherit": false,
+            "short": "f",
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "simple",
+                  "plain"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "idempotence",
+        "description": "check provisioner idempotence",
+        "options": [
+          {
+            "long": "scenario-name",
+            "description": "target scenario",
+            "inherit": false,
+            "short": "s",
+            "value": {
+              "name": "scenario"
+            }
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "initialize a new role or scenario",
+        "subcommands": [
+          {
+            "name": "role",
+            "description": "initialize a new Molecule role",
+            "options": [
+              {
+                "long": "dependency-name",
+                "description": "dependency to initialize",
+                "inherit": false,
+                "value": {
+                  "name": "dependency",
+                  "provider": {
+                    "values": [
+                      "galaxy"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "driver-name",
+                "description": "driver to use",
+                "inherit": false,
+                "short": "d",
+                "value": {
+                  "name": "driver",
+                  "provider": {
+                    "values": [
+                      "delegated",
+                      "docker",
+                      "podman",
+                      "vagrant",
+                      "azure",
+                      "hetzner"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "lint-name",
+                "description": "lint tool to initialize",
+                "inherit": false,
+                "value": {
+                  "name": "lint",
+                  "provider": {
+                    "values": [
+                      "yamllint"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "provisioner-name",
+                "description": "provisioner to initialize",
+                "inherit": false,
+                "value": {
+                  "name": "provisioner",
+                  "provider": {
+                    "values": [
+                      "ansible"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "verifier-name",
+                "description": "verifier to initialize",
+                "inherit": false,
+                "value": {
+                  "name": "verifier",
+                  "provider": {
+                    "values": [
+                      "ansible",
+                      "testinfra"
+                    ]
+                  }
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "role-name",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "scenario",
+            "description": "initialize a new Molecule scenario",
+            "options": [
+              {
+                "long": "dependency-name",
+                "description": "dependency to initialize",
+                "inherit": false,
+                "value": {
+                  "name": "dependency",
+                  "provider": {
+                    "values": [
+                      "galaxy"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "driver-name",
+                "description": "driver to use",
+                "inherit": false,
+                "short": "d",
+                "value": {
+                  "name": "driver",
+                  "provider": {
+                    "values": [
+                      "delegated",
+                      "docker",
+                      "podman",
+                      "vagrant",
+                      "azure",
+                      "hetzner"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "lint-name",
+                "description": "lint tool to initialize",
+                "inherit": false,
+                "value": {
+                  "name": "lint",
+                  "provider": {
+                    "values": [
+                      "yamllint"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "provisioner-name",
+                "description": "provisioner to initialize",
+                "inherit": false,
+                "value": {
+                  "name": "provisioner",
+                  "provider": {
+                    "values": [
+                      "ansible"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "role-name",
+                "description": "role to create",
+                "inherit": false,
+                "short": "r",
+                "value": {
+                  "name": "role"
+                }
+              },
+              {
+                "long": "verifier-name",
+                "description": "verifier to initialize",
+                "inherit": false,
+                "value": {
+                  "name": "verifier",
+                  "provider": {
+                    "values": [
+                      "ansible",
+                      "testinfra"
+                    ]
+                  }
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "scenario-name",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "lint",
+        "description": "lint the role",
+        "options": [
+          {
+            "long": "scenario-name",
+            "description": "target scenario",
+            "inherit": false,
+            "short": "s",
+            "value": {
+              "name": "scenario"
+            }
+          }
+        ]
+      },
+      {
+        "name": "list",
+        "description": "list instance status",
+        "options": [
+          {
+            "long": "scenario-name",
+            "description": "target scenario",
+            "inherit": false,
+            "short": "s",
+            "value": {
+              "name": "scenario"
+            }
+          },
+          {
+            "long": "format",
+            "description": "set output format",
+            "inherit": false,
+            "short": "f",
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "simple",
+                  "plain",
+                  "yaml"
+                ]
+              }
+            }
+          }
+        ]
+      },
+      {
+        "name": "login",
+        "description": "log in to one instance",
+        "options": [
+          {
+            "long": "host",
+            "description": "host to access",
+            "inherit": false,
+            "short": "h",
+            "value": {
+              "name": "host"
+            }
+          },
+          {
+            "long": "scenario-name",
+            "description": "target scenario",
+            "inherit": false,
+            "short": "s",
+            "value": {
+              "name": "scenario"
+            }
+          }
+        ]
+      },
+      {
+        "name": "matrix",
+        "description": "list the test step matrix",
+        "options": [
+          {
+            "long": "scenario-name",
+            "description": "target scenario",
+            "inherit": false,
+            "short": "s",
+            "value": {
+              "name": "scenario"
+            }
+          }
+        ]
+      },
+      {
+        "name": "prepare",
+        "description": "prepare instances for testing",
+        "options": [
+          {
+            "long": "scenario-name",
+            "description": "target scenario",
+            "inherit": false,
+            "short": "s",
+            "value": {
+              "name": "scenario"
+            }
+          },
+          {
+            "long": "driver-name",
+            "description": "driver to use",
+            "inherit": false,
+            "short": "d",
+            "value": {
+              "name": "driver",
+              "provider": {
+                "values": [
+                  "delegated",
+                  "docker",
+                  "podman",
+                  "vagrant",
+                  "azure",
+                  "hetzner"
+                ]
+              }
+            }
+          },
+          {
+            "long": "force",
+            "description": "enable force mode",
+            "inherit": false,
+            "excludes": [
+              "no-force"
+            ]
+          },
+          {
+            "long": "no-force",
+            "description": "disable force mode",
+            "inherit": false,
+            "excludes": [
+              "force"
+            ]
+          }
+        ]
+      },
+      {
+        "name": "reset",
+        "description": "reset Molecule temporary folders",
+        "options": [
+          {
+            "long": "scenario-name",
+            "description": "target scenario",
+            "inherit": false,
+            "short": "s",
+            "value": {
+              "name": "scenario"
+            }
+          }
+        ]
+      },
+      {
+        "name": "side-effect",
+        "description": "perform side effects on instances",
+        "options": [
+          {
+            "long": "scenario-name",
+            "description": "target scenario",
+            "inherit": false,
+            "short": "s",
+            "value": {
+              "name": "scenario"
+            }
+          }
+        ]
+      },
+      {
+        "name": "syntax",
+        "description": "syntax check the role",
+        "options": [
+          {
+            "long": "scenario-name",
+            "description": "target scenario",
+            "inherit": false,
+            "short": "s",
+            "value": {
+              "name": "scenario"
+            }
+          }
+        ]
+      },
+      {
+        "name": "test",
+        "description": "run the full Molecule test sequence",
+        "options": [
+          {
+            "long": "scenario-name",
+            "description": "target scenario",
+            "inherit": false,
+            "short": "s",
+            "value": {
+              "name": "scenario"
+            }
+          },
+          {
+            "long": "driver-name",
+            "description": "driver to use",
+            "inherit": false,
+            "short": "d",
+            "value": {
+              "name": "driver",
+              "provider": {
+                "values": [
+                  "delegated",
+                  "docker",
+                  "podman",
+                  "vagrant",
+                  "azure",
+                  "hetzner"
+                ]
+              }
+            }
+          },
+          {
+            "long": "all",
+            "description": "include all scenarios",
+            "inherit": false,
+            "excludes": [
+              "no-all"
+            ]
+          },
+          {
+            "long": "no-all",
+            "description": "do not include all scenarios",
+            "inherit": false,
+            "excludes": [
+              "all"
+            ]
+          },
+          {
+            "long": "destroy",
+            "description": "destroy strategy after the run",
+            "inherit": false,
+            "value": {
+              "name": "strategy",
+              "provider": {
+                "values": [
+                  "always",
+                  "never"
+                ]
+              }
+            }
+          },
+          {
+            "long": "parallel",
+            "description": "enable parallel mode",
+            "inherit": false,
+            "excludes": [
+              "no-parallel"
+            ]
+          },
+          {
+            "long": "no-parallel",
+            "description": "disable parallel mode",
+            "inherit": false,
+            "excludes": [
+              "parallel"
+            ]
+          }
+        ]
+      }
+    ]
+  }
+}
