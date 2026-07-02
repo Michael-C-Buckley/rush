@@ -1,0 +1,1992 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "firebase",
+    "description": "manage Firebase projects",
+    "subcommands": [
+      {
+        "name": "appdistribution:distribute",
+        "description": "upload a distribution",
+        "options": [
+          {
+            "long": "app",
+            "description": "the app id of your Firebase app",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "release-notes",
+            "description": "release notes to include with this distribution",
+            "inherit": false
+          },
+          {
+            "long": "release-notes-file",
+            "description": "path to file with release notes to include with this distribution",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "testers",
+            "description": "a comma separated list of tester emails to distribute to",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "testers-file",
+            "description": "path to file with a comma separated list of tester emails to distribute to",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "groups",
+            "description": "a comma separated list of group aliases to distribute to",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "groups-file",
+            "description": "path to file with a comma separated list of group aliases to distribute to",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "distribution-file",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "apps:android:sha:create",
+        "description": "add a SHA certificate hash for a given app id",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "appId",
+              "index": 0
+            },
+            {
+              "name": "shaHash",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "apps:android:sha:delete",
+        "description": "delete a SHA certificate hash for a given app id",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "appId",
+              "index": 0
+            },
+            {
+              "name": "shaId",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "apps:create",
+        "description": "create a new Firebase app",
+        "options": [
+          {
+            "short": "a",
+            "long": "package-name",
+            "description": "required package name for the Android app",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "b",
+            "long": "bundle-id",
+            "description": "required bundle id for the iOS app",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "s",
+            "long": "app-store-id",
+            "description": "(optional) app store id for the iOS app",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "platform",
+              "index": 0
+            },
+            {
+              "name": "displayName",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "auth:export",
+        "description": "export accounts from your Firebase project into a data file",
+        "options": [
+          {
+            "long": "format",
+            "description": "format of exported data (csv, json). Ignored if [dataFile] has format extension",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "csv"
+                  },
+                  {
+                    "value": "json"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "dataFile",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "auth:import",
+        "description": "import users into your Firebase project from a data file(.csv or .json)",
+        "options": [
+          {
+            "long": "hash-algo",
+            "description": "specify the hash algorithm used in password for these accounts",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "hash-key",
+            "description": "specify the key used in hash algorithm",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "salt-separator",
+            "description": "specify the salt separator which will be appended to salt when verifying password. only used by SCRYPT now",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "rounds",
+            "description": "specify how many rounds for hash calculation",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "mem-cost",
+            "description": "specify the memory cost for firebase scrypt, or cpu/memory cost for standard scrypt",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "parallelization",
+            "description": "specify the parallelization for standard scrypt",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "block-size",
+            "description": "specify the block size (normally is 8) for standard scrypt",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "dk-len",
+            "description": "specify derived key length for standard scrypt",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "hash-input-order",
+            "description": "specify the order of password and salt. Possible values are SALT_FIRST and PASSWORD_FIRST. MD5, SHA1, SHA256, SHA512, HMAC_MD5, HMAC_SHA1, HMAC_SHA256, HMAC_SHA",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "dataFile",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "database:get",
+        "description": "fetch and print JSON data at the specified path",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "database:instances:create",
+        "description": "create a realtime database instance",
+        "options": [
+          {
+            "short": "l",
+            "long": "location",
+            "description": "(optional) location for the database instance, defaults to us-central1",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "instanceName",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "database:instances:list",
+        "description": "list realtime database instances, optionally filtered by a specified location",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "database:profile",
+        "description": "profile the Realtime Database and generate a usage report",
+        "options": [
+          {
+            "short": "o",
+            "long": "output",
+            "description": "save the output to the specified file",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "d",
+            "long": "duration",
+            "description": "collect database usage information for the specified number of seconds",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "raw",
+            "description": "output the raw stats collected as newline delimited json",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "no-collapse",
+            "description": "prevent collapsing similar paths into $wildcard locations",
+            "inherit": false
+          },
+          {
+            "short": "i",
+            "long": "input",
+            "description": "generate the report based on the specified file instead of streaming logs from the database",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "instance",
+            "description": "use the database <instance>.firebaseio.com (if omitted, use default database instance)",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "database:push",
+        "description": "add a new JSON object to a list of data in your Firebase",
+        "options": [
+          {
+            "short": "d",
+            "long": "data",
+            "description": "specify escaped JSON directly",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "instance",
+            "description": "use the database <instance>.firebaseio.com (if omitted, use default database instance)",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "database:remove",
+        "description": "remove data from your Firebase at the specified path",
+        "options": [
+          {
+            "short": "y",
+            "long": "confirm",
+            "description": "pass this option to bypass confirmation prompt",
+            "inherit": false
+          },
+          {
+            "long": "instance",
+            "description": "use the database <instance>.firebaseio.com (if omitted, use default database instance)",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "database:set",
+        "description": "store JSON data at the specified path via STDIN, arg, or file",
+        "options": [
+          {
+            "short": "d",
+            "long": "data",
+            "description": "specify escaped JSON directly",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "y",
+            "long": "confirm",
+            "description": "pass this option to bypass confirmation prompt",
+            "inherit": false
+          },
+          {
+            "long": "instance",
+            "description": "use the database <instance>.firebaseio.com (if omitted, use default database instance)",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "database:settings:get",
+        "description": "store JSON data at the specified path via STDIN, arg, or file",
+        "options": [
+          {
+            "long": "instance",
+            "description": "use the database <instance>.firebaseio.com (if omitted, uses default database instance)",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "database:settings:set",
+        "description": "set the realtime database setting at path",
+        "options": [
+          {
+            "long": "instance",
+            "description": "use the database <instance>.firebaseio.com (if omitted, use default database instance)",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0
+            },
+            {
+              "name": "value",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "database:update",
+        "description": "update some of the keys for the defined path in your Firebase",
+        "options": [
+          {
+            "short": "d",
+            "long": "data",
+            "description": "specify escaped JSON directly",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "y",
+            "long": "confirm",
+            "description": "pass this option to bypass confirmation prompt",
+            "inherit": false
+          },
+          {
+            "long": "instance",
+            "description": "use the database <instance>.firebaseio.com (if omitted, use default database instance)",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "deploy",
+        "description": "deploy code and assets to your Firebase project",
+        "options": [
+          {
+            "short": "p",
+            "long": "public",
+            "description": "override the Hosting public directory specified in firebase.json",
+            "inherit": false
+          },
+          {
+            "short": "m",
+            "long": "message",
+            "description": "an optional message describing this deploy",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "f",
+            "long": "force",
+            "description": "delete Cloud Functions missing from the current working directory without confirmation",
+            "inherit": false
+          },
+          {
+            "long": "only",
+            "description": "only deploy to specified, comma-separated targets (e.g. \"hosting,storage\"). For functions, can specify filters with colons to scope function deploys to only tho",
+            "inherit": false
+          },
+          {
+            "long": "except",
+            "description": "deploy to all targets except specified (e.g. \"database\")",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "emulators:exec",
+        "description": "start the local Firebase emulators, run a test script, then shut down the emulators",
+        "options": [
+          {
+            "long": "only",
+            "description": "only specific emulators. This is a comma separated list of emulator names. Valid options are: [\"auth\",\"functions\",\"firestore\",\"database\",\"hosting\",\"pubsub\"]",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "inspect-functions",
+            "description": "emulate Cloud Functions in debug mode with the node inspector on the given port (9229 if not specified)",
+            "inherit": false
+          },
+          {
+            "long": "import",
+            "description": "import emulator data from a previous export (see emulators:export)",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "export-on-exit",
+            "description": "automatically export emulator data (emulators:export) when the emulators make a clean exit (SIGINT), when no dir is provided the location of --import [dir] is u",
+            "inherit": false
+          },
+          {
+            "long": "ui",
+            "description": "run the Emulator UI",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "script",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "emulators:export",
+        "description": "export data from running emulators",
+        "options": [
+          {
+            "long": "only",
+            "description": "only specific emulators. This is a comma separated list of emulator names. Valid options are: [\"auth\",\"functions\",\"firestore\",\"database\",\"hosting\",\"pubsub\"]",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "force",
+            "description": "overwrite any export data in the target directory",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "emulators:start",
+        "description": "start the local Firebase emulators",
+        "options": [
+          {
+            "long": "only",
+            "description": "only specific emulators. This is a comma separated list of emulator names. Valid options are: [\"auth\",\"functions\",\"firestore\",\"database\",\"hosting\",\"pubsub\"]",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "inspect-functions",
+            "description": "emulate Cloud Functions in debug mode with the node inspector on the given port (9229 if not specified)",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "import",
+            "description": "import emulator data from a previous export (see emulators:export)",
+            "inherit": false
+          },
+          {
+            "long": "export-on-exit",
+            "description": "automatically export emulator data (emulators:export) when the emulators make a clean exit (SIGINT), when no dir is provided the location of --import [dir] is u",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "experimental:functions:shell",
+        "description": "launch full Node shell with emulated functions",
+        "options": [
+          {
+            "short": "p",
+            "long": "port",
+            "description": "the port on which to emulate functions (default: 5000) (default: 5000)",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "ext:configure",
+        "description": "configure an existing extension instance",
+        "options": [
+          {
+            "long": "params",
+            "description": "path of params file with .env format",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "extensionInstanceId",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "ext:info",
+        "description": "list all the extensions that are installed in your Firebase project",
+        "options": [
+          {
+            "long": "markdown",
+            "description": "output info in Markdown suitable for constructing a README file",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "extensionName",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "ext:uninstall",
+        "description": "uninstall an extension that is installed in your Firebase project by instance ID",
+        "options": [
+          {
+            "short": "f",
+            "long": "force",
+            "description": "no confirmation. Otherwise, a confirmation prompt will appear",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "extensionInstanceId",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "ext:update",
+        "description": "update an existing extension instance to the latest version",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "extensionInstanceId",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "firestore:delete",
+        "description": "delete data from Cloud Firestore",
+        "options": [
+          {
+            "short": "r",
+            "long": "recursive",
+            "description": "recursive. Delete all documents and subcollections at and under the specified level. May not be passed along with",
+            "inherit": false
+          },
+          {
+            "long": "shallow",
+            "description": "shallow. Delete only documents at the specified level and ignore documents in subcollections. This action can potentially orphan documents nested in subcollecti",
+            "inherit": false
+          },
+          {
+            "long": "all-collections",
+            "description": "delete all. Deletes the entire Firestore database, including all collections and documents. Any other flags or arguments will be ignored",
+            "inherit": false
+          },
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "no confirmation. Otherwise, a confirmation prompt will appear",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "firestore:indexes",
+        "description": "list indexes in your project's Cloud Firestore database",
+        "options": [
+          {
+            "long": "pretty",
+            "description": "pretty print. When not specified the indexes are printed in the JSON specification format",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "functions:config:clone",
+        "description": "clone environment config from another project",
+        "options": [
+          {
+            "long": "from",
+            "description": "the project from which to clone configuration",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "only",
+            "description": "a comma-separated list of keys to clone",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "except",
+            "description": "a comma-separated list of keys to not clone",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "functions:config:get",
+        "description": "fetch environment config stored at the given path",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "functions:config:set",
+        "description": "set environment config with key=value syntax",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "values",
+              "description": "key=value",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "functions:log",
+        "description": "read logs from deployed functions",
+        "options": [
+          {
+            "long": "only",
+            "description": "only show logs of specified, comma-separated functions (e.g. \"funcA,funcB\")",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "n",
+            "long": "lines",
+            "description": "specify number of log lines to fetch",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "open",
+            "description": "open logs page in web browser",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "functions:shell",
+        "description": "launch full Node shell with emulated functions",
+        "options": [
+          {
+            "short": "p",
+            "long": "port",
+            "description": "the port on which to emulate functions",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "inspect-functions",
+            "description": "emulate Cloud Functions in debug mode with the node inspector on the given port (9229 if not specified)",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "display help information",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "hosting:channel:create",
+        "description": "create a Firebase Hosting channel",
+        "options": [
+          {
+            "short": "e",
+            "long": "expires",
+            "description": "duration string (e.g. 12h or 30d) for channel expiration, max 30d",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "site",
+            "description": "site for which to create the channel",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "channelId",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "hosting:channel:delete",
+        "description": "delete a Firebase Hosting channel",
+        "options": [
+          {
+            "long": "site",
+            "description": "site in which the channel exists",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "f",
+            "long": "force",
+            "description": "delete without confirmation",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "channelId",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "hosting:channel:deploy",
+        "description": "deploy to a specific Firebase Hosting channel",
+        "options": [
+          {
+            "short": "e",
+            "long": "expires",
+            "description": "duration string (e.g. 12h, 30d) for channel expiration, max 30d; defaults to 7d",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "only",
+            "description": "only create previews for specified targets",
+            "inherit": false
+          },
+          {
+            "long": "open",
+            "description": "open a browser to the channel after deploying",
+            "inherit": false
+          },
+          {
+            "long": "no-authorized-domains",
+            "description": "do not sync channel domains with Firebase Auth",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "channelId",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "hosting:channel:list",
+        "description": "list all Firebase Hosting channels for your project",
+        "options": [
+          {
+            "long": "site",
+            "description": "list channels for the specified site",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "hosting:channel:open",
+        "description": "opens the URL for a Firebase Hosting channel",
+        "options": [
+          {
+            "long": "site",
+            "description": "the site to which the channel belongs",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "channelId",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "hosting:clone",
+        "description": "clone a version from one site to another",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "source",
+              "index": 0
+            },
+            {
+              "name": "targetChannel",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "hosting:disable",
+        "description": "stop serving web traffic to your Firebase Hosting site",
+        "options": [
+          {
+            "short": "y",
+            "long": "confirm",
+            "description": "skip confirmation",
+            "inherit": false
+          },
+          {
+            "short": "s",
+            "long": "site",
+            "description": "the site to disable",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "hosting:sites:create",
+        "description": "create a Firebase Hosting site",
+        "options": [
+          {
+            "long": "app",
+            "description": "specify an existing Firebase Web App ID",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "siteId",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "hosting:sites:delete",
+        "description": "delete a Firebase Hosting site",
+        "options": [
+          {
+            "short": "f",
+            "long": "force",
+            "description": "delete without confirmation",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "siteId",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "hosting:sites:get",
+        "description": "print info about a Firebase Hosting site",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "siteId",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "hosting:sites:list",
+        "description": "list Firebase Hosting sites",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "setup a Firebase project in the current directory",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "login",
+        "description": "log the CLI into Firebase",
+        "options": [
+          {
+            "long": "no-localhost",
+            "description": "copy and paste a code instead of starting a local server for authentication",
+            "inherit": false
+          },
+          {
+            "long": "reauth",
+            "description": "force reauthentication even if already logged in",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "login:add",
+        "description": "authorize the CLI for an additional account",
+        "options": [
+          {
+            "long": "no-localhost",
+            "description": "copy and paste a code instead of starting a local server for authentication",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "email",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "login:ci",
+        "description": "generate an access token for use in non-interactive environments",
+        "options": [
+          {
+            "long": "no-localhost",
+            "description": "copy and paste a code instead of starting a local server for authentication",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "login:list",
+        "description": "list authorized CLI accounts",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "login:use",
+        "description": "set the default account to use for this project directory",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "email",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "logout",
+        "description": "log the CLI out of Firebase",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "email",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "open",
+        "description": "quickly open a browser to relevant project resources",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "link",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "projects:addfirebase",
+        "description": "add Firebase resources to a Google Cloud Platform project",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "projectId",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "projects:create",
+        "description": "creates a new Google Cloud Platform project, then adds Firebase resources to the project",
+        "options": [
+          {
+            "short": "n",
+            "long": "display-name",
+            "description": "(optional) display name for the project",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "o",
+            "long": "organization",
+            "description": "(optional) ID of the parent Google Cloud Platform organization under which to create this project",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "f",
+            "long": "folder",
+            "description": "(optional) ID of the parent Google Cloud Platform folder in which to create this project",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "projectId",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "projects:list",
+        "description": "list all Firebase projects you have access to",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "remoteconfig:get",
+        "description": "get a Firebase project's Remote Config template",
+        "options": [
+          {
+            "short": "v",
+            "long": "version-number",
+            "description": "grabs the specified version of the template",
+            "inherit": false
+          },
+          {
+            "short": "o",
+            "long": "output",
+            "description": "write config output to a filename (if omitted, will use the default file path)",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "remoteconfig:rollback",
+        "description": "roll back a project's published Remote Config template to the one specified by the provided version number",
+        "options": [
+          {
+            "short": "v",
+            "long": "version-number",
+            "description": "rollback to the specified version of the template",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "force",
+            "description": "rollback template to the specified version without confirmation",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "remoteconfig:versions:list",
+        "description": "get a list of Remote Config template versions that have been published for a Firebase project",
+        "options": [
+          {
+            "long": "limit",
+            "description": "limit the number of versions being returned. Pass '0' to fetch all versions",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "serve",
+        "description": "start a local server for your static assets",
+        "options": [
+          {
+            "short": "p",
+            "long": "port",
+            "description": "the port on which to listen (default: 5000) (default: 5000)",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "o",
+            "long": "host",
+            "description": "the host on which to listen (default: localhost) (default: \"localhost\")",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "only",
+            "description": "only serve specified targets (valid targets are: hosting, functions)",
+            "inherit": false
+          },
+          {
+            "long": "except",
+            "description": "serve all except specified targets (valid targets are: hosting, functions)",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "setup:emulators:database",
+        "description": "downloads the database emulator",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "setup:emulators:firestore",
+        "description": "downloads the firestore emulator",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "setup:emulators:pubsub",
+        "description": "downloads the pubsub emulator",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "setup:emulators:ui",
+        "description": "downloads the ui emulator",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "target",
+        "description": "display configured deploy targets for the current project",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "type",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "target:apply",
+        "description": "apply a deploy target to a resource",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "type",
+              "index": 0
+            },
+            {
+              "name": "name",
+              "index": 1
+            },
+            {
+              "name": "resources",
+              "index": 2,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "target:clear",
+        "description": "clear all resources from a named resource target",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "type",
+              "index": 0
+            },
+            {
+              "name": "target",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "target:remove",
+        "description": "remove a resource target",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "type",
+              "index": 0
+            },
+            {
+              "name": "resource",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "use",
+        "description": "set an active Firebase project for your working directory",
+        "options": [
+          {
+            "long": "add",
+            "description": "create a new project alias interactively",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "alias",
+            "description": "create a new alias for the provided project id",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "unalias",
+            "description": "remove an already created project alias",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "clear",
+            "description": "clear the active project selection",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "alias-or-project-id",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
