@@ -1,0 +1,505 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "rollup",
+    "description": "bundle JavaScript modules with Rollup",
+    "options": [
+      {
+        "short": "c",
+        "long": "config",
+        "description": "use this config file (if argument is used but value is unspecified, defaults to rollup.config.js)",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "d",
+        "long": "dir",
+        "inherit": false,
+        "value": {
+          "name": "dirname",
+          "description": "Directory for chunks (if absent, prints to stdout)",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "e",
+        "long": "external",
+        "inherit": false,
+        "value": {
+          "name": "ids",
+          "description": "Comma-separate list of module IDs to exclude"
+        }
+      },
+      {
+        "short": "f",
+        "long": "format",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "description": "Type of output (amd, cjs, es, iife, umd, system)",
+          "provider": {
+            "values": [
+              "amd",
+              "cjs",
+              "es",
+              "iife",
+              "umd",
+              "system"
+            ]
+          }
+        }
+      },
+      {
+        "short": "g",
+        "long": "globals",
+        "inherit": false,
+        "value": {
+          "name": "pairs",
+          "description": "Comma-separate list of `moduleID:Global` pairs"
+        }
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help message",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "long": "input",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "description": "Input (alternative to <entry file>)",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "m",
+        "long": "sourcemap",
+        "description": "generate sourcemap (`-m inline` for inline map)",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "long": "name",
+        "inherit": false,
+        "value": {
+          "name": "name",
+          "description": "Name for UMD export"
+        }
+      },
+      {
+        "short": "o",
+        "long": "file",
+        "inherit": false,
+        "value": {
+          "name": "output",
+          "description": "Single output file (if absent, prints to stdout)",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "p",
+        "long": "plugin",
+        "inherit": false,
+        "value": {
+          "name": "plugin",
+          "description": "Use the plugin specified (may be repeated)"
+        }
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version number",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "watch",
+        "description": "watch files in bundle and rebuild on changes",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "--amd.id"
+        ],
+        "inherit": false,
+        "value": {
+          "name": "id",
+          "description": "ID for AMD module (default is anonymous)"
+        }
+      },
+      {
+        "spellings": [
+          "--amd.autoId"
+        ],
+        "description": "generate the AMD ID based off the chunk name",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "--amd.basePath"
+        ],
+        "inherit": false,
+        "value": {
+          "name": "prefix",
+          "description": "Path to prepend to auto generated AMD ID"
+        }
+      },
+      {
+        "spellings": [
+          "--amd.define"
+        ],
+        "inherit": false,
+        "value": {
+          "name": "name",
+          "description": "Function to use in place of 'define'"
+        }
+      },
+      {
+        "long": "assetFileNames",
+        "inherit": false,
+        "value": {
+          "name": "pattern",
+          "description": "Name pattern for emitted assets"
+        }
+      },
+      {
+        "long": "banner",
+        "inherit": false,
+        "value": {
+          "name": "text",
+          "description": "Code to insert at top of bundle (outside wrapper)"
+        }
+      },
+      {
+        "long": "chunkFileNames",
+        "inherit": false,
+        "value": {
+          "name": "pattern",
+          "description": "Name pattern for emitted secondary chunks"
+        }
+      },
+      {
+        "long": "compact",
+        "description": "minify wrapper code",
+        "inherit": false
+      },
+      {
+        "long": "context",
+        "inherit": false,
+        "value": {
+          "name": "variable",
+          "description": "Specify top-level 'this' value"
+        }
+      },
+      {
+        "long": "entryFileNames",
+        "inherit": false,
+        "value": {
+          "name": "pattern",
+          "description": "Name pattern for emitted entry chunks"
+        }
+      },
+      {
+        "long": "environment",
+        "inherit": false,
+        "value": {
+          "name": "values",
+          "description": "Settings passed to config file"
+        }
+      },
+      {
+        "long": "no-esModule",
+        "description": "do not add __esmodule property",
+        "inherit": false
+      },
+      {
+        "long": "exports",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "description": "Specify export mode (auto, default, named, none)"
+        }
+      },
+      {
+        "long": "extend",
+        "description": "extend global variable defined by --name",
+        "inherit": false
+      },
+      {
+        "long": "no-externalLiveBindings",
+        "description": "do not generate code to support live bindings",
+        "inherit": false
+      },
+      {
+        "long": "failAfterWarnings",
+        "description": "exit with an error if the build produced warnings",
+        "inherit": false
+      },
+      {
+        "long": "footer",
+        "inherit": false,
+        "value": {
+          "name": "text",
+          "description": "Code to insert at end of bundle (outside wrapper)"
+        }
+      },
+      {
+        "long": "no-freeze",
+        "description": "do not freeze namespace objects",
+        "inherit": false
+      },
+      {
+        "long": "no-hoistTransistiveImports",
+        "description": "do not hoist transistive imports into entry chunks",
+        "inherit": false
+      },
+      {
+        "long": "no-indent",
+        "description": "don't indent result",
+        "inherit": false
+      },
+      {
+        "long": "no-interop",
+        "description": "do not include interop block",
+        "inherit": false
+      },
+      {
+        "long": "inlineDynamicImports",
+        "description": "create a single bundle when using dynamic imports",
+        "inherit": false
+      },
+      {
+        "long": "intro",
+        "inherit": false,
+        "value": {
+          "name": "text",
+          "description": "Code to insert at top of bundle (inside wrapper)"
+        }
+      },
+      {
+        "long": "minifyInternalImports",
+        "description": "force or disable minification of internal imports",
+        "inherit": false
+      },
+      {
+        "long": "namespaceToStringTag",
+        "description": "create proper '.toString' methods for namespaces",
+        "inherit": false
+      },
+      {
+        "long": "noConflict",
+        "description": "generate a noConflict method for UMD globals",
+        "inherit": false
+      },
+      {
+        "long": "outro",
+        "inherit": false,
+        "value": {
+          "name": "text",
+          "description": "Code to insert at end of bundle (inside wrapper)"
+        }
+      },
+      {
+        "long": "preferConst",
+        "description": "use 'const' instead of 'var' for exports",
+        "inherit": false
+      },
+      {
+        "long": "no-preserveEntrySignatures",
+        "description": "avoid facade chunks for entry points",
+        "inherit": false
+      },
+      {
+        "long": "preserveModules",
+        "description": "preserve module structure",
+        "inherit": false
+      },
+      {
+        "long": "preserveModulesRoot",
+        "description": "put preserved modules under this path at root level",
+        "inherit": false
+      },
+      {
+        "long": "preserveSymlinks",
+        "description": "do not follow symlinks when resolving files",
+        "inherit": false
+      },
+      {
+        "long": "no-sanitizeFileName",
+        "description": "do not replace invalid characters in file names",
+        "inherit": false
+      },
+      {
+        "long": "shimMissingExports",
+        "description": "create shim variables for missing exports",
+        "inherit": false
+      },
+      {
+        "long": "silent",
+        "description": "don't print warnings",
+        "inherit": false
+      },
+      {
+        "long": "sourcemapExcludeSources",
+        "description": "do not include source code in source maps",
+        "inherit": false
+      },
+      {
+        "long": "sourcemapFile",
+        "description": "specify bundle position for source maps",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "spellings": [
+          "--stdin=ext"
+        ],
+        "description": "specify file extension used for stdin input",
+        "inherit": false
+      },
+      {
+        "long": "no-stdin",
+        "description": "do not read \"-\" from stdin",
+        "inherit": false
+      },
+      {
+        "long": "no-strict",
+        "description": "don't emit '\"use strict\"; in the generated modules",
+        "inherit": false
+      },
+      {
+        "long": "strictDeprecations",
+        "description": "throw errors for deprecated features",
+        "inherit": false
+      },
+      {
+        "long": "systemNullSetters",
+        "description": "replace empty SystemJS setters with 'null'",
+        "inherit": false
+      },
+      {
+        "long": "no-treeshake",
+        "description": "disable tree-shaking optimizations",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "--no-treeshake.annotations"
+        ],
+        "description": "ignore pure call annotations",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "--no-treeshake.moduleSideEffects"
+        ],
+        "description": "assume modules have no side effects",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "--no-treeshake.propertyReadSideEffects"
+        ],
+        "description": "ignore property access side-effects",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "--no-treeshake.tryCatchDeoptimization"
+        ],
+        "description": "do not turn off try-catch-tree-shaking",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "--no-treeshake.unknownGlobalSideEffects"
+        ],
+        "description": "assume unknown globals do not throw",
+        "inherit": false
+      },
+      {
+        "long": "waitForBuildInput",
+        "description": "wait for bundle input files",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "--watch.buildDelay"
+        ],
+        "description": "throttle watch rebuilds",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "spellings": [
+          "--no-watch.clearScreen"
+        ],
+        "description": "do not clear the screen when rebuilding",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "--watch.skipWrite"
+        ],
+        "description": "do not write files to disk when watching",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "--watch.exclude"
+        ],
+        "description": "exclude files from being watched",
+        "inherit": false,
+        "value": {
+          "name": "files"
+        }
+      },
+      {
+        "spellings": [
+          "--watch.include"
+        ],
+        "description": "limit watching to specified files",
+        "inherit": false,
+        "value": {
+          "name": "files"
+        }
+      },
+      {
+        "long": "validate",
+        "description": "validate output",
+        "inherit": false
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    },
+    "arguments": {
+      "states": [
+        {
+          "name": "entry",
+          "description": "entry file",
+          "provider": "builtin.files",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    }
+  }
+}
