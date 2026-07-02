@@ -1,0 +1,163 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pocketbase",
+    "description": "run PocketBase",
+    "options": [
+      {
+        "long": "debug",
+        "description": "enable debug logs",
+        "inherit": false
+      },
+      {
+        "long": "dir",
+        "description": "set data directory",
+        "inherit": false,
+        "value": {
+          "name": "dir",
+          "description": "PocketBase data directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "encryptionEnv",
+        "description": "set encryption key environment variable",
+        "inherit": false,
+        "value": {
+          "name": "env",
+          "description": "Encryption environment variable name"
+        }
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "help",
+        "description": "show command help",
+        "arguments": {
+          "states": [
+            {
+              "name": "subcommand",
+              "index": 0,
+              "description": "command name",
+              "provider": "pocketbase.commands"
+            }
+          ]
+        }
+      },
+      {
+        "name": "migrate",
+        "description": "run database migrations",
+        "subcommands": [
+          {
+            "name": "collections",
+            "description": "create collections migration",
+            "arguments": {
+              "states": [
+                {
+                  "name": "folder",
+                  "description": "migrations folder",
+                  "provider": "builtin.directories",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "create",
+            "description": "create migration template",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "migration file name",
+                  "index": 0
+                },
+                {
+                  "name": "folder",
+                  "description": "migrations folder",
+                  "provider": "builtin.directories",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "down",
+            "description": "revert applied migrations",
+            "arguments": {
+              "states": [
+                {
+                  "name": "number",
+                  "description": "migration count",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "up",
+            "description": "run available migrations"
+          }
+        ]
+      },
+      {
+        "name": "serve",
+        "description": "start the web server",
+        "options": [
+          {
+            "long": "http",
+            "description": "set HTTP address",
+            "inherit": false,
+            "value": {
+              "name": "string",
+              "description": "API HTTP server address"
+            }
+          },
+          {
+            "long": "https",
+            "description": "set HTTPS address",
+            "inherit": false,
+            "value": {
+              "name": "string",
+              "description": "API HTTPS server address (auto TLS via Let's Encrypt)"
+            }
+          },
+          {
+            "long": "origins",
+            "description": "set CORS origins",
+            "inherit": false,
+            "value": {
+              "name": "strings",
+              "description": "CORS allowed domain origins list"
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "pocketbase.commands": {
+        "values": [
+          "help",
+          "migrate",
+          "serve"
+        ]
+      }
+    }
+  }
+}
