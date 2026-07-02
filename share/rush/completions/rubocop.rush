@@ -1,0 +1,11 @@
+__rush_complete_rubocop_cops() {
+  command -v rubocop >/dev/null 2>&1 || return
+  rubocop --show-cops 2>/dev/null | while IFS= read -r line; do
+    case "$line" in
+      [A-Z]*/*:)
+        cop=${line%:}
+        rush_complete candidate "$cop" --kind value --description 'RuboCop cop'
+        ;;
+    esac
+  done
+}
