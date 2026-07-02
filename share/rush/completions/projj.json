@@ -1,0 +1,140 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "projj",
+    "description": "manage repositories",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "show version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "completion",
+        "description": "generate completion script"
+      },
+      {
+        "name": "add",
+        "description": "add repository",
+        "arguments": {
+          "states": [
+            {
+              "name": "repository-url",
+              "index": 0,
+              "description": "repository URL"
+            }
+          ]
+        }
+      },
+      {
+        "name": "find",
+        "description": "find repository",
+        "arguments": {
+          "states": [
+            {
+              "name": "repository-name",
+              "index": 0,
+              "provider": "projj.repositories",
+              "description": "repository name"
+            }
+          ]
+        }
+      },
+      {
+        "name": "import",
+        "description": "import repositories from existing directory",
+        "arguments": {
+          "states": [
+            {
+              "name": "directory",
+              "provider": "builtin.directories",
+              "index": 0,
+              "description": "directory"
+            }
+          ]
+        }
+      },
+      {
+        "name": "init",
+        "description": "initialize configuration"
+      },
+      {
+        "name": "remove",
+        "description": "remove repository",
+        "arguments": {
+          "states": [
+            {
+              "name": "repository-name",
+              "index": 0,
+              "provider": "projj.repositories",
+              "description": "repository name"
+            }
+          ]
+        }
+      },
+      {
+        "name": "run",
+        "description": "run hook in current directory",
+        "arguments": {
+          "states": [
+            {
+              "name": "hook-name",
+              "index": 0,
+              "provider": "projj.hooks",
+              "description": "hook name"
+            }
+          ]
+        }
+      },
+      {
+        "name": "runall",
+        "description": "run hook in every repository",
+        "arguments": {
+          "states": [
+            {
+              "name": "hook-name",
+              "index": 0,
+              "provider": "projj.hooks",
+              "description": "hook name"
+            }
+          ]
+        }
+      },
+      {
+        "name": "sync",
+        "description": "sync data from directory",
+        "arguments": {
+          "states": [
+            {
+              "name": "directory",
+              "provider": "builtin.directories",
+              "index": 0,
+              "description": "directory"
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "projj.repositories": {
+        "function": "__rush_complete_projj_repositories"
+      },
+      "projj.hooks": {
+        "function": "__rush_complete_projj_hooks"
+      }
+    }
+  }
+}

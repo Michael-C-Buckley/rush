@@ -1,0 +1,40 @@
+__rush_complete_projj_repositories() {
+  cache=${HOME:-}/.projj/cache.json
+  if [ ! -r "$cache" ]; then
+    return
+  fi
+  python3 - "$cache" <<'PY' 2>/dev/null
+import json, os, sys
+with open(sys.argv[1]) as f:
+    cache=json.load(f)
+for key, value in cache.items():
+    name=os.path.basename(key.rstrip('/'))
+    desc=value.get('repo','') if isinstance(value, dict) else ''
+    if name:
+        print(name + '\t' + desc)
+PY
+  while IFS='	' read -r name desc; do
+    if [ -n "$name" ]; then
+      rush_complete candidate "$name" --kind value --description "${desc:-repository}"
+    fi
+  done
+}
+
+__rush_complete_projj_hooks() {
+  config=${HOME:-}/.projj/config.json
+  if [ ! -r "$config" ]; then
+    return
+  fi
+  python3 - "$config" <<'PY' 2>/dev/null
+import json, sys
+with open(sys.argv[1]) as f:
+    config=json.load(f)
+for name, command in config.get('hooks', {}).items():
+    print(str(name) + '\t' + str(command))
+PY
+  while IFS='	' read -r name desc; do
+    if [ -n "$name" ]; then
+      rush_complete candidate "$name" --kind value --description "${desc:-hook}"
+    fi
+  done
+}
