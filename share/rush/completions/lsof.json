@@ -1,0 +1,520 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "lsof",
+    "description": "list open files",
+    "options": [
+      {
+        "short": "?",
+        "long": "help",
+        "spellings": [
+          "-h"
+        ],
+        "description": "help",
+        "inherit": false
+      },
+      {
+        "short": "a",
+        "description": "apply AND to the selections (defaults to OR)",
+        "inherit": false
+      },
+      {
+        "short": "b",
+        "description": "avoid kernel blocks",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "description": "select the listing of files for processes executing a command",
+        "inherit": false,
+        "value": {
+          "name": "string-or-regexp-(optional-ending-with-/i-/b-/x)"
+        }
+      },
+      {
+        "spellings": [
+          "+c"
+        ],
+        "description": "cOMMAND width (9)",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "spellings": [
+          "+d"
+        ],
+        "description": "search for all open instances/files/directories of directory",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "d",
+        "description": "specify a list of file descriptors (FDs) to exclude from or include in the output listing",
+        "inherit": false,
+        "value": {
+          "name": "File-descriptor-number"
+        }
+      },
+      {
+        "spellings": [
+          "+D"
+        ],
+        "description": "search tree for all open instances/files/directories of directory. *SLOW?*",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "spellings": [
+          "+f"
+        ],
+        "description": "enable path name arguments to be interpreted",
+        "inherit": false,
+        "value": {
+          "name": "flags",
+          "required": false,
+          "style": "optional",
+          "provider": {
+            "values": [
+              {
+                "value": "c",
+                "description": "File structure use count"
+              },
+              {
+                "value": "g",
+                "description": "File flag abbreviations"
+              },
+              {
+                "value": "G",
+                "description": "File flags in hexadecimal"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "f",
+        "description": "inhibit path name arguments to be interpreted",
+        "inherit": false,
+        "value": {
+          "name": "flags",
+          "provider": {
+            "values": [
+              {
+                "value": "c",
+                "description": "File structure use count"
+              },
+              {
+                "value": "g",
+                "description": "File flag abbreviations"
+              },
+              {
+                "value": "G",
+                "description": "File flags in hexadecimal"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "F",
+        "description": "select fields to output",
+        "inherit": false,
+        "value": {
+          "name": "options",
+          "provider": {
+            "values": [
+              {
+                "value": "a",
+                "description": "Access: r = read; w = write; u = read/write"
+              },
+              {
+                "value": "c",
+                "description": "Command name"
+              },
+              {
+                "value": "C",
+                "description": "File struct share count"
+              },
+              {
+                "value": "d",
+                "description": "Device character code"
+              },
+              {
+                "value": "D",
+                "description": "Major/minor device number as 0x<hex>"
+              },
+              {
+                "value": "f",
+                "description": "File descriptor (always selected)"
+              },
+              {
+                "value": "G",
+                "description": "File flaGs"
+              },
+              {
+                "value": "i",
+                "description": "Inode number"
+              },
+              {
+                "value": "k",
+                "description": "Link count"
+              },
+              {
+                "value": "K",
+                "description": "Task ID (TID)"
+              },
+              {
+                "value": "l",
+                "description": "Lock: r/R = read; w/W = write; u = read/write"
+              },
+              {
+                "value": "L",
+                "description": "Login name"
+              },
+              {
+                "value": "m",
+                "description": "Marker between repeated output"
+              },
+              {
+                "value": "M",
+                "description": "Task comMand name"
+              },
+              {
+                "value": "n",
+                "description": "Comment, name, Internet addresses"
+              },
+              {
+                "value": "o",
+                "description": "File offset as 0t<dec> or 0x<hex>"
+              },
+              {
+                "value": "p",
+                "description": "Process ID (PID)"
+              },
+              {
+                "value": "g",
+                "description": "Process group ID (PGID)"
+              },
+              {
+                "value": "P",
+                "description": "Protocol name"
+              },
+              {
+                "value": "r",
+                "description": "Raw device number as 0x<hex>"
+              },
+              {
+                "value": "R",
+                "description": "PaRent PID"
+              },
+              {
+                "value": "s",
+                "description": "File size"
+              },
+              {
+                "value": "S",
+                "description": "Stream module and device names"
+              },
+              {
+                "value": "t",
+                "description": "File type"
+              },
+              {
+                "value": "T",
+                "description": "TCP/TPI info"
+              },
+              {
+                "value": "u",
+                "description": "User ID (UID)"
+              },
+              {
+                "value": "0",
+                "description": "(zero) use NUL field terminator instead of N"
+              }
+            ]
+          },
+          "repeatable": true
+        }
+      },
+      {
+        "spellings": [
+          "-F?"
+        ],
+        "description": "show fields for -F",
+        "inherit": false
+      },
+      {
+        "short": "g",
+        "description": "exclude or select by process group IDs (PGID)",
+        "inherit": false,
+        "value": {
+          "name": "PGID",
+          "description": "Process Group ID (comma separated)"
+        }
+      },
+      {
+        "short": "i",
+        "description": "selects files by [46][protocol][@hostname|hostaddr][:service|port]",
+        "inherit": false,
+        "value": {
+          "name": "options",
+          "provider": {
+            "values": [
+              "4",
+              "6",
+              "tcp",
+              "udp",
+              "TCP",
+              "UDP",
+              ":http",
+              ":https",
+              ":who",
+              ":time"
+            ]
+          }
+        }
+      },
+      {
+        "short": "l",
+        "description": "inhibit conversion of user IDs to login names",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "+L"
+        ],
+        "description": "enable listing of file link counts",
+        "inherit": false,
+        "value": {
+          "name": "number",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "short": "L",
+        "description": "disable listing of file link counts",
+        "inherit": false,
+        "value": {
+          "name": "number",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "spellings": [
+          "+M"
+        ],
+        "description": "enable portMap registration",
+        "inherit": false
+      },
+      {
+        "short": "M",
+        "description": "disable portMap registration",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "description": "no host names",
+        "inherit": false
+      },
+      {
+        "short": "N",
+        "description": "select NFS files",
+        "inherit": false
+      },
+      {
+        "short": "o",
+        "description": "list file offset",
+        "inherit": false
+      },
+      {
+        "short": "O",
+        "description": "no overhead *RISKY*",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "description": "exclude or select process identification numbers (PIDs)",
+        "inherit": false,
+        "value": {
+          "name": "PIDs",
+          "description": "PIDs to select or exclude ( with ^)"
+        }
+      },
+      {
+        "short": "P",
+        "description": "no port names",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "+r"
+        ],
+        "description": "repeat every t seconds (15) until no files",
+        "inherit": false,
+        "value": {
+          "name": "time-(seconds)",
+          "description": "Time per repeat"
+        }
+      },
+      {
+        "short": "r",
+        "description": "repeat every t seconds (15) forever",
+        "inherit": false,
+        "value": {
+          "name": "time-(seconds)",
+          "description": "Time per repeat"
+        }
+      },
+      {
+        "short": "R",
+        "description": "list parent PID",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "list file size or exclude/select protocol",
+        "inherit": false,
+        "value": {
+          "name": "protocol:state",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "short": "S",
+        "description": "stat timeout in seconds (lstat/readlink/stat)",
+        "inherit": false,
+        "value": {
+          "name": "timeout-(seconds)",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "short": "T",
+        "description": "disable TCP/TPI info",
+        "inherit": false,
+        "value": {
+          "name": "info",
+          "provider": {
+            "values": [
+              {
+                "value": "f",
+                "description": "Selects reporting of socket options/states/values and tcp flag values"
+              },
+              {
+                "value": "q",
+                "description": "Selects queue length reporting"
+              },
+              {
+                "value": "s",
+                "description": "Selects connection state reporting"
+              },
+              {
+                "value": "w",
+                "description": "Selects window size reporting"
+              },
+              {
+                "value": "",
+                "description": "Disables info"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "t",
+        "description": "specify terse listing",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "description": "exclude/select login|UID set",
+        "inherit": false,
+        "value": {
+          "name": "UIDs"
+        }
+      },
+      {
+        "short": "U",
+        "description": "select Unix socket",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "description": "list version info",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "description": "verbose search",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "+w"
+        ],
+        "description": "enable warnings",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "description": "disable warnings",
+        "inherit": false
+      },
+      {
+        "short": "x",
+        "description": "cross over +d|+D File systems or symbolic links",
+        "inherit": false,
+        "value": {
+          "name": "cross-over-option",
+          "provider": {
+            "values": [
+              {
+                "value": "f",
+                "description": "File system mount point cross-over processing"
+              },
+              {
+                "value": "l",
+                "description": "Symbolic link cross-over processing"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "short": "X",
+        "description": "file descriptor table only",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "path",
+          "description": "file or filesystem to select",
+          "provider": "builtin.directories",
+          "index": 0,
+          "repeatable": true,
+          "required": false
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}
