@@ -1,0 +1,701 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "watson",
+    "description": "time tracking CLI",
+    "options": [
+      {
+        "long": "help",
+        "description": "show help for watson"
+      },
+      {
+        "long": "version",
+        "description": "show the version for watson"
+      },
+      {
+        "long": "color",
+        "description": "color output"
+      },
+      {
+        "long": "no-color",
+        "description": "no color output"
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "add",
+        "description": "add time to a project with tag(s) that was not tracked live",
+        "options": [
+          {
+            "long": "from",
+            "short": "f",
+            "description": "date and time of start of tracked activity",
+            "value": {
+              "name": "DATETIME",
+              "description": "The start time. Ex: 2022-03-04 12:00:00"
+            }
+          },
+          {
+            "long": "to",
+            "short": "t",
+            "description": "date and time of end of tracked activity",
+            "value": {
+              "name": "DATETIME",
+              "description": "The start time. Ex: 2022-03-04 12:00:00"
+            }
+          },
+          {
+            "long": "confirm-new-project",
+            "short": "c",
+            "description": "confirm creation of new tag"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value"
+            }
+          ]
+        }
+      },
+      {
+        "name": "aggregate",
+        "description": "display a report of the time spent on each project aggregated by day",
+        "options": [
+          {
+            "long": "current",
+            "short": "c",
+            "description": "include currently running frame in report"
+          },
+          {
+            "long": "no-current",
+            "short": "C",
+            "description": "don't include currently running frame in report"
+          },
+          {
+            "long": "from",
+            "short": "f",
+            "description": "the date from when the reports should start. Defaults to seven days ago",
+            "value": {
+              "name": "DATETIME",
+              "description": "The start time. Ex: 2022-03-04 12:00:00"
+            }
+          },
+          {
+            "long": "to",
+            "short": "t",
+            "description": "the date at which the report should stop (inclusive). Defaults to tomorrow",
+            "value": {
+              "name": "DATETIME",
+              "description": "The start time. Ex: 2022-03-04 12:00:00"
+            }
+          },
+          {
+            "long": "project",
+            "short": "p",
+            "description": "reports activity only for the given project. You can add other projects by using this option several times",
+            "value": {
+              "name": "PROJECT"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "tag",
+            "short": "T",
+            "description": "reports activity only for frames containing the given tag. You can add several tags by using this option multiple times",
+            "value": {
+              "name": "TAG"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "json",
+            "short": "j",
+            "description": "format output in JSON instead of plain text"
+          },
+          {
+            "long": "csv",
+            "short": "s",
+            "description": "format output in CSV instead of plain text"
+          },
+          {
+            "long": "pager",
+            "short": "g",
+            "description": "view output through a pager"
+          },
+          {
+            "long": "no-pager",
+            "short": "G",
+            "description": "don't view output through a pager"
+          }
+        ]
+      },
+      {
+        "name": "cancel",
+        "description": "cancel the last call to the start command. The time will not be recorded"
+      },
+      {
+        "name": "config",
+        "description": "get and set configuration options",
+        "options": [
+          {
+            "long": "edit",
+            "short": "e",
+            "description": "edit the configuration file with an editor"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "SECTION.OPTION",
+              "provider": {
+                "values": [
+                  {
+                    "value": "backend.url",
+                    "description": "This is the API root url of your repository, e.g. https://my.server.com/api/"
+                  },
+                  {
+                    "value": "backend.token",
+                    "description": "To authenticate watson as an API client, once generated, you will need to set up your API token in your configuration, e.g. 7e329263e329"
+                  },
+                  {
+                    "value": "options.confirm_new_project",
+                    "description": "If true, the user will be asked for confirmation before creating a new project. The option can be overriden in the command line with --confirm-new-project flag."
+                  },
+                  {
+                    "value": "options.confirm_new_tag",
+                    "description": "If true, the user will be asked for confirmation before creating a new tag. The option can be overriden in the command line with --confirm-new-tag flag. Default"
+                  },
+                  {
+                    "value": "options.date_format",
+                    "description": "Globally configure how dates should be formatted. All python\u2019s strftime directives are supported. Default: %Y.%m.%d"
+                  },
+                  {
+                    "value": "options.log_current",
+                    "description": "If true, the output of the log command will include the currently running frame (if any) by default. The option can be overridden on the command line with the -"
+                  },
+                  {
+                    "value": "options.pager",
+                    "description": "If true, the output of the log and report command will be run through a pager by default. The option can be overridden on the command line with the -g/-G or --p"
+                  },
+                  {
+                    "value": "options.report_current",
+                    "description": "If true, the output of the report command will include the currently running frame (if any) by default. The option can be overridden on the command line with th"
+                  },
+                  {
+                    "value": "options.reverse_log",
+                    "description": "If true, the output of the log command will reverse the order of the days to display the latest day\u2019s entries on top and the oldest day\u2019s entries at the bottom."
+                  },
+                  {
+                    "value": "options.stop_on_start",
+                    "description": "If true, starting a new project will stop running projects. Default false"
+                  },
+                  {
+                    "value": "options.stop_on_restart",
+                    "description": "Similar to the options.stop_on_start option, but for the restart command. Default: false"
+                  },
+                  {
+                    "value": "options.time_format",
+                    "description": "Globally configure how time should be formatted. All python\u2019s strftime directives are supported. Default: %H.%M:%S%z"
+                  },
+                  {
+                    "value": "options.week_start",
+                    "description": "Globally configure which day corresponds to the start of a week. Allowable values are monday, tuesday, wednesday, thursday, friday, saturday, and sunday"
+                  }
+                ]
+              }
+            },
+            {
+              "name": "VALUE"
+            }
+          ]
+        }
+      },
+      {
+        "name": "edit",
+        "description": "edit a frame",
+        "options": [
+          {
+            "long": "confirm-new-project",
+            "short": "c",
+            "description": "confirm addition of new project"
+          },
+          {
+            "long": "confirm-new-tag",
+            "short": "b",
+            "description": "confirm creation of new tag"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "FRAME-ID"
+            }
+          ]
+        }
+      },
+      {
+        "name": "frames",
+        "description": "display the list of all frame IDs"
+      },
+      {
+        "name": "help",
+        "description": "display help information",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "provider": "commands"
+            }
+          ]
+        }
+      },
+      {
+        "name": "log",
+        "description": "display each recorded session during the given timespan",
+        "options": [
+          {
+            "long": "current",
+            "short": "c",
+            "description": "include currently running frame in report"
+          },
+          {
+            "long": "no-current",
+            "short": "C",
+            "description": "don't include currently running frame in report"
+          },
+          {
+            "long": "reverse",
+            "short": "r",
+            "description": "reverse the order of the days in output"
+          },
+          {
+            "long": "no-reverse",
+            "short": "R",
+            "description": "don't Reverse the order of the days in output"
+          },
+          {
+            "long": "from",
+            "short": "f",
+            "description": "the date from when the log should start. Defaults to seven days ago",
+            "value": {
+              "name": "DATETIME"
+            }
+          },
+          {
+            "long": "to",
+            "short": "t",
+            "description": "the date at which the log should stop (inclusive). Defaults to tomorrow",
+            "value": {
+              "name": "DATETIME"
+            }
+          },
+          {
+            "long": "year",
+            "short": "y",
+            "description": "reports activity for the current year"
+          },
+          {
+            "long": "month",
+            "short": "m",
+            "description": "reports activity for the current month"
+          },
+          {
+            "long": "luna",
+            "short": "l",
+            "description": "reports activity for the current moon cycle"
+          },
+          {
+            "long": "week",
+            "short": "w",
+            "description": "reports activity for the current week"
+          },
+          {
+            "long": "day",
+            "short": "d",
+            "description": "reports activity for the current day"
+          },
+          {
+            "long": "all",
+            "short": "a",
+            "description": "reports all activities"
+          },
+          {
+            "long": "project",
+            "short": "p",
+            "description": "logs activity only for the given project. You can add other projects by using this option several times",
+            "value": {
+              "name": "PROJECT"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "tag",
+            "short": "T",
+            "description": "logs activity only for frames containing the given tag. You can add several tags by using this option multiple times",
+            "value": {
+              "name": "TAG"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "ignore-project",
+            "description": "logs activity for all projects but the given ones. You can ignore several projects by using the option multiple times. Any given project will be ignored",
+            "value": {
+              "name": "PROJECT"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "ignore-tag",
+            "description": "logs activity for all tags but the given ones. You can ignore several tags by using the option multiple times. Any given tag will be ignored",
+            "value": {
+              "name": "TAG"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "json",
+            "short": "j",
+            "description": "format output in JSON instead of plain text"
+          },
+          {
+            "long": "csv",
+            "short": "s",
+            "description": "format output in CSV instead of plain text"
+          },
+          {
+            "long": "pager",
+            "short": "g",
+            "description": "view output through a pager"
+          },
+          {
+            "long": "no-pager",
+            "short": "G",
+            "description": "don't view output through a pager"
+          }
+        ]
+      },
+      {
+        "name": "merge",
+        "description": "perform a merge of the existing frames with a conflicting frames file. When storing the frames on a file hosting service, there is the possibility that the fram",
+        "options": [
+          {
+            "short": "f",
+            "long": "force",
+            "description": "if specified, then the merge will automatically be performed"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "file",
+              "provider": "files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "projects",
+        "description": "display the list of all the existing projects"
+      },
+      {
+        "name": "remove",
+        "description": "remove a frame. You can specify the frame either by id or by position (ex: -1 for the last frame)",
+        "options": [
+          {
+            "short": "f",
+            "long": "force",
+            "description": "don\u2019t ask for confirmation"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "ID"
+            }
+          ]
+        }
+      },
+      {
+        "name": "rename",
+        "description": "rename a project or tag",
+        "arguments": {
+          "states": [
+            {
+              "name": "type",
+              "description": "Project or tag",
+              "provider": "types"
+            },
+            {
+              "name": "OLD_NAME"
+            },
+            {
+              "name": "NEW_NAME"
+            }
+          ]
+        }
+      },
+      {
+        "name": "report",
+        "description": "display a report of the time spent on each project",
+        "options": [
+          {
+            "long": "current",
+            "short": "c",
+            "description": "include currently running frame in report"
+          },
+          {
+            "long": "no-current",
+            "short": "C",
+            "description": "don't include currently running frame in report"
+          },
+          {
+            "long": "from",
+            "short": "f",
+            "description": "the date from when the report should start. Defaults to seven days ago",
+            "value": {
+              "name": "DATETIME"
+            }
+          },
+          {
+            "long": "to",
+            "short": "t",
+            "description": "the date at which the report should stop (inclusive). Defaults to tomorrow",
+            "value": {
+              "name": "DATETIME"
+            }
+          },
+          {
+            "long": "year",
+            "short": "y",
+            "description": "reports activity for the current year"
+          },
+          {
+            "long": "month",
+            "short": "m",
+            "description": "reports activity for the current month"
+          },
+          {
+            "long": "luna",
+            "short": "l",
+            "description": "reports activity for the current moon cycle"
+          },
+          {
+            "long": "week",
+            "short": "w",
+            "description": "reports activity for the current week"
+          },
+          {
+            "long": "day",
+            "short": "d",
+            "description": "reports activity for the current day"
+          },
+          {
+            "long": "project",
+            "short": "p",
+            "description": "reports activity only for the given project. You can add other projects by using this option several times",
+            "value": {
+              "name": "PROJECT"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "tag",
+            "short": "T",
+            "description": "reports activity only for frames containing the given tag. You can add several tags by using this option multiple times",
+            "value": {
+              "name": "TAG"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "ignore-project",
+            "description": "reports activity for all projects but the given ones. You can ignore several projects by using the option multiple times. Any given project will be ignored",
+            "value": {
+              "name": "PROJECT"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "ignore-tag",
+            "description": "reports activity for all tags but the given ones. You can ignore several tags by using the option multiple times. Any given tag will be ignored",
+            "value": {
+              "name": "TAG"
+            },
+            "repeatable": true
+          },
+          {
+            "long": "json",
+            "short": "j",
+            "description": "format output in JSON instead of plain text"
+          },
+          {
+            "long": "csv",
+            "short": "s",
+            "description": "format output in CSV instead of plain text"
+          },
+          {
+            "long": "pager",
+            "short": "g",
+            "description": "view output through a pager"
+          },
+          {
+            "long": "no-pager",
+            "short": "G",
+            "description": "don't view output through a pager"
+          }
+        ]
+      },
+      {
+        "name": "restart",
+        "description": "restart monitoring time for a previously stopped project",
+        "options": [
+          {
+            "long": "at",
+            "description": "start frame at this time. Must be in (YYYY-MM-DDT)?HH:MM(:SS)? format",
+            "value": {
+              "name": "DATETIME"
+            }
+          },
+          {
+            "long": "stop",
+            "short": "s",
+            "description": "stop an already running project"
+          },
+          {
+            "long": "no-stop",
+            "short": "S",
+            "description": "don't stop an already running project"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "FRAME"
+            }
+          ]
+        }
+      },
+      {
+        "name": "start",
+        "description": "start monitoring time for the given project. You can add tags indicating more specifically what you are working on with +tag",
+        "options": [
+          {
+            "long": "at",
+            "description": "start frame at this time. Must be in (YYYY-MM-DDT)?HH:MM(:SS)? format",
+            "value": {
+              "name": "DATETIME"
+            }
+          },
+          {
+            "long": "gap",
+            "short": "g",
+            "description": "leave gap between end time of previous project and start time of the current"
+          },
+          {
+            "long": "no-gap",
+            "short": "G",
+            "description": "don't leave gap between end time of previous project and start time of the current"
+          },
+          {
+            "long": "confirm-new-project",
+            "short": "c",
+            "description": "confirm addition of new project"
+          },
+          {
+            "long": "confirm-new-tag",
+            "short": "b",
+            "description": "confirm creation of new tag"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "ARGS",
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "status",
+        "description": "display when the current project was started and the time spent since",
+        "options": [
+          {
+            "long": "project",
+            "short": "p",
+            "description": "only output project",
+            "repeatable": true
+          },
+          {
+            "long": "tags",
+            "short": "t",
+            "description": "only show tags"
+          },
+          {
+            "long": "elapsed",
+            "short": "e",
+            "description": "only show time elapsed"
+          }
+        ]
+      },
+      {
+        "name": "stop",
+        "description": "stop monitoring time for the current project",
+        "options": [
+          {
+            "long": "at",
+            "description": "stop frame at this time. Must be in (YYYY-MM-DDT)?HH:MM(:SS)? format",
+            "value": {
+              "name": "DATETIME"
+            }
+          }
+        ]
+      },
+      {
+        "name": "sync",
+        "description": "get the frames from the server and push the new ones"
+      },
+      {
+        "name": "tags",
+        "description": "display the list of all the tags"
+      }
+    ],
+    "providers": {
+      "commands": {
+        "values": [
+          "add",
+          "aggregate",
+          "cancel",
+          "config",
+          "edit",
+          "frames",
+          "help",
+          "log",
+          "merge",
+          "projects",
+          "remove",
+          "rename",
+          "report",
+          "restart",
+          "start",
+          "status",
+          "stop",
+          "sync",
+          "tags"
+        ]
+      },
+      "types": {
+        "values": [
+          "project",
+          "tag"
+        ]
+      },
+      "files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
