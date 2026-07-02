@@ -1,0 +1,536 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pip",
+    "description": "manage Python packages",
+    "subcommands": [
+      {
+        "name": "install",
+        "description": "install packages",
+        "options": [
+          {
+            "short": "r",
+            "long": "requirement",
+            "description": "use a requirements file",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "requirements-file",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "package to install",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "download",
+        "description": "download packages",
+        "options": [
+          {
+            "short": "c",
+            "long": "constraint",
+            "description": "use a constraints file",
+            "repeatable": true,
+            "inherit": false
+          },
+          {
+            "short": "r",
+            "long": "requirement",
+            "description": "use a requirements file",
+            "repeatable": true,
+            "inherit": false
+          },
+          {
+            "long": "no-deps",
+            "description": "skip package dependencies",
+            "inherit": false
+          },
+          {
+            "long": "global-option",
+            "description": "pass an option to setup.py",
+            "inherit": false
+          },
+          {
+            "long": "no-binary",
+            "description": "disable binary packages",
+            "repeatable": true,
+            "inherit": false
+          },
+          {
+            "long": "only-binary",
+            "description": "use only binary packages",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "pip.binary-policy"
+            }
+          },
+          {
+            "long": "prefer-binary",
+            "description": "prefer binary packages",
+            "inherit": false
+          },
+          {
+            "long": "src",
+            "description": "set editable checkout directory",
+            "inherit": false,
+            "value": {
+              "name": "source-folder",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "pre",
+            "description": "include prereleases",
+            "inherit": false
+          },
+          {
+            "long": "require-hashes",
+            "description": "require hashes for requirements",
+            "inherit": false
+          },
+          {
+            "long": "progress-bar",
+            "description": "set progress bar style",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "pip.progress-bars"
+            }
+          },
+          {
+            "long": "no-build-isolation",
+            "description": "disable build isolation",
+            "inherit": false
+          },
+          {
+            "long": "use-pep517",
+            "description": "use PEP 517 builds",
+            "inherit": false
+          },
+          {
+            "long": "ignore-requires-python",
+            "description": "ignore Requires-Python metadata",
+            "inherit": false
+          },
+          {
+            "short": "d",
+            "long": "dest",
+            "description": "set destination directory",
+            "inherit": false,
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "platform",
+            "description": "set target platform",
+            "inherit": false,
+            "value": {
+              "name": "platform"
+            }
+          },
+          {
+            "long": "python-version",
+            "description": "set target Python version",
+            "inherit": false
+          },
+          {
+            "long": "implementation",
+            "description": "set Python implementation",
+            "inherit": false,
+            "value": {
+              "name": "implementation"
+            }
+          },
+          {
+            "long": "abi",
+            "description": "set target ABI",
+            "inherit": false,
+            "value": {
+              "name": "abi"
+            }
+          },
+          {
+            "long": "no-clean",
+            "description": "keep build directories",
+            "inherit": false
+          },
+          {
+            "short": "i",
+            "long": "index-url",
+            "description": "set package index URL",
+            "inherit": false,
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "long": "no-index",
+            "description": "ignore package indexes",
+            "inherit": false
+          },
+          {
+            "long": "extra-index-url",
+            "description": "add package index URL",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "find-links",
+            "description": "search links or local archives",
+            "inherit": false,
+            "value": {
+              "name": "url",
+              "provider": "builtin.files"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "builtin.files",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "uninstall",
+        "description": "uninstall packages",
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0,
+              "provider": "pip.installed-packages"
+            }
+          ]
+        }
+      },
+      {
+        "name": "freeze",
+        "description": "output installed packages",
+        "options": [
+          {
+            "short": "r",
+            "long": "requirement",
+            "description": "use a requirements file",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "long": "local",
+            "description": "exclude global site packages",
+            "inherit": false
+          },
+          {
+            "long": "user",
+            "description": "use user site packages",
+            "inherit": false
+          },
+          {
+            "long": "path",
+            "description": "restrict to installation path",
+            "repeatable": true,
+            "inherit": false
+          },
+          {
+            "long": "all",
+            "description": "include normally skipped packages",
+            "inherit": false
+          },
+          {
+            "long": "exclude-editable",
+            "description": "exclude editable packages",
+            "inherit": false
+          },
+          {
+            "long": "exclude",
+            "description": "exclude a package",
+            "inherit": false,
+            "value": {
+              "name": "package",
+              "provider": "pip.installed-packages"
+            }
+          }
+        ]
+      },
+      {
+        "name": "list",
+        "description": "list installed packages",
+        "options": [
+          {
+            "short": "o",
+            "long": "outdated",
+            "description": "list outdated packages",
+            "inherit": false
+          },
+          {
+            "short": "u",
+            "long": "uptodate",
+            "description": "list up-to-date packages",
+            "inherit": false
+          },
+          {
+            "short": "e",
+            "long": "editable",
+            "description": "list editable projects",
+            "inherit": false
+          },
+          {
+            "short": "l",
+            "long": "local",
+            "description": "exclude global site packages",
+            "inherit": false
+          },
+          {
+            "long": "user",
+            "description": "use user site packages",
+            "inherit": false
+          },
+          {
+            "long": "path",
+            "description": "restrict to installation path",
+            "repeatable": true,
+            "inherit": false,
+            "value": {
+              "name": "path",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "pre",
+            "description": "include prereleases",
+            "inherit": false
+          },
+          {
+            "long": "format",
+            "description": "set output format",
+            "inherit": false
+          },
+          {
+            "long": "not-required",
+            "description": "list packages not required by others",
+            "inherit": false
+          },
+          {
+            "long": "exclude-editable",
+            "description": "exclude editable packages",
+            "inherit": false
+          },
+          {
+            "long": "include-editable",
+            "description": "include editable packages",
+            "inherit": false
+          },
+          {
+            "long": "exclude",
+            "description": "exclude a package",
+            "inherit": false,
+            "value": {
+              "name": "package",
+              "provider": "pip.installed-packages"
+            }
+          },
+          {
+            "short": "i",
+            "long": "index-url",
+            "description": "set package index URL",
+            "inherit": false,
+            "value": {
+              "name": "value"
+            }
+          },
+          {
+            "long": "extra-index-url",
+            "description": "add package index URL",
+            "inherit": false
+          },
+          {
+            "long": "no-index",
+            "description": "ignore package indexes",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "find-links",
+            "description": "search links or local archives",
+            "inherit": false,
+            "value": {
+              "name": "url",
+              "provider": "builtin.files"
+            }
+          }
+        ]
+      },
+      {
+        "name": "show",
+        "description": "show package information",
+        "options": [
+          {
+            "short": "f",
+            "long": "files",
+            "inherit": false,
+            "description": "show installed files"
+          }
+        ]
+      },
+      {
+        "name": "check",
+        "description": "verify installed dependencies"
+      },
+      {
+        "name": "config",
+        "description": "manage configuration",
+        "options": [
+          {
+            "long": "editor",
+            "description": "set editor",
+            "inherit": false
+          },
+          {
+            "long": "global",
+            "description": "use global configuration",
+            "inherit": false
+          },
+          {
+            "long": "user",
+            "description": "use user site packages",
+            "inherit": false
+          },
+          {
+            "long": "site",
+            "description": "use site configuration",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "search",
+        "description": "search PyPI packages",
+        "options": [
+          {
+            "short": "i",
+            "long": "index",
+            "inherit": false,
+            "description": "set index URL"
+          }
+        ]
+      },
+      {
+        "name": "cache",
+        "description": "manage wheel cache"
+      },
+      {
+        "name": "wheel",
+        "description": "build wheels"
+      },
+      {
+        "name": "hash",
+        "description": "compute archive hashes",
+        "options": [
+          {
+            "short": "a",
+            "long": "algorithm",
+            "description": "set hash algorithm",
+            "inherit": false,
+            "value": {
+              "name": "value",
+              "provider": "pip.hash-algorithms"
+            }
+          }
+        ]
+      },
+      {
+        "name": "completion",
+        "description": "generate shell completion"
+      },
+      {
+        "name": "debug",
+        "description": "show debug information",
+        "options": [
+          {
+            "long": "platform",
+            "description": "set target platform",
+            "inherit": false,
+            "value": {
+              "name": "platform"
+            }
+          },
+          {
+            "long": "python-version",
+            "description": "set target Python version",
+            "inherit": false,
+            "value": {
+              "name": "python-version"
+            }
+          },
+          {
+            "long": "implementation",
+            "description": "set Python implementation",
+            "inherit": false,
+            "value": {
+              "name": "implementation"
+            }
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "show command help"
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "pip.hash-algorithms": {
+        "values": [
+          "sha256",
+          "sha384",
+          "sha512"
+        ]
+      },
+      "pip.progress-bars": {
+        "values": [
+          "off",
+          "on",
+          "ascii",
+          "pretty",
+          "emoji"
+        ]
+      },
+      "pip.binary-policy": {
+        "values": [
+          {
+            "value": ":all:",
+            "description": "all packages"
+          },
+          {
+            "value": ":none:",
+            "description": "no packages"
+          }
+        ]
+      },
+      "pip.installed-packages": {
+        "function": "__rush_complete_pip_installed_packages"
+      }
+    }
+  }
+}
