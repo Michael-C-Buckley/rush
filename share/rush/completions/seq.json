@@ -1,0 +1,65 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "seq",
+    "description": "print numeric sequences",
+    "options": [
+      {
+        "short": "w",
+        "long": "fixed-width",
+        "description": "equalize the widths of all numbers by padding with zeros as necessary",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "separator",
+        "description": "string separator between numbers. Default is newline",
+        "inherit": false,
+        "value": {
+          "name": "string",
+          "description": "separator"
+        }
+      },
+      {
+        "short": "f",
+        "long": "format",
+        "description": "use a printf(3) style format to print each number",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "description": "print all numbers using format"
+        }
+      },
+      {
+        "short": "t",
+        "long": "terminator",
+        "description": "use string to terminate sequence of numbers",
+        "inherit": false,
+        "value": {
+          "name": "string",
+          "description": "terminator"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "first",
+          "description": "starting number in sequence",
+          "index": 0
+        },
+        {
+          "name": "step",
+          "description": "increment interval",
+          "index": 1
+        },
+        {
+          "name": "last",
+          "description": "last number in sequence",
+          "index": 2
+        }
+      ]
+    }
+  }
+}
