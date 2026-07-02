@@ -1,0 +1,182 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "open",
+    "description": "open files, apps, or urls",
+    "options": [
+      {
+        "short": "a",
+        "description": "Specify the application to use for opening the file",
+        "inherit": false,
+        "value": {
+          "name": "Application",
+          "provider": "open.apps"
+        }
+      },
+      {
+        "short": "b",
+        "description": "Specify the bundle identifier of the app to use to open the file",
+        "inherit": false,
+        "value": {
+          "name": "Bundle-Identifier",
+          "provider": "open.bundle-ids"
+        }
+      },
+      {
+        "short": "D",
+        "description": "Reveals the enclosing folder in finder",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "description": "Opens the file with /Applications/TextEdit",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "description": "Open the file with the default text editor",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "description": "Read input from standard input and open the results in the default text editor",
+        "inherit": false
+      },
+      {
+        "short": "F",
+        "long": "fresh",
+        "description": "Opens the application without restoring windows",
+        "inherit": false
+      },
+      {
+        "short": "W",
+        "long": "wait-apps",
+        "description": "Waits until the applications exit",
+        "inherit": false
+      },
+      {
+        "short": "R",
+        "long": "reveal",
+        "description": "Reveals the file(s) in the Finder instead of opening them",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "long": "new",
+        "description": "Open a new instance of the application(s) even if one is already running",
+        "inherit": false
+      },
+      {
+        "short": "j",
+        "long": "hide",
+        "description": "Launches the app hidden",
+        "inherit": false
+      },
+      {
+        "short": "g",
+        "long": "background",
+        "description": "Do not bring the application to the foreground",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "header",
+        "description": "Searches header locations for a header whose name matches the given string and then opens it",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "description": "For -h, the SDK to use; if supplied, only SDKs whose names contain the argument value are searched",
+        "inherit": false,
+        "value": {
+          "name": "partial-SDK-name"
+        }
+      },
+      {
+        "short": "u",
+        "long": "url",
+        "description": "Open this URL, even if it matches exactly a filepath",
+        "inherit": false,
+        "value": {
+          "name": "URL"
+        }
+      },
+      {
+        "short": "i",
+        "long": "stdin",
+        "description": "Launches the application with stdin connected to PATH; defaults to /dev/null",
+        "inherit": false,
+        "value": {
+          "name": "PATH",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "o",
+        "long": "stdout",
+        "description": "Launches the application with /dev/stdout connected to PATH",
+        "inherit": false,
+        "value": {
+          "name": "PATH",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "stderr",
+        "description": "Launches the application with /dev/stderr connected to PATH",
+        "inherit": false,
+        "value": {
+          "name": "PATH",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "env",
+        "description": "Add an enviroment variable to the launched process, where VAR is formatted AAA=foo",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "VAR"
+        }
+      },
+      {
+        "long": "args",
+        "description": "All remaining arguments are passed to the opened application in the argv parameter to main(). These arguments are not opened or interpreted by the open tool",
+        "inherit": false,
+        "value": {
+          "name": "Arguments",
+          "repeatable": true
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file-or-url",
+          "provider": [
+            "builtin.files",
+            "builtin.directories"
+          ],
+          "index": 0,
+          "repeatable": true,
+          "description": "file, directory, or url"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "open.apps": {
+        "function": "__rush_complete_open_apps"
+      },
+      "open.bundle-ids": {
+        "function": "__rush_complete_open_bundle_ids"
+      }
+    }
+  }
+}

@@ -1,0 +1,25 @@
+__rush_complete_open_apps() {
+  command -v mdfind >/dev/null 2>&1 || return
+  mdfind 'kMDItemContentTypeTree=com.apple.application-bundle' -onlyin / 2>/dev/null | while IFS= read -r path; do
+    test -n "$path" || continue
+    name=${path##*/}
+    priority=50
+    case $path in
+      /Applications/*) priority=76 ;;
+    esac
+    case $path in
+      /Applications/$name) priority=80 ;;
+    esac
+    rush_complete candidate "$name" --kind plain --description "$path" --priority "$priority"
+  done
+}
+
+__rush_complete_open_bundle_ids() {
+  command -v mdfind >/dev/null 2>&1 || return
+  command -v mdls >/dev/null 2>&1 || return
+  mdfind 'kMDItemContentTypeTree=com.apple.application-bundle' -onlyin / 2>/dev/null | while IFS= read -r path; do
+    test -n "$path" || continue
+    id=$(mdls -name kMDItemCFBundleIdentifier -r "$path" 2>/dev/null)
+    test -n "$id" && test "$id" != '(null)' && rush_complete candidate "$id" --kind plain --description "$path" --priority 50
+  done
+}
