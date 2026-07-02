@@ -1,0 +1,5277 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pscale",
+    "description": "communicate with the PlanetScale API",
+    "options": [
+      {
+        "description": "show help",
+        "inherit": false,
+        "long": "help",
+        "short": "h"
+      },
+      {
+        "description": "set API token",
+        "inherit": false,
+        "long": "api-token",
+        "value": {
+          "name": "token"
+        }
+      },
+      {
+        "description": "set API base URL",
+        "inherit": false,
+        "long": "api-url",
+        "value": {
+          "name": "url"
+        }
+      },
+      {
+        "description": "set config file",
+        "inherit": false,
+        "long": "config",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "description": "enable debug mode",
+        "inherit": false,
+        "long": "debug"
+      },
+      {
+        "description": "set output format",
+        "inherit": false,
+        "long": "format",
+        "short": "f",
+        "value": {
+          "name": "format",
+          "provider": "pscale.formats"
+        }
+      },
+      {
+        "description": "disable color output",
+        "inherit": false,
+        "long": "no-color"
+      },
+      {
+        "description": "set service token",
+        "inherit": false,
+        "long": "service-token",
+        "value": {
+          "name": "token"
+        }
+      },
+      {
+        "description": "set service token name",
+        "inherit": false,
+        "long": "service-token-name",
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "version",
+        "description": "show pscale version",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "audit-log",
+        "description": "list audit logs",
+        "subcommands": [
+          {
+            "name": "list",
+            "aliases": [
+              "ls"
+            ],
+            "description": "list all audit logs of an organization",
+            "options": [
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set API token",
+            "inherit": false,
+            "long": "api-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set API base URL",
+            "inherit": false,
+            "long": "api-url",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "enable debug mode",
+            "inherit": false,
+            "long": "debug"
+          },
+          {
+            "description": "set output format",
+            "inherit": false,
+            "long": "format",
+            "short": "f",
+            "value": {
+              "name": "format",
+              "provider": "pscale.formats"
+            }
+          },
+          {
+            "description": "disable color output",
+            "inherit": false,
+            "long": "no-color"
+          },
+          {
+            "description": "set service token",
+            "inherit": false,
+            "long": "service-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set service token name",
+            "inherit": false,
+            "long": "service-token-name",
+            "value": {
+              "name": "name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "auth",
+        "description": "login and logout via the PlanetScale API",
+        "subcommands": [
+          {
+            "name": "login",
+            "description": "authenticate with the PlanetScale API",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "logout",
+            "description": "log out of the PlanetScale API",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set API token",
+            "inherit": false,
+            "long": "api-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set API base URL",
+            "inherit": false,
+            "long": "api-url",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "enable debug mode",
+            "inherit": false,
+            "long": "debug"
+          },
+          {
+            "description": "set output format",
+            "inherit": false,
+            "long": "format",
+            "short": "f",
+            "value": {
+              "name": "format",
+              "provider": "pscale.formats"
+            }
+          },
+          {
+            "description": "disable color output",
+            "inherit": false,
+            "long": "no-color"
+          },
+          {
+            "description": "set service token",
+            "inherit": false,
+            "long": "service-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set service token name",
+            "inherit": false,
+            "long": "service-token-name",
+            "value": {
+              "name": "name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "backup",
+        "description": "create, list, show, and delete branch backups",
+        "subcommands": [
+          {
+            "name": "create",
+            "aliases": [
+              "b"
+            ],
+            "description": "backup a branch's data and schema",
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                },
+                {
+                  "name": "branch",
+                  "index": 1
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "set region",
+                "inherit": false,
+                "long": "region",
+                "value": {
+                  "name": "region"
+                }
+              },
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "aliases": [
+              "rm"
+            ],
+            "description": "delete a branch backup",
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                },
+                {
+                  "name": "branch",
+                  "index": 1
+                },
+                {
+                  "name": "backup",
+                  "index": 2
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "skip confirmation",
+                "inherit": false,
+                "long": "force"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "aliases": [
+              "ls"
+            ],
+            "description": "list all backups of a branch",
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                },
+                {
+                  "name": "branch",
+                  "index": 1
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "restore",
+            "description": "restore a backup to a new branch",
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                },
+                {
+                  "name": "branch",
+                  "index": 1
+                },
+                {
+                  "name": "backup",
+                  "index": 2
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "show",
+            "description": "show a specific backup of a branch",
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                },
+                {
+                  "name": "branch",
+                  "index": 1
+                },
+                {
+                  "name": "backup",
+                  "index": 2
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set API token",
+            "inherit": false,
+            "long": "api-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set API base URL",
+            "inherit": false,
+            "long": "api-url",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "enable debug mode",
+            "inherit": false,
+            "long": "debug"
+          },
+          {
+            "description": "set output format",
+            "inherit": false,
+            "long": "format",
+            "short": "f",
+            "value": {
+              "name": "format",
+              "provider": "pscale.formats"
+            }
+          },
+          {
+            "description": "disable color output",
+            "inherit": false,
+            "long": "no-color"
+          },
+          {
+            "description": "set service token",
+            "inherit": false,
+            "long": "service-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set service token name",
+            "inherit": false,
+            "long": "service-token-name",
+            "value": {
+              "name": "name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "branch",
+        "description": "create, delete, diff, and manage branches",
+        "subcommands": [
+          {
+            "name": "create",
+            "aliases": [
+              "b"
+            ],
+            "description": "create a new branch from a database",
+            "options": [
+              {
+                "description": "set region",
+                "inherit": false,
+                "long": "region",
+                "value": {
+                  "name": "region"
+                }
+              },
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "from",
+                "description": "branch to be created from",
+                "inherit": false
+              },
+              {
+                "long": "restore",
+                "description": "backup to restore into the branch",
+                "inherit": false
+              },
+              {
+                "long": "web",
+                "short": "w",
+                "description": "create a branch in your web browser",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "source-database",
+                  "index": 0
+                },
+                {
+                  "name": "branch",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "aliases": [
+              "rm"
+            ],
+            "description": "delete a branch from a database",
+            "arguments": {
+              "states": [
+                {
+                  "name": "source-database",
+                  "index": 0
+                },
+                {
+                  "name": "branch",
+                  "index": 1
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "skip confirmation",
+                "inherit": false,
+                "long": "force"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "diff",
+            "description": "show the diff of a branch",
+            "arguments": {
+              "states": [
+                {
+                  "name": "source-database",
+                  "index": 0
+                },
+                {
+                  "name": "branch",
+                  "index": 1
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "aliases": [
+              "ls"
+            ],
+            "description": "list all branches of a database",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "web",
+                "description": "list branches in your web browser",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "promote",
+            "aliases": [
+              "p"
+            ],
+            "description": "promote a new branch from a database",
+            "arguments": {
+              "states": [
+                {
+                  "name": "source-database",
+                  "index": 0
+                },
+                {
+                  "name": "branch",
+                  "index": 1
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "refresh-schema",
+            "description": "refresh the schema for a database branch",
+            "arguments": {
+              "states": [
+                {
+                  "name": "source-database",
+                  "index": 0
+                },
+                {
+                  "name": "branch",
+                  "index": 1
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "schema",
+            "description": "show the schema of a branch",
+            "arguments": {
+              "states": [
+                {
+                  "name": "source-database",
+                  "index": 0
+                },
+                {
+                  "name": "branch",
+                  "index": 1
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "show",
+            "description": "show a specific branch of a database",
+            "arguments": {
+              "states": [
+                {
+                  "name": "source-database",
+                  "index": 0
+                },
+                {
+                  "name": "branch",
+                  "index": 1
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "switch",
+            "description": "switches the current project to use the specified branch",
+            "options": [
+              {
+                "description": "set database",
+                "inherit": false,
+                "long": "database",
+                "value": {
+                  "name": "database"
+                }
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "create",
+                "description": "if enabled, will automatically create the branch if it does not exist",
+                "inherit": false
+              },
+              {
+                "long": "parent-branch",
+                "description": "parent branch to inherit from if a new branch is being created (default...",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "branch",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ],
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set API token",
+            "inherit": false,
+            "long": "api-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set API base URL",
+            "inherit": false,
+            "long": "api-url",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "enable debug mode",
+            "inherit": false,
+            "long": "debug"
+          },
+          {
+            "description": "set output format",
+            "inherit": false,
+            "long": "format",
+            "short": "f",
+            "value": {
+              "name": "format",
+              "provider": "pscale.formats"
+            }
+          },
+          {
+            "description": "disable color output",
+            "inherit": false,
+            "long": "no-color"
+          },
+          {
+            "description": "set service token",
+            "inherit": false,
+            "long": "service-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set service token name",
+            "inherit": false,
+            "long": "service-token-name",
+            "value": {
+              "name": "name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "completion",
+        "description": "generate completion script for your shell",
+        "options": [
+          {
+            "description": "open in web browser",
+            "inherit": false,
+            "long": "web"
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set API token",
+            "inherit": false,
+            "long": "api-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set API base URL",
+            "inherit": false,
+            "long": "api-url",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "enable debug mode",
+            "inherit": false,
+            "long": "debug"
+          },
+          {
+            "description": "set output format",
+            "inherit": false,
+            "long": "format",
+            "short": "f",
+            "value": {
+              "name": "format",
+              "provider": "pscale.formats"
+            }
+          },
+          {
+            "description": "disable color output",
+            "inherit": false,
+            "long": "no-color"
+          },
+          {
+            "description": "set service token",
+            "inherit": false,
+            "long": "service-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set service token name",
+            "inherit": false,
+            "long": "service-token-name",
+            "value": {
+              "name": "name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "connect",
+        "description": "create a secure connection to a database and branch for a local client",
+        "options": [
+          {
+            "description": "set organization",
+            "inherit": false,
+            "long": "org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "description": "set local port",
+            "inherit": false,
+            "long": "port",
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "description": "set remote address",
+            "inherit": false,
+            "long": "remote-addr",
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set API token",
+            "inherit": false,
+            "long": "api-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set API base URL",
+            "inherit": false,
+            "long": "api-url",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "enable debug mode",
+            "inherit": false,
+            "long": "debug"
+          },
+          {
+            "description": "set output format",
+            "inherit": false,
+            "long": "format",
+            "short": "f",
+            "value": {
+              "name": "format",
+              "provider": "pscale.formats"
+            }
+          },
+          {
+            "description": "disable color output",
+            "inherit": false,
+            "long": "no-color"
+          },
+          {
+            "description": "set service token",
+            "inherit": false,
+            "long": "service-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set service token name",
+            "inherit": false,
+            "long": "service-token-name",
+            "value": {
+              "name": "name"
+            }
+          },
+          {
+            "long": "execute",
+            "description": "run this command after successfully connecting to the database",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "execute-env-url",
+            "description": "environment variable name that contains the exposed Database URL. (defau...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "execute-protocol",
+            "description": "protocol for the exposed URL (by default DATABASE_URL) value in execute...",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          },
+          {
+            "long": "host",
+            "description": "local host to bind and listen for connections (default \"127.0.0.1\")",
+            "inherit": false,
+            "value": {
+              "name": "string"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "mydatabase",
+              "index": 0
+            },
+            {
+              "name": "mybranch",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "database",
+        "aliases": [
+          "db"
+        ],
+        "description": "create, read, delete, and dump/restore databases",
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create a database instance",
+            "options": [
+              {
+                "description": "set region",
+                "inherit": false,
+                "long": "region",
+                "value": {
+                  "name": "region"
+                }
+              },
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "notes",
+                "description": "notes for the database",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "aliases": [
+              "rm"
+            ],
+            "description": "delete a database instance",
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "skip confirmation",
+                "inherit": false,
+                "long": "force"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "dump",
+            "description": "backup and dump your database",
+            "options": [
+              {
+                "description": "set local address",
+                "inherit": false,
+                "long": "local-addr",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "output",
+                "description": "output director of the dump. By default the dump is stored to a folder i...",
+                "inherit": false,
+                "value": {
+                  "name": "string",
+                  "provider": "builtin.directories"
+                }
+              },
+              {
+                "long": "tables",
+                "description": "comma separated string of tables to dump. By default all tables are dumped",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                },
+                {
+                  "name": "branch",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "aliases": [
+              "ls"
+            ],
+            "description": "list databases",
+            "options": [
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "restore-dump",
+            "description": "restore your database from a local dump directory",
+            "options": [
+              {
+                "description": "set local address",
+                "inherit": false,
+                "long": "local-addr",
+                "value": {
+                  "name": "address"
+                }
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "dir",
+                "description": "directory that contains the files to be used for restoration (required)",
+                "inherit": false,
+                "value": {
+                  "name": "string",
+                  "provider": "builtin.directories"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                },
+                {
+                  "name": "branch",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "show",
+            "description": "retrieve information about a database",
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "description": "set organization",
+            "inherit": false,
+            "long": "org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set API token",
+            "inherit": false,
+            "long": "api-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set API base URL",
+            "inherit": false,
+            "long": "api-url",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "enable debug mode",
+            "inherit": false,
+            "long": "debug"
+          },
+          {
+            "description": "set output format",
+            "inherit": false,
+            "long": "format",
+            "short": "f",
+            "value": {
+              "name": "format",
+              "provider": "pscale.formats"
+            }
+          },
+          {
+            "description": "disable color output",
+            "inherit": false,
+            "long": "no-color"
+          },
+          {
+            "description": "set service token",
+            "inherit": false,
+            "long": "service-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set service token name",
+            "inherit": false,
+            "long": "service-token-name",
+            "value": {
+              "name": "name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "deploy-request",
+        "aliases": [
+          "dr"
+        ],
+        "description": "create, review, diff, and manage deploy requests",
+        "subcommands": [
+          {
+            "name": "close",
+            "description": "close a deploy request",
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                },
+                {
+                  "name": "number",
+                  "index": 1
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "description": "create a deploy request from a branch",
+            "options": [
+              {
+                "description": "set region",
+                "inherit": false,
+                "long": "region",
+                "value": {
+                  "name": "region"
+                }
+              },
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "deploy-to",
+                "description": "branch to deploy the branch. By default it's set to 'main'",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                },
+                {
+                  "name": "branch",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "deploy",
+            "description": "deploy a specific deploy request",
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                },
+                {
+                  "name": "branch",
+                  "index": 1
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "diff",
+            "description": "show the diff of a deploy request",
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                },
+                {
+                  "name": "number",
+                  "index": 1
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "aliases": [
+              "ls"
+            ],
+            "description": "list all deploy requests for a database",
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "review",
+            "description": "review a deploy request (approve, comment, etc...)",
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "approve",
+                "description": "approve a deploy request",
+                "inherit": false
+              },
+              {
+                "long": "comment",
+                "description": "comment on a deploy request",
+                "inherit": false,
+                "value": {
+                  "name": "string"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                },
+                {
+                  "name": "number",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "show",
+            "description": "show a specific deploy request",
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                },
+                {
+                  "name": "number",
+                  "index": 1
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "description": "set organization",
+            "inherit": false,
+            "long": "org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set API token",
+            "inherit": false,
+            "long": "api-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set API base URL",
+            "inherit": false,
+            "long": "api-url",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "enable debug mode",
+            "inherit": false,
+            "long": "debug"
+          },
+          {
+            "description": "set output format",
+            "inherit": false,
+            "long": "format",
+            "short": "f",
+            "value": {
+              "name": "format",
+              "provider": "pscale.formats"
+            }
+          },
+          {
+            "description": "disable color output",
+            "inherit": false,
+            "long": "no-color"
+          },
+          {
+            "description": "set service token",
+            "inherit": false,
+            "long": "service-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set service token name",
+            "inherit": false,
+            "long": "service-token-name",
+            "value": {
+              "name": "name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "help about any command",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set API token",
+            "inherit": false,
+            "long": "api-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set API base URL",
+            "inherit": false,
+            "long": "api-url",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "enable debug mode",
+            "inherit": false,
+            "long": "debug"
+          },
+          {
+            "description": "set output format",
+            "inherit": false,
+            "long": "format",
+            "short": "f",
+            "value": {
+              "name": "format",
+              "provider": "pscale.formats"
+            }
+          },
+          {
+            "description": "disable color output",
+            "inherit": false,
+            "long": "no-color"
+          },
+          {
+            "description": "set service token",
+            "inherit": false,
+            "long": "service-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set service token name",
+            "inherit": false,
+            "long": "service-token-name",
+            "value": {
+              "name": "name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "org",
+        "description": "list, show, and switch organizations",
+        "subcommands": [
+          {
+            "name": "list",
+            "aliases": [
+              "ls"
+            ],
+            "description": "list the currently active organizations",
+            "options": [
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "show",
+            "description": "display the currently active organization",
+            "options": [
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "switch",
+            "description": "switch the currently active organization",
+            "options": [
+              {
+                "description": "set database",
+                "inherit": false,
+                "long": "database",
+                "value": {
+                  "name": "database"
+                }
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              },
+              {
+                "long": "save-config",
+                "description": "path to store the organization. By default the configuration is deducted...",
+                "inherit": false,
+                "value": {
+                  "name": "string",
+                  "provider": "builtin.files"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "organization",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ],
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set API token",
+            "inherit": false,
+            "long": "api-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set API base URL",
+            "inherit": false,
+            "long": "api-url",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "enable debug mode",
+            "inherit": false,
+            "long": "debug"
+          },
+          {
+            "description": "set output format",
+            "inherit": false,
+            "long": "format",
+            "short": "f",
+            "value": {
+              "name": "format",
+              "provider": "pscale.formats"
+            }
+          },
+          {
+            "description": "disable color output",
+            "inherit": false,
+            "long": "no-color"
+          },
+          {
+            "description": "set service token",
+            "inherit": false,
+            "long": "service-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set service token name",
+            "inherit": false,
+            "long": "service-token-name",
+            "value": {
+              "name": "name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "password",
+        "description": "create, list, and delete branch passwords",
+        "subcommands": [
+          {
+            "name": "create",
+            "aliases": [
+              "p"
+            ],
+            "description": "create password to access a branch's data",
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                },
+                {
+                  "name": "branch",
+                  "index": 1
+                },
+                {
+                  "name": "name",
+                  "index": 2
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "set region",
+                "inherit": false,
+                "long": "region",
+                "value": {
+                  "name": "region"
+                }
+              },
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "aliases": [
+              "rm"
+            ],
+            "description": "delete a branch password",
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                },
+                {
+                  "name": "branch",
+                  "index": 1
+                },
+                {
+                  "name": "password",
+                  "index": 2
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "skip confirmation",
+                "inherit": false,
+                "long": "force"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "aliases": [
+              "ls"
+            ],
+            "description": "list all passwords of a database",
+            "arguments": {
+              "states": [
+                {
+                  "name": "database",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "description": "set organization",
+            "inherit": false,
+            "long": "org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set API token",
+            "inherit": false,
+            "long": "api-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set API base URL",
+            "inherit": false,
+            "long": "api-url",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "enable debug mode",
+            "inherit": false,
+            "long": "debug"
+          },
+          {
+            "description": "set output format",
+            "inherit": false,
+            "long": "format",
+            "short": "f",
+            "value": {
+              "name": "format",
+              "provider": "pscale.formats"
+            }
+          },
+          {
+            "description": "disable color output",
+            "inherit": false,
+            "long": "no-color"
+          },
+          {
+            "description": "set service token",
+            "inherit": false,
+            "long": "service-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set service token name",
+            "inherit": false,
+            "long": "service-token-name",
+            "value": {
+              "name": "name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "region",
+        "description": "list regions",
+        "subcommands": [
+          {
+            "name": "list",
+            "aliases": [
+              "ls"
+            ],
+            "description": "list regions",
+            "options": [
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set API token",
+            "inherit": false,
+            "long": "api-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set API base URL",
+            "inherit": false,
+            "long": "api-url",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "enable debug mode",
+            "inherit": false,
+            "long": "debug"
+          },
+          {
+            "description": "set output format",
+            "inherit": false,
+            "long": "format",
+            "short": "f",
+            "value": {
+              "name": "format",
+              "provider": "pscale.formats"
+            }
+          },
+          {
+            "description": "disable color output",
+            "inherit": false,
+            "long": "no-color"
+          },
+          {
+            "description": "set service token",
+            "inherit": false,
+            "long": "service-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set service token name",
+            "inherit": false,
+            "long": "service-token-name",
+            "value": {
+              "name": "name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "service-token",
+        "description": "create, list, and manage access for service tokens",
+        "subcommands": [
+          {
+            "name": "add-access",
+            "description": "ddd access to a service token in the organization",
+            "arguments": {
+              "states": [
+                {
+                  "name": "token",
+                  "index": 0
+                },
+                {
+                  "name": "access",
+                  "index": 1
+                },
+                {
+                  "name": "access",
+                  "index": 2
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "set database",
+                "inherit": false,
+                "long": "database",
+                "value": {
+                  "name": "database"
+                }
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "create",
+            "description": "create a service token for the organization",
+            "options": [
+              {
+                "description": "set region",
+                "inherit": false,
+                "long": "region",
+                "value": {
+                  "name": "region"
+                }
+              },
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "delete an entire service token in an organization",
+            "arguments": {
+              "states": [
+                {
+                  "name": "token",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "skip confirmation",
+                "inherit": false,
+                "long": "force"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "delete-access",
+            "description": "delete access granted to a service token in the organization",
+            "arguments": {
+              "states": [
+                {
+                  "name": "token",
+                  "index": 0
+                },
+                {
+                  "name": "access",
+                  "index": 1
+                },
+                {
+                  "name": "access",
+                  "index": 2
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "set database",
+                "inherit": false,
+                "long": "database",
+                "value": {
+                  "name": "database"
+                }
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "list",
+            "description": "list service tokens for the organization",
+            "options": [
+              {
+                "description": "open in web browser",
+                "inherit": false,
+                "long": "web"
+              },
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          },
+          {
+            "name": "show-access",
+            "description": "fetch a service token and it's accesses",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0
+                }
+              ]
+            },
+            "options": [
+              {
+                "description": "show help",
+                "inherit": false,
+                "long": "help",
+                "short": "h"
+              },
+              {
+                "description": "set API token",
+                "inherit": false,
+                "long": "api-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set API base URL",
+                "inherit": false,
+                "long": "api-url",
+                "value": {
+                  "name": "url"
+                }
+              },
+              {
+                "description": "set config file",
+                "inherit": false,
+                "long": "config",
+                "value": {
+                  "name": "file",
+                  "provider": "builtin.files"
+                }
+              },
+              {
+                "description": "enable debug mode",
+                "inherit": false,
+                "long": "debug"
+              },
+              {
+                "description": "set output format",
+                "inherit": false,
+                "long": "format",
+                "short": "f",
+                "value": {
+                  "name": "format",
+                  "provider": "pscale.formats"
+                }
+              },
+              {
+                "description": "disable color output",
+                "inherit": false,
+                "long": "no-color"
+              },
+              {
+                "description": "set service token",
+                "inherit": false,
+                "long": "service-token",
+                "value": {
+                  "name": "token"
+                }
+              },
+              {
+                "description": "set service token name",
+                "inherit": false,
+                "long": "service-token-name",
+                "value": {
+                  "name": "name"
+                }
+              }
+            ]
+          }
+        ],
+        "options": [
+          {
+            "description": "set organization",
+            "inherit": false,
+            "long": "org",
+            "value": {
+              "name": "org"
+            }
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set API token",
+            "inherit": false,
+            "long": "api-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set API base URL",
+            "inherit": false,
+            "long": "api-url",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "enable debug mode",
+            "inherit": false,
+            "long": "debug"
+          },
+          {
+            "description": "set output format",
+            "inherit": false,
+            "long": "format",
+            "short": "f",
+            "value": {
+              "name": "format",
+              "provider": "pscale.formats"
+            }
+          },
+          {
+            "description": "disable color output",
+            "inherit": false,
+            "long": "no-color"
+          },
+          {
+            "description": "set service token",
+            "inherit": false,
+            "long": "service-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set service token name",
+            "inherit": false,
+            "long": "service-token-name",
+            "value": {
+              "name": "name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "shell",
+        "description": "open a MySQL shell instance to a database and branch",
+        "arguments": {
+          "states": [
+            {
+              "name": "mydatabase",
+              "index": 0
+            },
+            {
+              "name": "mybranch",
+              "index": 1
+            }
+          ]
+        },
+        "options": [
+          {
+            "description": "set local port",
+            "inherit": false,
+            "long": "port",
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "description": "set remote address",
+            "inherit": false,
+            "long": "remote-addr",
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "description": "set local address",
+            "inherit": false,
+            "long": "local-addr",
+            "value": {
+              "name": "address"
+            }
+          },
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set API token",
+            "inherit": false,
+            "long": "api-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set API base URL",
+            "inherit": false,
+            "long": "api-url",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "enable debug mode",
+            "inherit": false,
+            "long": "debug"
+          },
+          {
+            "description": "set output format",
+            "inherit": false,
+            "long": "format",
+            "short": "f",
+            "value": {
+              "name": "format",
+              "provider": "pscale.formats"
+            }
+          },
+          {
+            "description": "disable color output",
+            "inherit": false,
+            "long": "no-color"
+          },
+          {
+            "description": "set service token",
+            "inherit": false,
+            "long": "service-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set service token name",
+            "inherit": false,
+            "long": "service-token-name",
+            "value": {
+              "name": "name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "signup",
+        "aliases": [
+          "register",
+          "sign-up"
+        ],
+        "description": "signup for a new PlanetScale account",
+        "options": [
+          {
+            "description": "show help",
+            "inherit": false,
+            "long": "help",
+            "short": "h"
+          },
+          {
+            "description": "set API token",
+            "inherit": false,
+            "long": "api-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set API base URL",
+            "inherit": false,
+            "long": "api-url",
+            "value": {
+              "name": "url"
+            }
+          },
+          {
+            "description": "set config file",
+            "inherit": false,
+            "long": "config",
+            "value": {
+              "name": "file",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "description": "enable debug mode",
+            "inherit": false,
+            "long": "debug"
+          },
+          {
+            "description": "set output format",
+            "inherit": false,
+            "long": "format",
+            "short": "f",
+            "value": {
+              "name": "format",
+              "provider": "pscale.formats"
+            }
+          },
+          {
+            "description": "disable color output",
+            "inherit": false,
+            "long": "no-color"
+          },
+          {
+            "description": "set service token",
+            "inherit": false,
+            "long": "service-token",
+            "value": {
+              "name": "token"
+            }
+          },
+          {
+            "description": "set service token name",
+            "inherit": false,
+            "long": "service-token-name",
+            "value": {
+              "name": "name"
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "pscale.formats": {
+        "values": [
+          "human",
+          "json",
+          "csv"
+        ]
+      }
+    }
+  }
+}
