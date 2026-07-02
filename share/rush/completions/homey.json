@@ -1,0 +1,286 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "homey",
+    "options": [
+      {
+        "long": "help",
+        "inherit": true
+      },
+      {
+        "long": "version",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "app",
+        "description": "app related commands",
+        "options": [
+          {
+            "short": "p",
+            "long": "path",
+            "description": "path to a Homey App directory",
+            "inherit": true,
+            "value": {
+              "name": "value",
+              "provider": "builtin.directories"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "add-types",
+            "description": "install the Apps SDK TypeScript declarations"
+          },
+          {
+            "name": "build",
+            "description": "build a Homey App for publishing"
+          },
+          {
+            "name": "compose",
+            "description": "migrate app to Homey compose"
+          },
+          {
+            "name": "create",
+            "description": "create a new Homey App"
+          },
+          {
+            "name": "discovery",
+            "description": "discovery related commands",
+            "subcommands": [
+              {
+                "name": "create",
+                "description": "create a new Discovery strategy"
+              }
+            ]
+          },
+          {
+            "name": "driver",
+            "description": "driver related commands",
+            "subcommands": [
+              {
+                "name": "capabilities",
+                "description": "change the capabilities of a Driver"
+              },
+              {
+                "name": "create",
+                "description": "create a new Driver"
+              },
+              {
+                "name": "flow",
+                "description": "create a new Flow for a Driver"
+              }
+            ]
+          },
+          {
+            "name": "flow",
+            "description": "flow related commands",
+            "subcommands": [
+              {
+                "name": "create",
+                "description": "create a new Flow"
+              }
+            ]
+          },
+          {
+            "name": "install",
+            "description": "install a Homey App",
+            "options": [
+              {
+                "short": "c",
+                "long": "clean",
+                "inherit": false,
+                "value": {
+                  "name": "clean",
+                  "provider": "homey-booleans"
+                }
+              },
+              {
+                "short": "s",
+                "long": "skip-build",
+                "inherit": false,
+                "value": {
+                  "name": "skip-build",
+                  "provider": "homey-booleans"
+                }
+              }
+            ]
+          },
+          {
+            "name": "manage",
+            "description": "view your app in the Homey Developer Tools"
+          },
+          {
+            "name": "publish",
+            "description": "publish a Homey App to the Homey Apps Store"
+          },
+          {
+            "name": "run",
+            "description": "run a Homey App in development mode",
+            "options": [
+              {
+                "short": "c",
+                "long": "clean",
+                "inherit": false,
+                "value": {
+                  "name": "clean",
+                  "provider": "homey-booleans"
+                }
+              },
+              {
+                "short": "s",
+                "long": "skip-build",
+                "inherit": false,
+                "value": {
+                  "name": "skip-build",
+                  "provider": "homey-booleans"
+                }
+              },
+              {
+                "short": "l",
+                "long": "link-modules",
+                "description": "provide a comma-separated path to local Node.js modules to link. Only works on Homey Cloud",
+                "inherit": false,
+                "value": {
+                  "name": "modules"
+                }
+              }
+            ]
+          },
+          {
+            "name": "validate",
+            "description": "validate a Homey App",
+            "options": [
+              {
+                "short": "l",
+                "long": "level",
+                "description": "validation level",
+                "inherit": false,
+                "value": {
+                  "name": "value",
+                  "provider": "homey-validation-levels"
+                }
+              }
+            ]
+          },
+          {
+            "name": "version",
+            "description": "update a Homey App's version",
+            "arguments": {
+              "states": [
+                {
+                  "name": "next",
+                  "provider": "homey-version-increments",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "view",
+            "description": "view your app in the Homey Apps Store"
+          }
+        ]
+      },
+      {
+        "name": "docs",
+        "description": "open Homey Developer Documentation"
+      },
+      {
+        "name": "list",
+        "description": "list all Homeys"
+      },
+      {
+        "name": "login",
+        "description": "log in with an Athom Account"
+      },
+      {
+        "name": "logout",
+        "description": "log out the current user"
+      },
+      {
+        "name": "select",
+        "description": "select a Homey as active",
+        "options": [
+          {
+            "short": "i",
+            "long": "id",
+            "description": "iD of the Homey",
+            "inherit": false,
+            "value": {
+              "name": "id"
+            }
+          },
+          {
+            "short": "n",
+            "long": "name",
+            "description": "name of the Homey",
+            "inherit": false,
+            "value": {
+              "name": "name"
+            }
+          }
+        ]
+      },
+      {
+        "name": "tools",
+        "description": "open Homey Developer Tools"
+      },
+      {
+        "name": "unselect",
+        "description": "unselect the active Homey"
+      },
+      {
+        "name": "whoami",
+        "description": "show the current logged in user"
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "homey-booleans": {
+        "values": [
+          {
+            "value": "false"
+          },
+          {
+            "value": "true"
+          }
+        ]
+      },
+      "homey-validation-levels": {
+        "values": [
+          {
+            "value": "debug"
+          },
+          {
+            "value": "publish"
+          },
+          {
+            "value": "verified"
+          }
+        ]
+      },
+      "homey-version-increments": {
+        "values": [
+          {
+            "value": "patch"
+          },
+          {
+            "value": "minor"
+          },
+          {
+            "value": "major"
+          },
+          {
+            "value": "semver"
+          }
+        ]
+      }
+    },
+    "description": "homey developer CLI"
+  }
+}
