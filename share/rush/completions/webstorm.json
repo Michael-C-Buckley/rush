@@ -1,0 +1,232 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "webstorm",
+    "description": "WebStorm CLI",
+    "providers": {
+      "files": {
+        "builtin": "files"
+      },
+      "directories": {
+        "builtin": "directories"
+      }
+    },
+    "options": [
+      {
+        "spellings": [
+          "nosplash"
+        ],
+        "description": "do not show splash screen"
+      },
+      {
+        "spellings": [
+          "dontReopenProjects"
+        ],
+        "description": "do not reopen projects"
+      },
+      {
+        "spellings": [
+          "disableNonBundledPlugins"
+        ],
+        "description": "do not load manually installed plugins"
+      },
+      {
+        "long": "wait",
+        "description": "wait for files to close before returning"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "path",
+          "provider": "files",
+          "repeatable": true
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "diff",
+        "description": "open diff viewer",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "files"
+            },
+            {
+              "name": "path2",
+              "provider": "files"
+            },
+            {
+              "name": "path3",
+              "provider": "files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "merge",
+        "description": "open merge dialog",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "files"
+            },
+            {
+              "name": "path2",
+              "provider": "files"
+            },
+            {
+              "name": "base",
+              "provider": "files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "format",
+        "description": "format files",
+        "arguments": {
+          "states": [
+            {
+              "name": "path",
+              "provider": "files",
+              "repeatable": true
+            }
+          ]
+        },
+        "options": [
+          {
+            "spellings": [
+              "-h"
+            ],
+            "description": "show help"
+          },
+          {
+            "spellings": [
+              "-m",
+              "-mask"
+            ],
+            "description": "set file masks",
+            "value": {
+              "name": "masks"
+            }
+          },
+          {
+            "spellings": [
+              "-r",
+              "-R"
+            ],
+            "description": "process directories recursively"
+          },
+          {
+            "spellings": [
+              "-s",
+              "-settings"
+            ],
+            "description": "use code style settings file",
+            "value": {
+              "name": "file",
+              "provider": "files"
+            }
+          },
+          {
+            "spellings": [
+              "-allowDefaults"
+            ],
+            "description": "use default code style settings"
+          },
+          {
+            "spellings": [
+              "-charset"
+            ],
+            "description": "set charset",
+            "value": {
+              "name": "charset"
+            }
+          },
+          {
+            "spellings": [
+              "-d",
+              "-dry"
+            ],
+            "description": "run in validation mode"
+          }
+        ]
+      },
+      {
+        "name": "inspect",
+        "description": "inspect a project",
+        "arguments": {
+          "states": [
+            {
+              "name": "project",
+              "provider": "directories"
+            },
+            {
+              "name": "inspection-profile",
+              "provider": "files"
+            },
+            {
+              "name": "output",
+              "provider": "files"
+            }
+          ]
+        },
+        "options": [
+          {
+            "spellings": [
+              "-changes"
+            ],
+            "description": "inspect only uncommitted changes"
+          },
+          {
+            "spellings": [
+              "-d"
+            ],
+            "description": "set subdirectory",
+            "value": {
+              "name": "directory",
+              "provider": "directories"
+            }
+          },
+          {
+            "spellings": [
+              "-format"
+            ],
+            "description": "set output format",
+            "value": {
+              "name": "format"
+            }
+          },
+          {
+            "spellings": [
+              "-v"
+            ],
+            "description": "set verbosity",
+            "value": {
+              "name": "level"
+            }
+          }
+        ]
+      },
+      {
+        "name": "installPlugins",
+        "description": "install plugins",
+        "arguments": {
+          "states": [
+            {
+              "name": "plugin-id"
+            },
+            {
+              "name": "repository-url"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
