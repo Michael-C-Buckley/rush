@@ -1,0 +1,222 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "lsblk",
+    "description": "list block devices",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for lsblk",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "show version for lsblk",
+        "inherit": false
+      },
+      {
+        "long": "all",
+        "short": "a",
+        "description": "also list empty devices and RAM disk devices",
+        "inherit": false
+      },
+      {
+        "long": "bytes",
+        "short": "b",
+        "description": "print the SIZE column in bytes",
+        "inherit": false
+      },
+      {
+        "long": "discard",
+        "short": "D",
+        "description": "print information about the discarding capabilities (TRIM, UNMAP) for each device",
+        "inherit": false
+      },
+      {
+        "long": "nodeps",
+        "short": "d",
+        "description": "do not print holder devices or slaves",
+        "inherit": false
+      },
+      {
+        "long": "dedup",
+        "short": "E",
+        "description": "use column as a de-duplication key to de-duplicate output tree",
+        "inherit": false,
+        "value": {
+          "name": "column"
+        }
+      },
+      {
+        "long": "exclude",
+        "short": "e",
+        "description": "exclude the devices specified by the comma-separated list of major device numbers",
+        "inherit": false,
+        "value": {
+          "name": "list"
+        }
+      },
+      {
+        "long": "fs",
+        "short": "f",
+        "description": "output info about filesystems",
+        "inherit": false
+      },
+      {
+        "long": "include",
+        "short": "I",
+        "description": "include devices specified by the comma-separated list of major device numbers",
+        "inherit": false,
+        "value": {
+          "name": "list"
+        }
+      },
+      {
+        "long": "ascii",
+        "short": "i",
+        "description": "use ASCII characters for tree formatting",
+        "inherit": false
+      },
+      {
+        "long": "json",
+        "short": "J",
+        "description": "use JSON output format",
+        "inherit": false
+      },
+      {
+        "long": "list",
+        "short": "l",
+        "description": "produce output in the form of a list",
+        "inherit": false
+      },
+      {
+        "long": "merge",
+        "short": "M",
+        "description": "group parents of sub-trees to provide more readable output for RAIDs and Multi-path devices",
+        "inherit": false
+      },
+      {
+        "long": "perms",
+        "short": "m",
+        "description": "output info about device owner, group and mode",
+        "inherit": false
+      },
+      {
+        "long": "noheadings",
+        "short": "n",
+        "description": "do not print a header line",
+        "inherit": false
+      },
+      {
+        "long": "output",
+        "short": "o",
+        "description": "specify which output columns to print",
+        "inherit": false,
+        "value": {
+          "name": "list",
+          "repeatable": true
+        }
+      },
+      {
+        "long": "output-all",
+        "short": "O",
+        "description": "output all available columns",
+        "inherit": false
+      },
+      {
+        "long": "pairs",
+        "short": "P",
+        "description": "produce output in the form of key-value pairs",
+        "inherit": false
+      },
+      {
+        "long": "raw",
+        "short": "r",
+        "description": "produce output in raw format",
+        "inherit": false
+      },
+      {
+        "long": "scsi",
+        "short": "S",
+        "description": "output info about SCSI devices only",
+        "inherit": false
+      },
+      {
+        "long": "inverse",
+        "short": "s",
+        "description": "print dependencies in inverse order",
+        "inherit": false
+      },
+      {
+        "long": "tree",
+        "short": "T",
+        "description": "force tree-like output format",
+        "inherit": false,
+        "value": {
+          "name": "column"
+        }
+      },
+      {
+        "long": "topology",
+        "short": "t",
+        "description": "output info about block-device topology",
+        "inherit": false
+      },
+      {
+        "long": "width",
+        "short": "w",
+        "description": "specifies output width as a number of characters",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "sort",
+        "short": "x",
+        "description": "sort output lines by column",
+        "inherit": false,
+        "value": {
+          "name": "column"
+        }
+      },
+      {
+        "long": "zoned",
+        "short": "z",
+        "description": "print the zone model for each device",
+        "inherit": false
+      },
+      {
+        "long": "sysroot",
+        "description": "gather data for a Linux instance other than the instance from which the lsblk command is issued",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "device",
+          "description": "device to list",
+          "index": 0,
+          "required": false,
+          "provider": "builtin.files"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
