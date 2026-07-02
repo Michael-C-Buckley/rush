@@ -1,0 +1,62 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "mailsy",
+    "description": "generate disposable email addresses",
+    "options": [
+      {
+        "short": "v",
+        "long": "version",
+        "description": "output the current version",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "display help for command",
+        "inherit": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "g",
+        "description": "generate a new email"
+      },
+      {
+        "name": "m",
+        "description": "fetch messages from the inbox"
+      },
+      {
+        "name": "d",
+        "description": "delete account"
+      },
+      {
+        "name": "me",
+        "description": "show details of the account"
+      },
+      {
+        "name": "help",
+        "description": "get help for a command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "index": 0,
+              "required": false,
+              "provider": {
+                "values": [
+                  "g",
+                  "m",
+                  "d",
+                  "me",
+                  "help"
+                ]
+              }
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
