@@ -1,0 +1,95 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "goto",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for goto",
+        "inherit": false
+      },
+      {
+        "long": "register",
+        "short": "r",
+        "description": "registers an alias",
+        "inherit": true,
+        "value": [
+          {
+            "name": "alias"
+          },
+          {
+            "name": "target",
+            "provider": "builtin.directories"
+          }
+        ]
+      },
+      {
+        "long": "unregister",
+        "short": "u",
+        "description": "unregister an alias",
+        "inherit": true,
+        "value": {
+          "name": "alias",
+          "provider": "goto.aliases"
+        }
+      },
+      {
+        "long": "push",
+        "short": "p",
+        "description": "pushes the current directory onto the stack, then performs goto",
+        "inherit": false
+      },
+      {
+        "long": "pop",
+        "short": "o",
+        "description": "pops the top directory from the stack, then changes to that directory",
+        "inherit": false
+      },
+      {
+        "long": "list",
+        "short": "l",
+        "description": "pops the top directory from the stack, then changes to that directory",
+        "inherit": false
+      },
+      {
+        "long": "expand",
+        "short": "x",
+        "description": "expands an alias",
+        "inherit": false,
+        "value": {
+          "name": "alias",
+          "provider": "goto.aliases"
+        }
+      },
+      {
+        "long": "cleanup",
+        "short": "c",
+        "description": "cleans up non existent directory aliases",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "v",
+        "description": "displays the version of the goto script",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "alias",
+          "index": 0,
+          "provider": "goto.aliases"
+        }
+      ]
+    },
+    "providers": {
+      "goto.aliases": {
+        "function": "__rush_complete_goto_aliases"
+      }
+    },
+    "description": "jump to folders by alias"
+  }
+}

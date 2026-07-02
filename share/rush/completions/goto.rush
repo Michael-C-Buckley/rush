@@ -1,0 +1,11 @@
+__rush_complete_goto_aliases() {
+  config=${HOME:-}/.config/goto
+  test -r "$config" || return 0
+  while IFS= read -r line; do
+    set -- $line
+    alias=$1
+    target=$2
+    test -n "$alias" || continue
+    rush_complete candidate "$alias" --kind plain --description "goto $target" --priority 80
+  done < "$config"
+}
