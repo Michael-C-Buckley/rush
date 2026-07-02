@@ -1,0 +1,808 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "gource",
+    "description": "visualize source control repositories",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "help ('-H' for extended help)",
+        "inherit": false
+      },
+      {
+        "long": "viewport",
+        "description": "set the viewport size. If -f is also supplied, will attempt to set the video mode to this also. Add `!` to make the window non-resizable",
+        "inherit": false,
+        "value": {
+          "name": "size",
+          "description": "the size of the viewport (e.g. WIDTHxHEIGHT)",
+          "provider": {
+            "values": [
+              "3840x2160",
+              "2560x1440",
+              "1920x1080",
+              "1280x720",
+              "800x600"
+            ]
+          }
+        }
+      },
+      {
+        "short": "f",
+        "description": "fullscreen",
+        "inherit": false
+      },
+      {
+        "long": "screen",
+        "description": "set the number of the screen to display on",
+        "inherit": false,
+        "value": {
+          "name": "screen",
+          "description": "the number of the screen to display on"
+        }
+      },
+      {
+        "long": "high-dpi",
+        "description": "request a high DPI display when creating the window. On some platforms such as MacOS, the window resolution is specified in points instead of pixels. The --high",
+        "inherit": false
+      },
+      {
+        "long": "window-position",
+        "description": "initial window position on your desktop which may be made up of multiple monitors. This will override the screen setting so don't specify both",
+        "inherit": false,
+        "value": {
+          "name": "position",
+          "description": "the initial window position on your desktop (e.g. XxY)"
+        }
+      },
+      {
+        "long": "frameless",
+        "description": "frameless window",
+        "inherit": false
+      },
+      {
+        "long": "transparent",
+        "description": "make the background transparent. Only really useful for screenshots",
+        "inherit": false
+      },
+      {
+        "long": "start-date",
+        "description": "start with the first entry after the supplied date and optional time. If a time zone offset isn't specified the local time zone is used. Example accepted format",
+        "inherit": false,
+        "value": {
+          "name": "date",
+          "description": "the start date and optional time"
+        }
+      },
+      {
+        "long": "stop-date",
+        "description": "stop at the last entry prior to the supplied date and optional time. Uses the same format as --start-date",
+        "inherit": false,
+        "value": {
+          "name": "date",
+          "description": "the stop date and optional time"
+        }
+      },
+      {
+        "short": "p",
+        "long": "start-position",
+        "description": "begin at some position in the log (between 0.0 and 1.0 or 'random')",
+        "inherit": false,
+        "value": {
+          "name": "position",
+          "description": "the start position in the log",
+          "provider": {
+            "values": [
+              "random",
+              "0.0",
+              "0.1",
+              "0.2",
+              "0.3",
+              "0.4",
+              "0.5",
+              "0.6",
+              "0.7",
+              "0.8",
+              "0.9",
+              "1.0"
+            ]
+          }
+        }
+      },
+      {
+        "long": "stop-position",
+        "description": "stop (exit) at some position in the log (does not work with STDIN)",
+        "inherit": false,
+        "value": {
+          "name": "position",
+          "description": "the stop position in the log",
+          "provider": {
+            "values": [
+              "random",
+              "0.0",
+              "0.1",
+              "0.2",
+              "0.3",
+              "0.4",
+              "0.5",
+              "0.6",
+              "0.7",
+              "0.8",
+              "0.9",
+              "1.0"
+            ]
+          }
+        }
+      },
+      {
+        "short": "t",
+        "long": "stop-at-time",
+        "description": "stop (exit) after a specified number of seconds",
+        "inherit": false,
+        "value": {
+          "name": "seconds",
+          "description": "the number of seconds to wait before stopping"
+        }
+      },
+      {
+        "long": "stop-at-end",
+        "description": "stop (exit) at the end of the log / stream",
+        "inherit": false
+      },
+      {
+        "long": "loop",
+        "description": "loop back to the start of the log when the end is reached",
+        "inherit": false
+      },
+      {
+        "long": "loop-delay-seconds",
+        "description": "seconds to delay before looping",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "short": "a",
+        "long": "auto-skip-seconds",
+        "description": "automatically skip to next entry if nothing happens for a specified number of seconds",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "short": "s",
+        "long": "seconds-per-day",
+        "description": "speed of simulation in seconds per day",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "long": "realtime",
+        "description": "realtime playback speed",
+        "inherit": false
+      },
+      {
+        "long": "no-time-travel",
+        "description": "use the time of the last commit if the time of a commit is in the past",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "long": "time-scale",
+        "description": "change simulation time scale",
+        "inherit": false
+      },
+      {
+        "short": "i",
+        "long": "file-idle-time",
+        "description": "time in seconds files remain idle before they are removed or 0 for no limit",
+        "inherit": false
+      },
+      {
+        "long": "file-idle-time-at-end",
+        "description": "time in seconds files remain idle at the end before they are removed",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "short": "e",
+        "long": "elasticity",
+        "description": "elasticity of nodes",
+        "inherit": false,
+        "value": {
+          "name": "elasticity",
+          "description": "elasticity of nodes"
+        }
+      },
+      {
+        "short": "b",
+        "long": "background-colour",
+        "description": "background colour in hex",
+        "inherit": false,
+        "value": {
+          "name": "colour"
+        }
+      },
+      {
+        "long": "background-image",
+        "description": "set a background image",
+        "inherit": false,
+        "value": {
+          "name": "image-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "title",
+        "description": "set a title",
+        "inherit": false,
+        "value": {
+          "name": "title"
+        }
+      },
+      {
+        "long": "font-file",
+        "description": "specify the font. Should work with most font file formats supported by FreeType, such as TTF and OTF, among others",
+        "inherit": false,
+        "value": {
+          "name": "font-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "font-scale",
+        "description": "scale the size of all fonts",
+        "inherit": false,
+        "value": {
+          "name": "scale",
+          "description": "font scale"
+        }
+      },
+      {
+        "long": "font-size",
+        "description": "font size used by the date and title",
+        "inherit": false,
+        "value": {
+          "name": "size",
+          "description": "font size"
+        }
+      },
+      {
+        "long": "file-font-size",
+        "description": "font size of filenames",
+        "inherit": false,
+        "value": {
+          "name": "size",
+          "description": "font size"
+        }
+      },
+      {
+        "long": "dir-font-size",
+        "description": "font size of directory names",
+        "inherit": false,
+        "value": {
+          "name": "size",
+          "description": "font size"
+        }
+      },
+      {
+        "long": "user-font-size",
+        "description": "font size of user names",
+        "inherit": false,
+        "value": {
+          "name": "size",
+          "description": "font size"
+        }
+      },
+      {
+        "long": "font-colour",
+        "description": "font colour used by the date and title in hex",
+        "inherit": false,
+        "value": {
+          "name": "colour",
+          "description": "font colour"
+        }
+      },
+      {
+        "long": "key",
+        "description": "show file extension key",
+        "inherit": false
+      },
+      {
+        "long": "logo",
+        "description": "logo to display in the foreground",
+        "inherit": false,
+        "value": {
+          "name": "image-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "logo-offset",
+        "description": "offset position of the logo",
+        "inherit": false,
+        "value": {
+          "name": "offset",
+          "description": "logo offset"
+        }
+      },
+      {
+        "long": "date-format",
+        "description": "specify display date string (strftime format)",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "description": "date format"
+        }
+      },
+      {
+        "long": "log-command",
+        "description": "show the log command used by gource (git,svn,hg,bzr,cvs2cl)",
+        "inherit": false,
+        "value": {
+          "name": "command",
+          "description": "log command",
+          "provider": {
+            "values": [
+              "git",
+              "svn",
+              "hg",
+              "bzr",
+              "cvs2cl"
+            ]
+          }
+        }
+      },
+      {
+        "long": "log-format",
+        "description": "specify format of the log being read (git,svn,hg,bzr,cvs2cl,custom). Required when reading from STDIN",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "description": "log format",
+          "provider": {
+            "values": [
+              "git",
+              "svn",
+              "hg",
+              "bzr",
+              "cvs2cl",
+              "custom"
+            ]
+          }
+        }
+      },
+      {
+        "long": "git-branch",
+        "description": "get the git log of a branch other than the current one",
+        "inherit": false,
+        "value": {
+          "name": "branch"
+        }
+      },
+      {
+        "long": "follow-user",
+        "description": "have the camera automatically follow a particular user",
+        "inherit": false,
+        "value": {
+          "name": "username",
+          "description": "name of user to follow"
+        }
+      },
+      {
+        "long": "highlight-dirs",
+        "description": "highlight the names of all directories",
+        "inherit": false
+      },
+      {
+        "long": "highlight-user",
+        "description": "highlight the names of a particular user",
+        "inherit": false,
+        "value": {
+          "name": "username",
+          "description": "name of user to highlight"
+        }
+      },
+      {
+        "long": "highlight-users",
+        "description": "highlight the names of all users",
+        "inherit": false
+      },
+      {
+        "long": "highlight-colour",
+        "description": "font colour for highlighted users in hex",
+        "inherit": false,
+        "value": {
+          "name": "colour",
+          "description": "font colour (HEX)"
+        }
+      },
+      {
+        "long": "selection-colour",
+        "description": "font colour for selected users and files",
+        "inherit": false,
+        "value": {
+          "name": "colour",
+          "description": "font colour (HEX)"
+        }
+      },
+      {
+        "long": "filename-colour",
+        "description": "font colour for filenames",
+        "inherit": false,
+        "value": {
+          "name": "colour",
+          "description": "font colour (HEX)"
+        }
+      },
+      {
+        "long": "dir-colour",
+        "description": "font colour for directories",
+        "inherit": false,
+        "value": {
+          "name": "color",
+          "description": "dir colour (HEX)"
+        }
+      },
+      {
+        "long": "dir-name-depth",
+        "description": "draw names of directories down to a specific depth in the tree",
+        "inherit": false,
+        "value": {
+          "name": "depth"
+        }
+      },
+      {
+        "long": "dir-name-position",
+        "description": "position along edge of the directory name (between 0.1 and 1.0, default is 0.5)",
+        "inherit": false,
+        "value": {
+          "name": "position",
+          "provider": {
+            "values": [
+              "0.1",
+              "0.2",
+              "0.3",
+              "0.4",
+              "0.5",
+              "0.6",
+              "0.7",
+              "0.8",
+              "0.9",
+              "1.0"
+            ]
+          }
+        }
+      },
+      {
+        "long": "filename-time",
+        "description": "duration to keep filenames on screen (>= 2.0)",
+        "inherit": false,
+        "value": {
+          "name": "time"
+        }
+      },
+      {
+        "long": "file-extensions",
+        "description": "show filename extensions only",
+        "inherit": false
+      },
+      {
+        "long": "file-extension-fallback",
+        "description": "use filename as extension if the extension is missing or empty",
+        "inherit": false
+      },
+      {
+        "long": "file-filter",
+        "description": "filter out file paths matching the specified regular expression",
+        "inherit": false,
+        "value": {
+          "name": "regex"
+        }
+      },
+      {
+        "long": "file-show-filter",
+        "description": "show only file paths matching the specified regular expression",
+        "inherit": false,
+        "value": {
+          "name": "regex"
+        }
+      },
+      {
+        "long": "user-filter",
+        "description": "filter usernames matching the specified regular expression",
+        "inherit": false,
+        "value": {
+          "name": "regex"
+        }
+      },
+      {
+        "long": "user-show-filter",
+        "description": "show only usernames matching the specified regular expression",
+        "inherit": false,
+        "value": {
+          "name": "regex"
+        }
+      },
+      {
+        "long": "user-image-dir",
+        "description": "directory containing .jpg or .png images of users (eg 'Full Name.png') to use as avatars",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "default-user-image",
+        "description": "path of .jpg to use as the default user image",
+        "inherit": false,
+        "value": {
+          "name": "User-image",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "fixed-user-size",
+        "description": "forces the size of the user image to remain fixed throughout",
+        "inherit": false
+      },
+      {
+        "long": "colour-images",
+        "description": "colourize user images",
+        "inherit": false
+      },
+      {
+        "long": "crop",
+        "description": "crop view on an axis (vertical,horizontal)",
+        "inherit": false,
+        "value": {
+          "name": "axis"
+        }
+      },
+      {
+        "long": "padding",
+        "description": "camera view padding",
+        "inherit": false,
+        "value": {
+          "name": "padding"
+        }
+      },
+      {
+        "long": "multi-sampling",
+        "description": "enable multi-sampling",
+        "inherit": false
+      },
+      {
+        "long": "no-vsync",
+        "description": "disable vsync",
+        "inherit": false
+      },
+      {
+        "long": "bloom-multiplier",
+        "description": "adjust the amount of bloom",
+        "inherit": false,
+        "value": {
+          "name": "multiplier"
+        }
+      },
+      {
+        "long": "bloom-intensity",
+        "description": "adjust the intensity of the bloom",
+        "inherit": false,
+        "value": {
+          "name": "intensity"
+        }
+      },
+      {
+        "long": "max-files",
+        "description": "set the maximum number of files or 0 for no limit. Excess files will be discarded",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "max-file-lag",
+        "description": "max time files of a commit can take to appear. Use -1 for no limit",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "long": "max-user-speed",
+        "description": "max speed users can travel per second",
+        "inherit": false,
+        "value": {
+          "name": "units"
+        }
+      },
+      {
+        "long": "user-friction",
+        "description": "time users take to come to a halt",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "long": "user-scale",
+        "description": "change scale of user avatars",
+        "inherit": false,
+        "value": {
+          "name": "scale"
+        }
+      },
+      {
+        "long": "camera-mode",
+        "description": "camera mode (overview,track)",
+        "inherit": false,
+        "value": {
+          "name": "mode",
+          "provider": {
+            "values": [
+              "overview",
+              "track"
+            ]
+          }
+        }
+      },
+      {
+        "long": "disable-auto-rotate",
+        "description": "disable automatic camera rotation",
+        "inherit": false
+      },
+      {
+        "long": "disable-input",
+        "description": "disable keyboard and mouse input",
+        "inherit": false
+      },
+      {
+        "long": "hide",
+        "description": "hide one or more display elements from the list below: bloom - bloom effect date - current date dirnames - names of directories files - file icons filenames - n",
+        "inherit": false,
+        "value": {
+          "name": "element",
+          "description": "element to hide (Separate multiple elements with commas (eg \"mouse,progress\"))",
+          "provider": {
+            "values": [
+              "bloom",
+              "date",
+              "dirnames",
+              "files",
+              "filenames",
+              "mouse",
+              "progress",
+              "root",
+              "tree",
+              "users",
+              "usernames"
+            ]
+          }
+        }
+      },
+      {
+        "long": "hash-seed",
+        "description": "change the seed of hash function",
+        "inherit": false,
+        "value": {
+          "name": "seed"
+        }
+      },
+      {
+        "long": "caption-file",
+        "description": "caption file (see Caption Log Format)",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "caption-size",
+        "description": "caption size",
+        "inherit": false,
+        "value": {
+          "name": "size"
+        }
+      },
+      {
+        "long": "caption-colour",
+        "description": "caption colour in hex",
+        "inherit": false,
+        "value": {
+          "name": "colour",
+          "description": "colour in hex (eg #ff0000)"
+        }
+      },
+      {
+        "long": "caption-duration",
+        "description": "caption duration",
+        "inherit": false,
+        "value": {
+          "name": "seconds"
+        }
+      },
+      {
+        "long": "caption-offset",
+        "description": "caption horizontal offset (0 to centre captions)",
+        "inherit": false,
+        "value": {
+          "name": "offset"
+        }
+      },
+      {
+        "short": "o",
+        "long": "output-ppm-stream",
+        "description": "output a PPM image stream to a file ('-' for STDOUT). This will automatically hide the progress bar initially and enable 'stop-at-end' unless other behaviour is",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "r",
+        "long": "output-framerate",
+        "description": "framerate of output (25,30,60). Used with --output-ppm-stream",
+        "inherit": false,
+        "value": {
+          "name": "fps",
+          "provider": {
+            "values": [
+              "25",
+              "30",
+              "60",
+              "120"
+            ]
+          }
+        }
+      },
+      {
+        "long": "output-custom-log",
+        "description": "output a custom format log file ('-' for STDOUT)",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "load-config",
+        "description": "load a config file",
+        "inherit": false,
+        "value": {
+          "name": "config-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "save-config",
+        "description": "save a config file with the current options",
+        "inherit": false,
+        "value": {
+          "name": "config-file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "path",
+        "description": "either a supported version control directory, a pre-generated log file (see log commands or the custom log format), a Gource conf file or '-' to read STDIN",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      }
+    ]
+  }
+}
