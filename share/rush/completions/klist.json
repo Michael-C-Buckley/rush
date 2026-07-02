@@ -1,0 +1,75 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "klist",
+    "description": "list Kerberos credential cache tickets",
+    "options": [
+      {
+        "short": "c",
+        "description": "credential cache to list",
+        "inherit": false,
+        "value": {
+          "name": "cache"
+        }
+      },
+      {
+        "long": "cache",
+        "description": "credential cache to list",
+        "inherit": false,
+        "value": {
+          "name": "cache",
+          "style": "equals"
+        }
+      },
+      {
+        "short": "s",
+        "long": "test",
+        "spellings": [
+          "-t"
+        ],
+        "description": "test for there being an active and valid TGT for the local realm of the user in the credential cache",
+        "inherit": false
+      },
+      {
+        "short": "T",
+        "long": "tokens",
+        "description": "display AFS tokens",
+        "inherit": false
+      },
+      {
+        "short": "5",
+        "long": "v5",
+        "description": "display v5 cred cache (this is the default)",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "description": "include ticket flags in short form, each character stands for a specific flag",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "include verbose ticket information",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "long": "list-all",
+        "description": "list the credential caches for the current users, not all cache types supports listing multiple caches",
+        "inherit": false
+      },
+      {
+        "long": "json",
+        "description": "jSON formatted output",
+        "inherit": false
+      },
+      {
+        "long": "hidden",
+        "description": "verbose output",
+        "inherit": false
+      }
+    ]
+  }
+}
