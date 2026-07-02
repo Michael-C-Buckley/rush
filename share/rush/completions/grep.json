@@ -1,0 +1,410 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "grep",
+    "description": "match patterns in input text",
+    "options": [
+      {
+        "long": "help",
+        "description": "print a usage message briefly summarizing these command-line options and the bug-reporting address, then exit",
+        "inherit": false
+      },
+      {
+        "short": "E",
+        "long": "extended-regexp",
+        "description": "interpret PATTERN as an extended regular expression (-E is specified by POSIX.)",
+        "inherit": false
+      },
+      {
+        "short": "F",
+        "long": "fixed-string",
+        "description": "interpret PATTERN as a list of fixed strings, separated by newlines, any of which is to be matched. (-F is specified by POSIX.)",
+        "inherit": false
+      },
+      {
+        "short": "G",
+        "long": "basic-regexp",
+        "description": "interpret PATTERN as a basic regular expression (BRE, see below). This is the default",
+        "inherit": false
+      },
+      {
+        "short": "e",
+        "long": "regexp",
+        "description": "use PATTERN as the pattern. This can be used to specify multiple search patterns, or to protect a pattern beginning with a hyphen (-). (-e is specified by POSIX",
+        "inherit": false,
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "short": "i",
+        "long": "ignore-case",
+        "spellings": [
+          "-y"
+        ],
+        "description": "ignore case distinctions in both the PATTERN and the input files. (-i is specified by POSIX.)",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "invert-match",
+        "description": "invert the sense of matching, to select non-matching lines. (-v is specified by POSIX.)",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "word-regexp",
+        "description": "select only those lines containing matches that form whole words. The test is that the matching substring must either be at the beginning of the line, or preced",
+        "inherit": false
+      },
+      {
+        "short": "x",
+        "long": "line-regexp",
+        "description": "select only those matches that exactly match the whole line. (-x is specified by POSIX.)",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "long": "count",
+        "description": "suppress normal output; instead print a count of matching lines for each input file. With the -v, --invert-match option, count non-matching lines. (-c is specif",
+        "inherit": false
+      },
+      {
+        "long": "color",
+        "description": "surround the matched (non-empty) strings, matching lines, context lines, file names, line numbers, byte offsets, and separators (for fields and groups of contex",
+        "inherit": false,
+        "value": {
+          "name": "when",
+          "provider": "grep.color-modes"
+        }
+      },
+      {
+        "short": "L",
+        "long": "files-without-match",
+        "description": "suppress normal output; instead print the name of each input file from which no output would normally have been printed. The scanning will stop on the first mat",
+        "inherit": false,
+        "excludes": [
+          "--files-with-matches",
+          "-l"
+        ]
+      },
+      {
+        "short": "l",
+        "long": "files-with-matches",
+        "description": "suppress normal output; instead print the name of each input file from which output would normally have been printed. The scanning will stop on the first match.",
+        "inherit": false,
+        "excludes": [
+          "--files-without-match",
+          "-L"
+        ]
+      },
+      {
+        "short": "m",
+        "long": "max-count",
+        "description": "stop reading a file after NUM matching lines. If the input is standard input from a regular file, and NUM matching lines are output, grep ensures that the stand",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "short": "o",
+        "long": "only-matching",
+        "description": "print only the matched (non-empty) parts of a matching line, with each such part on a separate output line",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "aliases": [
+          "silent"
+        ],
+        "description": "quiet; do not write anything to standard output. Exit immediately with zero status if any match is found, even if an error was detected. Also see the -s or --no",
+        "inherit": false
+      },
+      {
+        "short": "s",
+        "long": "no-messages",
+        "description": "suppress error messages about nonexistent or unreadable files. Portability note: unlike GNU grep, 7th Edition Unix grep did not conform to POSIX, because it lac",
+        "inherit": false
+      },
+      {
+        "short": "b",
+        "long": "byte-offset",
+        "description": "print the 0-based byte offset within the input file before each line of output. If -o (--only-matching) is specified, print the offset of the matching part itse",
+        "inherit": false
+      },
+      {
+        "short": "H",
+        "long": "with-filename",
+        "description": "print the file name for each match. This is the default when there is more than one file to search",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "no-filename",
+        "description": "suppress the prefixing of file names on output. This is the default when there is only one file (or only standard input) to search",
+        "inherit": false
+      },
+      {
+        "long": "label",
+        "description": "display input actually coming from standard input as input coming from file LABEL. This is especially useful when implementing tools like zgrep, e.g., gzip -cd",
+        "inherit": false,
+        "value": {
+          "name": "label"
+        }
+      },
+      {
+        "short": "n",
+        "long": "line-number",
+        "description": "prefix each line of output with the 1-based line number within its input file. (-n is specified by POSIX.)",
+        "inherit": false
+      },
+      {
+        "short": "T",
+        "long": "initial-tab",
+        "description": "make sure that the first character of actual line content lies on a tab stop, so that the alignment of tabs looks normal. This is useful with options that prefi",
+        "inherit": false
+      },
+      {
+        "short": "u",
+        "long": "unix-byte-offsets",
+        "description": "report Unix-style byte offsets. This switch causes grep to report byte offsets as if the file were a Unix-style text file, i.e., with CR characters stripped off",
+        "inherit": false
+      },
+      {
+        "long": "null",
+        "description": "output a zero byte (the ASCII NUL character) instead of the character that normally follows a file name. For example, grep -lZ outputs a zero byte after each fi",
+        "inherit": false
+      },
+      {
+        "short": "A",
+        "long": "after-context",
+        "description": "print num lines of trailing context after each match",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "short": "B",
+        "long": "before-context",
+        "description": "print num lines of leading context before each match. See also the -A and -C options",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "short": "C",
+        "long": "context",
+        "description": "print NUM lines of output context. Places a line containing a group separator (--) between contiguous groups of matches. With the -o or --only-matching option,",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "short": "a",
+        "long": "text",
+        "description": "treat all files as ASCII text. Normally grep will simply print ``Binary file ... matches'' if files contain binary characters. Use of this option forces grep to",
+        "inherit": false
+      },
+      {
+        "long": "binary-files",
+        "description": "controls searching and printing of binary files",
+        "inherit": false,
+        "value": {
+          "name": "value",
+          "provider": "grep.binary-file-modes"
+        }
+      },
+      {
+        "short": "D",
+        "long": "devices",
+        "description": "specify the demanded action for devices, FIFOs and sockets",
+        "inherit": false,
+        "value": {
+          "name": "action",
+          "provider": "grep.device-actions"
+        }
+      },
+      {
+        "short": "d",
+        "long": "directories",
+        "description": "specify the demanded action for directories",
+        "inherit": false,
+        "value": {
+          "name": "action",
+          "provider": "grep.directory-actions"
+        }
+      },
+      {
+        "long": "exclude",
+        "description": "note that --exclude patterns take priority over --include patterns, and if no --include pattern is specified, all files are searched that are not excluded. Patt",
+        "inherit": false,
+        "value": {
+          "name": "glob",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "exclude-dir",
+        "description": "if -R is specified, only directories matching the given filename pattern are searched. Note that --exclude-dir patterns take priority over --include-dir pattern",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "dir",
+          "required": false,
+          "style": "optional",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "I",
+        "description": "ignore binary files. This option is equivalent to --binary-file=without-match option",
+        "inherit": false
+      },
+      {
+        "long": "include",
+        "description": "if specified, only files matching the given filename pattern are searched. Note that --exclude patterns take priority over --include patterns. Patterns are matc",
+        "inherit": false,
+        "value": {
+          "name": "glob",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "include-dir",
+        "description": "if -R is specified, only directories matching the given filename pattern are searched. Note that --exclude-dir patterns take priority over --include-dir pattern",
+        "inherit": false,
+        "value": {
+          "name": "dir",
+          "required": false,
+          "style": "optional",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "R",
+        "long": "recursive",
+        "spellings": [
+          "-r"
+        ],
+        "description": "recursively search subdirectories listed",
+        "inherit": false
+      },
+      {
+        "long": "line-buffered",
+        "description": "force output to be line buffered. By default, output is line buffered when standard output is a terminal and block buffered otherwise",
+        "inherit": false
+      },
+      {
+        "short": "U",
+        "long": "binary",
+        "description": "search binary files, but do not attempt to print them",
+        "inherit": false
+      },
+      {
+        "short": "J",
+        "spellings": [
+          "-bz2decompress"
+        ],
+        "description": "decompress the bzip2(1) compressed file before looking for the text",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "print version number of grep to the standard output stream",
+        "inherit": false
+      },
+      {
+        "short": "P",
+        "long": "perl-regexp",
+        "description": "interpret pattern as a Perl regular expression",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "long": "file",
+        "description": "obtain patterns from FILE, one per line. The empty file contains zero patterns, and therefore matches nothing. (-f is specified by POSIX.)",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "search-pattern",
+          "index": 0
+        },
+        {
+          "name": "file",
+          "provider": "builtin.files",
+          "index": 1
+        }
+      ]
+    },
+    "providers": {
+      "grep.color-modes": {
+        "candidates": [
+          {
+            "value": "never"
+          },
+          {
+            "value": "always"
+          },
+          {
+            "value": "auto"
+          }
+        ]
+      },
+      "grep.binary-file-modes": {
+        "candidates": [
+          {
+            "value": "binary",
+            "description": "search binary files but do not print them"
+          },
+          {
+            "value": "without-match",
+            "description": "do not search binary files"
+          },
+          {
+            "value": "text",
+            "description": "treat all files as text"
+          }
+        ]
+      },
+      "grep.device-actions": {
+        "candidates": [
+          {
+            "value": "read"
+          },
+          {
+            "value": "skip"
+          }
+        ]
+      },
+      "grep.directory-actions": {
+        "candidates": [
+          {
+            "value": "read"
+          },
+          {
+            "value": "skip"
+          },
+          {
+            "value": "recurse"
+          }
+        ]
+      }
+    }
+  }
+}
