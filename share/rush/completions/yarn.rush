@@ -1,0 +1,64 @@
+__rush_complete_yarn_package_json_dir() {
+    dir=$PWD
+    while [ "$dir" != / ]; do
+        if [ -f "$dir/package.json" ]; then
+            printf '%s\n' "$dir"
+            return 0
+        fi
+        dir=${dir%/*}
+        [ -n "$dir" ] || dir=/
+    done
+    [ -f /package.json ] && printf '/\n'
+}
+
+__rush_complete_yarn_package_json_keys() {
+    dir=$(__rush_complete_yarn_package_json_dir) || return 0
+    [ -n "$dir" ] || return 0
+    command -v node >/dev/null 2>&1 || return 0
+    node -e '
+const fs = require("fs");
+const pkg = JSON.parse(fs.readFileSync(process.argv[1], "utf8"));
+const sections = process.argv.slice(2).join(" ").split(/\s+/).filter(Boolean);
+for (const section of sections) {
+  for (const name of Object.keys(pkg[section] || {})) console.log(name);
+}
+' "$dir/package.json" $section 2>/dev/null
+}
+
+__rush_complete_yarn_scripts() {
+    __rush_complete_yarn_package_json_keys scripts | while IFS= read -r script; do
+        [ -n "$script" ] && rush_complete candidate "$script" --kind subcommand --description 'package script'
+    done
+}
+
+__rush_complete_yarn_dependencies() {
+    __rush_complete_yarn_package_json_keys 'dependencies devDependencies optionalDependencies peerDependencies' | while IFS= read -r dependency; do
+        [ -n "$dependency" ] && rush_complete candidate "$dependency" --kind package --description dependency
+    done
+}
+
+__rush_complete_yarn_workspaces() {
+    dir=$(__rush_complete_yarn_package_json_dir) || return 0
+    [ -n "$dir" ] || return 0
+    command -v node >/dev/null 2>&1 || return 0
+    node -e '
+const fs = require("fs");
+const path = require("path");
+const pkg = JSON.parse(fs.readFileSync(path.join(process.argv[1], "package.json"), "utf8"));
+const workspaces = Array.isArray(pkg.workspaces) ? pkg.workspaces : (pkg.workspaces && pkg.workspaces.packages) || [];
+for (const pattern of workspaces) {
+  const base = pattern.replace(/\/\*\*?$/ , "");
+  const full = path.join(process.argv[1], base);
+  if (!fs.existsSync(full)) continue;
+  for (const entry of fs.readdirSync(full)) {
+    const pkgPath = path.join(full, entry, "package.json");
+    try {
+      const child = JSON.parse(fs.readFileSync(pkgPath, "utf8"));
+      if (child.name) console.log(child.name);
+    } catch (_) {}
+  }
+}
+' "$dir" 2>/dev/null | while IFS= read -r workspace; do
+        [ -n "$workspace" ] && rush_complete candidate "$workspace" --kind package --description workspace
+    done
+}

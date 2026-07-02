@@ -1,0 +1,1436 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "yarn",
+    "description": "manage packages and run package scripts",
+    "options": [
+      {
+        "long": "disable-pnp",
+        "description": "disable the Plug'n'Play installation"
+      },
+      {
+        "long": "emoji",
+        "description": "enable emoji in output (default: true)",
+        "value": {
+          "name": "bool",
+          "provider": {
+            "values": [
+              {
+                "value": "true"
+              },
+              {
+                "value": "false"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "enable-pnp",
+        "aliases": [
+          "pnp"
+        ],
+        "description": "enable the Plug'n'Play installation"
+      },
+      {
+        "long": "flat",
+        "description": "only allow one version of a package"
+      },
+      {
+        "long": "focus",
+        "description": "focus on a single workspace by installing remote copies of its sibling workspaces"
+      },
+      {
+        "long": "force",
+        "description": "install and build packages even if they were built before, overwrite lockfile"
+      },
+      {
+        "long": "frozen-lockfile",
+        "description": "don't generate a lockfile and fail if an update is needed"
+      },
+      {
+        "long": "global-folder",
+        "description": "specify a custom folder to store global packages",
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "har",
+        "description": "save HAR output of network traffic"
+      },
+      {
+        "long": "https-proxy",
+        "description": "",
+        "value": {
+          "name": "path",
+          "provider": {
+            "values": [
+              {
+                "value": "https://"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "ignore-engines",
+        "description": "ignore engines check"
+      },
+      {
+        "long": "ignore-optional",
+        "description": "ignore optional dependencies"
+      },
+      {
+        "long": "ignore-platform",
+        "description": "ignore platform checks"
+      },
+      {
+        "long": "ignore-scripts",
+        "description": "don't run lifecycle scripts"
+      },
+      {
+        "long": "json",
+        "description": "format Yarn log messages as lines of JSON (see jsonlines.org)"
+      },
+      {
+        "long": "link-duplicates",
+        "description": "create hardlinks to the repeated modules in node_modules"
+      },
+      {
+        "long": "link-folder",
+        "description": "specify a custom folder to store global links",
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "modules-folder",
+        "description": "rather than installing modules into the node_modules folder relative to the cwd, output them here",
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "mutex",
+        "description": "use a mutex to ensure only one yarn instance is executing",
+        "value": [
+          {
+            "name": "type",
+            "provider": {
+              "values": [
+                {
+                  "value": ":"
+                }
+              ]
+            }
+          },
+          {
+            "name": "specifier",
+            "provider": {
+              "values": [
+                {
+                  "value": ":"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "long": "network-concurrency",
+        "description": "maximum number of concurrent network requests",
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "network-timeout",
+        "description": "tCP timeout for network requests",
+        "value": {
+          "name": "milliseconds"
+        }
+      },
+      {
+        "long": "no-bin-links",
+        "description": "don't generate bin links when setting up packages"
+      },
+      {
+        "long": "no-default-rc",
+        "description": "prevent Yarn from automatically detecting yarnrc and npmrc files"
+      },
+      {
+        "long": "no-lockfile",
+        "description": "don't read or generate a lockfile"
+      },
+      {
+        "long": "non-interactive",
+        "description": "do not show interactive prompts"
+      },
+      {
+        "long": "no-node-version-check",
+        "description": "do not warn when using a potentially unsupported Node version"
+      },
+      {
+        "long": "no-progress",
+        "description": "disable progress bar"
+      },
+      {
+        "long": "offline",
+        "description": "trigger an error if any required dependencies are not available in local cache"
+      },
+      {
+        "long": "otp",
+        "description": "one-time password for two factor authentication",
+        "value": {
+          "name": "otpcode"
+        }
+      },
+      {
+        "long": "prefer-offline",
+        "description": "use network only if dependencies are not available in local cache"
+      },
+      {
+        "long": "preferred-cache-folder",
+        "description": "specify a custom folder to store the yarn cache if possible",
+        "value": {
+          "name": "value",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "prod",
+        "aliases": [
+          "production"
+        ],
+        "description": "",
+        "value": {
+          "name": "value"
+        }
+      },
+      {
+        "long": "proxy",
+        "description": "",
+        "value": {
+          "name": "host"
+        }
+      },
+      {
+        "long": "pure-lockfile",
+        "description": "don't generate a lockfile"
+      },
+      {
+        "long": "registry",
+        "description": "override configuration registry",
+        "value": {
+          "name": "url"
+        }
+      },
+      {
+        "short": "s",
+        "long": "silent",
+        "description": "skip Yarn console logs, other types of logs (script output) will be printed"
+      },
+      {
+        "long": "scripts-prepend-node-path",
+        "description": "prepend the node executable dir to the PATH in scripts",
+        "value": {
+          "name": "value",
+          "provider": {
+            "values": [
+              {
+                "value": "true"
+              },
+              {
+                "value": "false"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "skip-integrity-check",
+        "description": "run install without checking if node_modules is installed"
+      },
+      {
+        "long": "strict-semver",
+        "description": ""
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "output the version number"
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "output usage information"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "script",
+          "description": "package script to run",
+          "index": 0,
+          "provider": "yarn.scripts"
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "add",
+        "description": "installs a package and any packages that it depends on",
+        "options": [
+          {
+            "short": "W",
+            "long": "ignore-workspace-root-check",
+            "description": "required to run yarn add inside a workspace root"
+          },
+          {
+            "short": "D",
+            "long": "dev",
+            "description": "save package to your `devDependencies`"
+          },
+          {
+            "short": "P",
+            "long": "peer",
+            "description": "save package to your `peerDependencies`"
+          },
+          {
+            "short": "O",
+            "long": "optional",
+            "description": "save package to your `optionalDependencies`"
+          },
+          {
+            "short": "E",
+            "long": "exact",
+            "description": "install exact version"
+          },
+          {
+            "short": "T",
+            "long": "tilde",
+            "description": "install most recent release with the same minor version"
+          },
+          {
+            "short": "A",
+            "long": "audit",
+            "description": "run vulnerability audit on installed packages"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "audit",
+        "description": "perform a vulnerability audit against the installed packages",
+        "options": [
+          {
+            "long": "summary",
+            "description": "only print the summary"
+          },
+          {
+            "long": "groups",
+            "description": "only audit dependencies from listed groups. Default: devDependencies, dependencies, optionalDependencies",
+            "value": {
+              "name": "group_name"
+            }
+          },
+          {
+            "long": "level",
+            "description": "only print advisories with severity greater than or equal to one of the following: info|low|moderate|high|critical. Default: info",
+            "value": {
+              "name": "severity",
+              "provider": {
+                "values": [
+                  {
+                    "value": "info"
+                  },
+                  {
+                    "value": "low"
+                  },
+                  {
+                    "value": "moderate"
+                  },
+                  {
+                    "value": "high"
+                  },
+                  {
+                    "value": "critical"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information"
+          }
+        ]
+      },
+      {
+        "name": "autoclean",
+        "description": "cleans and removes unnecessary files from package dependencies",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information"
+          },
+          {
+            "short": "i",
+            "long": "init",
+            "description": "creates the .yarnclean file if it does not exist, and adds the default entries"
+          },
+          {
+            "short": "f",
+            "long": "force",
+            "description": "if a .yarnclean file exists, run the clean process"
+          }
+        ]
+      },
+      {
+        "name": "bin",
+        "description": "displays the location of the yarn bin folder",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information"
+          }
+        ]
+      },
+      {
+        "name": "cache",
+        "description": "yarn cache list will print out every cached package",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information"
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "clean",
+            "description": "clear global cache"
+          },
+          {
+            "name": "dir",
+            "description": "print yarn\u2019s global cache path"
+          },
+          {
+            "name": "list",
+            "description": "print out every cached package",
+            "options": [
+              {
+                "long": "pattern",
+                "description": "filter cached packages by pattern",
+                "value": {
+                  "name": "pattern"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "config",
+        "description": "configure yarn",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information"
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "set",
+            "description": "sets the config key to a certain value",
+            "options": [
+              {
+                "short": "g",
+                "long": "global",
+                "description": "set global config"
+              }
+            ]
+          },
+          {
+            "name": "get",
+            "description": "print the value for a given key",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "delete",
+            "description": "deletes a given key from the config",
+            "arguments": {
+              "states": [
+                {
+                  "name": "value",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "displays the current configuration"
+          }
+        ]
+      },
+      {
+        "name": "create",
+        "description": "creates new projects from any create-* starter kits",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "cli",
+              "provider": "builtin.executables",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "exec",
+        "description": "",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information"
+          }
+        ]
+      },
+      {
+        "name": "generate-lock-entry",
+        "description": "generates a lock file entry",
+        "options": [
+          {
+            "long": "use-manifest",
+            "description": "specify which manifest file to use for generating lock entry",
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "resolved",
+            "description": "generate from <*.tgz>#<hash>",
+            "value": {
+              "name": "value",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information"
+          }
+        ]
+      },
+      {
+        "name": "global",
+        "description": "manage yarn globally",
+        "options": [
+          {
+            "long": "prefix",
+            "description": "bin prefix to use to install binaries",
+            "value": {
+              "name": "prefix"
+            }
+          },
+          {
+            "long": "latest",
+            "description": "bin prefix to use to install binaries"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information"
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "add",
+            "description": "install globally packages on your operating system",
+            "arguments": {
+              "states": [
+                {
+                  "name": "package",
+                  "index": 0,
+                  "repeatable": true
+                }
+              ]
+            }
+          },
+          {
+            "name": "bin",
+            "description": "displays the location of the yarn global bin folder"
+          },
+          {
+            "name": "dir",
+            "description": "displays the location of the global installation folder"
+          },
+          {
+            "name": "ls",
+            "description": "list globally installed packages (deprecated)"
+          },
+          {
+            "name": "list",
+            "description": "list globally installed packages"
+          },
+          {
+            "name": "remove",
+            "description": "remove globally installed packages",
+            "options": [
+              {
+                "short": "W",
+                "long": "ignore-workspace-root-check",
+                "description": "required to run yarn remove inside a workspace root"
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "output usage information"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "package",
+                  "index": 0,
+                  "repeatable": true,
+                  "provider": "yarn.dependencies"
+                }
+              ]
+            }
+          },
+          {
+            "name": "upgrade",
+            "description": "upgrade globally installed packages",
+            "options": [
+              {
+                "short": "S",
+                "long": "scope",
+                "description": "upgrade packages under the specified scope",
+                "value": {
+                  "name": "scope"
+                }
+              },
+              {
+                "short": "L",
+                "long": "latest",
+                "description": "list the latest version of packages"
+              },
+              {
+                "short": "E",
+                "long": "exact",
+                "description": "install exact version. Only used when --latest is specified"
+              },
+              {
+                "short": "P",
+                "long": "pattern",
+                "description": "upgrade packages that match pattern",
+                "value": {
+                  "name": "pattern"
+                }
+              },
+              {
+                "short": "T",
+                "long": "tilde",
+                "description": "install most recent release with the same minor version. Only used when --latest is specified"
+              },
+              {
+                "short": "C",
+                "long": "caret",
+                "description": "install most recent release with the same major version. Only used when --latest is specified"
+              },
+              {
+                "short": "A",
+                "long": "audit",
+                "description": "run vulnerability audit on installed packages"
+              },
+              {
+                "short": "h",
+                "long": "help",
+                "description": "output usage information"
+              }
+            ]
+          },
+          {
+            "name": "upgrade-interactive",
+            "description": "display the outdated packages before performing any upgrade",
+            "options": [
+              {
+                "long": "latest",
+                "description": "use the version tagged latest in the registry"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "output usage information"
+      },
+      {
+        "name": "import",
+        "description": "generates yarn.lock from an npm package-lock.json file"
+      },
+      {
+        "name": "info",
+        "description": "show information about a package"
+      },
+      {
+        "name": "init",
+        "description": "interactively creates or updates a package.json file",
+        "options": [
+          {
+            "short": "y",
+            "long": "yes",
+            "description": "use default options"
+          },
+          {
+            "short": "p",
+            "long": "private",
+            "description": "use default options and private true"
+          },
+          {
+            "short": "i",
+            "long": "install",
+            "description": "install a specific Yarn release",
+            "value": {
+              "name": "version"
+            }
+          },
+          {
+            "short": "2",
+            "description": "generates the project using Yarn 2"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information"
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "install all the dependencies listed within package.json",
+        "options": [
+          {
+            "short": "A",
+            "long": "audit",
+            "description": "run vulnerability audit on installed packages"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information"
+          }
+        ]
+      },
+      {
+        "name": "licenses",
+        "description": "",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list licenses for installed packages"
+          },
+          {
+            "name": "generate-disclaimer",
+            "description": "list of licenses from all the packages"
+          }
+        ]
+      },
+      {
+        "name": "link",
+        "description": "symlink a package folder during development",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "list",
+        "description": "lists all dependencies for the current working directory",
+        "options": [
+          {
+            "long": "depth",
+            "description": "restrict the depth of the dependencies"
+          },
+          {
+            "long": "pattern",
+            "description": "filter the list of dependencies by the pattern"
+          }
+        ]
+      },
+      {
+        "name": "login",
+        "description": "store registry username and email"
+      },
+      {
+        "name": "logout",
+        "description": "clear registry username and email"
+      },
+      {
+        "name": "node",
+        "description": ""
+      },
+      {
+        "name": "outdated",
+        "description": "checks for outdated package dependencies",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information"
+          }
+        ]
+      },
+      {
+        "name": "owner",
+        "description": "manage package owners",
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "lists all of the owners of a package",
+            "arguments": {
+              "states": [
+                {
+                  "name": "package",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "add",
+            "description": "adds the user as an owner of the package",
+            "arguments": {
+              "states": [
+                {
+                  "name": "package",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove",
+            "description": "removes the user as an owner of the package",
+            "arguments": {
+              "states": [
+                {
+                  "name": "user",
+                  "index": 0
+                },
+                {
+                  "name": "package",
+                  "index": 1
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "pack",
+        "description": "creates a compressed gzip archive of package dependencies",
+        "options": [
+          {
+            "long": "filename",
+            "description": "creates a compressed gzip archive of package dependencies and names the file filename"
+          }
+        ]
+      },
+      {
+        "name": "policies",
+        "description": "defines project-wide policies for your project",
+        "subcommands": [
+          {
+            "name": "set-version",
+            "description": "will download the latest stable release",
+            "options": [
+              {
+                "long": "rc",
+                "description": "download the latest rc release"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "publish",
+        "description": "publishes a package to the npm registry",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information"
+          },
+          {
+            "long": "major",
+            "description": "auto-increment major version number"
+          },
+          {
+            "long": "minor",
+            "description": "auto-increment minor version number"
+          },
+          {
+            "long": "patch",
+            "description": "auto-increment patch version number"
+          },
+          {
+            "long": "premajor",
+            "description": "auto-increment premajor version number"
+          },
+          {
+            "long": "preminor",
+            "description": "auto-increment preminor version number"
+          },
+          {
+            "long": "prepatch",
+            "description": "auto-increment prepatch version number"
+          },
+          {
+            "long": "prerelease",
+            "description": "auto-increment prerelease version number"
+          },
+          {
+            "long": "preid",
+            "description": "add a custom identifier to the prerelease",
+            "value": {
+              "name": "preid"
+            }
+          },
+          {
+            "long": "message",
+            "description": "message",
+            "value": {
+              "name": "message"
+            }
+          },
+          {
+            "long": "no-git-tag-version",
+            "description": "no git tag version"
+          },
+          {
+            "long": "no-commit-hooks",
+            "description": "bypass git hooks when committing new version"
+          },
+          {
+            "long": "access",
+            "description": "access",
+            "value": {
+              "name": "access"
+            }
+          },
+          {
+            "long": "tag",
+            "description": "tag",
+            "value": {
+              "name": "tag"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "Tarball-or-Folder",
+              "provider": "builtin.directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "remove",
+        "description": "remove installed package",
+        "options": [
+          {
+            "short": "W",
+            "long": "ignore-workspace-root-check",
+            "description": "required to run yarn remove inside a workspace root"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "value",
+              "index": 0,
+              "repeatable": true,
+              "provider": "yarn.dependencies"
+            }
+          ]
+        }
+      },
+      {
+        "name": "run",
+        "description": "runs a defined package script",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "script",
+              "description": "script to run from your package.json",
+              "provider": "yarn.scripts",
+              "index": 0
+            },
+            {
+              "name": "env",
+              "description": "lists environment variables available to scripts",
+              "provider": {
+                "values": [
+                  "env"
+                ]
+              },
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "tag",
+        "description": "add, remove, or list tags on a package"
+      },
+      {
+        "name": "team",
+        "description": "maintain team memberships",
+        "subcommands": [
+          {
+            "name": "create",
+            "description": "create a new team",
+            "arguments": {
+              "states": [
+                {
+                  "name": "<scope:team>",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "destroy",
+            "description": "destroys an existing team",
+            "arguments": {
+              "states": [
+                {
+                  "name": "<scope:team>",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "add",
+            "description": "add a user to an existing team",
+            "arguments": {
+              "states": [
+                {
+                  "name": "<scope:team>",
+                  "index": 0
+                },
+                {
+                  "name": "<user>",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove",
+            "description": "remove a user from a team they belong to",
+            "arguments": {
+              "states": [
+                {
+                  "name": "<scope:team>-<user>",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "if performed on an organization name, will return a list of existing teams under that organization. If performed on a team, it will instead return a list of all",
+            "arguments": {
+              "states": [
+                {
+                  "name": "<scope>|<scope:team>",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "unlink",
+        "description": "unlink a previously created symlink for a package"
+      },
+      {
+        "name": "unplug",
+        "description": ""
+      },
+      {
+        "name": "upgrade",
+        "description": "upgrades packages to their latest version based on the specified range",
+        "options": [
+          {
+            "short": "S",
+            "long": "scope",
+            "description": "upgrade packages under the specified scope",
+            "value": {
+              "name": "scope"
+            }
+          },
+          {
+            "short": "L",
+            "long": "latest",
+            "description": "list the latest version of packages"
+          },
+          {
+            "short": "E",
+            "long": "exact",
+            "description": "install exact version. Only used when --latest is specified"
+          },
+          {
+            "short": "P",
+            "long": "pattern",
+            "description": "upgrade packages that match pattern",
+            "value": {
+              "name": "pattern"
+            }
+          },
+          {
+            "short": "T",
+            "long": "tilde",
+            "description": "install most recent release with the same minor version. Only used when --latest is specified"
+          },
+          {
+            "short": "C",
+            "long": "caret",
+            "description": "install most recent release with the same major version. Only used when --latest is specified"
+          },
+          {
+            "short": "A",
+            "long": "audit",
+            "description": "run vulnerability audit on installed packages"
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0,
+              "repeatable": true,
+              "provider": "yarn.dependencies"
+            }
+          ]
+        }
+      },
+      {
+        "name": "upgrade-interactive",
+        "description": "upgrades packages in interactive mode",
+        "options": [
+          {
+            "long": "latest",
+            "description": "use the version tagged latest in the registry"
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "update version of your package",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information"
+          },
+          {
+            "long": "new-version",
+            "description": "new version",
+            "value": {
+              "name": "version"
+            }
+          },
+          {
+            "long": "major",
+            "description": "auto-increment major version number"
+          },
+          {
+            "long": "minor",
+            "description": "auto-increment minor version number"
+          },
+          {
+            "long": "patch",
+            "description": "auto-increment patch version number"
+          },
+          {
+            "long": "premajor",
+            "description": "auto-increment premajor version number"
+          },
+          {
+            "long": "preminor",
+            "description": "auto-increment preminor version number"
+          },
+          {
+            "long": "prepatch",
+            "description": "auto-increment prepatch version number"
+          },
+          {
+            "long": "prerelease",
+            "description": "auto-increment prerelease version number"
+          },
+          {
+            "long": "preid",
+            "description": "add a custom identifier to the prerelease",
+            "value": {
+              "name": "preid"
+            }
+          },
+          {
+            "long": "message",
+            "description": "message",
+            "value": {
+              "name": "message"
+            }
+          },
+          {
+            "long": "no-git-tag-version",
+            "description": "no git tag version"
+          },
+          {
+            "long": "no-commit-hooks",
+            "description": "bypass git hooks when committing new version"
+          },
+          {
+            "long": "access",
+            "description": "access",
+            "value": {
+              "name": "access"
+            }
+          },
+          {
+            "long": "tag",
+            "description": "tag",
+            "value": {
+              "name": "tag"
+            }
+          }
+        ]
+      },
+      {
+        "name": "versions",
+        "description": "displays version information of the currently installed Yarn, Node.js, and its dependencies"
+      },
+      {
+        "name": "why",
+        "description": "show information about why a package is installed",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "output usage information"
+          },
+          {
+            "long": "peers",
+            "description": "print the peer dependencies that match the specified name"
+          },
+          {
+            "short": "R",
+            "long": "recursive",
+            "description": "list, for each workspace, what are all the paths that lead to the dependency"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0,
+              "provider": "yarn.dependencies"
+            }
+          ]
+        }
+      },
+      {
+        "name": "workspace",
+        "description": "manage workspace"
+      },
+      {
+        "name": "workspaces",
+        "description": "show information about your workspaces",
+        "options": [
+          {
+            "spellings": [
+              "subcommand"
+            ],
+            "description": "",
+            "value": {
+              "name": "value",
+              "provider": {
+                "values": [
+                  {
+                    "value": "info"
+                  },
+                  {
+                    "value": "run"
+                  }
+                ]
+              }
+            }
+          },
+          {
+            "spellings": [
+              "flags"
+            ],
+            "description": ""
+          }
+        ]
+      },
+      {
+        "name": "set",
+        "description": "set global Yarn options",
+        "subcommands": [
+          {
+            "name": "resolution",
+            "description": "enforce a package resolution",
+            "options": [
+              {
+                "short": "s",
+                "long": "save",
+                "description": "persist the resolution inside the top-level manifest"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "descriptor",
+                  "description": "a descriptor for the package, in the form of 'lodash@npm:^1.2.3'",
+                  "index": 0
+                },
+                {
+                  "name": "resolution",
+                  "description": "the version of the package to resolve",
+                  "index": 1
+                }
+              ]
+            }
+          },
+          {
+            "name": "version",
+            "description": "lock the Yarn version used by the project",
+            "options": [
+              {
+                "long": "only-if-needed",
+                "description": "only lock the Yarn version if it isn't already locked"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "version",
+                  "description": "use the specified version, which can also be a Yarn 2 build (e.g 2.0.0-rc.30) or a Yarn 1 build (e.g 1.22.1)",
+                  "provider": {
+                    "values": [
+                      {
+                        "value": "from-sources"
+                      },
+                      "latest",
+                      "canary",
+                      "classic",
+                      "self"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "yarn.scripts": {
+        "function": "__rush_complete_yarn_scripts"
+      },
+      "yarn.dependencies": {
+        "function": "__rush_complete_yarn_dependencies"
+      },
+      "yarn.workspaces": {
+        "function": "__rush_complete_yarn_workspaces"
+      }
+    }
+  }
+}
