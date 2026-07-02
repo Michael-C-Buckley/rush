@@ -1,0 +1,113 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "wing",
+    "subcommands": [
+      {
+        "name": "run",
+        "description": "runs a Wing executable in the Wing Console",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "executable",
+              "description": "Executable .wx file",
+              "provider": "files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "compile",
+        "description": "compiles a Wing program",
+        "options": [
+          {
+            "short": "o",
+            "long": "out-dir",
+            "description": "output directory",
+            "value": {
+              "name": "out-dir",
+              "provider": "directories"
+            }
+          },
+          {
+            "short": "t",
+            "long": "target",
+            "description": "target platform (options: 'tf-aws', 'sim')",
+            "value": {
+              "name": "target",
+              "provider": "targets"
+            }
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "entrypoint",
+              "description": "Program .w entrypoint",
+              "provider": "files"
+            }
+          ]
+        }
+      },
+      {
+        "name": "upgrade",
+        "description": "upgrades the Wing toolchain to the latest version",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "display help for command"
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "display help for command",
+        "arguments": {
+          "states": [
+            {
+              "name": "command",
+              "provider": "commands"
+            }
+          ]
+        }
+      }
+    ],
+    "description": "Wing language toolchain",
+    "providers": {
+      "files": {
+        "builtin": "files"
+      },
+      "directories": {
+        "builtin": "directories"
+      },
+      "targets": {
+        "values": [
+          "tf-aws",
+          "sim"
+        ]
+      },
+      "commands": {
+        "values": [
+          "run",
+          "compile",
+          "upgrade",
+          "help"
+        ]
+      }
+    }
+  }
+}
