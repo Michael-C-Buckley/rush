@@ -1,0 +1,47 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "git-profile",
+    "description": "switch git profiles",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "help for git-profile script",
+        "inherit": false
+      },
+      {
+        "long": "config",
+        "short": "c",
+        "description": "config file (default \"~/.gitprofile\")",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "use",
+        "description": "use a profile",
+        "arguments": {
+          "states": [
+            {
+              "name": "profile",
+              "description": "Profile you want to apply in this repository",
+              "index": 0,
+              "provider": "git-profile.profiles"
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "git-profile.profiles": {
+        "function": "__rush_complete_git_profile_profiles"
+      }
+    }
+  }
+}

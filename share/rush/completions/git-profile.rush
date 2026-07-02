@@ -1,0 +1,12 @@
+__rush_complete_git_profile_profiles() {
+  git-profile list 2>/dev/null | while IFS= read -r line; do
+    case "$line" in
+      '['*']')
+        profile=${line#'['}
+        profile=${profile%']'}
+        test -n "$profile" || continue
+        rush_complete candidate "$profile" --kind plain --description "use profile $profile"
+        ;;
+    esac
+  done
+}
