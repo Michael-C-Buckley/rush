@@ -1,0 +1,56 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "preset",
+    "description": "apply scaffolding presets",
+    "options": [
+      { "long": "path", "short": "p", "description": "look in preset subdirectory", "inherit": false, "value": { "name": "path", "provider": "builtin.directories" } },
+      { "long": "tag", "short": "t", "description": "use repository branch or tag", "inherit": false, "value": { "name": "tag" } },
+      { "long": "no-ssh", "description": "do not use SSH for cloning", "inherit": false },
+      { "long": "no-cache", "description": "skip cached repository", "inherit": false },
+      { "long": "help", "short": "h", "description": "show help", "inherit": false },
+      { "long": "version", "short": "v", "description": "show version", "inherit": false },
+      { "long": "no-interaction", "description": "disable interactions", "inherit": true },
+      { "long": "debug", "description": "show debug information", "inherit": true },
+      { "long": "silent", "description": "suppress output", "inherit": true }
+    ],
+    "subcommands": [
+      {
+        "name": "apply",
+        "description": "apply a preset",
+        "options": [
+          { "long": "path", "short": "p", "description": "look in preset subdirectory", "inherit": false, "value": { "name": "path", "provider": "builtin.directories" } },
+          { "long": "tag", "short": "t", "description": "use repository branch or tag", "inherit": false, "value": { "name": "tag" } },
+          { "long": "no-ssh", "description": "do not use SSH for cloning", "inherit": false },
+          { "long": "no-cache", "description": "skip cached repository", "inherit": false }
+        ],
+        "arguments": {
+          "states": [
+            { "name": "resolvable", "description": "repository or preset path", "provider": ["builtin.directories", "builtin.files"], "index": 0 },
+            { "name": "target", "description": "target directory", "provider": "builtin.directories", "index": 1 }
+          ]
+        }
+      },
+      {
+        "name": "init",
+        "description": "create a preset",
+        "arguments": {
+          "states": [
+            { "name": "target", "description": "target directory", "provider": "builtin.directories", "index": 0 }
+          ]
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        { "name": "resolvable", "description": "repository or preset path", "provider": ["builtin.directories", "builtin.files"], "index": 0 },
+        { "name": "target", "description": "target directory", "provider": "builtin.directories", "index": 1 }
+      ]
+    },
+    "providers": {
+      "builtin.files": { "builtin": "files" },
+      "builtin.directories": { "builtin": "directories" }
+    }
+  }
+}
