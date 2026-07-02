@@ -1,0 +1,9 @@
+__rush_complete_n_versions() {
+  n ls 2>/dev/null | while IFS= read -r version; do
+    set -- $version
+    version=$1
+    test -n "$version" || continue
+    case "$version" in installed:|node/*) continue ;; esac
+    rush_complete candidate "$version" --kind plain --description "downloaded Node.js version"
+  done
+}

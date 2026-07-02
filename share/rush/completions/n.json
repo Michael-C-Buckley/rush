@@ -1,0 +1,433 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "n",
+    "description": "Node version management",
+    "options": [
+      {
+        "short": "V",
+        "long": "version",
+        "description": "show n version",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "short": "p",
+        "long": "preserve",
+        "description": "Preserve npm and npx during install of Node.js",
+        "inherit": false
+      },
+      {
+        "long": "no-preserve",
+        "description": "Do not preserve npm and npx during install of Node.js",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "Disable curl output. Disable log messages processing \"auto\" and \"engine\" labels",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "long": "download",
+        "description": "Download only",
+        "inherit": false
+      },
+      {
+        "short": "a",
+        "long": "arch",
+        "description": "Override system architecture",
+        "inherit": false,
+        "value": {
+          "name": "architecture",
+          "provider": {
+            "values": [
+              {
+                "value": "x64"
+              },
+              {
+                "value": "x86_64"
+              },
+              {
+                "value": "arm64"
+              },
+              {
+                "value": "aarch64"
+              },
+              {
+                "value": "armv8l"
+              },
+              {
+                "value": "x86"
+              },
+              {
+                "value": "i386"
+              },
+              {
+                "value": "i686"
+              },
+              {
+                "value": "armv6l"
+              },
+              {
+                "value": "armv7l"
+              }
+            ]
+          }
+        }
+      },
+      {
+        "long": "insecure",
+        "description": "Turn off certificate checking for https requests (may be needed from behind a proxy server)",
+        "priority": -10,
+        "inherit": false
+      },
+      {
+        "long": "use-xz",
+        "description": "Override automatic detection of xz support and enable use of xz compressed node downloads",
+        "inherit": false,
+        "excludes": [
+          "no-use-xz"
+        ]
+      },
+      {
+        "long": "no-use-xz",
+        "description": "Override automatic detection of xz support and disable use of xz compressed node downloads",
+        "inherit": false,
+        "excludes": [
+          "use-xz"
+        ]
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "i",
+        "aliases": [
+          "install"
+        ],
+        "description": "Install a Node.js version",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0,
+              "provider": [
+                {
+                  "values": [
+                    {
+                      "value": "latest",
+                      "description": "newest official release"
+                    },
+                    {
+                      "value": "current",
+                      "description": "newest official release"
+                    },
+                    {
+                      "value": "lts",
+                      "description": "newest long term support release"
+                    },
+                    {
+                      "value": "auto",
+                      "description": "read version from project files"
+                    },
+                    {
+                      "value": "engine",
+                      "description": "read version from package.json"
+                    }
+                  ]
+                },
+                {
+                  "function": "__rush_complete_n_versions"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "rm",
+        "aliases": [],
+        "description": "Remove a Node.js version",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0,
+              "repeatable": true,
+              "provider": {
+                "function": "__rush_complete_n_versions"
+              }
+            }
+          ]
+        }
+      },
+      {
+        "name": "prune",
+        "description": "Remove all cached Node.js versions except the installed version"
+      },
+      {
+        "name": "doctor",
+        "description": "Display diagnostics to help resolve problems"
+      },
+      {
+        "name": "uninstall",
+        "description": "Remove the installed Node.js"
+      },
+      {
+        "name": "ls",
+        "aliases": [
+          "list"
+        ],
+        "description": "Output downloaded versions"
+      },
+      {
+        "name": "lsr",
+        "aliases": [
+          "ls-remote",
+          "list-remote"
+        ],
+        "description": "Output matching versions available for download",
+        "options": [
+          {
+            "long": "all",
+            "description": "Ls-remote displays all matches instead of last 20",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0,
+              "provider": [
+                {
+                  "values": [
+                    {
+                      "value": "latest",
+                      "description": "newest official release"
+                    },
+                    {
+                      "value": "current",
+                      "description": "newest official release"
+                    },
+                    {
+                      "value": "lts",
+                      "description": "newest long term support release"
+                    },
+                    {
+                      "value": "auto",
+                      "description": "read version from project files"
+                    },
+                    {
+                      "value": "engine",
+                      "description": "read version from package.json"
+                    }
+                  ]
+                },
+                {
+                  "function": "__rush_complete_n_versions"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "which",
+        "aliases": [
+          "bin"
+        ],
+        "description": "Output path for downloaded node version",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0,
+              "provider": [
+                {
+                  "values": [
+                    {
+                      "value": "latest",
+                      "description": "newest official release"
+                    },
+                    {
+                      "value": "current",
+                      "description": "newest official release"
+                    },
+                    {
+                      "value": "lts",
+                      "description": "newest long term support release"
+                    },
+                    {
+                      "value": "auto",
+                      "description": "read version from project files"
+                    },
+                    {
+                      "value": "engine",
+                      "description": "read version from package.json"
+                    }
+                  ]
+                },
+                {
+                  "function": "__rush_complete_n_versions"
+                }
+              ]
+            }
+          ]
+        }
+      },
+      {
+        "name": "run",
+        "aliases": [
+          "use",
+          "as"
+        ],
+        "description": "Execute downloaded Node.js version with args",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0,
+              "provider": [
+                {
+                  "values": [
+                    {
+                      "value": "latest",
+                      "description": "newest official release"
+                    },
+                    {
+                      "value": "current",
+                      "description": "newest official release"
+                    },
+                    {
+                      "value": "lts",
+                      "description": "newest long term support release"
+                    },
+                    {
+                      "value": "auto",
+                      "description": "read version from project files"
+                    },
+                    {
+                      "value": "engine",
+                      "description": "read version from package.json"
+                    }
+                  ]
+                },
+                {
+                  "function": "__rush_complete_n_versions"
+                }
+              ]
+            },
+            {
+              "name": "args",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "exec",
+        "description": "Execute command with modified PATH, so downloaded node version and npm first",
+        "arguments": {
+          "states": [
+            {
+              "name": "version",
+              "index": 0,
+              "provider": [
+                {
+                  "values": [
+                    {
+                      "value": "latest",
+                      "description": "newest official release"
+                    },
+                    {
+                      "value": "current",
+                      "description": "newest official release"
+                    },
+                    {
+                      "value": "lts",
+                      "description": "newest long term support release"
+                    },
+                    {
+                      "value": "auto",
+                      "description": "read version from project files"
+                    },
+                    {
+                      "value": "engine",
+                      "description": "read version from package.json"
+                    }
+                  ]
+                },
+                {
+                  "function": "__rush_complete_n_versions"
+                }
+              ]
+            },
+            {
+              "name": "cmd",
+              "provider": "builtin.executables",
+              "index": 1
+            },
+            {
+              "name": "args",
+              "index": 2,
+              "repeatable": true
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.executables": {
+        "builtin": "executables"
+      }
+    },
+    "arguments": {
+      "states": [
+        {
+          "name": "version",
+          "description": "Node.js version",
+          "index": 0,
+          "required": false,
+          "provider": [
+            {
+              "values": [
+                {
+                  "value": "latest",
+                  "description": "newest official release"
+                },
+                {
+                  "value": "current",
+                  "description": "newest official release"
+                },
+                {
+                  "value": "lts",
+                  "description": "newest long term support release"
+                },
+                {
+                  "value": "auto",
+                  "description": "read version from project files"
+                },
+                {
+                  "value": "engine",
+                  "description": "read version from package.json"
+                }
+              ]
+            },
+            {
+              "function": "__rush_complete_n_versions"
+            }
+          ]
+        }
+      ]
+    }
+  }
+}
