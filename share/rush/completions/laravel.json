@@ -1,0 +1,185 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "laravel",
+    "description": "laravel installer",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "display the help message",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "do not output any message",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "display this application version",
+        "inherit": false
+      },
+      {
+        "long": "ansi",
+        "description": "force ANSI output",
+        "inherit": false
+      },
+      {
+        "long": "no-ansi",
+        "description": "disable ANSI output",
+        "inherit": false
+      },
+      {
+        "short": "n",
+        "long": "no-interaction",
+        "description": "do not ask any interactive question",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "increase the verbosity of messages: 1 for normal output, 2 for more verbose output and 3 for debug",
+        "inherit": false,
+        "repeatable": true
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "help",
+        "description": "show command help",
+        "options": [
+          {
+            "long": "format",
+            "description": "output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "txt",
+                  "xml",
+                  "json",
+                  "md"
+                ]
+              }
+            }
+          },
+          {
+            "long": "raw",
+            "description": "output raw command list",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "list",
+        "description": "list commands",
+        "options": [
+          {
+            "long": "format",
+            "description": "output format",
+            "inherit": false,
+            "value": {
+              "name": "format",
+              "provider": {
+                "values": [
+                  "txt",
+                  "xml",
+                  "json",
+                  "md"
+                ]
+              }
+            }
+          },
+          {
+            "long": "raw",
+            "description": "output raw command list",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "new",
+        "description": "create a new Laravel application",
+        "options": [
+          {
+            "long": "dev",
+            "description": "installs the latest \"development\" release",
+            "inherit": false
+          },
+          {
+            "long": "git",
+            "description": "initialize a Git repository",
+            "inherit": false
+          },
+          {
+            "long": "branch",
+            "description": "the branch that should be created for a new repository",
+            "inherit": false,
+            "value": {
+              "name": "BRANCH"
+            }
+          },
+          {
+            "long": "github",
+            "description": "create a new repository on GitHub",
+            "inherit": false,
+            "value": {
+              "name": "GITHUB",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "jet",
+            "description": "installs the Laravel Jetstream scaffolding",
+            "inherit": false
+          },
+          {
+            "long": "stack",
+            "description": "the Jetstream stack that should be installed",
+            "inherit": false,
+            "value": {
+              "name": "STACK",
+              "provider": {
+                "values": [
+                  "livewire",
+                  "inertia"
+                ]
+              }
+            }
+          },
+          {
+            "long": "teams",
+            "description": "indicates whether Jetstream should be scaffolded with team support",
+            "inherit": false
+          },
+          {
+            "long": "prompt-jetstream",
+            "description": "issues a prompt to determine if Jetstream should be installed",
+            "inherit": false
+          },
+          {
+            "short": "f",
+            "long": "force",
+            "description": "forces install even if the directory already exists",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0,
+              "description": "application name"
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
