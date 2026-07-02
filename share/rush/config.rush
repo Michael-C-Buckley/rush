@@ -195,6 +195,10 @@ rush_style() {
   rush_style_history_match="fg=$(color blend "$rush_color_yellow" "$rush_color_foreground" 12),bold"
   rush_style_autosuggestion="fg=$(color blend "$rush_color_foreground" "$rush_color_background" 50)"
   rush_style_diagnostic_error="ul=curly,ul_color=$rush_color_red"
+  rush_style_command_invalid="ul=curly,ul_color=$rush_color_red"
+  rush_style_input_comment="fg=$(color blend "$rush_color_foreground" "$rush_color_background" 45)"
+  rush_style_input_quote="fg=$(color blend "$rush_color_green" "$rush_color_foreground" 12)"
+  rush_style_input_pending="fg=$(color blend "$rush_color_cyan" "$rush_color_foreground" 12)"
 
   if test "$rush_color_scheme" = light; then
     rush_style_completion_selected="bg=$(color blend "$rush_color_background" "$rush_color_blue" 20)"

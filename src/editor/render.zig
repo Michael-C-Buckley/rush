@@ -254,6 +254,10 @@ pub const RenderOptions = struct {
 pub const DiagnosticSeverity = enum {
     warning,
     err,
+    command_invalid,
+    comment,
+    quote,
+    pending,
 };
 
 pub const DiagnosticSpan = struct {
@@ -411,8 +415,14 @@ pub fn completionFlashForCursor(text: []const u8, cursor: usize) CompletionFlash
     return .{ .start = start, .end = end };
 }
 
-fn diagnosticStyle(theme: UiTheme, _: DiagnosticSeverity) UiStyle {
-    return theme.diagnostic_error;
+fn diagnosticStyle(theme: UiTheme, severity: DiagnosticSeverity) UiStyle {
+    return switch (severity) {
+        .warning, .err => theme.diagnostic_error,
+        .command_invalid => theme.command_invalid,
+        .comment => theme.input_comment,
+        .quote => theme.input_quote,
+        .pending => theme.input_pending,
+    };
 }
 
 fn diagnosticSeverityAt(spans: []const DiagnosticSpan, start: usize, end: usize) ?DiagnosticSeverity {

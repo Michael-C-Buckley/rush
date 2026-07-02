@@ -39,6 +39,10 @@ pub const UiTheme = struct {
     history_match: UiStyle = .{ .fg = .{ .index = 3 } },
     autosuggestion: UiStyle = .{ .fg = .{ .index = 8 } },
     diagnostic_error: UiStyle = .{ .ul = .curly, .ul_color = .{ .index = 1 } },
+    command_invalid: UiStyle = .{ .ul = .curly, .ul_color = .{ .index = 1 } },
+    input_comment: UiStyle = .{ .fg = .{ .index = 8 } },
+    input_quote: UiStyle = .{ .fg = .{ .index = 2 } },
+    input_pending: UiStyle = .{ .fg = .{ .index = 6 } },
 };
 
 pub const Presentation = struct {

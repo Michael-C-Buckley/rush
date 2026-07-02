@@ -103,6 +103,10 @@ pub fn theme(state: shell.state.State) editor_render.UiTheme {
     applyUiStyleVariable(state, &ui_theme.history_match, "rush_style_history_match");
     applyUiStyleVariable(state, &ui_theme.autosuggestion, "rush_style_autosuggestion");
     applyUiStyleVariable(state, &ui_theme.diagnostic_error, "rush_style_diagnostic_error");
+    applyUiStyleVariable(state, &ui_theme.command_invalid, "rush_style_command_invalid");
+    applyUiStyleVariable(state, &ui_theme.input_comment, "rush_style_input_comment");
+    applyUiStyleVariable(state, &ui_theme.input_quote, "rush_style_input_quote");
+    applyUiStyleVariable(state, &ui_theme.input_pending, "rush_style_input_pending");
     return ui_theme;
 }
 

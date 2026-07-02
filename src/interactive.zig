@@ -145,12 +145,14 @@ const InteractiveSession = struct {
     restore_terminal_pgrp: ?host.Pid = null,
     last_command_duration_ms: ?i64 = null,
     pending_event_exit_status: ?u8 = null,
+    command_cache: PathCommandCache = .{},
 
     fn runTerminal(self: *InteractiveSession) !u8 {
         var terminal = editor.driver.TerminalSession.init(self.allocator, self.io) catch {
             try self.sh.host.writeAll(.stderr, "rush: cannot initialize terminal\n");
             return 2;
         };
+        defer self.command_cache.deinit(self.allocator);
         defer self.restoreTerminalProcessGroup();
         defer terminal.deinit();
         self.terminal = &terminal;
@@ -218,6 +220,7 @@ const InteractiveSession = struct {
         self.command_history.current_cwd = current_cwd;
         // ziglint-ignore: Z026 best-effort terminal metadata; the next directory change or prompt reports it again
         self.reportCurrentDirectory(terminal) catch {};
+        try self.command_cache.refresh(self.allocator, self.sh);
 
         return terminal.readLine(.{
             .prompt = prompt_text,
@@ -231,6 +234,8 @@ const InteractiveSession = struct {
             .style_context = self.sh,
             .refresh_style = interactive_style.refreshStyle,
             .refresh_color_report = interactive_style.refreshColorReport,
+            .diagnostic_context = self,
+            .diagnose = diagnoseInteractiveInput,
             .hook_context = self,
             .run_hooks = runInteractiveHooks,
             .next_hook_interval_ms = nextInteractiveHookIntervalMs,
@@ -537,6 +542,322 @@ fn refreshInteractivePrompt(context: *anyopaque, allocator: std.mem.Allocator, i
     return session.renderPrompt() catch try prompt(allocator, session.sh);
 }
 
+// ziglint-ignore: Z023 parameter order follows method or callback shape; preserve API
+fn diagnoseInteractiveInput(
+    context: *anyopaque,
+    allocator: std.mem.Allocator,
+    io: std.Io,
+    text: []const u8,
+) !?editor.render.DiagnosticRender {
+    _ = io;
+    const session: *InteractiveSession = @ptrCast(@alignCast(context));
+    return analyzeInteractiveInput(allocator, session.sh, &session.command_cache, text);
+}
+
+fn analyzeInteractiveInput(
+    allocator: std.mem.Allocator,
+    sh: *RushShell,
+    command_cache: *const PathCommandCache,
+    text: []const u8,
+) !?editor.render.DiagnosticRender {
+    if (text.len == 0) return null;
+
+    var spans: std.ArrayList(editor.render.DiagnosticSpan) = .empty;
+    errdefer spans.deinit(allocator);
+    try appendLexicalHighlightSpans(allocator, &spans, text);
+    try appendCommandValiditySpans(allocator, &spans, sh, command_cache, text);
+
+    if (spans.items.len == 0) return null;
+    return .{ .spans = try spans.toOwnedSlice(allocator) };
+}
+
+fn appendCommandValiditySpans(
+    allocator: std.mem.Allocator,
+    spans: *std.ArrayList(editor.render.DiagnosticSpan),
+    sh: *RushShell,
+    command_cache: *const PathCommandCache,
+    text: []const u8,
+) !void {
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+
+    const src: shell.source.Source = .{ .id = 0, .kind = .interactive, .name = "interactive", .text = text };
+    const tokens = try shell.lexer.lex(arena.allocator(), src);
+
+    var command_position = true;
+    var skip_redirection_target = false;
+    for (tokens) |tok| {
+        if (tok.kind == .eof) break;
+
+        if (skip_redirection_target and tok.kind == .word) {
+            skip_redirection_target = false;
+            continue;
+        }
+
+        if (tok.kind == .word) {
+            if (tok.reserved) |reserved| {
+                command_position = reservedWordStartsCommandList(reserved);
+                continue;
+            }
+            if (command_position and isAssignmentWord(tok.text)) {
+                command_position = true;
+                continue;
+            }
+            if (command_position and !commandResolves(allocator, sh, command_cache, tok.text)) {
+                try spans.append(allocator, .{
+                    .start = tok.span.start,
+                    .end = tok.span.end,
+                    .severity = .command_invalid,
+                });
+            }
+            command_position = false;
+            continue;
+        }
+
+        if (isRedirectionOperatorKind(tok.kind)) {
+            skip_redirection_target = true;
+            continue;
+        }
+
+        command_position = tokenStartsCommandPosition(tok.kind);
+    }
+}
+
+fn appendLexicalHighlightSpans(
+    allocator: std.mem.Allocator,
+    spans: *std.ArrayList(editor.render.DiagnosticSpan),
+    text: []const u8,
+) !void {
+    var index: usize = 0;
+    while (index < text.len) {
+        const byte = text[index];
+        if (byte == '#' and commentStartsAt(text, index)) {
+            const start = index;
+            while (index < text.len and text[index] != '\n') index += 1;
+            try spans.append(allocator, .{ .start = start, .end = index, .severity = .comment });
+            continue;
+        }
+        if (byte == '\\') {
+            index += 1;
+            if (index < text.len) index += 1;
+            continue;
+        }
+        if (byte == '$' and index + 1 < text.len and text[index + 1] == '\'') {
+            const start = index;
+            index += 2;
+            while (index < text.len) {
+                if (text[index] == '\\') {
+                    index += 1;
+                    if (index < text.len) index += 1;
+                    continue;
+                }
+                if (text[index] == '\'') {
+                    index += 1;
+                    try spans.append(allocator, .{ .start = start, .end = index, .severity = .quote });
+                    break;
+                }
+                index += 1;
+            } else {
+                try spans.append(allocator, .{ .start = start, .end = text.len, .severity = .pending });
+            }
+            continue;
+        }
+        if (byte == '\'' or byte == '"') {
+            const delimiter = byte;
+            const start = index;
+            index += 1;
+            while (index < text.len) {
+                if (delimiter == '"' and text[index] == '\\') {
+                    index += 1;
+                    if (index < text.len) index += 1;
+                    continue;
+                }
+                if (text[index] == delimiter) {
+                    index += 1;
+                    try spans.append(allocator, .{ .start = start, .end = index, .severity = .quote });
+                    break;
+                }
+                index += 1;
+            } else {
+                try spans.append(allocator, .{ .start = start, .end = text.len, .severity = .pending });
+            }
+            continue;
+        }
+        index += 1;
+    }
+}
+
+fn commandResolves(
+    allocator: std.mem.Allocator,
+    sh: *RushShell,
+    command_cache: *const PathCommandCache,
+    command: []const u8,
+) bool {
+    std.debug.assert(command.len != 0);
+    if (std.mem.indexOfScalar(u8, command, '/') != null) return existingCommandPath(allocator, sh, command);
+    if (sh.lookupBuiltin(command) != null) return true;
+    if (sh.state.getFunction(command) != null and !sh.state.isFunctionAutoloadSuppressed(command)) return true;
+    if (sh.state.getAlias(command) != null) return true;
+    if (sh.extensions.getAbbreviation(command) != null) return true;
+    if (sh.state.command_hashes.contains(command)) return true;
+    return command_cache.contains(command);
+}
+
+fn existingCommandPath(allocator: std.mem.Allocator, sh: *RushShell, command: []const u8) bool {
+    const command_z = allocator.dupeZ(u8, command) catch return false;
+    defer allocator.free(command_z);
+    return sh.host.existsZ(command_z);
+}
+
+const PathCommandCache = struct {
+    path_key: []const u8 = "",
+    cwd_key: []const u8 = "",
+    commands: std.StringHashMapUnmanaged(void) = .empty,
+
+    fn deinit(self: *PathCommandCache, allocator: std.mem.Allocator) void {
+        allocator.free(self.path_key);
+        allocator.free(self.cwd_key);
+        var iterator = self.commands.iterator();
+        while (iterator.next()) |entry| allocator.free(entry.key_ptr.*);
+        self.commands.deinit(allocator);
+        self.* = .{};
+    }
+
+    fn refresh(self: *PathCommandCache, allocator: std.mem.Allocator, sh: *RushShell) !void {
+        const path = interactivePathValue(sh) orelse "";
+        const cwd = sh.host.currentDir(allocator) catch try allocator.dupe(u8, "");
+        defer allocator.free(cwd);
+        if (std.mem.eql(u8, self.path_key, path) and std.mem.eql(u8, self.cwd_key, cwd)) return;
+
+        var next: std.StringHashMapUnmanaged(void) = .empty;
+        errdefer deinitCommandMap(allocator, &next);
+        var dirs = std.mem.splitScalar(u8, path, ':');
+        while (dirs.next()) |raw_dir| {
+            const dir = if (raw_dir.len == 0) "." else raw_dir;
+            var entries = sh.host.listDir(allocator, dir) catch continue;
+            defer entries.deinit();
+            for (entries.entries) |entry| {
+                if (entry.name.len == 0 or entry.name[0] == '.') continue;
+                if (entry.kind == .directory) continue;
+                const full_path = try std.fs.path.join(allocator, &.{ dir, entry.name });
+                defer allocator.free(full_path);
+                const full_path_z = try allocator.dupeZ(u8, full_path);
+                defer allocator.free(full_path_z);
+                if (!sh.host.fileAccessZ(full_path_z, .execute)) continue;
+                try putCommandName(allocator, &next, entry.name);
+            }
+        }
+
+        const path_key = try allocator.dupe(u8, path);
+        errdefer allocator.free(path_key);
+        const cwd_key = try allocator.dupe(u8, cwd);
+        errdefer allocator.free(cwd_key);
+
+        self.deinit(allocator);
+        self.path_key = path_key;
+        self.cwd_key = cwd_key;
+        self.commands = next;
+    }
+
+    fn contains(self: PathCommandCache, name: []const u8) bool {
+        return self.commands.contains(name);
+    }
+};
+
+fn deinitCommandMap(allocator: std.mem.Allocator, commands: *std.StringHashMapUnmanaged(void)) void {
+    var iterator = commands.iterator();
+    while (iterator.next()) |entry| allocator.free(entry.key_ptr.*);
+    commands.deinit(allocator);
+}
+
+fn putCommandName(
+    allocator: std.mem.Allocator,
+    commands: *std.StringHashMapUnmanaged(void),
+    name: []const u8,
+) !void {
+    if (commands.contains(name)) return;
+    const owned = try allocator.dupe(u8, name);
+    errdefer allocator.free(owned);
+    try commands.put(allocator, owned, {});
+}
+
+fn interactivePathValue(sh: *RushShell) ?[]const u8 {
+    if (sh.state.getVariable("PATH")) |variable| return variable.value;
+    for (sh.env) |entry_ptr| {
+        const entry = std.mem.span(entry_ptr);
+        if (entry.len <= "PATH".len or entry["PATH".len] != '=') continue;
+        if (std.mem.eql(u8, entry[0.."PATH".len], "PATH")) return entry["PATH".len + 1 ..];
+    }
+    return "/bin:/usr/bin";
+}
+
+fn reservedWordStartsCommandList(reserved: shell.token.ReservedWord) bool {
+    return switch (reserved) {
+        .if_kw, .then_kw, .else_kw, .elif_kw, .do_kw, .while_kw, .until_kw => true,
+        else => false,
+    };
+}
+
+fn tokenStartsCommandPosition(kind: shell.token.Kind) bool {
+    return switch (kind) {
+        .newline,
+        .semicolon,
+        .ampersand,
+        .pipe,
+        .pipe_pipe,
+        .ampersand_ampersand,
+        .bang,
+        .left_paren,
+        .right_paren,
+        .left_brace,
+        .here_doc_body,
+        .here_doc_body_unterminated,
+        => true,
+        else => false,
+    };
+}
+
+fn isRedirectionOperatorKind(kind: shell.token.Kind) bool {
+    return switch (kind) {
+        .less,
+        .less_less,
+        .less_less_dash,
+        .less_less_less,
+        .less_ampersand,
+        .less_greater,
+        .greater,
+        .greater_greater,
+        .greater_ampersand,
+        .clobber,
+        => true,
+        else => false,
+    };
+}
+
+fn isAssignmentWord(text: []const u8) bool {
+    const equals_index = std.mem.indexOfScalar(u8, text, '=') orelse return false;
+    const name = text[0..equals_index];
+    if (name.len == 0 or !isNameStart(name[0])) return false;
+    for (name[1..]) |byte| if (!isNameContinue(byte)) return false;
+    return true;
+}
+
+fn isNameStart(byte: u8) bool {
+    return std.ascii.isAlphabetic(byte) or byte == '_';
+}
+
+fn isNameContinue(byte: u8) bool {
+    return isNameStart(byte) or std.ascii.isDigit(byte);
+}
+
+fn commentStartsAt(text: []const u8, index: usize) bool {
+    if (index == 0) return true;
+    return switch (text[index - 1]) {
+        ' ', '\t', '\n', '\r', ';', '&', '|', '(', ')' => true,
+        else => false,
+    };
+}
+
 fn pendingEventExit(session: *InteractiveSession, status: u8) void {
     session.pending_event_exit_status = status;
 }
@@ -803,6 +1124,44 @@ fn expandRushAbbreviation(
 
 fn unixTimestamp(io: std.Io) i64 {
     return std.Io.Clock.real.now(io).toSeconds();
+}
+
+test "interactive input analysis marks unresolved command tokens only" {
+    var sh = RushShell.init(std.testing.allocator, host.RealHost{}, .{});
+    defer sh.deinit();
+    try sh.state.putAlias(.{ .name = "ll", .value = "ls -l" });
+
+    var command_cache: PathCommandCache = .{};
+    defer command_cache.deinit(std.testing.allocator);
+    try putCommandName(std.testing.allocator, &command_cache.commands, "cached");
+
+    const text = "echo ok\nll\nnope arg\nFOO=bar cached < nope\n";
+    const analyzed = (try analyzeInteractiveInput(std.testing.allocator, &sh, &command_cache, text)).?;
+    defer analyzed.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 1), analyzed.spans.len);
+    try std.testing.expectEqual(editor.render.DiagnosticSeverity.command_invalid, analyzed.spans[0].severity);
+    try std.testing.expectEqual(@as(usize, 11), analyzed.spans[0].start);
+    try std.testing.expectEqual(@as(usize, 15), analyzed.spans[0].end);
+}
+
+test "interactive input analysis styles comments quotes and pending quote" {
+    var sh = RushShell.init(std.testing.allocator, host.RealHost{}, .{});
+    defer sh.deinit();
+    var command_cache: PathCommandCache = .{};
+    defer command_cache.deinit(std.testing.allocator);
+
+    const text = "printf 'ok' # comment\nprintf \"pending";
+    const analyzed = (try analyzeInteractiveInput(std.testing.allocator, &sh, &command_cache, text)).?;
+    defer analyzed.deinit(std.testing.allocator);
+
+    try std.testing.expectEqual(@as(usize, 3), analyzed.spans.len);
+    try std.testing.expectEqual(editor.render.DiagnosticSeverity.quote, analyzed.spans[0].severity);
+    try std.testing.expectEqualStrings("'ok'", text[analyzed.spans[0].start..analyzed.spans[0].end]);
+    try std.testing.expectEqual(editor.render.DiagnosticSeverity.comment, analyzed.spans[1].severity);
+    try std.testing.expectEqualStrings("# comment", text[analyzed.spans[1].start..analyzed.spans[1].end]);
+    try std.testing.expectEqual(editor.render.DiagnosticSeverity.pending, analyzed.spans[2].severity);
+    try std.testing.expectEqualStrings("\"pending", text[analyzed.spans[2].start..analyzed.spans[2].end]);
 }
 
 test {
