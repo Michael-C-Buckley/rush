@@ -1,0 +1,1393 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "vtex",
+    "description": "VTEX IO CLI",
+    "providers": {
+      "files": {
+        "builtin": "files"
+      },
+      "releaseTypes": {
+        "values": [
+          "major",
+          "minor",
+          "patch"
+        ]
+      }
+    },
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help"
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "add",
+        "description": "add app dependencies",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "app"
+            },
+            {
+              "name": "extra-app"
+            }
+          ]
+        }
+      },
+      {
+        "name": "autoupdate",
+        "description": "automatically update the CLI",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "channel"
+            }
+          ]
+        }
+      },
+      {
+        "name": "browse",
+        "description": "open a workspace URL",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "qr",
+            "short": "q",
+            "description": "print a QR code"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "path"
+            }
+          ]
+        }
+      },
+      {
+        "name": "config",
+        "description": "manage configuration",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "get",
+            "description": "print a configuration value",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name"
+                }
+              ]
+            }
+          },
+          {
+            "name": "reset",
+            "description": "reset a configuration value",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name"
+                }
+              ]
+            }
+          },
+          {
+            "name": "set",
+            "description": "set a configuration value",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name"
+                },
+                {
+                  "name": "value"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "debug dotnet",
+        "description": "debug .NET applications",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "app"
+            }
+          ]
+        }
+      },
+      {
+        "name": "deploy",
+        "description": "deploy an app",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "yes",
+            "short": "y",
+            "description": "answer yes to prompts"
+          },
+          {
+            "long": "force",
+            "short": "f",
+            "description": "ignore testing period"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "app"
+            }
+          ]
+        }
+      },
+      {
+        "name": "deprecate",
+        "description": "deprecate apps",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "yes",
+            "short": "y",
+            "description": "answer yes to prompts"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "app"
+            },
+            {
+              "name": "extra-app"
+            }
+          ]
+        }
+      },
+      {
+        "name": "deps",
+        "description": "manage dependencies",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "diff",
+            "description": "compare workspace dependencies",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "workspace1"
+                },
+                {
+                  "name": "workspace2"
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list dependency tree",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              },
+              {
+                "long": "keys",
+                "short": "k",
+                "description": "show only key dependencies"
+              },
+              {
+                "long": "npm",
+                "short": "n",
+                "description": "include npm dependencies"
+              }
+            ]
+          },
+          {
+            "name": "update",
+            "description": "update dependencies",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "app"
+                },
+                {
+                  "name": "extra-app"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "edition",
+        "description": "manage edition app",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "get",
+            "description": "show edition app",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              }
+            ]
+          },
+          {
+            "name": "set",
+            "description": "set edition app",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "edition"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "help",
+        "description": "show command help",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "all",
+            "description": "show all commands"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "command"
+            }
+          ]
+        }
+      },
+      {
+        "name": "infra",
+        "description": "manage infra services",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "install",
+            "description": "install an infra service",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "service"
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list infra services",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              },
+              {
+                "long": "available",
+                "short": "a",
+                "description": "list available services"
+              },
+              {
+                "long": "filter",
+                "short": "f",
+                "description": "filter services",
+                "value": {
+                  "name": "filter"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name"
+                }
+              ]
+            }
+          },
+          {
+            "name": "update",
+            "description": "update infra services",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "copy boilerplate files",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ]
+      },
+      {
+        "name": "install",
+        "description": "install apps",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "force",
+            "short": "f",
+            "description": "force the operation"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "app"
+            },
+            {
+              "name": "extra-app"
+            }
+          ]
+        }
+      },
+      {
+        "name": "lighthouse",
+        "description": "run Lighthouse audits",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "audit",
+            "description": "run a Lighthouse audit",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              },
+              {
+                "long": "json",
+                "short": "j",
+                "description": "output JSON"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "url"
+                }
+              ]
+            }
+          },
+          {
+            "name": "show",
+            "description": "show audit report",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              },
+              {
+                "long": "app",
+                "short": "a",
+                "description": "filter by app",
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "url",
+                "short": "u",
+                "description": "filter by URL",
+                "value": {
+                  "name": "url"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "lh",
+        "description": "run Lighthouse audits",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "audit",
+            "description": "run a Lighthouse audit",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              },
+              {
+                "long": "json",
+                "short": "j",
+                "description": "output JSON"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "url"
+                }
+              ]
+            }
+          },
+          {
+            "name": "show",
+            "description": "show audit report",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              },
+              {
+                "long": "app",
+                "short": "a",
+                "description": "filter by app",
+                "value": {
+                  "name": "app"
+                }
+              },
+              {
+                "long": "url",
+                "short": "u",
+                "description": "filter by URL",
+                "value": {
+                  "name": "url"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "link",
+        "description": "link local app",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "account",
+            "short": "a",
+            "description": "use account",
+            "value": {
+              "name": "account"
+            }
+          },
+          {
+            "long": "clean",
+            "short": "c",
+            "description": "clean builder cache"
+          },
+          {
+            "long": "setup",
+            "short": "s",
+            "description": "set up typings"
+          },
+          {
+            "long": "unsafe",
+            "short": "u",
+            "description": "ignore TypeScript errors"
+          },
+          {
+            "long": "workspace",
+            "short": "w",
+            "description": "use workspace",
+            "value": {
+              "name": "workspace"
+            }
+          },
+          {
+            "long": "no-watch",
+            "description": "do not watch files"
+          }
+        ]
+      },
+      {
+        "name": "list",
+        "description": "list installed apps",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ]
+      },
+      {
+        "name": "local token",
+        "description": "print auth token",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ]
+      },
+      {
+        "name": "login",
+        "description": "log in to an account",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "workspace",
+            "short": "w",
+            "description": "use workspace",
+            "value": {
+              "name": "workspace"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "account"
+            }
+          ]
+        }
+      },
+      {
+        "name": "logout",
+        "description": "log out",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ]
+      },
+      {
+        "name": "logs",
+        "description": "show app logs",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "all",
+            "short": "a",
+            "description": "show all app logs"
+          },
+          {
+            "long": "past",
+            "short": "p",
+            "description": "show previous logs"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "app"
+            }
+          ]
+        }
+      },
+      {
+        "name": "publish",
+        "description": "publish app release candidate",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "force",
+            "short": "f",
+            "description": "force publish"
+          },
+          {
+            "long": "tag",
+            "short": "t",
+            "description": "add release tag",
+            "value": {
+              "name": "tag"
+            }
+          },
+          {
+            "long": "workspace",
+            "short": "w",
+            "description": "use workspace",
+            "value": {
+              "name": "workspace"
+            }
+          },
+          {
+            "long": "yes",
+            "short": "y",
+            "description": "answer yes to prompts"
+          }
+        ]
+      },
+      {
+        "name": "redirects",
+        "description": "manage redirects",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "delete",
+            "description": "delete redirects",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "csv"
+                }
+              ]
+            }
+          },
+          {
+            "name": "export",
+            "description": "export redirects",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "csv"
+                }
+              ]
+            }
+          },
+          {
+            "name": "import",
+            "description": "import redirects",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              },
+              {
+                "long": "reset",
+                "short": "r",
+                "description": "remove existing redirects"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "release",
+        "description": "release app version",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "type"
+            },
+            {
+              "name": "tag"
+            }
+          ]
+        }
+      },
+      {
+        "name": "settings",
+        "description": "manage app settings",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "get",
+            "description": "get app setting",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "app"
+                },
+                {
+                  "name": "field"
+                }
+              ]
+            }
+          },
+          {
+            "name": "set",
+            "description": "set app setting",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "app"
+                },
+                {
+                  "name": "field"
+                },
+                {
+                  "name": "value"
+                }
+              ]
+            }
+          },
+          {
+            "name": "unset",
+            "description": "unset app setting",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "app"
+                },
+                {
+                  "name": "field"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "setup",
+        "description": "set up development tooling",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "ignore-linked",
+            "short": "i",
+            "description": "ignore linked apps"
+          },
+          {
+            "long": "all",
+            "description": "set up everything"
+          },
+          {
+            "long": "tooling",
+            "description": "set up tooling"
+          },
+          {
+            "long": "tsconfig",
+            "description": "set up TSConfig"
+          },
+          {
+            "long": "typings",
+            "description": "set up typings"
+          }
+        ]
+      },
+      {
+        "name": "submit",
+        "description": "submit app for validation",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "app"
+            }
+          ]
+        }
+      },
+      {
+        "name": "support",
+        "description": "log in as support",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "account"
+            }
+          ]
+        }
+      },
+      {
+        "name": "switch",
+        "description": "switch account",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "workspace",
+            "short": "w",
+            "description": "use workspace",
+            "value": {
+              "name": "workspace"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "account"
+            }
+          ]
+        }
+      },
+      {
+        "name": "test",
+        "description": "run tests",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "e2e",
+            "description": "run E2E tests",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              },
+              {
+                "long": "report",
+                "short": "r",
+                "description": "show report",
+                "value": {
+                  "name": "report"
+                }
+              },
+              {
+                "long": "token",
+                "short": "t",
+                "description": "send auth token"
+              },
+              {
+                "long": "workspace",
+                "short": "w",
+                "description": "use workspace"
+              }
+            ]
+          },
+          {
+            "name": "unit",
+            "description": "run unit tests",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              },
+              {
+                "long": "unsafe",
+                "short": "u",
+                "description": "ignore TypeScript errors"
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "undeprecate",
+        "description": "restore deprecated app",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "yes",
+            "short": "y",
+            "description": "answer yes to prompts"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "app"
+            },
+            {
+              "name": "extra-app"
+            }
+          ]
+        }
+      },
+      {
+        "name": "uninstall",
+        "description": "uninstall apps",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "yes",
+            "short": "y",
+            "description": "answer yes to prompts"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "app"
+            },
+            {
+              "name": "extra-app"
+            }
+          ]
+        }
+      },
+      {
+        "name": "unlink",
+        "description": "unlink apps",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          },
+          {
+            "long": "all",
+            "short": "a",
+            "description": "unlink all apps"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "app"
+            },
+            {
+              "name": "extra-app"
+            }
+          ]
+        }
+      },
+      {
+        "name": "update",
+        "description": "update installed apps",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ]
+      },
+      {
+        "name": "url",
+        "description": "print base URL",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ]
+      },
+      {
+        "name": "whoami",
+        "description": "print current account information",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ]
+      },
+      {
+        "name": "workspace",
+        "description": "manage workspaces",
+        "options": [
+          {
+            "long": "help",
+            "short": "h",
+            "description": "show help"
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "abtest",
+            "description": "manage A/B tests",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              }
+            ],
+            "subcommands": [
+              {
+                "name": "finish",
+                "description": "stop A/B tests",
+                "options": [
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "show help"
+                  }
+                ]
+              },
+              {
+                "name": "start",
+                "description": "start A/B test",
+                "options": [
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "show help"
+                  }
+                ]
+              },
+              {
+                "name": "status",
+                "description": "show A/B test status",
+                "options": [
+                  {
+                    "long": "help",
+                    "short": "h",
+                    "description": "show help"
+                  }
+                ]
+              }
+            ]
+          },
+          {
+            "name": "delete",
+            "description": "delete workspaces",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              },
+              {
+                "long": "force",
+                "short": "f",
+                "description": "force delete"
+              },
+              {
+                "long": "yes",
+                "short": "y",
+                "description": "answer yes"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "workspace"
+                },
+                {
+                  "name": "extra-workspace"
+                }
+              ]
+            }
+          },
+          {
+            "name": "list",
+            "description": "list workspaces",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              }
+            ]
+          },
+          {
+            "name": "promote",
+            "description": "promote current workspace",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              }
+            ]
+          },
+          {
+            "name": "reset",
+            "description": "reset workspace",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              },
+              {
+                "long": "production",
+                "short": "p",
+                "description": "create production workspace"
+              },
+              {
+                "long": "yes",
+                "short": "y",
+                "description": "answer yes"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "workspace"
+                }
+              ]
+            }
+          },
+          {
+            "name": "status",
+            "description": "show workspace status",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "workspace"
+                }
+              ]
+            }
+          },
+          {
+            "name": "use",
+            "description": "use workspace",
+            "options": [
+              {
+                "long": "help",
+                "short": "h",
+                "description": "show help"
+              },
+              {
+                "long": "production",
+                "short": "p",
+                "description": "create production workspace"
+              },
+              {
+                "long": "reset",
+                "short": "r",
+                "description": "reset workspace"
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "workspace"
+                }
+              ]
+            }
+          }
+        ]
+      }
+    ]
+  }
+}
