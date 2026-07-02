@@ -1,0 +1,82 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "osascript",
+    "description": "execute osa scripts",
+    "options": [
+      {
+        "short": "e",
+        "description": "Enter one line of a script",
+        "inherit": false,
+        "value": {
+          "name": "statement"
+        }
+      },
+      {
+        "short": "i",
+        "description": "Interactive mode",
+        "inherit": false
+      },
+      {
+        "short": "l",
+        "description": "Override the language for any plain text files",
+        "inherit": false,
+        "value": {
+          "name": "language",
+          "provider": {
+            "values": [
+              "AppleScript",
+              "JavaScript"
+            ]
+          }
+        }
+      },
+      {
+        "short": "s",
+        "description": "Modify the output style",
+        "inherit": false,
+        "value": {
+          "name": "flags",
+          "provider": {
+            "values": [
+              {
+                "value": "h",
+                "description": "Print values in human-readable form (default)"
+              },
+              {
+                "value": "s",
+                "description": "Print values in recompilable source form"
+              },
+              {
+                "value": "e",
+                "description": "Print script errors to stderr (default)"
+              },
+              {
+                "value": "o",
+                "description": "Print script errors to stdout"
+              }
+            ]
+          },
+          "repeatable": true
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "script",
+          "provider": "builtin.files",
+          "index": 0,
+          "description": "script file",
+          "required": false
+        }
+      ]
+    },
+    "providers": {
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
