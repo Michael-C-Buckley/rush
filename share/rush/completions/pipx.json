@@ -1,0 +1,527 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pipx",
+    "description": "install and run isolated Python apps",
+    "options": [
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for pipx",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "install",
+        "description": "install a package",
+        "options": [
+          {
+            "long": "include-deps",
+            "description": "include apps from dependencies",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "description": "modify existing files or environments",
+            "inherit": false
+          },
+          {
+            "long": "suffix",
+            "description": "set executable and environment suffix",
+            "inherit": false,
+            "value": {
+              "name": "suffix"
+            }
+          },
+          {
+            "long": "python",
+            "description": "set Python executable",
+            "inherit": false,
+            "value": {
+              "name": "python",
+              "provider": "builtin.executables"
+            }
+          },
+          {
+            "long": "system-site-packages",
+            "description": "enable system site packages",
+            "inherit": false
+          },
+          {
+            "long": "index-url",
+            "short": "i",
+            "description": "set package index URL",
+            "inherit": false,
+            "value": {
+              "name": "index-url"
+            }
+          },
+          {
+            "long": "editable",
+            "short": "e",
+            "description": "install in editable mode",
+            "inherit": false
+          },
+          {
+            "long": "pip-args",
+            "description": "pass arguments to pip",
+            "inherit": false,
+            "value": {
+              "name": "pip-args"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "show verbose output",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package-spec",
+              "description": "package name or pip installation spec",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "inject",
+        "description": "inject packages into an environment",
+        "options": [
+          {
+            "long": "include-apps",
+            "description": "add injected apps to PATH",
+            "inherit": false
+          },
+          {
+            "long": "include-deps",
+            "description": "include apps from dependencies",
+            "inherit": false
+          },
+          {
+            "long": "system-site-packages",
+            "description": "enable system site packages",
+            "inherit": false
+          },
+          {
+            "long": "index-url",
+            "short": "i",
+            "description": "set package index URL",
+            "inherit": false,
+            "value": {
+              "name": "index-url"
+            }
+          },
+          {
+            "long": "editable",
+            "short": "e",
+            "description": "install in editable mode",
+            "inherit": false
+          },
+          {
+            "long": "pip-args",
+            "description": "pass arguments to pip",
+            "inherit": false,
+            "value": {
+              "name": "pip-args"
+            }
+          },
+          {
+            "long": "force",
+            "short": "f",
+            "description": "modify existing files or environments",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "show verbose output",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "name of the existing pipx-managed Virtual Environment to inject into",
+              "index": 0,
+              "provider": "pipx.packages"
+            },
+            {
+              "name": "dependencies",
+              "description": "the packages to inject into the Virtual Environment--either package...",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "upgrade",
+        "description": "upgrade a package",
+        "options": [
+          {
+            "long": "include-injected",
+            "description": "include injected packages",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "short": "f",
+            "description": "modify existing files or environments",
+            "inherit": false
+          },
+          {
+            "long": "system-site-packages",
+            "description": "enable system site packages",
+            "inherit": false
+          },
+          {
+            "long": "index-url",
+            "short": "i",
+            "description": "set package index URL",
+            "inherit": false,
+            "value": {
+              "name": "index-url"
+            }
+          },
+          {
+            "long": "editable",
+            "short": "e",
+            "description": "install in editable mode",
+            "inherit": false
+          },
+          {
+            "long": "pip-args",
+            "description": "pass arguments to pip",
+            "inherit": false,
+            "value": {
+              "name": "pip-args"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "show verbose output",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0,
+              "provider": "pipx.packages",
+              "repeatable": false
+            }
+          ]
+        }
+      },
+      {
+        "name": "upgrade-all",
+        "description": "upgrade all packages",
+        "options": [
+          {
+            "long": "include-injected",
+            "description": "include injected packages",
+            "inherit": false
+          },
+          {
+            "long": "skip",
+            "description": "skip packages",
+            "inherit": false,
+            "value": {
+              "name": "packages-to-skip",
+              "provider": "pipx.packages"
+            }
+          },
+          {
+            "long": "force",
+            "short": "f",
+            "description": "modify existing files or environments",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "show verbose output",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "uninstall",
+        "description": "uninstall a package",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "show verbose output",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0,
+              "provider": "pipx.packages",
+              "repeatable": false
+            }
+          ]
+        }
+      },
+      {
+        "name": "uninstall-all",
+        "description": "uninstall all packages",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "show verbose output",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "reinstall",
+        "description": "reinstall a package",
+        "options": [
+          {
+            "long": "python",
+            "description": "set Python executable",
+            "inherit": false,
+            "value": {
+              "name": "python",
+              "provider": "builtin.executables"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "show verbose output",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "index": 0,
+              "provider": "pipx.packages",
+              "repeatable": false
+            }
+          ]
+        }
+      },
+      {
+        "name": "reinstall-all",
+        "description": "reinstall all packages",
+        "options": [
+          {
+            "long": "python",
+            "description": "set Python executable",
+            "inherit": false,
+            "value": {
+              "name": "python",
+              "provider": "builtin.executables"
+            }
+          },
+          {
+            "long": "skip",
+            "description": "skip packages",
+            "inherit": false,
+            "value": {
+              "name": "packages-to-skip",
+              "provider": "pipx.packages"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "show verbose output",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "list",
+        "description": "list installed packages and apps",
+        "options": [
+          {
+            "long": "include-injected",
+            "description": "include injected packages",
+            "inherit": false
+          },
+          {
+            "long": "json",
+            "description": "output JSON",
+            "inherit": false
+          },
+          {
+            "long": "short",
+            "description": "list packages only",
+            "inherit": false
+          },
+          {
+            "long": "verbose",
+            "description": "show verbose output",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "run an app in a temporary environment",
+        "options": [
+          {
+            "long": "no-cache",
+            "description": "do not reuse cached environment",
+            "inherit": false
+          },
+          {
+            "long": "pypackages",
+            "description": "run from local __pypackages__",
+            "inherit": false
+          },
+          {
+            "long": "spec",
+            "description": "set package spec",
+            "inherit": false,
+            "value": {
+              "name": "spec"
+            }
+          },
+          {
+            "long": "python",
+            "description": "set Python executable",
+            "inherit": false,
+            "value": {
+              "name": "python",
+              "provider": "builtin.executables"
+            }
+          },
+          {
+            "long": "system-site-packages",
+            "description": "enable system site packages",
+            "inherit": false
+          },
+          {
+            "long": "index-url",
+            "short": "i",
+            "description": "set package index URL",
+            "inherit": false,
+            "value": {
+              "name": "index-url"
+            }
+          },
+          {
+            "long": "editable",
+            "short": "e",
+            "description": "install in editable mode",
+            "inherit": false
+          },
+          {
+            "long": "pip-args",
+            "description": "pass arguments to pip",
+            "inherit": false,
+            "value": {
+              "name": "pip-args"
+            }
+          },
+          {
+            "long": "verbose",
+            "description": "show verbose output",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "app",
+              "description": "app/package name and any arguments to be passed to it",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "runpip",
+        "description": "run pip in an environment",
+        "options": [
+          {
+            "long": "verbose",
+            "description": "show verbose output",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "package",
+              "description": "name of the existing pipx-managed Virtual Environment to run pip in",
+              "index": 0,
+              "provider": "pipx.packages"
+            },
+            {
+              "name": "pipargs",
+              "description": "arguments to forward to pip command",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "ensurepath",
+        "description": "ensure pipx app directory is on PATH",
+        "options": [
+          {
+            "long": "force",
+            "short": "f",
+            "description": "modify existing files or environments",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "environment",
+        "description": "print pipx environment variables",
+        "options": [
+          {
+            "long": "value",
+            "description": "print variable value",
+            "inherit": false,
+            "value": {
+              "name": "variable",
+              "provider": "pipx.environment-variables"
+            }
+          }
+        ]
+      },
+      {
+        "name": "completions",
+        "description": "show shell completion instructions"
+      }
+    ],
+    "providers": {
+      "pipx.packages": {
+        "function": "__rush_complete_pipx_packages"
+      },
+      "pipx.environment-variables": {
+        "values": [
+          "PIPX_HOME",
+          "PIPX_BIN_DIR",
+          "PIPX_SHARED_LIBS",
+          "PIPX_LOCAL_VENVS",
+          "PIPX_LOG_DIR",
+          "PIPX_TRASH_DIR",
+          "PIPX_VENV_CACHEDIR"
+        ]
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.executables": {
+        "builtin": "executables"
+      }
+    }
+  }
+}

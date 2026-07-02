@@ -1,0 +1,8 @@
+__rush_complete_pipx_packages() {
+  pipx list --short 2>/dev/null | while IFS= read -r line; do
+    package=${line%% *}
+    if [ -n "$package" ]; then
+      rush_complete candidate "$package" --kind value --description "installed package"
+    fi
+  done
+}
