@@ -1,0 +1,105 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ignite-cli",
+    "description": "react Native app generator",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "output usage information",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "output the version number",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "new",
+        "description": "create a new React Native app",
+        "options": [
+          {
+            "long": "expo",
+            "description": "use Expo",
+            "inherit": false
+          },
+          {
+            "long": "bundle",
+            "description": "set the bundle ID of the app",
+            "inherit": false,
+            "value": {
+              "name": "bundle"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "g",
+        "aliases": [
+          "generate"
+        ],
+        "description": "generate components and other app features",
+        "options": [
+          {
+            "long": "list",
+            "description": "list installed generators",
+            "inherit": false
+          },
+          {
+            "long": "update",
+            "description": "update installed generators",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "generator",
+              "index": 0
+            },
+            {
+              "name": "name",
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "update",
+        "description": "update installed generators",
+        "options": [
+          {
+            "long": "all",
+            "description": "update all installed generators",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "generator",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "doctor",
+        "description": "check your environment & display versions of installed dependencies"
+      }
+    ]
+  }
+}
