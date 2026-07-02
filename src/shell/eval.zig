@@ -4237,7 +4237,11 @@ const BraceMatch = struct {
 };
 
 fn braceExpandWord(shell: anytype, word: ast.Word) ![]const ast.Word {
-    if (shell.state.options.mode == .posix) {
+    // A brace match can only start at a literal `{` byte: braceAtomsFromWord
+    // produces byte atoms only from literal text and from simple parameter
+    // expansions rendered as `$name`, which never contain braces. Skip the
+    // per-byte atomize/reparse round trip for the common brace-free word.
+    if (shell.state.options.mode == .posix or !wordLiteralsContainBrace(word)) {
         const words = try shell.scratchAllocator().alloc(ast.Word, 1);
         words[0] = word;
         return words;
@@ -4247,6 +4251,16 @@ fn braceExpandWord(shell: anytype, word: ast.Word) ![]const ast.Word {
     var expanded: std.ArrayList(ast.Word) = .empty;
     try appendBraceExpandedWords(shell, &expanded, atoms, word.span, word.quoted);
     return expanded.toOwnedSlice(shell.scratchAllocator());
+}
+
+fn wordLiteralsContainBrace(word: ast.Word) bool {
+    return switch (word.data) {
+        .literal => |literal| std.mem.indexOfScalar(u8, literal, '{') != null,
+        .parts => |parts| for (parts) |part| switch (part) {
+            .literal => |literal| if (std.mem.indexOfScalar(u8, literal, '{') != null) break true,
+            else => {},
+        } else false,
+    };
 }
 
 fn braceAtomsFromWord(shell: anytype, word: ast.Word) ![]const BraceAtom {
