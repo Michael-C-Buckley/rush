@@ -1,0 +1,265 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "vim",
+    "description": "modal text editor",
+    "options": [
+      {
+        "short": "v",
+        "description": "vi mode (like 'vi')"
+      },
+      {
+        "short": "e",
+        "description": "ex mode (like 'ex')"
+      },
+      {
+        "short": "E",
+        "description": "improved Ex mode"
+      },
+      {
+        "short": "s",
+        "description": "enable silent mode (when in ex mode), or Read Normal mode commands from file",
+        "value": {
+          "name": "scriptin",
+          "required": false,
+          "style": "optional",
+          "provider": "files"
+        }
+      },
+      {
+        "short": "d",
+        "description": "diff mode (like 'vimdiff')"
+      },
+      {
+        "short": "y",
+        "description": "easy mode (like 'evim', modeless)"
+      },
+      {
+        "short": "R",
+        "description": "readonly mode (like 'view')"
+      },
+      {
+        "short": "Z",
+        "description": "restricted mode (like 'rvim')"
+      },
+      {
+        "short": "m",
+        "description": "modifications (writing files) not allowed"
+      },
+      {
+        "short": "M",
+        "description": "modifications in text not allowed"
+      },
+      {
+        "short": "b",
+        "description": "binary mode"
+      },
+      {
+        "short": "l",
+        "description": "lisp mode"
+      },
+      {
+        "short": "C",
+        "description": "compatible with Vi: 'compatible'"
+      },
+      {
+        "short": "N",
+        "description": "not fully Vi compatible: 'nocompatible'"
+      },
+      {
+        "short": "V",
+        "description": "be verbose [level N] [log messages to fname]",
+        "value": [
+          {
+            "name": "N"
+          },
+          {
+            "name": "fname",
+            "provider": "files"
+          }
+        ]
+      },
+      {
+        "short": "D",
+        "description": "debugging mode"
+      },
+      {
+        "short": "n",
+        "description": "no swap file, use memory only"
+      },
+      {
+        "short": "r",
+        "description": "recover crashed session if filename is specified, otherwise list swap files and exit",
+        "value": {
+          "name": "filename",
+          "required": false,
+          "style": "optional",
+          "provider": "files"
+        }
+      },
+      {
+        "short": "L",
+        "description": "same as -r",
+        "value": {
+          "name": "filename",
+          "provider": "files"
+        }
+      },
+      {
+        "short": "T",
+        "description": "set terminal type to <terminal>",
+        "value": {
+          "name": "terminal"
+        }
+      },
+      {
+        "long": "not-a-term",
+        "description": "skip warning for input/output not being a terminal"
+      },
+      {
+        "long": "ttyfail",
+        "description": "exit if input or output is not a terminal"
+      },
+      {
+        "short": "u",
+        "description": "use <vimrc> instead of any .vimrc",
+        "value": {
+          "name": "vimrc",
+          "provider": "files"
+        }
+      },
+      {
+        "long": "noplugin",
+        "description": "don't load plugin scripts"
+      },
+      {
+        "short": "p",
+        "description": "open N tab pages (default: one for each file)",
+        "value": {
+          "name": "N",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "short": "o",
+        "description": "open N windows (default: one for each file)",
+        "value": {
+          "name": "N",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "short": "O",
+        "description": "like -o but split vertically",
+        "value": {
+          "name": "N",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "spellings": [
+          "+"
+        ],
+        "description": "start at end of file, if line number is specified, start at that line",
+        "value": {
+          "name": "lnum",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "cmd",
+        "description": "execute <command> before loading any vimrc file",
+        "value": {
+          "name": "command",
+          "provider": "executables"
+        }
+      },
+      {
+        "short": "c",
+        "description": "execute <command> after loading the first file",
+        "value": {
+          "name": "command"
+        }
+      },
+      {
+        "short": "S",
+        "description": "source file <session> after loading the first file",
+        "value": {
+          "name": "session",
+          "provider": "files"
+        }
+      },
+      {
+        "short": "w",
+        "description": "append all typed commands to file <scriptout>",
+        "value": {
+          "name": "scriptout",
+          "provider": "files"
+        }
+      },
+      {
+        "short": "W",
+        "description": "write all typed commands to file <scriptout>",
+        "value": {
+          "name": "scriptout",
+          "provider": "files"
+        }
+      },
+      {
+        "short": "x",
+        "description": "edit encrypted files"
+      },
+      {
+        "long": "startuptime",
+        "description": "write startup timing messages to <file>",
+        "value": {
+          "name": "file",
+          "provider": "files"
+        }
+      },
+      {
+        "short": "i",
+        "description": "use <viminfo> instead of .viminfo",
+        "value": {
+          "name": "viminfo",
+          "provider": "files"
+        }
+      },
+      {
+        "long": "clean",
+        "description": "'nocompatible', Vim defaults, no plugins, no viminfo"
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "print Help message and exit"
+      },
+      {
+        "long": "version",
+        "description": "print version information and exit"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "provider": "files",
+          "repeatable": true
+        }
+      ]
+    },
+    "providers": {
+      "files": {
+        "builtin": "files"
+      },
+      "executables": {
+        "builtin": "executables"
+      }
+    }
+  }
+}
