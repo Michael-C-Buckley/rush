@@ -483,6 +483,32 @@
             .status = 0,
         },
         .{
+            .name = "declare is hidden in POSIX mode",
+            .script =
+            \\declare value=bad
+            \\printf 'status=<%s>:<%s>\n' "$?" "${value-unset}"
+            ,
+            .stdout =
+            \\status=<127>:<unset>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
+            .name = "typeset is hidden in POSIX mode",
+            .script =
+            \\typeset value=bad
+            \\printf 'status=<%s>:<%s>\n' "$?" "${value-unset}"
+            ,
+            .stdout =
+            \\status=<127>:<unset>
+            \\
+            ,
+            .stderr_match = .nonempty,
+            .status = 0,
+        },
+        .{
             .name = "pwd output can be redirected",
             .script =
             \\pwd >out

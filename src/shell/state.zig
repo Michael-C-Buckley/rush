@@ -375,16 +375,46 @@ pub const State = struct {
     }
 
     pub fn declareLocal(self: *State, name: []const u8, value: ?[]const u8) !void {
+        try self.declareLocalWithAttributes(.{ .name = name, .value = value });
+    }
+
+    pub const LocalDeclaration = struct {
+        name: []const u8,
+        value: ?[]const u8 = null,
+        exported: bool = false,
+        readonly: bool = false,
+    };
+
+    pub fn declareLocalWithAttributes(self: *State, declaration: LocalDeclaration) !void {
+        const name = declaration.name;
         std.debug.assert(name.len != 0);
         if (self.getVariable(name)) |variable| if (variable.readonly) return error.ReadonlyVariable;
         if (self.getVariableAttributes(name)) |attributes| if (attributes.readonly) return error.ReadonlyVariable;
         const frame = self.currentLocalFrame();
         try self.saveLocalBinding(frame, name);
 
-        if (value) |local_value| {
-            try self.putVariable(.{ .name = name, .value = local_value });
+        if (declaration.value) |local_value| {
+            try self.putVariable(.{
+                .name = name,
+                .value = local_value,
+                .exported = declaration.exported,
+                .readonly = declaration.readonly,
+            });
         } else if (!frame.assignment_prefixes.contains(name)) {
             self.removeVariable(name);
+            if (declaration.exported or declaration.readonly) {
+                try self.putVariableAttributes(.{
+                    .name = name,
+                    .exported = declaration.exported,
+                    .readonly = declaration.readonly,
+                });
+            }
+        } else if (declaration.exported or declaration.readonly) {
+            try self.putVariableAttributes(.{
+                .name = name,
+                .exported = declaration.exported,
+                .readonly = declaration.readonly,
+            });
         }
     }
 

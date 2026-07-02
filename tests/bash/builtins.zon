@@ -302,6 +302,87 @@
             .status = 0,
         },
         .{
+            .name = "declare marks readonly and exported scalar variables",
+            .script =
+            \\HOME=/tmp
+            \\declare -rx VALUE=~:/bin
+            \\case "$(declare -p VALUE)" in
+            \\    'declare -rx VALUE="/tmp:/bin"') printf 'print=<ok>\n' ;;
+            \\    *) printf 'print=<bad:%s>\n' "$(declare -p VALUE)" ;;
+            \\esac
+            \\sh -c 'test "$VALUE" = /tmp:/bin'
+            \\printf 'env=<%s>\n' "$?"
+            ,
+            .stdout =
+            \\print=<ok>
+            \\env=<0>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "declare uses function local scope unless global is requested",
+            .script =
+            \\value=global
+            \\target=old
+            \\f() {
+            \\    declare value=local
+            \\    declare -g target=new
+            \\    printf 'inside=<%s>:<%s>\n' "$value" "$target"
+            \\}
+            \\f
+            \\printf 'after=<%s>:<%s>\n' "$value" "$target"
+            ,
+            .stdout =
+            \\inside=<local>:<new>
+            \\after=<global>:<new>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "typeset is an alias for scalar declaration",
+            .script =
+            \\typeset alias_value=ok
+            \\case "$(typeset -p alias_value)" in
+            \\    'declare -- alias_value="ok"') printf 'typeset=<ok>\n' ;;
+            \\    *) printf 'typeset=<bad:%s>\n' "$(typeset -p alias_value)" ;;
+            \\esac
+            ,
+            .stdout =
+            \\typeset=<ok>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "local accepts readonly and export flags",
+            .script =
+            \\f() {
+            \\    local -rx local_value=ok
+            \\    case "$(declare -p local_value)" in
+            \\        'declare -rx local_value="ok"') printf 'attrs=<ok>\n' ;;
+            \\        *) printf 'attrs=<bad:%s>\n' "$(declare -p local_value)" ;;
+            \\    esac
+            \\    sh -c 'test "$local_value" = ok'
+            \\    printf 'env=<%s>\n' "$?"
+            \\}
+            \\f
+            \\printf 'after=<%s>\n' "${local_value-unset}"
+            ,
+            .stdout =
+            \\attrs=<ok>
+            \\env=<0>
+            \\after=<unset>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "shopt lists queries and updates expand_aliases",
             .script =
             \\shopt -q expand_aliases

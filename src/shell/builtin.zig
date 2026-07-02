@@ -31,6 +31,7 @@ pub const Id = enum {
     dot,
     command,
     continue_,
+    declare,
     echo,
     env,
     event,
@@ -64,6 +65,7 @@ pub const Id = enum {
     times,
     trap,
     true_,
+    typeset,
     type,
     ulimit,
     umask,
@@ -95,6 +97,7 @@ pub const core_definitions: DefinitionMap = .initComptime(.{
     .{ ".", Definition{ .name = ".", .id = .dot, .kind = .special } },
     .{ "command", Definition{ .name = "command", .id = .command, .kind = .regular } },
     .{ "continue", Definition{ .name = "continue", .id = .continue_, .kind = .special } },
+    .{ "declare", Definition{ .name = "declare", .id = .declare, .kind = .regular } },
     .{ "echo", Definition{ .name = "echo", .id = .echo, .kind = .regular } },
     .{ "env", Definition{ .name = "env", .id = .env, .kind = .regular } },
     .{ "eval", Definition{ .name = "eval", .id = .eval, .kind = .special } },
@@ -122,6 +125,7 @@ pub const core_definitions: DefinitionMap = .initComptime(.{
     .{ "times", Definition{ .name = "times", .id = .times, .kind = .special } },
     .{ "trap", Definition{ .name = "trap", .id = .trap, .kind = .special } },
     .{ "true", Definition{ .name = "true", .id = .true_, .kind = .regular } },
+    .{ "typeset", Definition{ .name = "typeset", .id = .typeset, .kind = .regular } },
     .{ "type", Definition{ .name = "type", .id = .type, .kind = .regular } },
     .{ "ulimit", Definition{ .name = "ulimit", .id = .ulimit, .kind = .regular } },
     .{ "umask", Definition{ .name = "umask", .id = .umask, .kind = .regular } },
@@ -181,7 +185,8 @@ pub fn lookup(name: []const u8) ?Definition {
 pub fn lookupInMode(name: []const u8, mode: state_mod.Mode) ?Definition {
     const definition = lookup(name) orelse return null;
     // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-    if (mode == .posix and (definition.id == .local or definition.id == .source or definition.id == .shopt)) return null;
+    if (mode == .posix and (definition.id == .declare or definition.id == .local or definition.id == .source or
+        definition.id == .shopt or definition.id == .typeset)) return null;
     return definition;
 }
 
@@ -194,7 +199,21 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .alias => evalAlias(shell, args),
         .bg => evalBg(shell, args),
         .break_ => evalBreak(args),
-        .bracket, .cd, .command, .dot, .eval, .exec, .export_, .pwd, .read, .test_, .type, .wait => unreachable,
+        .bracket,
+        .cd,
+        .command,
+        .declare,
+        .dot,
+        .eval,
+        .exec,
+        .export_,
+        .pwd,
+        .read,
+        .test_,
+        .typeset,
+        .type,
+        .wait,
+        => unreachable,
         .continue_ => evalContinue(args),
         .echo => evalEcho(shell, args),
         .exit => evalExit(shell, args),
@@ -1883,8 +1902,25 @@ fn evalLocal(shell: anytype, args: []const []const u8) !result.EvalResult {
         return .{ .status = 1 };
     }
 
+    var exported = false;
+    var readonly = false;
+    var first_operand: usize = 1;
+    while (first_operand < args.len) : (first_operand += 1) {
+        const arg = args[first_operand];
+        if (std.mem.eql(u8, arg, "--")) {
+            first_operand += 1;
+            break;
+        }
+        if (arg.len < 2 or arg[0] != '-') break;
+        for (arg[1..]) |option| switch (option) {
+            'r' => readonly = true,
+            'x' => exported = true,
+            else => return .{ .status = 2 },
+        };
+    }
+
     var status: result.ExitStatus = 0;
-    for (args[1..]) |arg| {
+    for (args[first_operand..]) |arg| {
         // ziglint-ignore: Z011 deprecated API left unchanged to avoid semantic drift in lint-only pass
         const equal_index = std.mem.indexOfScalar(u8, arg, '=');
         const name = if (equal_index) |index| arg[0..index] else arg;
@@ -1897,7 +1933,12 @@ fn evalLocal(shell: anytype, args: []const []const u8) !result.EvalResult {
             continue;
         }
         const value = if (equal_index) |index| arg[index + 1 ..] else null;
-        shell.state.declareLocal(name, value) catch |err| switch (err) {
+        shell.state.declareLocalWithAttributes(.{
+            .name = name,
+            .value = value,
+            .exported = exported,
+            .readonly = readonly,
+        }) catch |err| switch (err) {
             error.ReadonlyVariable => {
                 try shell.host.writeAll(
                     .stderr,
@@ -2318,6 +2359,7 @@ test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.dot, lookup(".").?.id);
     try std.testing.expectEqual(Id.command, lookup("command").?.id);
     try std.testing.expectEqual(Id.continue_, lookup("continue").?.id);
+    try std.testing.expectEqual(Id.declare, lookup("declare").?.id);
     try std.testing.expectEqual(Id.eval, lookup("eval").?.id);
     try std.testing.expectEqual(Id.exec, lookup("exec").?.id);
     try std.testing.expectEqual(Id.export_, lookup("export").?.id);
@@ -2332,6 +2374,7 @@ test "builtin lookup identifies null true and false utilities" {
     try std.testing.expectEqual(Id.read, lookup("read").?.id);
     try std.testing.expectEqual(Id.readonly, lookup("readonly").?.id);
     try std.testing.expectEqual(Id.trap, lookup("trap").?.id);
+    try std.testing.expectEqual(Id.typeset, lookup("typeset").?.id);
     try std.testing.expectEqual(Id.type, lookup("type").?.id);
     try std.testing.expectEqual(Id.test_, lookup("test").?.id);
     try std.testing.expectEqual(Id.times, lookup("times").?.id);

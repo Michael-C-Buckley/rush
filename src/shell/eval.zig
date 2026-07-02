@@ -1406,7 +1406,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
     }
 
     if (try staticDeclarationBuiltinName(shell, command.words[0])) |id| {
-        if (id == .export_ or id == .readonly) {
+        if (id == .declare or id == .export_ or id == .readonly or id == .typeset) {
             try applyAssignments(shell, command.assignments);
             return evalDeclarationBuiltin(shell, id, command.words[1..]);
         }
@@ -1437,7 +1437,9 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
             } else {
                 try applyAssignments(shell, command.assignments);
             }
-            if (definition.id == .export_ or definition.id == .readonly) {
+            if (definition.id == .declare or definition.id == .export_ or
+                definition.id == .readonly or definition.id == .typeset)
+            {
                 return evalDeclarationBuiltin(shell, definition.id, command.words[1..]);
             }
             if (definition.id == .dot) return evalDotBuiltin(shell, fields);
@@ -1486,6 +1488,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
             .cd,
             .color,
             .command,
+            .declare,
             .echo,
             .event,
             .fc,
@@ -1504,6 +1507,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
             .pwd,
             .read,
             .shopt,
+            .typeset,
             .type,
             .ulimit,
             .umask,
@@ -1985,7 +1989,7 @@ fn evalCommandBuiltin(
                 if (index + 1 == args.len) return .{};
                 return evalExecBuiltin(shell, args[index..], assignments);
             },
-            .export_, .readonly => {
+            .declare, .export_, .readonly, .typeset => {
                 // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
                 const evaluated = try evalDeclarationBuiltin(shell, definition.id, commandFieldsAsWords(shell, args[index + 1 ..]) catch return error.OutOfMemory);
                 restoreVariables(shell, saved);
@@ -2795,7 +2799,9 @@ const read_escape_marker: u8 = 0;
 
 fn readBuiltinLine(shell: anytype, options: ReadOptions) !ReadLineResult {
     var line: std.ArrayList(u8) = .empty;
-    if (options.count == 0) return .{ .line = try line.toOwnedSlice(shell.scratchAllocator()), .found_delimiter = true };
+    if (options.count == 0) {
+        return .{ .line = try line.toOwnedSlice(shell.scratchAllocator()), .found_delimiter = true };
+    }
     if (options.timeout_ms == 0) return .{
         .line = try line.toOwnedSlice(shell.scratchAllocator()),
         .found_delimiter = shell.host.readReady(.stdin, 0),
@@ -3144,10 +3150,22 @@ fn normalizeAbsolutePath(allocator: std.mem.Allocator, path: []const u8) ![]cons
 fn staticDeclarationBuiltinName(shell: anytype, word: ast.Word) !?builtin.Id {
     if (wordHasDynamicExpansion(word)) return null;
     const name = try expandWordTracking(shell, word, null);
+    if (shell.state.options.mode == .bash) {
+        if (std.mem.eql(u8, name, "declare")) return .declare;
+        if (std.mem.eql(u8, name, "typeset")) return .typeset;
+    }
     if (std.mem.eql(u8, name, "export")) return .export_;
     if (std.mem.eql(u8, name, "readonly")) return .readonly;
     return null;
 }
+
+const DeclarationOptions = struct {
+    exported: bool = false,
+    readonly: bool = false,
+    print: bool = false,
+    global: bool = false,
+    first_operand: usize = 0,
+};
 
 const DeclarationAssignment = struct {
     name: []const u8,
@@ -3155,19 +3173,21 @@ const DeclarationAssignment = struct {
 };
 
 fn evalDeclarationBuiltin(shell: anytype, id: builtin.Id, words: []const ast.Word) EvalError!result.EvalResult {
-    std.debug.assert(id == .export_ or id == .readonly);
-    if (words.len == 0) return evalDeclarationList(shell, id);
-    if (words.len == 1) {
-        if (staticLiteralWord(words[0])) |literal| {
-            if (std.mem.eql(u8, literal, "-p")) return evalDeclarationList(shell, id);
-        }
+    std.debug.assert(id == .declare or id == .export_ or id == .readonly or id == .typeset);
+    const options = parseDeclarationOptions(shell, id, words) catch |err| switch (err) {
+        error.DeclarationUsage => return .{ .status = 2 },
+        else => return err,
+    };
+    const operands = words[options.first_operand..];
+    if (options.print) return evalDeclarationPrint(shell, id, operands);
+    if (operands.len == 0) return evalDeclarationList(shell, id);
+
+    if (id == .declare or id == .typeset) {
+        return evalDeclareOperands(shell, id, options, operands);
     }
 
     var status: result.ExitStatus = 0;
-    for (words) |word| {
-        if (staticLiteralWord(word)) |literal| {
-            if (std.mem.eql(u8, literal, "-p")) continue;
-        }
+    for (operands) |word| {
         if (try declarationAssignment(shell, word)) |assignment| {
             const value = try expandAssignmentWordTracking(shell, assignment.value, null);
             const existing = shell.state.getVariable(assignment.name);
@@ -3239,17 +3259,176 @@ fn evalDeclarationBuiltin(shell: anytype, id: builtin.Id, words: []const ast.Wor
     return .{ .status = status, .flow = if (fatal) .{ .fatal = status } else .normal };
 }
 
+fn parseDeclarationOptions(shell: anytype, id: builtin.Id, words: []const ast.Word) !DeclarationOptions {
+    var options: DeclarationOptions = switch (id) {
+        .export_ => .{ .exported = true },
+        .readonly => .{ .readonly = true },
+        .declare, .typeset => .{},
+        else => unreachable,
+    };
+    while (options.first_operand < words.len) : (options.first_operand += 1) {
+        const literal = staticLiteralWord(words[options.first_operand]) orelse break;
+        if (std.mem.eql(u8, literal, "--")) {
+            options.first_operand += 1;
+            break;
+        }
+        if (literal.len < 2 or literal[0] != '-') break;
+        for (literal[1..]) |option| switch (option) {
+            'p' => options.print = true,
+            'r' => options.readonly = true,
+            'x' => options.exported = true,
+            'g' => {
+                if (id != .declare and id != .typeset) return declarationUsageError(shell, id);
+                options.global = true;
+            },
+            else => return declarationUsageError(shell, id),
+        };
+    }
+    return options;
+}
+
+fn declarationUsageError(shell: anytype, id: builtin.Id) !DeclarationOptions {
+    try shell.host.writeAll(
+        .stderr,
+        try std.fmt.allocPrint(shell.scratchAllocator(), "{s}: invalid option\n", .{declarationName(id)}),
+    );
+    return error.DeclarationUsage;
+}
+
+fn evalDeclareOperands(
+    shell: anytype,
+    id: builtin.Id,
+    options: DeclarationOptions,
+    operands: []const ast.Word,
+) EvalError!result.EvalResult {
+    var status: result.ExitStatus = 0;
+    for (operands) |word| {
+        if (try declarationAssignment(shell, word)) |assignment| {
+            const value = try expandAssignmentWordTracking(shell, assignment.value, null);
+            try applyDeclaredVariable(shell, assignment.name, value, options, &status);
+            continue;
+        }
+
+        const names = try expandWordFields(shell, &.{word}, null);
+        for (names) |name| {
+            if (literalDeclarationAssignment(name)) |assignment| {
+                const value = switch (assignment.value.data) {
+                    .literal => |literal| literal,
+                    .parts => unreachable,
+                };
+                try applyDeclaredVariable(shell, assignment.name, value, options, &status);
+                continue;
+            }
+            if (!isAssignmentName(name)) {
+                try writeInvalidIdentifierDiagnostic(shell, id, name);
+                status = 1;
+                continue;
+            }
+            try applyDeclaredName(shell, name, options, &status);
+        }
+    }
+    return .{ .status = status };
+}
+
+fn declareUsesLocalScope(shell: anytype, options: DeclarationOptions) bool {
+    return shell.state.hasLocalFrame() and !options.global;
+}
+
+fn applyDeclaredVariable(
+    shell: anytype,
+    name: []const u8,
+    value: []const u8,
+    options: DeclarationOptions,
+    status: *result.ExitStatus,
+) !void {
+    const existing = shell.state.getVariable(name);
+    if (declareUsesLocalScope(shell, options)) {
+        shell.state.declareLocalWithAttributes(.{
+            .name = name,
+            .value = value,
+            .exported = options.exported or (existing != null and existing.?.exported),
+            .readonly = options.readonly or (existing != null and existing.?.readonly),
+        }) catch |err| switch (err) {
+            error.ReadonlyVariable => {
+                try writeReadonlyDiagnostic(shell, name);
+                status.* = 1;
+            },
+            else => return err,
+        };
+        return;
+    }
+    shell.state.putVariable(.{
+        .name = name,
+        .value = value,
+        .exported = options.exported or (existing != null and existing.?.exported),
+        .readonly = options.readonly or (existing != null and existing.?.readonly),
+    }) catch |err| switch (err) {
+        error.ReadonlyVariable => {
+            try writeReadonlyDiagnostic(shell, name);
+            status.* = 1;
+        },
+        else => return err,
+    };
+}
+
+fn applyDeclaredName(
+    shell: anytype,
+    name: []const u8,
+    options: DeclarationOptions,
+    status: *result.ExitStatus,
+) !void {
+    const existing = shell.state.getVariable(name);
+    if (declareUsesLocalScope(shell, options)) {
+        shell.state.declareLocalWithAttributes(.{
+            .name = name,
+            .exported = options.exported,
+            .readonly = options.readonly,
+        }) catch |err| switch (err) {
+            error.ReadonlyVariable => {
+                try writeReadonlyDiagnostic(shell, name);
+                status.* = 1;
+            },
+            else => return err,
+        };
+        return;
+    }
+    if (existing) |variable| {
+        shell.state.putVariable(.{
+            .name = name,
+            .value = variable.value,
+            .exported = options.exported or variable.exported,
+            .readonly = options.readonly or variable.readonly,
+        }) catch |err| switch (err) {
+            error.ReadonlyVariable => {
+                try writeReadonlyDiagnostic(shell, name);
+                status.* = 1;
+            },
+            else => return err,
+        };
+    } else if (options.exported or options.readonly) {
+        try shell.state.putVariableAttributes(.{
+            .name = name,
+            .exported = options.exported,
+            .readonly = options.readonly,
+        });
+    }
+}
+
 fn writeInvalidIdentifierDiagnostic(shell: anytype, id: builtin.Id, name: []const u8) !void {
-    const builtin_name = switch (id) {
+    try shell.host.writeAll(
+        .stderr,
+        // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
+        try std.fmt.allocPrint(shell.scratchAllocator(), "{s}: `{s}': not a valid identifier\n", .{ declarationName(id), name }),
+    );
+}
+
+fn declarationName(id: builtin.Id) []const u8 {
+    return switch (id) {
+        .declare, .typeset => "declare",
         .export_ => "export",
         .readonly => "readonly",
         else => unreachable,
     };
-    try shell.host.writeAll(
-        .stderr,
-        // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-        try std.fmt.allocPrint(shell.scratchAllocator(), "{s}: `{s}': not a valid identifier\n", .{ builtin_name, name }),
-    );
 }
 
 fn evalDeclarationList(shell: anytype, id: builtin.Id) !result.EvalResult {
@@ -3257,33 +3436,108 @@ fn evalDeclarationList(shell: anytype, id: builtin.Id) !result.EvalResult {
     while (attributes_iterator.next()) |entry| {
         const attributes = entry.value_ptr.*;
         const include = switch (id) {
+            .declare, .typeset => true,
             .export_ => attributes.exported,
             .readonly => attributes.readonly,
             else => unreachable,
         };
         if (!include) continue;
-        try shell.host.writeAll(.stdout, declarationPrefix(id));
-        try shell.host.writeAll(.stdout, attributes.name);
-        try shell.host.writeAll(.stdout, "\n");
+        try writeDeclarationEntry(shell, id, attributes.name, null, attributes.exported, attributes.readonly);
     }
 
     var iterator = shell.state.variables.iterator();
     while (iterator.next()) |entry| {
         const variable = entry.value_ptr.*;
         const include = switch (id) {
+            .declare, .typeset => true,
             .export_ => variable.exported,
             .readonly => variable.readonly,
             else => unreachable,
         };
         if (!include) continue;
-        const quoted = try singleQuoteShell(shell.scratchAllocator(), variable.value);
+        try writeDeclarationEntry(shell, id, variable.name, variable.value, variable.exported, variable.readonly);
+    }
+    return .{};
+}
+
+fn evalDeclarationPrint(shell: anytype, id: builtin.Id, operands: []const ast.Word) EvalError!result.EvalResult {
+    if (operands.len == 0) return evalDeclarationList(shell, id);
+    var status: result.ExitStatus = 0;
+    for (operands) |word| {
+        const names = try expandWordFields(shell, &.{word}, null);
+        for (names) |name| {
+            if (!isAssignmentName(name)) {
+                try writeInvalidIdentifierDiagnostic(shell, id, name);
+                status = 1;
+                continue;
+            }
+            if (shell.state.getVariable(name)) |variable| {
+                try writeDeclarationEntry(
+                    shell,
+                    id,
+                    variable.name,
+                    variable.value,
+                    variable.exported,
+                    variable.readonly,
+                );
+            } else if (shell.state.getVariableAttributes(name)) |attributes| {
+                try writeDeclarationEntry(shell, id, attributes.name, null, attributes.exported, attributes.readonly);
+            } else {
+                try shell.host.writeAll(
+                    .stderr,
+                    try std.fmt.allocPrint(
+                        shell.scratchAllocator(),
+                        "{s}: {s}: not found\n",
+                        .{ declarationName(id), name },
+                    ),
+                );
+                status = 1;
+            }
+        }
+    }
+    return .{ .status = status };
+}
+
+fn writeDeclarationEntry(
+    shell: anytype,
+    id: builtin.Id,
+    name: []const u8,
+    value: ?[]const u8,
+    exported: bool,
+    readonly: bool,
+) !void {
+    if (id == .declare or id == .typeset) {
+        try shell.host.writeAll(.stdout, "declare ");
+        if (readonly or exported) {
+            try shell.host.writeAll(.stdout, "-");
+            if (readonly) try shell.host.writeAll(.stdout, "r");
+            if (exported) try shell.host.writeAll(.stdout, "x");
+            try shell.host.writeAll(.stdout, " ");
+        } else {
+            try shell.host.writeAll(.stdout, "-- ");
+        }
+        try shell.host.writeAll(.stdout, name);
+        if (value) |text| {
+            const quoted = try doubleQuoteShell(shell.scratchAllocator(), text);
+            try shell.host.writeAll(.stdout, "=");
+            try shell.host.writeAll(.stdout, quoted);
+        }
+        try shell.host.writeAll(.stdout, "\n");
+        return;
+    }
+
+    if (value) |text| {
+        const quoted = try singleQuoteShell(shell.scratchAllocator(), text);
         try shell.host.writeAll(.stdout, declarationPrefix(id));
-        try shell.host.writeAll(.stdout, variable.name);
+        try shell.host.writeAll(.stdout, name);
         try shell.host.writeAll(.stdout, "=");
         try shell.host.writeAll(.stdout, quoted);
         try shell.host.writeAll(.stdout, "\n");
+    } else {
+        try shell.host.writeAll(.stdout, declarationPrefix(id));
+        try shell.host.writeAll(.stdout, name);
+        try shell.host.writeAll(.stdout, "\n");
     }
-    return .{};
 }
 
 fn declarationPrefix(id: builtin.Id) []const u8 {
@@ -3292,6 +3546,22 @@ fn declarationPrefix(id: builtin.Id) []const u8 {
         .readonly => "readonly ",
         else => unreachable,
     };
+}
+
+fn doubleQuoteShell(allocator: std.mem.Allocator, value: []const u8) ![]const u8 {
+    var output: std.ArrayList(u8) = .empty;
+    try output.append(allocator, '"');
+    for (value) |byte| {
+        switch (byte) {
+            '"', '\\', '$', '`' => {
+                try output.append(allocator, '\\');
+                try output.append(allocator, byte);
+            },
+            else => try output.append(allocator, byte),
+        }
+    }
+    try output.append(allocator, '"');
+    return output.toOwnedSlice(allocator);
 }
 
 fn singleQuoteShell(allocator: std.mem.Allocator, value: []const u8) ![]const u8 {
