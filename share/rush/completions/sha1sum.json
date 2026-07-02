@@ -1,0 +1,85 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "sha1sum",
+    "description": "compute SHA1 checksums",
+    "options": [
+      {
+        "short": "b",
+        "long": "binary",
+        "description": "read in binary mode",
+        "inherit": false
+      },
+      {
+        "short": "c",
+        "long": "check",
+        "description": "read SHA1 sums from the FILEs and check them",
+        "inherit": false
+      },
+      {
+        "long": "tag",
+        "description": "create a BSD-style checksum",
+        "inherit": false
+      },
+      {
+        "short": "t",
+        "long": "text",
+        "description": "read in text mode (default)",
+        "inherit": false
+      },
+      {
+        "short": "z",
+        "long": "zero",
+        "description": "end each output line with NUL, not newline, and disable file name escaping",
+        "inherit": false
+      },
+      {
+        "long": "ignore-missing",
+        "description": "don't fail or report status for missing files",
+        "inherit": false
+      },
+      {
+        "long": "quiet",
+        "description": "don't print OK for each successfully verified file",
+        "inherit": false
+      },
+      {
+        "long": "status",
+        "description": "don't output anything, status code shows success",
+        "inherit": false
+      },
+      {
+        "long": "strict",
+        "description": "exit non-zero for improperly formatted checksum lines",
+        "inherit": false
+      },
+      {
+        "short": "w",
+        "long": "warn",
+        "description": "warn about improperly formatted checksum lines",
+        "inherit": false
+      },
+      {
+        "long": "help",
+        "description": "output help message and exit",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "description": "output version information and exit",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "file",
+          "description": "file to checksum",
+          "provider": "builtin.files",
+          "index": 0
+        }
+      ]
+    }
+  }
+}
