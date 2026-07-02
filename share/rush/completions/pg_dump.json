@@ -1,0 +1,468 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pg_dump",
+    "description": "dump a PostgreSQL database",
+    "options": [
+      {
+        "long": "help",
+        "short": "?",
+        "description": "show help",
+        "inherit": false
+      },
+      {
+        "long": "file",
+        "short": "f",
+        "description": "write output to file or directory",
+        "inherit": false,
+        "value": {
+          "name": "filename",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "format",
+        "short": "F",
+        "description": "select output format",
+        "inherit": false,
+        "value": {
+          "name": "format",
+          "provider": "formats"
+        }
+      },
+      {
+        "long": "jobs",
+        "short": "j",
+        "description": "set number of parallel dump jobs",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "long": "verbose",
+        "short": "v",
+        "description": "verbose mode",
+        "inherit": false
+      },
+      {
+        "long": "version",
+        "short": "V",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "long": "compress",
+        "short": "Z",
+        "description": "set compression level",
+        "inherit": false,
+        "value": {
+          "name": "level",
+          "provider": "compression-levels"
+        }
+      },
+      {
+        "long": "lock-wait-timeout",
+        "description": "fail after waiting timeout for a table lock",
+        "inherit": false,
+        "value": {
+          "name": "timeout"
+        }
+      },
+      {
+        "long": "no-sync",
+        "description": "do not wait for changes to be written safely to disk",
+        "inherit": false
+      },
+      {
+        "long": "data-only",
+        "short": "a",
+        "description": "dump only the data, not the schema",
+        "inherit": false
+      },
+      {
+        "long": "blobs",
+        "short": "b",
+        "description": "include large objects in dump",
+        "inherit": false
+      },
+      {
+        "long": "no-blobs",
+        "short": "B",
+        "description": "exclude large objects in dump",
+        "inherit": false
+      },
+      {
+        "long": "clean",
+        "short": "c",
+        "description": "clean (drop) database objects before recreating",
+        "inherit": false
+      },
+      {
+        "long": "create",
+        "short": "C",
+        "description": "include commands to create database in dump",
+        "inherit": false
+      },
+      {
+        "long": "extension",
+        "short": "e",
+        "description": "dump the specified extension(s) only",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "long": "encoding",
+        "short": "E",
+        "description": "dump data using the specified encoding",
+        "inherit": false,
+        "value": {
+          "name": "encoding"
+        }
+      },
+      {
+        "long": "schema",
+        "short": "n",
+        "description": "dump the specified schema(s) only",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "long": "exclude-schema",
+        "short": "N",
+        "description": "do not dump the specified schema(s)",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "long": "no-owner",
+        "short": "O",
+        "description": "skip restoration of object ownership in plain-text format",
+        "inherit": false
+      },
+      {
+        "long": "schema-only",
+        "short": "s",
+        "description": "dump only the schema, no data",
+        "inherit": false
+      },
+      {
+        "long": "superuser",
+        "short": "S",
+        "description": "superuser user name to use in plain-text format",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "table",
+        "short": "t",
+        "description": "dump the specified table(s) only",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "table"
+        }
+      },
+      {
+        "long": "exclude-table",
+        "short": "T",
+        "description": "do not dump the specified table(s)",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "table"
+        }
+      },
+      {
+        "long": "no-privileges",
+        "short": "x",
+        "aliases": [
+          "no-acl"
+        ],
+        "description": "do not dump privileges (grant/revoke)",
+        "inherit": false
+      },
+      {
+        "long": "binary-upgrade",
+        "description": "for use by upgrade utilities only",
+        "inherit": false
+      },
+      {
+        "long": "column-inserts",
+        "aliases": [
+          "attribute-inserts"
+        ],
+        "description": "dump data as insert commands with column names",
+        "inherit": false
+      },
+      {
+        "long": "disable-dollar-quoting",
+        "description": "disable dollar quoting, use SQL standard quoting",
+        "inherit": false
+      },
+      {
+        "long": "disable-triggers",
+        "description": "disable triggers during data-only restore",
+        "inherit": false
+      },
+      {
+        "long": "enable-row-security",
+        "description": "enable row security (dump only content user has access to)",
+        "inherit": false
+      },
+      {
+        "long": "exclude-table-data",
+        "description": "do not dump data for the specified table(s)",
+        "repeatable": true,
+        "inherit": false,
+        "value": {
+          "name": "table"
+        }
+      },
+      {
+        "long": "extra-float-digits",
+        "description": "override default setting for extra_float_digits",
+        "inherit": false,
+        "value": {
+          "name": "num"
+        }
+      },
+      {
+        "long": "if-exists",
+        "description": "use if exists when dropping objects",
+        "inherit": false
+      },
+      {
+        "long": "include-foreign-data",
+        "description": "include foreign table data matching pattern",
+        "inherit": false,
+        "value": {
+          "name": "pattern"
+        }
+      },
+      {
+        "long": "inserts",
+        "description": "dump data as insert commands, rather than copy",
+        "inherit": false
+      },
+      {
+        "long": "load-via-partition-root",
+        "description": "load partitions via the root table",
+        "inherit": false
+      },
+      {
+        "long": "no-comments",
+        "description": "do not dump comments",
+        "inherit": false
+      },
+      {
+        "long": "no-publications",
+        "description": "do not dump publications",
+        "inherit": false
+      },
+      {
+        "long": "no-security-labels",
+        "description": "do not dump security label assignments",
+        "inherit": false
+      },
+      {
+        "long": "no-subscriptions",
+        "description": "do not dump subscriptions",
+        "inherit": false
+      },
+      {
+        "long": "no-synchronized-snapshots",
+        "description": "do not use synchronized snapshots in parallel jobs",
+        "inherit": false
+      },
+      {
+        "long": "no-tablespaces",
+        "description": "do not dump tablespace assignments",
+        "inherit": false
+      },
+      {
+        "long": "no-toast-compression",
+        "description": "do not dump TOAST compression methods",
+        "inherit": false
+      },
+      {
+        "long": "no-unlogged-table-data",
+        "description": "do not dump unlogged table data",
+        "inherit": false
+      },
+      {
+        "long": "on-conflict-do-nothing",
+        "description": "add ON CONFLICT DO NOTHING to insert commands",
+        "inherit": false
+      },
+      {
+        "long": "quote-all-identifiers",
+        "description": "quote all identifiers, even if not key words",
+        "inherit": false
+      },
+      {
+        "long": "rows-per-insert",
+        "description": "number of rows per insert; implies --inserts",
+        "inherit": false,
+        "value": {
+          "name": "rows"
+        }
+      },
+      {
+        "long": "section",
+        "description": "dump named section (pre-data, data, or post-data)",
+        "inherit": false,
+        "value": {
+          "name": "section",
+          "provider": "sections"
+        }
+      },
+      {
+        "long": "serializable-deferrable",
+        "description": "wait until the dump can run without anomalies",
+        "inherit": false
+      },
+      {
+        "long": "snapshot",
+        "description": "use given snapshot for the dump",
+        "inherit": false,
+        "value": {
+          "name": "snapshot"
+        }
+      },
+      {
+        "long": "strict-names",
+        "description": "require table and/or schema include patterns to match at least one entity each",
+        "inherit": false
+      },
+      {
+        "long": "use-set-session-authorization",
+        "description": "use SET SESSION AUTHORIZATION commands instead of ALTER OWNER commands to set ownership",
+        "inherit": false
+      },
+      {
+        "long": "dbname",
+        "short": "d",
+        "description": "database to dump",
+        "inherit": false,
+        "value": {
+          "name": "database"
+        }
+      },
+      {
+        "long": "host",
+        "short": "h",
+        "description": "database server host or socket directory",
+        "inherit": false,
+        "value": {
+          "name": "host"
+        }
+      },
+      {
+        "long": "port",
+        "short": "p",
+        "description": "database server port number",
+        "inherit": false,
+        "value": {
+          "name": "number"
+        }
+      },
+      {
+        "long": "username",
+        "short": "U",
+        "description": "connect as specified user",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "no-password",
+        "short": "w",
+        "description": "never prompt for password",
+        "inherit": false
+      },
+      {
+        "long": "password",
+        "short": "W",
+        "description": "force password prompt (should happen automatically)",
+        "inherit": false
+      },
+      {
+        "long": "role",
+        "description": "do SET ROLE before dump",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "dbname",
+          "description": "database to dump",
+          "index": 0
+        }
+      ]
+    },
+    "providers": {
+      "formats": {
+        "values": [
+          {
+            "value": "c",
+            "description": "custom archive"
+          },
+          {
+            "value": "d",
+            "description": "directory archive"
+          },
+          {
+            "value": "t",
+            "description": "tar archive"
+          },
+          {
+            "value": "p",
+            "description": "plain text"
+          }
+        ]
+      },
+      "compression-levels": {
+        "values": [
+          "0",
+          "1",
+          "2",
+          "3",
+          "4",
+          "5",
+          "6",
+          "7",
+          "8",
+          "9"
+        ]
+      },
+      "sections": {
+        "values": [
+          "pre-data",
+          "data",
+          "post-data"
+        ]
+      },
+      "builtin.files": {
+        "builtin": "files"
+      }
+    }
+  }
+}
