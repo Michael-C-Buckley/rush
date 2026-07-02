@@ -1,0 +1,141 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "stow",
+    "description": "manage symbolic link farms",
+    "options": [
+      {
+        "short": "n",
+        "long": "no",
+        "description": "preview filesystem changes",
+        "inherit": false
+      },
+      {
+        "short": "d",
+        "long": "dir",
+        "description": "set the stow directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "t",
+        "long": "target",
+        "description": "set the target directory",
+        "inherit": false,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "increase or set verbosity",
+        "inherit": false,
+        "value": {
+          "name": "level",
+          "provider": {
+            "values": [
+              "0",
+              "1",
+              "2",
+              "3",
+              "4",
+              "5"
+            ]
+          }
+        }
+      },
+      {
+        "short": "S",
+        "long": "stow",
+        "description": "stow following packages",
+        "inherit": false
+      },
+      {
+        "short": "D",
+        "long": "delete",
+        "description": "unstow following packages",
+        "inherit": false
+      },
+      {
+        "short": "R",
+        "long": "restow",
+        "description": "restow following packages",
+        "inherit": false
+      },
+      {
+        "long": "adopt",
+        "description": "adopt existing target files",
+        "priority": -10,
+        "inherit": false
+      },
+      {
+        "long": "no-folding",
+        "description": "disable directory folding",
+        "inherit": false
+      },
+      {
+        "long": "ignore",
+        "description": "ignore files matching a regex",
+        "inherit": false,
+        "value": {
+          "name": "regex"
+        }
+      },
+      {
+        "long": "defer",
+        "description": "defer files matching a regex",
+        "inherit": false,
+        "value": {
+          "name": "regex"
+        }
+      },
+      {
+        "long": "override",
+        "description": "override files matching a regex",
+        "inherit": false,
+        "value": {
+          "name": "regex"
+        }
+      },
+      {
+        "long": "dotfiles",
+        "description": "enable dotfile package handling",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "show version",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help",
+        "inherit": false
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    },
+    "arguments": {
+      "states": [
+        {
+          "name": "package",
+          "description": "package directory",
+          "provider": "builtin.directories",
+          "index": 0,
+          "repeatable": true
+        }
+      ]
+    }
+  }
+}
