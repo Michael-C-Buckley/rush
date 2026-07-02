@@ -1,0 +1,908 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "gt",
+    "description": "graphite CLI",
+    "options": [
+      {
+        "long": "version",
+        "description": "show Graphite CLI version",
+        "inherit": true
+      },
+      {
+        "long": "help",
+        "short": "h",
+        "description": "show help for Graphite CLI",
+        "inherit": true
+      },
+      {
+        "long": "interactive",
+        "description": "prompt the user. Disable with --no-interactive",
+        "inherit": true
+      },
+      {
+        "long": "no-interactive",
+        "description": "run non interactive",
+        "inherit": true
+      },
+      {
+        "long": "quiet",
+        "short": "q",
+        "description": "minimize output to the terminal. Implies --no-interactive",
+        "inherit": true
+      },
+      {
+        "long": "verify",
+        "description": "run git hooks. Disable with --no-verify",
+        "inherit": true
+      },
+      {
+        "long": "no-verify",
+        "description": "disable git hooks",
+        "inherit": true
+      },
+      {
+        "long": "debug",
+        "description": "display debug output",
+        "inherit": true
+      },
+      {
+        "long": "cwd",
+        "description": "working directory in which to perform operations",
+        "inherit": true,
+        "value": {
+          "name": "directory",
+          "provider": "builtin.directories"
+        }
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "aliases",
+        "description": "edit your command aliases",
+        "options": [
+          {
+            "long": "reset",
+            "description": "reset your alias configuration",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "auth",
+        "description": "add your auth token to enable Graphite CLI to create and update your PRs on GitHub",
+        "options": [
+          {
+            "long": "token",
+            "short": "t",
+            "description": "auth token. Get it from: https://app.graphite.dev/activate",
+            "inherit": false,
+            "value": {
+              "name": "token",
+              "description": "auth token"
+            }
+          }
+        ]
+      },
+      {
+        "name": "bottom",
+        "aliases": [
+          "b"
+        ],
+        "description": "switch to the first branch from trunk in the current stack"
+      },
+      {
+        "name": "changelog",
+        "description": "show the Graphite CLI changelog"
+      },
+      {
+        "name": "checkout",
+        "aliases": [
+          "co"
+        ],
+        "description": "switch to a branch. If no branch is provided, opens an interactive selector",
+        "options": [
+          {
+            "long": "show-untracked",
+            "short": "u",
+            "description": "include untracked branched in interactive selection",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "branch",
+              "description": "name of branch to checkout",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "children",
+        "description": "show the children of the current branch"
+      },
+      {
+        "name": "completion",
+        "description": "set up bash or zsh tab completion"
+      },
+      {
+        "name": "config",
+        "description": "configure the Graphite CLI"
+      },
+      {
+        "name": "continue",
+        "aliases": [
+          "cont"
+        ],
+        "description": "continues the most recent Graphite command halted by a merge conflict",
+        "options": [
+          {
+            "long": "all",
+            "short": "a",
+            "description": "stage all changes before continuing",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "create",
+        "aliases": [
+          "c"
+        ],
+        "description": "create a new branch stacked on top of the current branch and commit staged changes. If no branch name is specified but a commit message is passed, generate a br",
+        "options": [
+          {
+            "long": "message",
+            "short": "m",
+            "description": "commit staged changes on the new branch with this message",
+            "inherit": false,
+            "value": {
+              "name": "message",
+              "description": "commit message"
+            }
+          },
+          {
+            "long": "all",
+            "short": "a",
+            "description": "stage all unstaged changes on the new branch with this message",
+            "inherit": false
+          },
+          {
+            "long": "patch",
+            "short": "p",
+            "description": "pick hunks to stage before committing",
+            "inherit": false
+          },
+          {
+            "long": "insert",
+            "short": "i",
+            "description": "when true, any existing children of the current branch will become children of the new branch",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "branch name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "dash",
+        "description": "open the web dashboard"
+      },
+      {
+        "name": "delete",
+        "aliases": [
+          "dl"
+        ],
+        "description": "delete a branch and its corresponding Graphite metadata",
+        "options": [
+          {
+            "long": "force",
+            "short": "f",
+            "description": "delete the branch even if it is not merged or closed",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "branch name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "docs",
+        "description": "show the Graphite CLI docs"
+      },
+      {
+        "name": "down",
+        "aliases": [
+          "d"
+        ],
+        "description": "switch to the parent of the current branch",
+        "options": [
+          {
+            "long": "steps",
+            "short": "n",
+            "description": "the number of levels to traverse downstack",
+            "inherit": false,
+            "value": {
+              "name": "steps"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "steps",
+              "description": "the number of levels to traverse downstack",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "feedback",
+        "description": "commands for providing feedback and debug state",
+        "options": [
+          {
+            "long": "print-debug-context",
+            "description": "print a debug summary of your repository. Useful for creating bug report details",
+            "inherit": false
+          },
+          {
+            "long": "with-debug-context",
+            "description": "include a blob of json describing your repo's state to help with debugging. Run 'gt feedback debug-context' to see what would be included",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "message",
+              "description": "post a string directly to the maintainers' Slack so they can drown in praise, factor in your feedback, laugh at your jokes, cry at your insults, or fall victim",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "fish",
+        "description": "set up 'fish' tab completion"
+      },
+      {
+        "name": "fold",
+        "aliases": [
+          "f"
+        ],
+        "description": "fold a branch's changes into its parent, update dependencies of descendants of the new combined branch, and restack",
+        "options": [
+          {
+            "long": "keep",
+            "short": "k",
+            "description": "keeps the name of the current branch instead of using the name of its parent",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "get",
+        "description": "get branches from trunk to the specified branch from remote, prompting the user to resolve conflicts. If no branch is provided, get downstack from the current b",
+        "options": [
+          {
+            "long": "force",
+            "short": "f",
+            "description": "overwrite all fetched branches with remote source of truth",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "branch",
+              "description": "branch to get from remote",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "info",
+        "aliases": [
+          "i"
+        ],
+        "description": "display information about the current branch",
+        "options": [
+          {
+            "long": "patch",
+            "short": "p",
+            "description": "show the changes made by each commit",
+            "inherit": false
+          },
+          {
+            "long": "diff",
+            "short": "d",
+            "description": "show the diff between this branch and its parent. Takes precedence over patch",
+            "inherit": false
+          },
+          {
+            "long": "body",
+            "short": "b",
+            "description": "show the PR body, if it exists",
+            "inherit": false
+          },
+          {
+            "long": "stat",
+            "short": "s",
+            "description": "show a diffstat instead of a full diff. Modifies either --patch or --diff. If neither is passed, implies --diff",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "init",
+        "description": "initialize Graphite in this repository by selecting a trunk branch. Can also be used to change the trunk branch of the repository",
+        "options": [
+          {
+            "long": "reset",
+            "description": "untrack all branches",
+            "inherit": false
+          },
+          {
+            "long": "trunk",
+            "description": "the name of your trunk branch. If no name is passed, you will be prompted to select one interactively",
+            "inherit": false,
+            "value": {
+              "name": "trunk",
+              "description": "name of the trunk branch",
+              "required": false,
+              "style": "optional"
+            }
+          }
+        ]
+      },
+      {
+        "name": "log",
+        "aliases": [
+          "l"
+        ],
+        "description": "commands that log your stacks",
+        "options": [
+          {
+            "long": "classic",
+            "description": "use the old short logging style, which runs out of screen real estate more quickly. Other options will not work in classic mode",
+            "inherit": false
+          },
+          {
+            "long": "reverse",
+            "short": "r",
+            "description": "print the log upside down. Handy when you have a lot of branches",
+            "inherit": false
+          },
+          {
+            "long": "show-untracked",
+            "short": "u",
+            "description": "include untracked branched in interactive selection",
+            "inherit": false
+          },
+          {
+            "long": "stack",
+            "short": "s",
+            "description": "only show ancestors and descendants of the current branch",
+            "inherit": false
+          },
+          {
+            "long": "steps",
+            "short": "n",
+            "description": "only show this many levels upstack and downstack. Implies --stack",
+            "inherit": false,
+            "value": {
+              "name": "Number-of-steps"
+            }
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "long",
+            "description": "display a graph of the commit ancestry of all branches"
+          },
+          {
+            "name": "short",
+            "description": "log all stacks tracked by Graphite, arranged to show dependencies"
+          }
+        ]
+      },
+      {
+        "name": "merge",
+        "description": "merge the pull requests associated with all branches from trunk to the current branch via Graphite",
+        "options": [
+          {
+            "long": "confirm",
+            "short": "c",
+            "description": "asks for confirmation before merging branches. Prompts for confirmation if the local branches differ from remote, regardless of the value of this flag",
+            "inherit": false
+          },
+          {
+            "long": "dry-run",
+            "description": "reports the PRs that would be merged and terminates. No branches are merged",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "modify",
+        "aliases": [
+          "m"
+        ],
+        "description": "modify the current branch by amending its commit or creating a new commit. Automatically restacks descendants. If you have any unstaged changes, you will be ask",
+        "options": [
+          {
+            "long": "all",
+            "short": "a",
+            "description": "stage all changes before committing",
+            "inherit": false
+          },
+          {
+            "long": "commit",
+            "short": "c",
+            "description": "create a new commit instead of amending the current commit. If this branch has no commits, this command always creates a new commit",
+            "inherit": false
+          },
+          {
+            "long": "edit",
+            "short": "e",
+            "description": "if passed, open an editor to edit the commit message. When creating a new commit, this flag is ignored",
+            "inherit": false
+          },
+          {
+            "long": "interactive-rebase",
+            "description": "ignore all other flags and start a git interactive rebase on the commits in this branch",
+            "inherit": false
+          },
+          {
+            "long": "message",
+            "short": "m",
+            "description": "the message for the new or amended commit. If passed, no editor is opened",
+            "inherit": false,
+            "value": {
+              "name": "message",
+              "description": "commit message"
+            }
+          },
+          {
+            "long": "patch",
+            "short": "p",
+            "description": "pick hunks to stage before committing",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "move",
+        "description": "rebase the current branch onto the target branch and restack all of its descendants. If no branch is passed in, opens an interactive selector",
+        "options": [
+          {
+            "long": "onto",
+            "short": "o",
+            "description": "branch to move the current branch onto",
+            "inherit": false,
+            "value": {
+              "name": "branch",
+              "description": "branch to move"
+            }
+          },
+          {
+            "long": "source",
+            "description": "branch to move (defaults to current branch)",
+            "inherit": false,
+            "value": {
+              "name": "branch",
+              "description": "branch to move"
+            }
+          }
+        ]
+      },
+      {
+        "name": "parent",
+        "description": "show the parent of the current branch"
+      },
+      {
+        "name": "pop",
+        "description": "delete the current branch but reaint the state of files in the working tree"
+      },
+      {
+        "name": "pr",
+        "description": "opens the pull request page for a branch or PR number. If no branch is passed, the current branch's PR is opened",
+        "arguments": {
+          "states": [
+            {
+              "name": "branch",
+              "description": "a branch name or PR number to open",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "rename",
+        "aliases": [
+          "rn"
+        ],
+        "description": "rename a branch and update metadata referencing it. If no branch name is supplied, you will be prompted for a new branch name. Note that this removes any associ",
+        "options": [
+          {
+            "long": "force",
+            "short": "f",
+            "description": "allow renaming a branch that is already associated with an open GitHub pull request",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "description": "branch name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "reorder",
+        "description": "reorder branches between trunk and the current branch, restacking all of their descendants. Opens an editor where you can reorder branches by moving around a li"
+      },
+      {
+        "name": "restack",
+        "aliases": [
+          "r"
+        ],
+        "description": "ensure the current branch is based on its parent, rebasing if necessary. If conflicts are encountered, you will be prompted to resolve them via an interactive G",
+        "options": [
+          {
+            "long": "branch",
+            "description": "which branch to run this command from. Defaults to the current branch",
+            "inherit": false,
+            "value": {
+              "name": "branch",
+              "description": "name of the branch"
+            }
+          },
+          {
+            "long": "downstack",
+            "description": "only restack this branch and its ancestors",
+            "inherit": false
+          },
+          {
+            "long": "only",
+            "description": "only restack this branch",
+            "inherit": false
+          },
+          {
+            "long": "upstack",
+            "description": "only restack this branch and its descendants",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "revert",
+        "description": "create a branch that reverts a commit on the trunk branch. Currently experimental",
+        "options": [
+          {
+            "long": "edit",
+            "short": "e",
+            "description": "edit the commit message",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "sha",
+              "description": "the commit to revert",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "split",
+        "aliases": [
+          "sp"
+        ],
+        "description": "split the current branch into multiple single-commit branches",
+        "options": [
+          {
+            "long": "by-commit",
+            "short": "c",
+            "aliases": [
+              "commit"
+            ],
+            "description": "split by commit - slice up the history of this branch",
+            "inherit": false
+          },
+          {
+            "long": "by-hunk",
+            "short": "h",
+            "aliases": [
+              "hunk"
+            ],
+            "description": "split by hunk - split into new single-commit branches",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "squash",
+        "aliases": [
+          "sq"
+        ],
+        "description": "squash all commits in the current branch and restack upstack branches",
+        "options": [
+          {
+            "long": "message",
+            "short": "m",
+            "description": "the updated message for the commit",
+            "inherit": false,
+            "value": {
+              "name": "message",
+              "description": "commit message"
+            }
+          },
+          {
+            "long": "edit",
+            "description": "modify the existing commit message",
+            "inherit": false
+          },
+          {
+            "long": "no-edit",
+            "short": "n",
+            "description": "don't modify the existing commit message. Takes precedence over --edit",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "submit",
+        "aliases": [
+          "s"
+        ],
+        "description": "idempotently force push the current branch to GitHub, creating or updating a pull request. Opens an interactive prompt that allows you to input pull request met",
+        "options": [
+          {
+            "long": "always",
+            "description": "always push updates",
+            "inherit": false
+          },
+          {
+            "long": "branch",
+            "description": "branch to submit from",
+            "inherit": false,
+            "value": {
+              "name": "branch"
+            }
+          },
+          {
+            "long": "confirm",
+            "description": "ask for confirmation before submitting",
+            "inherit": false,
+            "short": "c"
+          },
+          {
+            "long": "draft",
+            "description": "mark PRs as draft",
+            "inherit": false,
+            "short": "d"
+          },
+          {
+            "long": "dry-run",
+            "description": "show what would be submitted without pushing",
+            "inherit": false
+          },
+          {
+            "long": "edit",
+            "description": "edit PR fields interactively",
+            "inherit": false,
+            "short": "e"
+          },
+          {
+            "long": "force",
+            "description": "force push remote branch",
+            "inherit": false,
+            "short": "f"
+          },
+          {
+            "long": "merge-when-ready",
+            "description": "mark submitted PRs as merge when ready",
+            "inherit": false,
+            "short": "m"
+          },
+          {
+            "long": "no-edit",
+            "description": "don't edit PR fields inline",
+            "inherit": false,
+            "short": "n"
+          },
+          {
+            "long": "publish",
+            "description": "publish PRs",
+            "inherit": false,
+            "short": "p"
+          },
+          {
+            "long": "rerequest-review",
+            "description": "rerequest review from current reviewers",
+            "inherit": false
+          },
+          {
+            "long": "restack",
+            "description": "restack branches before submitting",
+            "inherit": false
+          },
+          {
+            "long": "reviewers",
+            "description": "set reviewers",
+            "inherit": false,
+            "short": "r",
+            "value": {
+              "name": "reviewers",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "stack",
+            "description": "submit descendants as well as ancestors",
+            "inherit": false,
+            "short": "s"
+          },
+          {
+            "long": "update-only",
+            "description": "only update already submitted PRs",
+            "inherit": false,
+            "short": "u"
+          }
+        ]
+      },
+      {
+        "name": "sync",
+        "description": "pull the trunk branch from remote and prompt to delete any branches that have been merged. Restacks all branches in your repository that can be restacked withou",
+        "options": [
+          {
+            "long": "delete",
+            "description": "delete merged branches (true by default; skip with --no-delete)",
+            "inherit": false
+          },
+          {
+            "long": "force",
+            "short": "f",
+            "description": "don't prompt for confirmation before deleting a branch or overwriting trunk to match remote if it can't be fast-forwarded",
+            "inherit": false
+          },
+          {
+            "long": "pull",
+            "description": "pull the trunk branch from remote (true by default; skip with --no-pull)",
+            "inherit": false
+          },
+          {
+            "long": "restack",
+            "description": "restack any branches that can be restacked without conflicts (true by default; skip with --no-restack)",
+            "inherit": false
+          },
+          {
+            "long": "show-delete-progress",
+            "description": "show progress through merged branches",
+            "inherit": false
+          }
+        ]
+      },
+      {
+        "name": "top",
+        "aliases": [
+          "t"
+        ],
+        "description": "switch to the tip branch of the current stack. Prompts if ambiguous"
+      },
+      {
+        "name": "track",
+        "aliases": [
+          "tr"
+        ],
+        "description": "start tracking the current (or provided) branch with Graphite by selecting its parent. This command can also be used to fix corrupted Graphite metadata",
+        "options": [
+          {
+            "long": "parent",
+            "short": "p",
+            "description": "the tracked branch's parent. If unset, prompts for a parent branch",
+            "inherit": false,
+            "value": {
+              "name": "parent",
+              "description": "name of parent branch"
+            }
+          },
+          {
+            "long": "force",
+            "short": "f",
+            "description": "sets the parent to the most recent tracked ancestor of the branch being tracked. Takes precedence over `--parent`",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "branch",
+              "description": "branch name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "trunk",
+        "description": "switch to the trunk branch"
+      },
+      {
+        "name": "untrack",
+        "aliases": [
+          "utr"
+        ],
+        "description": "stop tracking a branch with Graphite. If the branch has children, they will also be untracked. Default to the current branch if none is passed in",
+        "options": [
+          {
+            "long": "force",
+            "short": "f",
+            "description": "will not prompt for confirmation before untracking a branch with children",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "branch",
+              "description": "branch name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "up",
+        "aliases": [
+          "u"
+        ],
+        "description": "switch to the child of the current branch. Prompts if ambiguous",
+        "options": [
+          {
+            "long": "steps",
+            "short": "n",
+            "description": "the number of levels to traverse upstack",
+            "inherit": false,
+            "value": {
+              "name": "steps"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "steps",
+              "description": "the number of levels to traverse upstack",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ]
+  }
+}
