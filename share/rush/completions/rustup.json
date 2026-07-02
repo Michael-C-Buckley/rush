@@ -1,0 +1,1065 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "rustup",
+    "description": "manage Rust toolchains",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "prints help information",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "prints version information",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "disable progress output",
+        "inherit": false
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "enable verbose output",
+        "inherit": false
+      },
+      {
+        "spellings": [
+          "+"
+        ],
+        "description": "select a Rust toolchain",
+        "value": {
+          "name": "toolchain",
+          "provider": "rustup.cargo-toolchains"
+        }
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "toolchain",
+          "description": "release channel (e.g. +stable) or custom toolchain to set override",
+          "index": 0,
+          "provider": "rustup.toolchains"
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "show",
+        "description": "show the active and installed toolchains or profiles",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "prints help information",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "active-toolchain",
+            "description": "show the active toolchain"
+          },
+          {
+            "name": "home",
+            "description": "display the computed value of RUSTUP_HOME"
+          },
+          {
+            "name": "profile",
+            "description": "show the current profile"
+          },
+          {
+            "name": "keys",
+            "description": "display the known PGP keys"
+          },
+          {
+            "name": "help",
+            "description": "prints this message or the help of the given subcommand(s)"
+          }
+        ]
+      },
+      {
+        "name": "update",
+        "description": "update Rust toolchains and rustup",
+        "options": [
+          {
+            "long": "force",
+            "description": "force an update, even if some components are missing",
+            "inherit": false
+          },
+          {
+            "long": "force-non-host",
+            "description": "install toolchains that require an emulator. See https://github.com/rust-lang/rustup/wiki/Non-host-toolchains",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "prints help information",
+            "inherit": false
+          },
+          {
+            "long": "no-self-update",
+            "description": "don't perform self update when running the `rustup update` command",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "toolchain",
+              "description": "toolchain name. For more information see `rustup help toolchain`",
+              "index": 0,
+              "repeatable": true,
+              "provider": "rustup.toolchains"
+            }
+          ]
+        }
+      },
+      {
+        "name": "check",
+        "description": "check for updates to Rust toolchains and rustup",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "prints help information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "toolchain",
+              "description": "toolchain name. For more information see `rustup help toolchain`",
+              "index": 0,
+              "provider": "rustup.toolchains"
+            }
+          ]
+        }
+      },
+      {
+        "name": "default",
+        "description": "sets the default toolchain to the one specified. If the toolchain is not already installed then it is installed first",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "prints help information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "toolchain",
+              "description": "toolchain name",
+              "index": 0,
+              "provider": "rustup.toolchains"
+            }
+          ]
+        }
+      },
+      {
+        "name": "target",
+        "description": "modify a toolchain's supported targets",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "prints help information",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list installed and available targets",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "prints help information",
+                "inherit": false
+              },
+              {
+                "short": "V",
+                "long": "version",
+                "description": "prints version information",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "add",
+            "description": "add a target to a Rust toolchain",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "prints help information",
+                "inherit": false
+              },
+              {
+                "short": "V",
+                "long": "version",
+                "description": "prints version information",
+                "inherit": false
+              },
+              {
+                "long": "toolchain",
+                "inherit": false,
+                "value": {
+                  "name": "toolchain",
+                  "description": "toolchain name",
+                  "provider": "rustup.toolchains"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "target",
+                  "description": "target triple",
+                  "index": 0,
+                  "provider": "rustup.targets"
+                }
+              ]
+            }
+          },
+          {
+            "name": "remove",
+            "description": "remove a target from a Rust toolchain",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "prints help information",
+                "inherit": false
+              },
+              {
+                "short": "V",
+                "long": "version",
+                "description": "prints version information",
+                "inherit": false
+              },
+              {
+                "long": "toolchain",
+                "inherit": false,
+                "value": {
+                  "name": "toolchain",
+                  "description": "toolchain name",
+                  "provider": "rustup.toolchains"
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "target",
+                  "description": "target triple",
+                  "index": 0,
+                  "provider": "rustup.targets"
+                }
+              ]
+            }
+          },
+          {
+            "name": "help",
+            "description": "prints this message or the help of the given subcommand(s)",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "prints help information",
+                "inherit": false
+              },
+              {
+                "short": "V",
+                "long": "version",
+                "description": "prints version information",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "subcommand",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "toolchain",
+        "description": "modify or query the installed toolchains",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "prints help information",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list installed toolchains",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "prints help information",
+                "inherit": false
+              },
+              {
+                "short": "V",
+                "long": "version",
+                "description": "prints version information",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "install",
+            "description": "install or update a given toolchain",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "prints help information",
+                "inherit": false
+              },
+              {
+                "short": "t",
+                "long": "target",
+                "description": "add specific targets on installation",
+                "inherit": false,
+                "value": {
+                  "name": "targets",
+                  "provider": "rustup.targets"
+                }
+              },
+              {
+                "short": "c",
+                "long": "component",
+                "description": "add specific components on installation",
+                "inherit": false,
+                "value": {
+                  "name": "components"
+                }
+              },
+              {
+                "long": "profile",
+                "inherit": false,
+                "value": {
+                  "name": "profile",
+                  "provider": {
+                    "values": [
+                      "minimal",
+                      "default",
+                      "complete"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "allow-downgrade",
+                "description": "allow rustup to downgrade the toolchain to satisfy your component choice",
+                "inherit": false
+              },
+              {
+                "long": "force",
+                "description": "force an update, even if some components are missing",
+                "inherit": false
+              },
+              {
+                "long": "no-self-update",
+                "description": "don't perform self update when running the`rustup toolchain install` command",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "toolchain",
+                  "description": "toolchain name",
+                  "index": 0,
+                  "repeatable": true,
+                  "provider": "rustup.toolchains"
+                }
+              ]
+            }
+          },
+          {
+            "name": "uninstall",
+            "description": "uninstall a toolchain",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "prints help information",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "toolchain",
+                  "description": "toolchain name",
+                  "index": 0,
+                  "repeatable": true,
+                  "provider": "rustup.toolchains"
+                }
+              ]
+            }
+          },
+          {
+            "name": "link",
+            "description": "create a custom toolchain by symlinking to a directory",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "prints help information",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "toolchain",
+                  "description": "custom toolchain name",
+                  "index": 0,
+                  "repeatable": true,
+                  "provider": "rustup.toolchains"
+                },
+                {
+                  "name": "path",
+                  "description": "path to the directory",
+                  "index": 1,
+                  "provider": "builtin.files"
+                }
+              ]
+            }
+          },
+          {
+            "name": "help",
+            "description": "prints this message or the help of the given subcommand(s)",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "prints help information",
+                "inherit": false
+              },
+              {
+                "short": "V",
+                "long": "version",
+                "description": "prints version information",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "subcommand",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "component",
+        "description": "modify a toolchain's installed components",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "prints help information",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list installed and available components",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "prints help information",
+                "inherit": false
+              },
+              {
+                "short": "V",
+                "long": "version",
+                "description": "prints version information",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "add",
+            "description": "add a component to a Rust toolchain",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "prints help information",
+                "inherit": false
+              },
+              {
+                "short": "V",
+                "long": "version",
+                "description": "prints version information",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "remove",
+            "description": "remove a component from a Rust toolchain",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "prints help information",
+                "inherit": false
+              },
+              {
+                "short": "V",
+                "long": "version",
+                "description": "prints version information",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "help",
+            "description": "prints this message or the help of the given subcommand(s)",
+            "arguments": {
+              "states": [
+                {
+                  "name": "subcommand(s)",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "override",
+        "description": "modify directory toolchain overrides",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "prints help information",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "list",
+            "description": "list directory toolchain overrides",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "prints help information",
+                "inherit": false
+              },
+              {
+                "short": "V",
+                "long": "version",
+                "description": "prints version information",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "set",
+            "description": "set the override toolchain for a directory",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "prints help information",
+                "inherit": false
+              },
+              {
+                "short": "V",
+                "long": "version",
+                "description": "prints version information",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "toolchain",
+                  "description": "toolchain name",
+                  "index": 0,
+                  "provider": "rustup.toolchains"
+                }
+              ]
+            }
+          },
+          {
+            "name": "unset",
+            "description": "remove the override toolchain for a directory",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "prints help information",
+                "inherit": false
+              },
+              {
+                "short": "V",
+                "long": "version",
+                "description": "prints version information",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "help",
+            "description": "prints this message or the help of the given subcommand(s)",
+            "arguments": {
+              "states": [
+                {
+                  "name": "subcommand(s)",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "run",
+        "description": "run a command with an environment configured for a given toolchain",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "prints help information",
+            "inherit": false
+          },
+          {
+            "long": "install",
+            "description": "install the requested toolchain if needed",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "toolchain",
+              "description": "toolchain name",
+              "index": 0,
+              "provider": "rustup.toolchains"
+            },
+            {
+              "name": "command",
+              "provider": "builtin.executables",
+              "index": 1,
+              "repeatable": true
+            }
+          ]
+        }
+      },
+      {
+        "name": "which",
+        "description": "display which binary will be run for a given command",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "prints help information",
+            "inherit": false
+          },
+          {
+            "long": "toolchain",
+            "description": "toolchain name",
+            "inherit": false,
+            "value": {
+              "name": "toolchain",
+              "provider": "rustup.toolchains"
+            }
+          }
+        ]
+      },
+      {
+        "name": "doc",
+        "description": "open the documentation for the current toolchain",
+        "options": [
+          {
+            "long": "alloc",
+            "description": "the Rust core allocation and collections library",
+            "inherit": false
+          },
+          {
+            "long": "book",
+            "description": "the Rust Programming Language book",
+            "inherit": false
+          },
+          {
+            "long": "cargo",
+            "description": "the Cargo Book",
+            "inherit": false
+          },
+          {
+            "long": "core",
+            "description": "the Rust Core Library",
+            "inherit": false
+          },
+          {
+            "long": "edition-guide",
+            "description": "the Rust Edition Guide",
+            "inherit": false
+          },
+          {
+            "long": "embedded-book",
+            "description": "the Embedded Rust Book",
+            "inherit": false
+          },
+          {
+            "short": "h",
+            "long": "help",
+            "description": "prints help information",
+            "inherit": false
+          },
+          {
+            "long": "nomicon",
+            "description": "the Dark Arts of Advanced and Unsafe Rust Programming",
+            "inherit": false
+          },
+          {
+            "long": "path",
+            "description": "only print the path to the documentation",
+            "inherit": false
+          },
+          {
+            "long": "proc_macro",
+            "description": "a support library for macro authors when defining new macros",
+            "inherit": false
+          },
+          {
+            "long": "reference",
+            "description": "the Rust Reference",
+            "inherit": false
+          },
+          {
+            "long": "rust-by-example",
+            "description": "a collection of runnable examples that illustrate various Rust concepts and standard libraries",
+            "inherit": false
+          },
+          {
+            "long": "rustc",
+            "description": "the compiler for the Rust programming language",
+            "inherit": false
+          },
+          {
+            "long": "rustdoc",
+            "description": "generate documentation for Rust projects",
+            "inherit": false
+          },
+          {
+            "long": "std",
+            "description": "standard library API documentation",
+            "inherit": false
+          },
+          {
+            "long": "test",
+            "description": "support code for rustc's built in unit-test and micro-benchmarking framework",
+            "inherit": false
+          },
+          {
+            "long": "unstable-book",
+            "description": "--unstable-book",
+            "inherit": false
+          },
+          {
+            "long": "toolchain",
+            "description": "toolchain name",
+            "inherit": false,
+            "value": {
+              "name": "toolchain",
+              "provider": "rustup.toolchains"
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "topic",
+              "description": "topic such as 'core', 'fn', 'usize', 'eprintln!', 'core::arch', 'alloc::format!', 'std::fs', 'std::fs::read_dir', 'std::io::Bytes', 'std::iter::Sum', 'std::io::",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "man",
+        "description": "view the man page for a given command",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "prints help information",
+            "inherit": false
+          },
+          {
+            "long": "toolchain",
+            "description": "toolchain name",
+            "inherit": false,
+            "value": {
+              "name": "toolchain",
+              "provider": "rustup.toolchains"
+            }
+          }
+        ]
+      },
+      {
+        "name": "self",
+        "description": "modify the rustup installation",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "prints help information",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "update",
+            "description": "download and install updates to rustup",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "prints help information",
+                "inherit": false
+              },
+              {
+                "short": "V",
+                "long": "version",
+                "description": "prints version information",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "uninstall",
+            "description": "uninstall rustup",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "prints help information",
+                "inherit": false
+              },
+              {
+                "short": "V",
+                "long": "version",
+                "description": "prints version information",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "upgrade-data",
+            "description": "upgrade the internal data format",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "prints help information",
+                "inherit": false
+              },
+              {
+                "short": "V",
+                "long": "version",
+                "description": "prints version information",
+                "inherit": false
+              }
+            ]
+          },
+          {
+            "name": "help",
+            "description": "prints this message or the help of the given subcommand(s)",
+            "arguments": {
+              "states": [
+                {
+                  "name": "subcommand(s)",
+                  "index": 0
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "set",
+        "description": "alter rustup settings",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "prints help information",
+            "inherit": false
+          }
+        ],
+        "subcommands": [
+          {
+            "name": "auto-self-update",
+            "description": "the rustup auto self update mode",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "prints help information",
+                "inherit": false
+              },
+              {
+                "short": "V",
+                "long": "version",
+                "description": "prints version information",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "auto-self-update-mode",
+                  "provider": {
+                    "values": [
+                      "enable",
+                      "disable",
+                      "check-only"
+                    ]
+                  },
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "default-host",
+            "options": [
+              {
+                "short": "h",
+                "long": "help",
+                "description": "prints help information",
+                "inherit": false
+              },
+              {
+                "short": "V",
+                "long": "version",
+                "description": "prints version information",
+                "inherit": false
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "host-triple",
+                  "index": 0,
+                  "provider": "rustup.targets"
+                }
+              ]
+            }
+          }
+        ]
+      },
+      {
+        "name": "completions",
+        "description": "generate tab-completion scripts for your shell",
+        "options": [
+          {
+            "short": "h",
+            "long": "help",
+            "description": "prints help information",
+            "inherit": false
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "shell",
+              "provider": {
+                "values": [
+                  "zsh",
+                  "bash",
+                  "fish",
+                  "powershell",
+                  "elvish"
+                ]
+              },
+              "index": 0
+            },
+            {
+              "name": "command",
+              "provider": {
+                "values": [
+                  "rustup",
+                  "cargo"
+                ]
+              },
+              "index": 1
+            }
+          ]
+        }
+      },
+      {
+        "name": "help",
+        "description": "prints this message or the help of the given subcommand(s)",
+        "arguments": {
+          "states": [
+            {
+              "name": "subcommand",
+              "index": 0,
+              "repeatable": true
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.executables": {
+        "builtin": "executables"
+      },
+      "rustup.toolchains": {
+        "function": "__rush_complete_rustup_toolchains"
+      },
+      "rustup.toolchain-overrides": {
+        "function": "__rush_complete_rustup_toolchain_overrides"
+      },
+      "rustup.targets": {
+        "function": "__rush_complete_rustup_targets"
+      },
+      "rustup.installed-targets": {
+        "function": "__rush_complete_rustup_installed_targets"
+      },
+      "rustup.cargo-toolchains": {
+        "function": "__rush_complete_rustup_cargo_toolchains"
+      }
+    }
+  }
+}
