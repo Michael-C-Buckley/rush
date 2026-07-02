@@ -1,0 +1,324 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "vite",
+    "description": "vite frontend build tool",
+    "options": [
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help message"
+      },
+      {
+        "long": "host",
+        "description": "specify the hostname",
+        "value": {
+          "name": "host",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "long": "port",
+        "description": "specify the port",
+        "value": {
+          "name": "port"
+        }
+      },
+      {
+        "long": "https",
+        "description": "use TLS + HTTP/2"
+      },
+      {
+        "long": "open",
+        "description": "open browser on startup",
+        "value": {
+          "name": "browser",
+          "required": false,
+          "style": "optional",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "cors",
+        "description": "enable CORS"
+      },
+      {
+        "long": "strictPort",
+        "description": "exit if the port is already in use"
+      },
+      {
+        "long": "force",
+        "description": "for the optimizer to re-bundle"
+      },
+      {
+        "short": "c",
+        "long": "config",
+        "description": "use the specified config file",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "base",
+        "description": "public base path",
+        "value": {
+          "name": "path"
+        }
+      },
+      {
+        "short": "l",
+        "long": "logLevel",
+        "description": "set the log level",
+        "value": {
+          "name": "level",
+          "provider": "logLevels"
+        }
+      },
+      {
+        "long": "clearScreen",
+        "description": "enable screen clearing when logging"
+      },
+      {
+        "short": "d",
+        "long": "debug",
+        "description": "show debug logs",
+        "value": {
+          "name": "feat",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "short": "f",
+        "long": "filter",
+        "description": "filter debug logs",
+        "value": {
+          "name": "filter"
+        }
+      },
+      {
+        "short": "m",
+        "long": "mode",
+        "description": "set env mode",
+        "value": {
+          "name": "mode",
+          "provider": "envModes"
+        }
+      },
+      {
+        "short": "v",
+        "long": "version",
+        "description": "display version number"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "root",
+          "provider": "directories",
+          "index": 0
+        }
+      ]
+    },
+    "subcommands": [
+      {
+        "name": "build",
+        "description": "build for production",
+        "options": [
+          {
+            "long": "target",
+            "description": "transpile target (must be a valid esbuild target)",
+            "value": {
+              "name": "target"
+            }
+          },
+          {
+            "long": "outDir",
+            "description": "output directory",
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "assetsDir",
+            "description": "directory under outDir to place assets in",
+            "value": {
+              "name": "dir",
+              "provider": "builtin.directories"
+            }
+          },
+          {
+            "long": "assetsInlineLimit",
+            "description": "static asset base64 inline threshold in bytes",
+            "value": {
+              "name": "number"
+            }
+          },
+          {
+            "long": "ssr",
+            "description": "build specified entry for server-side rendering",
+            "value": {
+              "name": "entry",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "sourcemap",
+            "description": "output sourcemaps for build"
+          },
+          {
+            "long": "minify",
+            "description": "enable minification",
+            "value": {
+              "name": "minifier",
+              "required": false,
+              "style": "optional",
+              "provider": "minifiers"
+            }
+          },
+          {
+            "long": "manifest",
+            "description": "emit build manifest json",
+            "value": {
+              "name": "name",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "ssrManifest",
+            "description": "emit ssr manifest json",
+            "value": {
+              "name": "name",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "emptyOutDir",
+            "description": "force empty outDir when it's outside of root"
+          },
+          {
+            "short": "w",
+            "long": "watch",
+            "description": "rebuilds when modules have changed on disk"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "root",
+              "provider": "directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "optimize",
+        "description": "pre-bundle dependencies",
+        "options": [
+          {
+            "long": "force",
+            "description": "for the optimizer to re-bundle"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "root",
+              "provider": "directories",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "preview",
+        "description": "locally preview the production build",
+        "options": [
+          {
+            "long": "host",
+            "description": "specify the hostname",
+            "value": {
+              "name": "host",
+              "required": false,
+              "style": "optional"
+            }
+          },
+          {
+            "long": "port",
+            "description": "specify the port",
+            "value": {
+              "name": "port"
+            }
+          },
+          {
+            "long": "https",
+            "description": "use TLS + HTTP/2"
+          },
+          {
+            "long": "open",
+            "description": "open browser on startup",
+            "value": {
+              "name": "browser",
+              "required": false,
+              "style": "optional",
+              "provider": "builtin.files"
+            }
+          },
+          {
+            "long": "strictPort",
+            "description": "exit if the port is already in use"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "root",
+              "provider": "directories",
+              "index": 0
+            }
+          ]
+        }
+      }
+    ],
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "files": {
+        "builtin": "files"
+      },
+      "directories": {
+        "builtin": "directories"
+      },
+      "envModes": {
+        "function": "__rush_complete_vite_env_modes"
+      },
+      "logLevels": {
+        "values": [
+          "info",
+          "warn",
+          "error",
+          "silent"
+        ]
+      },
+      "minifiers": {
+        "values": [
+          "terser",
+          "esbuild"
+        ]
+      }
+    }
+  }
+}

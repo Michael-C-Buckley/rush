@@ -1,0 +1,7 @@
+__rush_complete_vite_env_modes() {
+    for file in .env.*; do
+        [ -e "$file" ] || continue
+        [ -f "$file" ] || continue
+        rush_complete candidate "$file" --kind file
+    done
+}
