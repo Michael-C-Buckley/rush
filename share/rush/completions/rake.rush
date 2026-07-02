@@ -1,0 +1,22 @@
+__rush_complete_rake_tasks() {
+  command -v rake >/dev/null 2>&1 || return
+  rake --tasks --silent 2>/dev/null | while IFS= read -r line; do
+    case "$line" in
+      rake\ *) ;;
+      *) continue ;;
+    esac
+    task=${line#rake }
+    description=
+    case "$task" in
+      *' #'*) description=${task#* #}; task=${task%% #*} ;;
+    esac
+    task=${task%% *}
+    if [ -n "$task" ]; then
+      if [ -n "$description" ]; then
+        rush_complete candidate "$task" --kind value --description "$description"
+      else
+        rush_complete candidate "$task" --kind value --description 'rake task'
+      fi
+    fi
+  done
+}

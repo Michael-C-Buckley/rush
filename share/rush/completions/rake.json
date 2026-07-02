@@ -1,0 +1,127 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "rake",
+    "description": "run Ruby build tasks with rake",
+    "options": [
+      {
+        "short": "n",
+        "long": "dry-run",
+        "description": "do a dry run without executing actions",
+        "inherit": false
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "spellings": [
+          "-H"
+        ],
+        "description": "display this help message",
+        "inherit": false
+      },
+      {
+        "short": "I",
+        "long": "libdir",
+        "description": "include LIBDIR in the search path for required modules",
+        "inherit": false,
+        "value": {
+          "name": "libdir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "P",
+        "long": "prereqs",
+        "description": "display the tasks and dependencies, then exit",
+        "inherit": false
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "do not log messages to standard output",
+        "inherit": false
+      },
+      {
+        "short": "f",
+        "long": "rakefile",
+        "description": "use FILE as the rakefile",
+        "inherit": false,
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "r",
+        "long": "require",
+        "description": "require MODULE before executing rakefile",
+        "inherit": false,
+        "value": {
+          "name": "module"
+        }
+      },
+      {
+        "short": "s",
+        "long": "silent",
+        "description": "like --quiet, but also suppresses the 'in directory' announcement",
+        "inherit": false
+      },
+      {
+        "short": "T",
+        "long": "tasks",
+        "description": "display the tasks and dependencies, then exit",
+        "inherit": false,
+        "value": {
+          "name": "pattern",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "short": "t",
+        "long": "trace",
+        "description": "turn on invoke/execute tracing, enable full backtrace",
+        "inherit": false,
+        "value": {
+          "name": "output",
+          "required": false,
+          "style": "optional"
+        }
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "log message to standard output (default)",
+        "inherit": false
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "display the program version",
+        "inherit": false
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "targets",
+          "index": 0,
+          "repeatable": true,
+          "provider": "rake.tasks"
+        }
+      ]
+    },
+    "providers": {
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "rake.tasks": {
+        "function": "__rush_complete_rake_tasks"
+      }
+    }
+  }
+}
