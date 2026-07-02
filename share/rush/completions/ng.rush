@@ -1,0 +1,6 @@
+__rush_complete_ng_projects() {
+  ng config projects 2>/dev/null | sed -n 's/^[[:space:]]*"\([^"]*\)"[[:space:]]*:.*/\1/p' | while IFS= read -r project; do
+    test -n "$project" || continue
+    rush_complete candidate "$project" --kind plain --description "Angular project"
+  done
+}

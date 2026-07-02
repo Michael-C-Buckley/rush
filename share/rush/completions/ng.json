@@ -1,0 +1,205 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "ng",
+    "description": "manage Angular projects",
+    "options": [
+      {
+        "long": "version",
+        "description": "show version information",
+        "inherit": false
+      }
+    ],
+    "subcommands": [
+      {
+        "name": "new",
+        "description": "Create a new Angular app",
+        "options": [
+          {
+            "long": "create-application",
+            "description": "Create a default application?",
+            "inherit": false,
+            "value": {
+              "name": "project",
+              "provider": {
+                "values": [
+                  "true",
+                  "false"
+                ]
+              }
+            }
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "name",
+              "index": 0
+            }
+          ]
+        }
+      },
+      {
+        "name": "generate",
+        "description": "Generate new files",
+        "arguments": {
+          "states": [
+            {
+              "name": "schematic",
+              "index": 0
+            }
+          ]
+        },
+        "subcommands": [
+          {
+            "name": "application",
+            "description": "Generates a new application",
+            "options": [
+              {
+                "long": "style",
+                "inherit": false,
+                "value": {
+                  "name": "extension",
+                  "provider": {
+                    "values": [
+                      "css",
+                      "scss",
+                      "sass",
+                      "less",
+                      "styl"
+                    ]
+                  }
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "Name of the new app",
+                  "index": 0
+                }
+              ]
+            }
+          },
+          {
+            "name": "component",
+            "description": "Generate a new component",
+            "options": [
+              {
+                "long": "project",
+                "description": "project name",
+                "inherit": false,
+                "value": {
+                  "name": "project",
+                  "provider": "ng.projects"
+                }
+              },
+              {
+                "long": "change-detection",
+                "short": "c",
+                "description": "The change detection strategy to use",
+                "inherit": false,
+                "value": {
+                  "name": "strategy",
+                  "provider": {
+                    "values": [
+                      "Default",
+                      "OnPush"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "display-block",
+                "short": "b",
+                "description": "Add :host block to styles",
+                "inherit": false,
+                "value": {
+                  "name": "boolean",
+                  "provider": {
+                    "values": [
+                      "true",
+                      "false"
+                    ]
+                  }
+                }
+              },
+              {
+                "long": "flat",
+                "description": "Create at the top level",
+                "inherit": false,
+                "value": {
+                  "name": "boolean",
+                  "provider": {
+                    "values": [
+                      "true",
+                      "false"
+                    ]
+                  }
+                }
+              }
+            ],
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "description": "Component name",
+                  "index": 0,
+                  "required": false
+                }
+              ]
+            }
+          },
+          {
+            "name": "library",
+            "description": "Generates a new library",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0,
+                  "required": false
+                }
+              ]
+            }
+          },
+          {
+            "name": "class",
+            "description": "Generates a class",
+            "arguments": {
+              "states": [
+                {
+                  "name": "name",
+                  "index": 0,
+                  "required": false
+                }
+              ]
+            },
+            "options": [
+              {
+                "long": "project",
+                "description": "project name",
+                "inherit": false,
+                "value": {
+                  "name": "project",
+                  "provider": "ng.projects"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      {
+        "name": "version",
+        "description": "View your Angular CLI version (update for Angular 14+)"
+      }
+    ],
+    "providers": {
+      "ng.projects": {
+        "function": "__rush_complete_ng_projects"
+      }
+    }
+  }
+}
