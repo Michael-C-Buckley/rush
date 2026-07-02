@@ -72,7 +72,47 @@ fn parseWithAliasState(
 
 pub const ParseOptions = struct {
     require_complete_here_docs: bool = false,
+    /// When set, receives the location of the first parse failure so the
+    /// caller can report a positioned diagnostic; errors themselves carry
+    /// no payload.
+    failure: ?*?Failure = null,
 };
+
+/// Location details for a parse error, captured from the token the parser
+/// stopped at.
+pub const Failure = struct {
+    line: usize,
+    /// Source text of the offending token; null when parsing stopped at
+    /// end of input.
+    near: ?[]const u8,
+};
+
+pub fn isParseError(err: anyerror) bool {
+    return switch (err) {
+        error.ExpectedCommand,
+        error.ExpectedRedirectionTarget,
+        error.IncompleteHereDoc,
+        error.InvalidParameterExpansion,
+        error.UnclosedCommandSubstitution,
+        error.UnclosedQuote,
+        error.UnexpectedToken,
+        => true,
+        else => false,
+    };
+}
+
+/// Alias-aware whole-program parse that also reports failure locations
+/// through `ParseOptions.failure`.
+// ziglint-ignore: Z015 matches the existing public parse API error set exposure
+pub fn parseWithAliasesAndOptions(
+    allocator: std.mem.Allocator,
+    src: source_mod.Source,
+    tokens: []const token.Token,
+    shell_state: state_mod.State,
+    options: ParseOptions,
+) ParserError!ast.Program {
+    return parseWithAliasStateOptions(allocator, src, tokens, shell_state, options);
+}
 
 fn parseWithAliasStateOptions(
     allocator: std.mem.Allocator,
@@ -90,7 +130,10 @@ fn parseWithAliasStateOptions(
         .alias_state = alias_state,
         .require_complete_here_docs = options.require_complete_here_docs,
     };
-    return parser.parseProgram();
+    return parser.parseProgram() catch |err| {
+        if (options.failure) |out| out.* = parser.currentFailure();
+        return err;
+    };
 }
 
 /// Incremental parser that yields one newline-terminated complete command
@@ -100,6 +143,7 @@ fn parseWithAliasStateOptions(
 pub const Incremental = struct {
     parser: Parser,
     started: bool = false,
+    last_failure: ?Failure = null,
 
     pub fn init(
         allocator: std.mem.Allocator,
@@ -138,6 +182,18 @@ pub const Incremental = struct {
     /// separators remain before end of input.
     // ziglint-ignore: Z015 matches the existing public parse API error set exposure
     pub fn next(self: *Incremental) ParserError!?ast.Program {
+        return self.nextCommand() catch |err| {
+            self.last_failure = self.parser.currentFailure();
+            return err;
+        };
+    }
+
+    /// Location of the most recent parse failure from `next`.
+    pub fn failure(self: *const Incremental) ?Failure {
+        return self.last_failure;
+    }
+
+    fn nextCommand(self: *Incremental) ParserError!?ast.Program {
         const p = &self.parser;
         // Leading separators are skipped once, mirroring parseList; between
         // commands only the newlines consumed after each terminator are
@@ -1053,6 +1109,17 @@ const Parser = struct {
         return self.at(.here_doc_body) or self.at(.here_doc_body_unterminated);
     }
 
+    /// Snapshots the location where parsing stopped, for diagnostics. The
+    /// token at the current index is the best approximation of the error
+    /// position without threading spans through every error return.
+    fn currentFailure(self: *const Parser) Failure {
+        const tok = self.tokens[@min(self.index, self.tokens.len - 1)];
+        return .{
+            .line = tok.span.start_line,
+            .near = if (tok.kind == .eof) null else self.source.text[tok.span.start..tok.span.end],
+        };
+    }
+
     fn expect(self: *Parser, kind: token.Kind) ParseError!void {
         _ = self.eat(kind) orelse return error.UnexpectedToken;
     }
@@ -1889,4 +1956,49 @@ test "quoted here-document delimiters keep the body literal with no parts" {
     try std.testing.expect(here_doc.delimiter_quoted);
     try std.testing.expectEqualStrings("$X `cmd`\n", here_doc.body);
     try std.testing.expectEqual(@as(usize, 0), here_doc.parts.len);
+}
+
+test "incremental parser records failure locations" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var shell_state = state_mod.State.init(std.testing.allocator, .{});
+    defer shell_state.deinit();
+
+    const src: source_mod.Source = .{
+        .id = 1,
+        .kind = .script_file,
+        .name = "test",
+        .text = "echo ok\n)\n",
+    };
+    const tokens = try lexer.lex(allocator, src);
+    var incremental: Incremental = .init(allocator, src, tokens, shell_state);
+
+    _ = (try incremental.next()).?;
+    try std.testing.expectError(error.ExpectedCommand, incremental.next());
+    const parse_failure = incremental.failure().?;
+    try std.testing.expectEqual(@as(usize, 2), parse_failure.line);
+    try std.testing.expectEqualStrings(")", parse_failure.near.?);
+}
+
+test "whole-program parse reports failure at end of input" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var shell_state = state_mod.State.init(std.testing.allocator, .{});
+    defer shell_state.deinit();
+
+    const src: source_mod.Source = .{
+        .id = 1,
+        .kind = .script_file,
+        .name = "test",
+        .text = "if true\nthen echo x\n",
+    };
+    const tokens = try lexer.lex(allocator, src);
+    var parse_failure: ?Failure = null;
+    const parsed = parseWithAliasesAndOptions(allocator, src, tokens, shell_state, .{ .failure = &parse_failure });
+
+    try std.testing.expectError(error.UnexpectedToken, parsed);
+    try std.testing.expectEqual(@as(usize, 3), parse_failure.?.line);
+    try std.testing.expectEqual(@as(?[]const u8, null), parse_failure.?.near);
 }

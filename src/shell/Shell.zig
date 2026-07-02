@@ -194,7 +194,10 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
                     // Unexpanded text may only parse after alias expansion
                     // (an alias value can open a construct); retry the rest
                     // of the input through the alias-aware path.
-                    if (!self.aliasesMayRewrite()) return err;
+                    if (!self.aliasesMayRewrite()) {
+                        self.reportParseFailure(err, incremental.failure(), 0);
+                        return err;
+                    }
                     boundaries_failed = true;
                     end = src.text.len;
                 }
@@ -233,7 +236,9 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
         ) !result.EvalResult {
             while (true) {
                 const require_complete = end.* < src.text.len;
-                return self.evalSourceChunk(src, src.text[start..end.*], require_complete) catch |err| switch (err) {
+                var failure: ?parser.Failure = null;
+                const chunk = src.text[start..end.*];
+                return self.evalSourceChunk(src, chunk, require_complete, &failure) catch |err| switch (err) {
                     error.ExpectedCommand,
                     error.ExpectedRedirectionTarget,
                     error.IncompleteHereDoc,
@@ -241,7 +246,10 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
                     error.UnclosedQuote,
                     error.UnexpectedToken,
                     => {
-                        if (end.* >= src.text.len) return err;
+                        if (end.* >= src.text.len) {
+                            self.reportParseFailure(err, failure, lineOffset(src.text, start));
+                            return err;
+                        }
                         end.* = nextBoundaryEnd(src, incremental, boundaries_failed);
                         continue;
                     },
@@ -255,24 +263,76 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
             src: source.Source,
             text: []const u8,
             require_complete_here_docs: bool,
+            failure: *?parser.Failure,
         ) !result.EvalResult {
             const chunk_src: source.Source = .{ .id = src.id, .kind = src.kind, .name = src.name, .text = text };
 
             const ast_allocator = self.astAllocator();
             const lexed = try lexer.lexWithAliasesSource(ast_allocator, chunk_src, self.state);
-            const program = if (require_complete_here_docs)
-                // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-                try parser.parseWithAliasesRequiringCompleteHereDocs(ast_allocator, lexed.source, lexed.tokens, self.state)
-            else
-                try parser.parseWithAliases(ast_allocator, lexed.source, lexed.tokens, self.state);
+            const program = try parser.parseWithAliasesAndOptions(
+                ast_allocator,
+                lexed.source,
+                lexed.tokens,
+                self.state,
+                .{ .require_complete_here_docs = require_complete_here_docs, .failure = failure },
+            );
             program.validate();
             return eval.evalProgram(Host, self, program);
+        }
+
+        /// Writes a positioned syntax diagnostic in the same style as the
+        /// evaluator's expansion diagnostics. The error still propagates to
+        /// the caller, which decides whether the shell exits.
+        fn reportParseFailure(self: *Self, err: anyerror, failure: ?parser.Failure, line_offset: usize) void {
+            std.debug.assert(parser.isParseError(err));
+            const stream_offset = line_offset + self.state.diagnostic_line_offset;
+            const line = if (failure) |value| value.line + stream_offset else stream_offset + 1;
+            const near = if (failure) |value| value.near else null;
+
+            const message = message: {
+                const allocator = self.astAllocator();
+                break :message switch (err) {
+                    error.UnclosedQuote => std.fmt.allocPrint(
+                        allocator,
+                        "{}: syntax error: unterminated quoted string\n",
+                        .{line},
+                    ),
+                    error.UnclosedCommandSubstitution => std.fmt.allocPrint(
+                        allocator,
+                        "{}: syntax error: unterminated command substitution\n",
+                        .{line},
+                    ),
+                    error.IncompleteHereDoc => std.fmt.allocPrint(
+                        allocator,
+                        "{}: syntax error: here-document missing terminating delimiter\n",
+                        .{line},
+                    ),
+                    error.InvalidParameterExpansion => std.fmt.allocPrint(
+                        allocator,
+                        "{}: syntax error: bad substitution\n",
+                        .{line},
+                    ),
+                    else => if (near) |text|
+                        std.fmt.allocPrint(allocator, "{}: syntax error: unexpected '{s}'\n", .{ line, text })
+                    else
+                        std.fmt.allocPrint(allocator, "{}: syntax error: unexpected end of input\n", .{line}),
+                } catch return;
+            };
+            // ziglint-ignore: Z026 best-effort diagnostic; the parse error still propagates
+            self.host.writeAll(.stderr, message) catch {};
         }
 
         fn aliasesMayRewrite(self: *Self) bool {
             return self.state.aliases.count() != 0 and lexer.aliasesEnabled(self.state);
         }
     };
+}
+
+/// Number of lines before `offset`, for translating chunk-relative parse
+/// failure lines into source lines.
+fn lineOffset(text: []const u8, offset: usize) usize {
+    std.debug.assert(offset <= text.len);
+    return std.mem.count(u8, text[0..offset], "\n");
 }
 
 fn nextBoundaryEnd(

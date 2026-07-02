@@ -106,12 +106,13 @@ fn evalSource(
     defer sh.deinit();
     sh.setFunctionAutoload(autoloadRushFunction);
 
-    const evaluated = sh.evalSource(src) catch {
-        try sh.host.writeAll(.stderr, "rush: shell error\n");
+    const evaluated = sh.evalSource(src) catch |err| {
+        // Parse errors already produced a positioned syntax diagnostic.
+        if (!shell.parser.isParseError(err)) try sh.host.writeAll(.stderr, "rush: shell error\n");
         return 2;
     };
-    return shell.eval.runExitTrap(&sh, evaluated.status) catch {
-        try sh.host.writeAll(.stderr, "rush: shell error\n");
+    return shell.eval.runExitTrap(&sh, evaluated.status) catch |err| {
+        if (!shell.parser.isParseError(err)) try sh.host.writeAll(.stderr, "rush: shell error\n");
         return 2;
     };
 }

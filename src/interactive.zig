@@ -317,9 +317,10 @@ const InteractiveSession = struct {
 
         const background_jobs_before = self.sh.state.background_jobs.items.len;
         const started_at = unixTimestamp(self.io);
-        const evaluated = self.sh.evalSource(src) catch {
+        const evaluated = self.sh.evalSource(src) catch |err| {
             self.sh.state.last_status = 2;
-            try self.sh.host.writeAll(.stderr, "rush: shell error\n");
+            // Parse errors already produced a positioned syntax diagnostic.
+            if (!shell.parser.isParseError(err)) try self.sh.host.writeAll(.stderr, "rush: shell error\n");
             // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
             terminal.finishSemanticCommand(2) catch {};
             try terminal.enterEditorMode();
@@ -542,10 +543,11 @@ fn refreshInteractivePrompt(context: *anyopaque, allocator: std.mem.Allocator, i
     return session.renderPrompt() catch try prompt(allocator, session.sh);
 }
 
-// ziglint-ignore: Z023 parameter order follows method or callback shape; preserve API
 fn diagnoseInteractiveInput(
     context: *anyopaque,
+    // ziglint-ignore: Z023 parameter order follows method or callback shape; preserve API
     allocator: std.mem.Allocator,
+    // ziglint-ignore: Z023 parameter order follows method or callback shape; preserve API
     io: std.Io,
     text: []const u8,
 ) !?editor.render.DiagnosticRender {
@@ -714,6 +716,7 @@ const PathCommandCache = struct {
     cwd_key: []const u8 = "",
     commands: std.StringHashMapUnmanaged(void) = .empty,
 
+    // ziglint-ignore: Z030 deinit intentionally leaves reusable/test-local state shape
     fn deinit(self: *PathCommandCache, allocator: std.mem.Allocator) void {
         allocator.free(self.path_key);
         allocator.free(self.cwd_key);
@@ -926,6 +929,10 @@ fn runStdinScript(
 ) !u8 {
     var pending: std.ArrayList(u8) = .empty;
     defer pending.deinit(allocator);
+    // Diagnostics number lines from the start of the stream even though
+    // each complete command evaluates as its own source.
+    var consumed_lines: usize = 0;
+    defer sh.state.diagnostic_line_offset = 0;
 
     while (true) {
         const line = try readStdinLineWithNewline(allocator, sh) orelse break;
@@ -933,9 +940,12 @@ fn runStdinScript(
         try pending.appendSlice(allocator, line);
         if (endsWithLineContinuation(pending.items)) continue;
         if (!stdinCommandsComplete(sh, pending.items)) continue;
+        sh.state.diagnostic_line_offset = consumed_lines;
+        consumed_lines += std.mem.count(u8, pending.items, "\n");
         if (try evalStdinPending(sh, source_id, &pending)) |status| return status;
     }
     if (pending.items.len != 0) {
+        sh.state.diagnostic_line_offset = consumed_lines;
         if (try evalStdinPending(sh, source_id, &pending)) |status| return status;
     }
     return shell.eval.runExitTrap(sh, sh.state.last_status) catch {
@@ -962,7 +972,8 @@ fn evalStdinPending(
     const evaluated = sh.evalSource(src) catch |err| switch (err) {
         error.OutOfMemory => return error.OutOfMemory,
         else => {
-            try sh.host.writeAll(.stderr, "rush: shell error\n");
+            // Parse errors already produced a positioned syntax diagnostic.
+            if (!shell.parser.isParseError(err)) try sh.host.writeAll(.stderr, "rush: shell error\n");
             return 2;
         },
     };
@@ -1067,9 +1078,10 @@ fn runPromptedStdin(
         };
         source_id.* +%= 1;
 
-        const evaluated = sh.evalSource(src) catch {
+        const evaluated = sh.evalSource(src) catch |err| {
             sh.state.last_status = 2;
-            try sh.host.writeAll(.stderr, "rush: shell error\n");
+            // Parse errors already produced a positioned syntax diagnostic.
+            if (!shell.parser.isParseError(err)) try sh.host.writeAll(.stderr, "rush: shell error\n");
             continue;
         };
         switch (evaluated.flow) {
@@ -1127,7 +1139,7 @@ fn unixTimestamp(io: std.Io) i64 {
 }
 
 test "interactive input analysis marks unresolved command tokens only" {
-    var sh = RushShell.init(std.testing.allocator, host.RealHost{}, .{});
+    var sh = RushShell.init(std.testing.allocator, .{}, .{});
     defer sh.deinit();
     try sh.state.putAlias(.{ .name = "ll", .value = "ls -l" });
 
@@ -1146,7 +1158,7 @@ test "interactive input analysis marks unresolved command tokens only" {
 }
 
 test "interactive input analysis styles comments quotes and pending quote" {
-    var sh = RushShell.init(std.testing.allocator, host.RealHost{}, .{});
+    var sh = RushShell.init(std.testing.allocator, .{}, .{});
     defer sh.deinit();
     var command_cache: PathCommandCache = .{};
     defer command_cache.deinit(std.testing.allocator);

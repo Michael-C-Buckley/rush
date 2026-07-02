@@ -487,6 +487,50 @@
             .status_match = .nonzero,
         },
         .{
+            .name = "syntax errors report the line and offending token",
+            .script =
+            \\printf 'ran\n'
+            \\printf 'ok\n'
+            \\)
+            ,
+            .stdout =
+            \\ran
+            \\ok
+            \\
+            ,
+            .stderr =
+            \\3: syntax error: unexpected ')'
+            \\
+            ,
+            .status = 2,
+        },
+        .{
+            .name = "unterminated quotes report a syntax diagnostic",
+            .script = "printf 'ok\\n'\necho \"abc",
+            .stdout =
+            \\ok
+            \\
+            ,
+            .stderr =
+            \\2: syntax error: unterminated quoted string
+            \\
+            ,
+            .status = 2,
+        },
+        .{
+            .name = "unexpected end of input reports a syntax diagnostic",
+            .script =
+            \\if true
+            \\then printf 'x\n'
+            ,
+            .stdout = "",
+            .stderr =
+            \\2: syntax error: unexpected end of input
+            \\
+            ,
+            .status = 2,
+        },
+        .{
             .name = "trailing blank lines preserve the last command status",
             .script =
             \\false
