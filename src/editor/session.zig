@@ -164,6 +164,7 @@ pub const MouseClick = struct {
 pub const LineSession = struct {
     allocator: std.mem.Allocator,
     prompt: Prompt,
+    right_prompt: Prompt = .{ .bytes = "" },
     requests: LineRequestOutbox = .{},
     editing_mode: EditingMode = .emacs,
     vi_state: ViState = .insert,
@@ -261,6 +262,7 @@ pub const LineSession = struct {
         self.redo_stack.deinit(self.allocator);
         self.editor.deinit();
         self.allocator.free(self.prompt.bytes);
+        if (self.right_prompt.bytes.len != 0) self.allocator.free(self.right_prompt.bytes);
         self.* = undefined;
     }
 
@@ -1872,6 +1874,15 @@ pub const LineSession = struct {
         self.requests.clear(self.allocator, .refresh_prompt);
     }
 
+    pub fn replaceRightPrompt(self: *LineSession, prompt: Prompt) !void {
+        const bytes = try self.allocator.dupe(u8, prompt.bytes);
+        if (self.right_prompt.bytes.len != 0) self.allocator.free(self.right_prompt.bytes);
+        self.right_prompt = .{
+            .bytes = bytes,
+            .visible_width = prompt.visible_width,
+        };
+    }
+
     pub fn applyCompletion(self: *LineSession, application: completion.Application) !void {
         switch (application) {
             .edit => |edit| {
@@ -1989,6 +2000,10 @@ pub const LineSession = struct {
         var suggestion_suffix: ?[]const u8 = null;
         defer if (suggestion_suffix) |suffix| allocator.free(suffix);
         render_options.prompt = self.prompt;
+        render_options.right_prompt = if (self.state == .editing or self.state == .history_search)
+            self.right_prompt
+        else
+            .{ .bytes = "" };
         render_options.cursor_shape = self.cursorShape();
         render_options.completion_menu = self.completion_menu.candidates;
         render_options.completion_selection = self.completion_menu.selected;
@@ -4371,6 +4386,52 @@ test "line session renders with its prompt" {
     defer std.testing.allocator.free(rendered);
 
     try std.testing.expectEqualStrings("\r\x1b[2Krush> x\r\x1b[7C", rendered);
+}
+
+test "line session renders right prompt flush right" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.replaceRightPrompt(.{ .bytes = "RIGHT" });
+    try session.editor.buffer.replace("echo");
+
+    var frame = try session.renderFrame(std.testing.allocator, .{
+        .width = 20,
+        .synchronized_output = false,
+    });
+    defer frame.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("$ echo         RIGHT", frame.lines[0]);
+}
+
+test "line session hides right prompt on collision" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.replaceRightPrompt(.{ .bytes = "RIGHT" });
+    try session.editor.buffer.replace("echo abcdefghijk");
+
+    var frame = try session.renderFrame(std.testing.allocator, .{
+        .width = 20,
+        .synchronized_output = false,
+    });
+    defer frame.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("$ echo abcdefghijk", frame.lines[0]);
+}
+
+test "line session omits right prompt after submit" {
+    var session = try LineSession.init(std.testing.allocator, "$ ");
+    defer session.deinit();
+    try session.replaceRightPrompt(.{ .bytes = "RIGHT" });
+    try session.editor.buffer.replace("echo");
+    try session.handleKey(.{ .key = .enter });
+
+    var frame = try session.renderFrame(std.testing.allocator, .{
+        .width = 20,
+        .synchronized_output = false,
+    });
+    defer frame.deinit(std.testing.allocator);
+
+    try std.testing.expectEqualStrings("$ echo", frame.lines[0]);
 }
 
 test "render line styles diagnostic spans without moving cursor" {

@@ -228,6 +228,7 @@ pub const FrameRenderOptions = struct {
 
 pub const RenderOptions = struct {
     prompt: Prompt = .{ .bytes = "" },
+    right_prompt: Prompt = .{ .bytes = "" },
     completion_menu: []const completion.Candidate = &.{},
     completion_selection: usize = 0,
     completion_window_start: usize = 0,
@@ -327,6 +328,14 @@ pub fn frameFromInput(allocator: std.mem.Allocator, input: Input, options: Rende
 
     try appendWrappedLine(allocator, &lines, input_line_bytes, wrap_width, options.width_method);
     if (cursor_position.row == lines.items.len) try lines.append(allocator, try allocator.dupe(u8, ""));
+    try appendRightPrompt(
+        allocator,
+        lines.items,
+        options.prompt.bytes,
+        options.right_prompt.bytes,
+        wrap_width,
+        options.width_method,
+    );
     const input_line_count = lines.items.len;
     if (options.status_line.len != 0) {
         try appendWrappedLine(allocator, &lines, options.status_line, wrap_width, options.width_method);
@@ -352,6 +361,36 @@ pub fn frameFromInput(allocator: std.mem.Allocator, input: Input, options: Rende
         .cursor_col = cursor_position.col,
         .cursor_shape = options.cursor_shape,
     };
+}
+
+fn appendRightPrompt(
+    allocator: std.mem.Allocator,
+    lines: [][]const u8,
+    prompt_bytes: []const u8,
+    right_prompt_bytes: []const u8,
+    width: u16,
+    method: vaxis.gwidth.Method,
+) !void {
+    if (right_prompt_bytes.len == 0 or lines.len == 0) return;
+    const line_width: usize = width;
+    const right_width: usize = visibleWidth(right_prompt_bytes, method);
+    if (right_width == 0 or right_width >= line_width) return;
+
+    const input_start = wrappedPosition(prompt_bytes, width, method);
+    if (input_start.row >= lines.len) return;
+
+    const row = lines[input_start.row];
+    const left_width: usize = visibleWidth(row, method);
+    if (left_width + right_width >= line_width) return;
+
+    var padded: std.ArrayList(u8) = .empty;
+    errdefer padded.deinit(allocator);
+    try padded.appendSlice(allocator, row);
+    for (left_width..line_width - right_width) |_| try padded.append(allocator, ' ');
+    try padded.appendSlice(allocator, right_prompt_bytes);
+
+    allocator.free(row);
+    lines[input_start.row] = try padded.toOwnedSlice(allocator);
 }
 
 fn appendStyledInput(

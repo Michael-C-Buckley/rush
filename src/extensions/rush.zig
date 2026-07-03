@@ -1445,6 +1445,22 @@ pub fn renderTransientPrompt(
     );
 }
 
+pub fn renderRightPrompt(
+    allocator: std.mem.Allocator,
+    sh: anytype,
+    previous_status: result.ExitStatus,
+    previous_duration_ms: ?i64,
+) !?[]const u8 {
+    return renderPromptFunction(
+        allocator,
+        sh,
+        "rush_prompt_right",
+        previous_status,
+        previous_duration_ms,
+        .skip,
+    );
+}
+
 const PromptFallback = enum { fallback_static, skip };
 
 fn renderPromptFunction(

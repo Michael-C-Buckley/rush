@@ -214,6 +214,8 @@ const InteractiveSession = struct {
 
         const prompt_text = self.renderPrompt() catch try prompt(self.allocator, self.sh);
         defer self.allocator.free(prompt_text);
+        const right_prompt_text = try self.renderRightPrompt() orelse "";
+        defer if (right_prompt_text.len != 0) self.allocator.free(right_prompt_text);
         _ = self.dispatchPromptAsyncLifecycleEvents(self.allocator) catch |err| switch (err) {
             error.OutOfMemory => return error.OutOfMemory,
             else => {},
@@ -226,6 +228,7 @@ const InteractiveSession = struct {
 
         return terminal.readLine(.{
             .prompt = prompt_text,
+            .right_prompt = right_prompt_text,
             .history = self.history_service.lineEditorView(self.io),
             .prompt_async_context = self,
             .pump_prompt_async = pumpPromptAsync,
@@ -244,6 +247,7 @@ const InteractiveSession = struct {
             .run_activity_event = runInteractiveActivityEvent,
             .prompt_context = self,
             .refresh_prompt = refreshInteractivePrompt,
+            .refresh_right_prompt = refreshInteractiveRightPrompt,
             .refresh_transient_prompt = refreshInteractiveTransientPrompt,
         }) catch |err| {
             var message_buffer: [128]u8 = undefined;
@@ -309,6 +313,18 @@ const InteractiveSession = struct {
         defer self.sh.state.last_status = prompt_status;
 
         return extensions.rush.renderTransientPrompt(
+            self.allocator,
+            self.sh,
+            prompt_status,
+            self.last_command_duration_ms,
+        );
+    }
+
+    fn renderRightPrompt(self: *InteractiveSession) !?[]const u8 {
+        const prompt_status = self.last_command_status;
+        defer self.sh.state.last_status = prompt_status;
+
+        return extensions.rush.renderRightPrompt(
             self.allocator,
             self.sh,
             prompt_status,
@@ -577,6 +593,14 @@ fn refreshInteractivePrompt(context: *anyopaque, allocator: std.mem.Allocator, i
     const session: *InteractiveSession = @ptrCast(@alignCast(context));
     _ = try session.dispatchPromptAsyncLifecycleEvents(allocator);
     return session.renderPrompt() catch try prompt(allocator, session.sh);
+}
+
+// ziglint-ignore: Z023 parameter order follows method or callback shape; preserve API
+fn refreshInteractiveRightPrompt(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) !?[]const u8 {
+    _ = allocator;
+    _ = io;
+    const session: *InteractiveSession = @ptrCast(@alignCast(context));
+    return try session.renderRightPrompt();
 }
 
 // ziglint-ignore: Z023 parameter order follows method or callback shape; preserve API
@@ -1319,6 +1343,50 @@ test "interactive transient prompt uses prompt helpers and last command status" 
     defer std.testing.allocator.free(rendered);
 
     try std.testing.expectEqualStrings("BAD", rendered);
+    try std.testing.expectEqual(@as(shell.result.ExitStatus, 1), sh.state.last_status);
+}
+
+test "interactive right prompt uses prompt helpers and last command status" {
+    var sh = RushShell.init(std.testing.allocator, .{}, .{});
+    defer sh.deinit();
+
+    const src: shell.source.Source = .{
+        .id = 1,
+        .kind = .command_string,
+        .name = "test",
+        .text =
+        \\rush_prompt_right(){
+        \\  if test "$?" = 0; then
+        \\    prompt text OK-RIGHT
+        \\  else
+        \\    prompt text BAD-RIGHT
+        \\  fi
+        \\}
+        ,
+    };
+    const defined = try sh.evalSource(src);
+    try std.testing.expectEqual(@as(shell.result.ExitStatus, 0), defined.status);
+
+    var command_history = history.History.init(std.testing.allocator);
+    defer command_history.deinit();
+    var history_service = history.InteractiveHistoryService.init(&command_history);
+    var source_id: shell.source.SourceId = 2;
+    var session: InteractiveSession = .{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .sh = &sh,
+        .source_id = &source_id,
+        .command_history = &command_history,
+        .history_service = &history_service,
+        .events = .{ .sh = &sh },
+        .last_command_status = 1,
+    };
+
+    sh.state.last_status = 0;
+    const rendered = (try session.renderRightPrompt()) orelse return error.TestExpectedEqual;
+    defer std.testing.allocator.free(rendered);
+
+    try std.testing.expectEqualStrings("BAD-RIGHT", rendered);
     try std.testing.expectEqual(@as(shell.result.ExitStatus, 1), sh.state.last_status);
 }
 

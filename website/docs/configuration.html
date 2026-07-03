@@ -193,6 +193,16 @@ each <span class="var">$XDG_DATA_DIRS</span> entry + /rush/functions
 
   <p>Unset <code>rush_prompt_transient</code> to leave accepted prompts unchanged.</p>
 
+  <h2 id="right-prompt"><a href="#right-prompt">Right prompt</a></h2>
+
+  <p>Define <code>rush_prompt_right</code> to render text flush-right on the editable input line. Rush hides it automatically when the input would collide with it, and it is not kept in the accepted command line.</p>
+
+  <pre><span class="cmd">rush_prompt_right</span>() {
+  <span class="kw">if</span> test <span class="str">"$(prompt_duration)"</span> != <span class="str">""</span>; <span class="kw">then</span>
+    <span class="cmd">prompt</span> segment <span class="opt">--dim</span> <span class="str">"$(prompt_duration)"</span>
+  <span class="kw">fi</span>
+}</pre>
+
   <h2 id="prompt-commands"><a href="#prompt-commands">Prompt commands</a></h2>
 
   <pre><span class="cmd">prompt</span> text TEXT...

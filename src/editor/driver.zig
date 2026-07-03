@@ -60,6 +60,7 @@ const CompletionWorker = worker.Worker;
 
 pub const ReadLineOptions = struct {
     prompt: []const u8,
+    right_prompt: []const u8 = "",
     editing_mode: line_editor.EditingMode = .emacs,
     prompt_refresh_interval_ms: ?u64 = null,
     hook_context: ?*anyopaque = null,
@@ -78,6 +79,11 @@ pub const ReadLineOptions = struct {
         std.mem.Allocator,
         std.Io,
     ) anyerror![]const u8 = null,
+    refresh_right_prompt: ?*const fn (
+        *anyopaque,
+        std.mem.Allocator,
+        std.Io,
+    ) anyerror!?[]const u8 = null,
     refresh_transient_prompt: ?*const fn (
         *anyopaque,
         std.mem.Allocator,
@@ -439,6 +445,10 @@ pub const TerminalSession = struct {
             .visible_width = line_editor.visibleWidth(read_options.prompt, self.capabilities.widthMethod()),
         }, read_options.history, read_options.editing_mode);
         defer session.deinit();
+        try session.replaceRightPrompt(.{
+            .bytes = read_options.right_prompt,
+            .visible_width = line_editor.visibleWidth(read_options.right_prompt, self.capabilities.widthMethod()),
+        });
 
         try writeTtyAll(&self.tty, semantic_command_start);
         try renderSession(
@@ -677,6 +687,22 @@ pub const TerminalSession = struct {
                                 .bytes = prompt,
                                 .visible_width = line_editor.visibleWidth(prompt, self.capabilities.widthMethod()),
                             });
+                            if (read_options.refresh_right_prompt) |refresh_right_prompt| {
+                                const maybe_right_prompt = try refresh_right_prompt(
+                                    read_options.prompt_context.?,
+                                    self.allocator,
+                                    self.io,
+                                );
+                                defer if (maybe_right_prompt) |right_prompt| self.allocator.free(right_prompt);
+                                const right_prompt = maybe_right_prompt orelse "";
+                                try session.replaceRightPrompt(.{
+                                    .bytes = right_prompt,
+                                    .visible_width = line_editor.visibleWidth(
+                                        right_prompt,
+                                        self.capabilities.widthMethod(),
+                                    ),
+                                });
+                            }
                         }
                         if (session.takeClearScreenRequest()) {
                             if (pending_clear_screen_deadline_ms == null) {
@@ -761,6 +787,7 @@ pub const TerminalSession = struct {
                             });
                         }
                     }
+                    try session.replaceRightPrompt(.{ .bytes = "" });
                     try renderSession(
                         self.allocator,
                         self.io,
