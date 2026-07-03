@@ -514,6 +514,23 @@ fn appendProviderCandidates(
     provider_ref: std.json.Value,
     companion_path: ?[]const u8,
 ) !void {
+    if (jsonArray(provider_ref)) |provider_refs| {
+        for (provider_refs.items) |item| {
+            try appendProviderCandidates(
+                allocator,
+                io,
+                sh,
+                builder,
+                analyzed,
+                semantic,
+                command,
+                providers,
+                item,
+                companion_path,
+            );
+        }
+        return;
+    }
     if (providerValue(providers, provider_ref)) |provider| {
         // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
         if (jsonStringField(provider, "builtin")) |name| return appendBuiltinProvider(allocator, builder, sh, analyzed, name);
@@ -1110,6 +1127,28 @@ test "completion includes dynamic option provider candidates" {
         if (std.mem.eql(u8, candidate.value, "-Doptimize=ReleaseSafe")) return;
     }
     return error.ExpectedOptimizeReleaseSafeCandidate;
+}
+
+test "completion uses provider arrays from nvim manifest" {
+    var sh = shell.ShellWithBuiltins(host.RealHost, extensions.rush.registry).init(std.testing.allocator, .{}, .{});
+    defer sh.deinit();
+
+    const source = "nvim ";
+    var application = try complete(&sh, std.testing.allocator, std.testing.io, source, source.len);
+    defer application.deinit(std.testing.allocator);
+    const candidates = switch (application) {
+        .ambiguous => |candidates| candidates,
+        else => return error.ExpectedNvimPathCandidates,
+    };
+
+    var saw_file = false;
+    var saw_directory = false;
+    for (candidates) |candidate| {
+        if (std.mem.eql(u8, candidate.value, "AGENTS.md") and candidate.kind == .file) saw_file = true;
+        if (std.mem.eql(u8, candidate.value, "src/") and candidate.kind == .directory) saw_directory = true;
+    }
+    try std.testing.expect(saw_file);
+    try std.testing.expect(saw_directory);
 }
 
 test "path completion follows symlinked directories before appending space" {
