@@ -153,15 +153,6 @@ rush_prompt() {
   fi
 }
 
-rush_prompt_transient() {
-  rush_prompt_status=$?
-  if test "$rush_prompt_status" = 0; then
-    prompt text '● '
-  else
-    prompt segment --fg red '● '
-  fi
-}
-
 # ---- Project environment hooks ----
 # Opt-in project environment hooks. Register these from a later config file,
 # for example:
