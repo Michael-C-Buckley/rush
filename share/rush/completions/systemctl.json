@@ -428,7 +428,8 @@
             {
               "name": "pattern",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.units"
             }
           ]
         }
@@ -441,7 +442,8 @@
             {
               "name": "pattern",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.socket-units"
             }
           ]
         }
@@ -454,7 +456,8 @@
             {
               "name": "pattern",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.timer-units"
             }
           ]
         }
@@ -467,7 +470,8 @@
             {
               "name": "pattern",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.units"
             }
           ]
         }
@@ -480,7 +484,8 @@
             {
               "name": "pattern",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.failed-units"
             }
           ]
         }
@@ -493,7 +498,8 @@
             {
               "name": "pattern-or-pid",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.units"
             }
           ]
         }
@@ -506,7 +512,11 @@
             {
               "name": "pattern-or-job",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": [
+                "systemctl.units",
+                "systemctl.jobs"
+              ]
             }
           ]
         }
@@ -519,7 +529,8 @@
             {
               "name": "pattern",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.units"
             }
           ]
         }
@@ -532,7 +543,8 @@
             {
               "name": "pattern-or-pid",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.units"
             }
           ]
         }
@@ -545,7 +557,8 @@
             {
               "name": "pattern",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.units"
             }
           ]
         }
@@ -558,7 +571,8 @@
             {
               "name": "unit",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.startable-units"
             }
           ]
         }
@@ -571,7 +585,8 @@
             {
               "name": "unit",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.stoppable-units"
             }
           ]
         }
@@ -584,7 +599,8 @@
             {
               "name": "unit",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.reloadable-units"
             }
           ]
         }
@@ -597,7 +613,8 @@
             {
               "name": "unit",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.restartable-units"
             }
           ]
         }
@@ -610,7 +627,8 @@
             {
               "name": "unit",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.stoppable-units"
             }
           ]
         }
@@ -623,7 +641,8 @@
             {
               "name": "unit",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.restartable-units"
             }
           ]
         }
@@ -636,7 +655,8 @@
             {
               "name": "unit",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.reloadable-units"
             }
           ]
         }
@@ -648,7 +668,8 @@
           "states": [
             {
               "name": "unit",
-              "index": 0
+              "index": 0,
+              "provider": "systemctl.isolatable-units"
             }
           ]
         }
@@ -661,7 +682,8 @@
             {
               "name": "unit",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.stoppable-units"
             }
           ]
         }
@@ -674,7 +696,8 @@
             {
               "name": "unit",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.units"
             }
           ]
         }
@@ -687,7 +710,8 @@
             {
               "name": "pattern",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.stoppable-units"
             }
           ]
         }
@@ -700,7 +724,8 @@
             {
               "name": "pattern",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.stoppable-units"
             }
           ]
         }
@@ -712,7 +737,8 @@
           "states": [
             {
               "name": "unit",
-              "index": 0
+              "index": 0,
+              "provider": "systemctl.units"
             },
             {
               "name": "property=value",
@@ -728,7 +754,8 @@
           "states": [
             {
               "name": "unit",
-              "index": 0
+              "index": 0,
+              "provider": "systemctl.units"
             },
             {
               "name": "path",
@@ -750,7 +777,8 @@
           "states": [
             {
               "name": "unit",
-              "index": 0
+              "index": 0,
+              "provider": "systemctl.units"
             },
             {
               "name": "path",
@@ -776,11 +804,13 @@
           "states": [
             {
               "name": "service",
-              "index": 0
+              "index": 0,
+              "provider": "systemctl.active-units"
             },
             {
               "name": "level",
-              "index": 1
+              "index": 1,
+              "provider": "systemctl.log-levels"
             }
           ]
         }
@@ -792,11 +822,13 @@
           "states": [
             {
               "name": "service",
-              "index": 0
+              "index": 0,
+              "provider": "systemctl.active-units"
             },
             {
               "name": "target",
-              "index": 1
+              "index": 1,
+              "provider": "systemctl.log-targets"
             }
           ]
         }
@@ -809,7 +841,8 @@
             {
               "name": "pattern",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.failed-units"
             }
           ]
         }
@@ -822,7 +855,8 @@
             {
               "name": "pattern",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.unit-files"
             }
           ]
         }
@@ -836,7 +870,7 @@
               "name": "unit-or-path",
               "index": 0,
               "repeatable": true,
-              "provider": "builtin.files"
+              "provider": "systemctl.disabled-unit-files-and-files"
             }
           ]
         }
@@ -850,7 +884,10 @@
               "name": "unit-or-path",
               "index": 0,
               "repeatable": true,
-              "provider": "builtin.files"
+              "provider": [
+                "systemctl.enabled-unit-files",
+                "builtin.files"
+              ]
             }
           ]
         }
@@ -863,7 +900,8 @@
             {
               "name": "unit",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.enabled-or-disabled-unit-files"
             }
           ]
         }
@@ -876,7 +914,8 @@
             {
               "name": "unit",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.unit-files"
             }
           ]
         }
@@ -889,7 +928,8 @@
             {
               "name": "unit",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.unit-files"
             }
           ]
         }
@@ -902,7 +942,8 @@
             {
               "name": "unit",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.units"
             }
           ]
         }
@@ -915,7 +956,8 @@
             {
               "name": "unit",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.masked-unit-files"
             }
           ]
         }
@@ -942,7 +984,8 @@
             {
               "name": "unit",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.units"
             }
           ]
         }
@@ -954,12 +997,14 @@
           "states": [
             {
               "name": "target",
-              "index": 0
+              "index": 0,
+              "provider": "systemctl.target-units"
             },
             {
               "name": "unit",
               "index": 1,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.units"
             }
           ]
         }
@@ -971,12 +1016,14 @@
           "states": [
             {
               "name": "target",
-              "index": 0
+              "index": 0,
+              "provider": "systemctl.target-units"
             },
             {
               "name": "unit",
               "index": 1,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.units"
             }
           ]
         }
@@ -989,7 +1036,8 @@
             {
               "name": "unit",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.units"
             }
           ]
         }
@@ -1005,7 +1053,8 @@
           "states": [
             {
               "name": "target",
-              "index": 0
+              "index": 0,
+              "provider": "systemctl.target-units"
             }
           ]
         }
@@ -1018,7 +1067,8 @@
             {
               "name": "pattern",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.jobs"
             }
           ]
         }
@@ -1031,7 +1081,8 @@
             {
               "name": "job",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.jobs"
             }
           ]
         }
@@ -1048,7 +1099,8 @@
             {
               "name": "variable=value",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.environment-names"
             }
           ]
         }
@@ -1061,7 +1113,8 @@
             {
               "name": "variable",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "systemctl.environment-names"
             }
           ]
         }
@@ -1074,7 +1127,8 @@
             {
               "name": "variable",
               "index": 0,
-              "repeatable": true
+              "repeatable": true,
+              "provider": "builtin.variables"
             }
           ]
         }
@@ -1094,7 +1148,8 @@
           "states": [
             {
               "name": "level",
-              "index": 0
+              "index": 0,
+              "provider": "systemctl.log-levels"
             }
           ]
         }
@@ -1106,7 +1161,8 @@
           "states": [
             {
               "name": "target",
-              "index": 0
+              "index": 0,
+              "provider": "systemctl.log-targets"
             }
           ]
         }
@@ -1180,11 +1236,13 @@
           "states": [
             {
               "name": "root",
-              "index": 0
+              "index": 0,
+              "provider": "builtin.files"
             },
             {
               "name": "init",
-              "index": 1
+              "index": 1,
+              "provider": "builtin.files"
             }
           ]
         }
@@ -1209,6 +1267,69 @@
     "providers": {
       "builtin.files": {
         "builtin": "files"
+      },
+      "builtin.variables": {
+        "builtin": "variables"
+      },
+      "systemctl.units": {
+        "function": "__rush_complete_systemctl_units"
+      },
+      "systemctl.active-units": {
+        "function": "__rush_complete_systemctl_active_units"
+      },
+      "systemctl.startable-units": {
+        "function": "__rush_complete_systemctl_start_units"
+      },
+      "systemctl.stoppable-units": {
+        "function": "__rush_complete_systemctl_stoppable_units"
+      },
+      "systemctl.reloadable-units": {
+        "function": "__rush_complete_systemctl_reloadable_units"
+      },
+      "systemctl.restartable-units": {
+        "function": "__rush_complete_systemctl_restartable_units"
+      },
+      "systemctl.isolatable-units": {
+        "function": "__rush_complete_systemctl_isolatable_units"
+      },
+      "systemctl.failed-units": {
+        "function": "__rush_complete_systemctl_failed_units"
+      },
+      "systemctl.unit-files": {
+        "function": "__rush_complete_systemctl_unit_files"
+      },
+      "systemctl.disabled-unit-files-and-files": {
+        "function": "__rush_complete_systemctl_disabled_unit_files_and_files"
+      },
+      "systemctl.enabled-unit-files": {
+        "function": "__rush_complete_systemctl_enabled_unit_files"
+      },
+      "systemctl.enabled-or-disabled-unit-files": {
+        "function": "__rush_complete_systemctl_enabled_or_disabled_unit_files"
+      },
+      "systemctl.masked-unit-files": {
+        "function": "__rush_complete_systemctl_masked_unit_files"
+      },
+      "systemctl.socket-units": {
+        "function": "__rush_complete_systemctl_socket_units"
+      },
+      "systemctl.timer-units": {
+        "function": "__rush_complete_systemctl_timer_units"
+      },
+      "systemctl.target-units": {
+        "function": "__rush_complete_systemctl_target_units"
+      },
+      "systemctl.jobs": {
+        "function": "__rush_complete_systemctl_jobs"
+      },
+      "systemctl.environment-names": {
+        "function": "__rush_complete_systemctl_environment_names"
+      },
+      "systemctl.log-levels": {
+        "function": "__rush_complete_systemctl_log_levels"
+      },
+      "systemctl.log-targets": {
+        "function": "__rush_complete_systemctl_log_targets"
       }
     }
   }

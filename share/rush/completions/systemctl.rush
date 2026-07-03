@@ -1,0 +1,227 @@
+__rush_complete_systemctl_scope_args() {
+  if rush_complete option-present --long host || rush_complete option-present --short H; then
+    return 1
+  fi
+  if rush_complete option-present --long machine || rush_complete option-present --short M; then
+    return 1
+  fi
+
+  if rush_complete option-present --long user; then
+    printf ' --user'
+  fi
+  if rush_complete option-present --long system; then
+    printf ' --system'
+  fi
+  if rush_complete option-present --long global; then
+    printf ' --global'
+  fi
+
+  for root in $(rush_complete option-values --long root 2>/dev/null); do
+    test -n "$root" && printf ' --root=%s' "$root"
+  done
+}
+
+__rush_complete_systemctl_list_units() {
+  scope=$(__rush_complete_systemctl_scope_args) || return
+  systemctl $scope --full --legend=no --no-pager --plain list-units "$@" 2>/dev/null |
+    while read unit load active sub description; do
+      case "$unit" in ''|UNIT) continue ;; esac
+      if test -n "$active" && test -n "$sub"; then
+        description="$active $sub"
+      else
+        description='loaded unit'
+      fi
+      rush_complete candidate "$unit" --kind plain --description "$description" --priority 20
+    done
+}
+
+__rush_complete_systemctl_list_unit_files() {
+  scope=$(__rush_complete_systemctl_scope_args) || return
+  systemctl $scope --full --legend=no --no-pager --plain list-unit-files "$@" 2>/dev/null |
+    while read unit state preset; do
+      case "$unit" in ''|'UNIT FILE') continue ;; esac
+      if test -n "$state"; then
+        description="$state unit file"
+      else
+        description='unit file'
+      fi
+      rush_complete candidate "$unit" --kind plain --description "$description" --priority 10
+    done
+}
+
+__rush_complete_systemctl_unit_names_from_list_units() {
+  scope=$(__rush_complete_systemctl_scope_args) || return
+  systemctl $scope --full --legend=no --no-pager --plain list-units "$@" 2>/dev/null |
+    while read unit rest; do
+      case "$unit" in ''|UNIT) continue ;; esac
+      printf '%s\n' "$unit"
+    done
+}
+
+__rush_complete_systemctl_unit_names_from_list_unit_files() {
+  scope=$(__rush_complete_systemctl_scope_args) || return
+  systemctl $scope --full --legend=no --no-pager --plain list-unit-files "$@" 2>/dev/null |
+    while read unit rest; do
+      case "$unit" in ''|'UNIT FILE') continue ;; esac
+      printf '%s\n' "$unit"
+    done
+}
+
+__rush_complete_systemctl_emit_property_units() {
+  property=$1
+  expected=$2
+  description=$3
+  shift 3
+
+  scope=$(__rush_complete_systemctl_scope_args) || return
+  systemctl $scope show --no-pager --property="Id,$property" -- "$@" 2>/dev/null |
+    while IFS='=' read key value; do
+      case "$key" in
+        Id) unit=$value ;;
+        "$property")
+          if test "$value" = "$expected" && test -n "$unit"; then
+            rush_complete candidate "$unit" --kind plain --description "$description" --priority 25
+          fi
+          unit=
+          ;;
+      esac
+    done
+}
+
+__rush_complete_systemctl_unit_names_by_property() {
+  property=$1
+  expected=$2
+  shift 2
+
+  scope=$(__rush_complete_systemctl_scope_args) || return
+  systemctl $scope show --no-pager --property="Id,$property" -- "$@" 2>/dev/null |
+    while IFS='=' read key value; do
+      case "$key" in
+        Id) unit=$value ;;
+        "$property")
+          if test "$value" = "$expected" && test -n "$unit"; then
+            printf '%s\n' "$unit"
+          fi
+          unit=
+          ;;
+      esac
+    done
+}
+
+__rush_complete_systemctl_units() {
+  __rush_complete_systemctl_list_units --all
+  __rush_complete_systemctl_unit_files
+}
+
+__rush_complete_systemctl_active_units() {
+  __rush_complete_systemctl_list_units
+}
+
+__rush_complete_systemctl_failed_units() {
+  __rush_complete_systemctl_list_units --state=failed
+}
+
+__rush_complete_systemctl_start_units() {
+  units=$(
+    __rush_complete_systemctl_unit_names_from_list_unit_files \
+      --state=enabled,enabled-runtime,linked,linked-runtime,static,indirect,disabled,generated,transient
+    __rush_complete_systemctl_unit_names_from_list_units --state=inactive,failed
+  )
+  test -n "$units" || return
+  units=$(__rush_complete_systemctl_unit_names_by_property CanStart yes $units)
+  test -n "$units" || return
+  __rush_complete_systemctl_emit_property_units ActiveState inactive 'startable unit' $units
+}
+
+__rush_complete_systemctl_unit_files() {
+  __rush_complete_systemctl_list_unit_files
+}
+
+__rush_complete_systemctl_disabled_unit_files_and_files() {
+  __rush_complete_systemctl_list_unit_files --state=disabled
+  rush_complete files
+}
+
+__rush_complete_systemctl_enabled_unit_files() {
+  __rush_complete_systemctl_list_unit_files --state=enabled,enabled-runtime
+}
+
+__rush_complete_systemctl_enabled_or_disabled_unit_files() {
+  __rush_complete_systemctl_list_unit_files --state=enabled,enabled-runtime,disabled
+}
+
+__rush_complete_systemctl_masked_unit_files() {
+  __rush_complete_systemctl_list_unit_files --state=masked,masked-runtime
+}
+
+__rush_complete_systemctl_socket_units() {
+  __rush_complete_systemctl_list_units --type=socket
+  __rush_complete_systemctl_list_unit_files --type=socket
+}
+
+__rush_complete_systemctl_timer_units() {
+  __rush_complete_systemctl_list_units --type=timer
+  __rush_complete_systemctl_list_unit_files --type=timer
+}
+
+__rush_complete_systemctl_target_units() {
+  __rush_complete_systemctl_list_units --type=target
+  __rush_complete_systemctl_list_unit_files --type=target --all
+}
+
+__rush_complete_systemctl_stoppable_units() {
+  units=$(__rush_complete_systemctl_unit_names_from_list_units --state=active)
+  test -n "$units" || return
+  __rush_complete_systemctl_emit_property_units CanStop yes 'stoppable unit' $units
+}
+
+__rush_complete_systemctl_reloadable_units() {
+  units=$(__rush_complete_systemctl_unit_names_from_list_units --state=active)
+  test -n "$units" || return
+  __rush_complete_systemctl_emit_property_units CanReload yes 'reloadable unit' $units
+}
+
+__rush_complete_systemctl_restartable_units() {
+  units=$(
+    __rush_complete_systemctl_unit_names_from_list_unit_files --state=enabled,disabled,static
+    __rush_complete_systemctl_unit_names_from_list_units
+  )
+  test -n "$units" || return
+  __rush_complete_systemctl_emit_property_units CanStart yes 'restartable unit' $units
+}
+
+__rush_complete_systemctl_isolatable_units() {
+  units=$(__rush_complete_systemctl_unit_names_from_list_units --all)
+  test -n "$units" || return
+  __rush_complete_systemctl_emit_property_units AllowIsolate yes 'isolatable unit' $units
+}
+
+__rush_complete_systemctl_jobs() {
+  scope=$(__rush_complete_systemctl_scope_args) || return
+  systemctl $scope --full --legend=no --no-pager --plain list-jobs 2>/dev/null |
+    while read job unit type state; do
+      case "$job" in ''|JOB) continue ;; esac
+      rush_complete candidate "$job" --kind plain --description "job for $unit" --priority 30
+      test -n "$unit" && rush_complete candidate "$unit" --kind plain --description "job $state" --priority 20
+    done
+}
+
+__rush_complete_systemctl_environment_names() {
+  scope=$(__rush_complete_systemctl_scope_args) || return
+  systemctl $scope show-environment 2>/dev/null |
+    while IFS='=' read name value; do
+      test -n "$name" && rush_complete candidate "$name" --kind plain --description 'manager variable'
+    done
+}
+
+__rush_complete_systemctl_log_levels() {
+  for level in emerg alert crit err warning notice info debug; do
+    rush_complete candidate "$level" --kind plain --description 'log level'
+  done
+}
+
+__rush_complete_systemctl_log_targets() {
+  for target in console kmsg journal syslog null auto; do
+    rush_complete candidate "$target" --kind plain --description 'log target'
+  done
+}
