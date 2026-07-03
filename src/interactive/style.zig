@@ -21,8 +21,15 @@ pub fn refreshStyle(
     _ = allocator;
     _ = io;
     const sh: *RushShell = @ptrCast(@alignCast(context));
-    try sh.state.putVariable(.{ .name = "rush_color_scheme", .value = colorSchemeName(scheme) });
-    try runStyleFunction(sh);
+    const scheme_name = colorSchemeName(scheme);
+    if (variableChanged(sh, "rush_color_scheme", scheme_name)) {
+        try sh.state.putVariable(.{ .name = "rush_color_scheme", .value = scheme_name });
+        sh.extensions.style_dirty = true;
+    }
+    if (sh.extensions.style_dirty) {
+        try runStyleFunction(sh);
+        sh.extensions.style_dirty = false;
+    }
     return theme(sh.state);
 }
 
@@ -44,9 +51,20 @@ pub fn refreshColorReport(
         "#{x:0>2}{x:0>2}{x:0>2}",
         .{ report.value[0], report.value[1], report.value[2] },
     );
-    try sh.state.putVariable(.{ .name = variable, .value = value });
-    try runStyleFunction(sh);
+    // Only record the color here. Every color-query wave is terminated by a
+    // DA1 query, so `refreshStyle` runs `rush_style` once per batch instead of
+    // once per report, and only when a report actually changed a color;
+    // running it here made a held Enter ~4x slower.
+    if (variableChanged(sh, variable, value)) {
+        try sh.state.putVariable(.{ .name = variable, .value = value });
+        sh.extensions.style_dirty = true;
+    }
     return theme(sh.state);
+}
+
+fn variableChanged(sh: *RushShell, name: []const u8, value: []const u8) bool {
+    const existing = sh.state.getVariable(name) orelse return true;
+    return !std.mem.eql(u8, existing.value, value);
 }
 
 fn runStyleFunction(sh: *RushShell) !void {
@@ -138,7 +156,7 @@ test "interactive style refresh runs rush_style with color scheme" {
     try std.testing.expect(ui_theme.match.bold);
 }
 
-test "interactive color reports update rush color variables" {
+test "interactive color reports update rush color variables without running rush_style" {
     // ziglint-ignore: Z010 explicit type retained for readability/type inference
     var sh = RushShell.init(std.testing.allocator, host.RealHost{}, .{});
     defer sh.deinit();
@@ -147,19 +165,58 @@ test "interactive color reports update rush color variables" {
         .id = 1,
         .kind = .command_string,
         .name = "test",
-        .text = "rush_style() { rush_style_directory=\"fg=$rush_color_blue\"; }",
+        .text =
+        \\rush_style() {
+        \\  rush_style_runs=$((${rush_style_runs:-0} + 1))
+        \\  rush_style_directory="fg=$rush_color_blue"
+        \\}
+        ,
     };
     _ = try sh.evalSource(src);
 
-    const ui_theme = try refreshColorReport(
+    const report_theme = try refreshColorReport(
         &sh,
         std.testing.allocator,
         std.testing.io,
         .{ .kind = .{ .index = 4 }, .value = .{ 0x01, 0x23, 0x45 } },
     );
 
+    // The report only records the color; rush_style waits for the DA1
+    // batch terminator so it runs once per query wave.
+    const default_theme: editor_render.UiTheme = .{};
     try std.testing.expectEqualStrings("#012345", sh.state.getVariable("rush_color_blue").?.value);
+    try std.testing.expectEqual(default_theme.directory.fg, report_theme.directory.fg);
+    try std.testing.expectEqual(null, sh.state.getVariable("rush_style_runs"));
+
+    const ui_theme = try refreshStyle(&sh, std.testing.allocator, std.testing.io, .dark);
     try std.testing.expectEqual(editor_render.parseUiColor("#012345").?, ui_theme.directory.fg.?);
+    try std.testing.expectEqualStrings("1", sh.state.getVariable("rush_style_runs").?.value);
+
+    // A repeated batch with identical colors and scheme is deduped:
+    // no rush_style rerun on the next DA1.
+    _ = try refreshColorReport(
+        &sh,
+        std.testing.allocator,
+        std.testing.io,
+        .{ .kind = .{ .index = 4 }, .value = .{ 0x01, 0x23, 0x45 } },
+    );
+    _ = try refreshStyle(&sh, std.testing.allocator, std.testing.io, .dark);
+    try std.testing.expectEqualStrings("1", sh.state.getVariable("rush_style_runs").?.value);
+
+    // A changed color marks the style dirty and reruns once on DA1.
+    _ = try refreshColorReport(
+        &sh,
+        std.testing.allocator,
+        std.testing.io,
+        .{ .kind = .{ .index = 4 }, .value = .{ 0x67, 0x89, 0xab } },
+    );
+    const changed_theme = try refreshStyle(&sh, std.testing.allocator, std.testing.io, .dark);
+    try std.testing.expectEqual(editor_render.parseUiColor("#6789ab").?, changed_theme.directory.fg.?);
+    try std.testing.expectEqualStrings("2", sh.state.getVariable("rush_style_runs").?.value);
+
+    // A scheme change alone also reruns rush_style.
+    _ = try refreshStyle(&sh, std.testing.allocator, std.testing.io, .light);
+    try std.testing.expectEqualStrings("3", sh.state.getVariable("rush_style_runs").?.value);
 }
 
 test {

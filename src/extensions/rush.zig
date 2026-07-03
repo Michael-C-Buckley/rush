@@ -113,6 +113,9 @@ pub const State = struct {
     prompt_async_render_started: bool = false,
     prompt_buffer: std.ArrayListUnmanaged(u8) = .empty,
     building_prompt: bool = false,
+    // Set when a terminal color/scheme report changes a rush_color_* value;
+    // the DA1 batch terminator reruns rush_style only while this is set.
+    style_dirty: bool = true,
     previous_duration_ms: ?i64 = null,
     completion_context: ?*CompletionContext = null,
 
