@@ -648,7 +648,7 @@ fn analyzeInteractiveInput(
             .severity = triviaSeverity(item.kind),
         });
     }
-    try appendCommandValiditySpans(allocator, &spans, sh, command_cache, tokens);
+    try appendTokenSpans(allocator, &spans, sh, command_cache, tokens);
 
     if (spans.items.len == 0) return null;
     return .{ .spans = try spans.toOwnedSlice(allocator) };
@@ -659,10 +659,11 @@ fn triviaSeverity(kind: shell.lexer.Trivia.Kind) editor.render.DiagnosticSeverit
         .comment => .comment,
         .quote => .quote,
         .pending_quote => .pending,
+        .expansion => .expansion,
     };
 }
 
-fn appendCommandValiditySpans(
+fn appendTokenSpans(
     allocator: std.mem.Allocator,
     spans: *std.ArrayList(editor.render.DiagnosticSpan),
     sh: *RushShell,
@@ -672,14 +673,54 @@ fn appendCommandValiditySpans(
     var tracker: shell.token.CommandPositionTracker = .{};
     for (tokens) |tok| {
         if (tok.kind == .eof) break;
-        if (tracker.classify(tok) != .command) continue;
-        if (commandResolves(allocator, sh, command_cache, tok.text)) continue;
+        const severity: editor.render.DiagnosticSeverity = switch (tracker.classify(tok)) {
+            .command => if (commandResolves(allocator, sh, command_cache, tok.text))
+                .command
+            else
+                .command_invalid,
+            .reserved => .reserved,
+            .assignment => {
+                try appendAssignmentNameSpan(allocator, spans, tok);
+                continue;
+            },
+            .argument => {
+                if (!tok.quoted and tok.text.len != 0 and tok.text[0] == '-') {
+                    try spans.append(allocator, .{
+                        .start = tok.span.start,
+                        .end = tok.span.end,
+                        .severity = .option,
+                    });
+                }
+                continue;
+            },
+            .redirection_target => continue,
+            .operator => switch (tok.kind) {
+                .newline, .here_doc_body, .here_doc_body_unterminated => continue,
+                else => .operator,
+            },
+        };
         try spans.append(allocator, .{
             .start = tok.span.start,
             .end = tok.span.end,
-            .severity = .command_invalid,
+            .severity = severity,
         });
     }
+}
+
+/// Styles only the `NAME=` (or `NAME+=`) prefix so the value keeps its own
+/// quote and expansion styling.
+fn appendAssignmentNameSpan(
+    allocator: std.mem.Allocator,
+    spans: *std.ArrayList(editor.render.DiagnosticSpan),
+    tok: shell.Token,
+) !void {
+    const equals_index = std.mem.indexOfScalar(u8, tok.text, '=') orelse return;
+    const end = @min(tok.span.start + equals_index + 1, tok.span.end);
+    try spans.append(allocator, .{
+        .start = tok.span.start,
+        .end = end,
+        .severity = .assignment,
+    });
 }
 
 fn commandResolves(
@@ -1261,10 +1302,18 @@ test "interactive input analysis marks unresolved command tokens only" {
     const analyzed = (try analyzeInteractiveInput(std.testing.allocator, &sh, &command_cache, text)).?;
     defer analyzed.deinit(std.testing.allocator);
 
-    try std.testing.expectEqual(@as(usize, 1), analyzed.spans.len);
-    try std.testing.expectEqual(editor.render.DiagnosticSeverity.command_invalid, analyzed.spans[0].severity);
-    try std.testing.expectEqual(@as(usize, 11), analyzed.spans[0].start);
-    try std.testing.expectEqual(@as(usize, 15), analyzed.spans[0].end);
+    try std.testing.expectEqual(@as(usize, 6), analyzed.spans.len);
+    const Severity = editor.render.DiagnosticSeverity;
+    try std.testing.expectEqual(Severity.command, analyzed.spans[0].severity); // echo
+    try std.testing.expectEqual(Severity.command, analyzed.spans[1].severity); // ll alias
+    try std.testing.expectEqual(Severity.command_invalid, analyzed.spans[2].severity);
+    try std.testing.expectEqualStrings("nope", text[analyzed.spans[2].start..analyzed.spans[2].end]);
+    try std.testing.expectEqual(Severity.assignment, analyzed.spans[3].severity);
+    try std.testing.expectEqualStrings("FOO=", text[analyzed.spans[3].start..analyzed.spans[3].end]);
+    try std.testing.expectEqual(Severity.command, analyzed.spans[4].severity);
+    try std.testing.expectEqualStrings("cached", text[analyzed.spans[4].start..analyzed.spans[4].end]);
+    try std.testing.expectEqual(Severity.operator, analyzed.spans[5].severity);
+    try std.testing.expectEqualStrings("<", text[analyzed.spans[5].start..analyzed.spans[5].end]);
 }
 
 test "interactive input analysis styles comments quotes and pending quote" {
@@ -1277,13 +1326,47 @@ test "interactive input analysis styles comments quotes and pending quote" {
     const analyzed = (try analyzeInteractiveInput(std.testing.allocator, &sh, &command_cache, text)).?;
     defer analyzed.deinit(std.testing.allocator);
 
-    try std.testing.expectEqual(@as(usize, 3), analyzed.spans.len);
+    try std.testing.expectEqual(@as(usize, 5), analyzed.spans.len);
     try std.testing.expectEqual(editor.render.DiagnosticSeverity.quote, analyzed.spans[0].severity);
     try std.testing.expectEqualStrings("'ok'", text[analyzed.spans[0].start..analyzed.spans[0].end]);
     try std.testing.expectEqual(editor.render.DiagnosticSeverity.comment, analyzed.spans[1].severity);
     try std.testing.expectEqualStrings("# comment", text[analyzed.spans[1].start..analyzed.spans[1].end]);
     try std.testing.expectEqual(editor.render.DiagnosticSeverity.pending, analyzed.spans[2].severity);
     try std.testing.expectEqualStrings("\"pending", text[analyzed.spans[2].start..analyzed.spans[2].end]);
+    try std.testing.expectEqual(editor.render.DiagnosticSeverity.command, analyzed.spans[3].severity);
+    try std.testing.expectEqualStrings("printf", text[analyzed.spans[3].start..analyzed.spans[3].end]);
+    try std.testing.expectEqual(editor.render.DiagnosticSeverity.command, analyzed.spans[4].severity);
+}
+
+test "interactive input analysis styles reserved words operators options and expansions" {
+    var sh = RushShell.init(std.testing.allocator, .{}, .{});
+    defer sh.deinit();
+    var command_cache: PathCommandCache = .{};
+    defer command_cache.deinit(std.testing.allocator);
+    try putCommandName(std.testing.allocator, &command_cache.commands, "grep");
+
+    const text = "if grep -q $HOME f; then echo $(id); fi";
+    const analyzed = (try analyzeInteractiveInput(std.testing.allocator, &sh, &command_cache, text)).?;
+    defer analyzed.deinit(std.testing.allocator);
+
+    const Severity = editor.render.DiagnosticSeverity;
+    const expected = [_]struct { severity: Severity, text: []const u8 }{
+        .{ .severity = .expansion, .text = "$HOME" },
+        .{ .severity = .expansion, .text = "$(id)" },
+        .{ .severity = .reserved, .text = "if" },
+        .{ .severity = .command, .text = "grep" },
+        .{ .severity = .option, .text = "-q" },
+        .{ .severity = .operator, .text = ";" },
+        .{ .severity = .reserved, .text = "then" },
+        .{ .severity = .command, .text = "echo" },
+        .{ .severity = .operator, .text = ";" },
+        .{ .severity = .reserved, .text = "fi" },
+    };
+    try std.testing.expectEqual(expected.len, analyzed.spans.len);
+    for (expected, analyzed.spans) |want, span| {
+        try std.testing.expectEqual(want.severity, span.severity);
+        try std.testing.expectEqualStrings(want.text, text[span.start..span.end]);
+    }
 }
 
 test {

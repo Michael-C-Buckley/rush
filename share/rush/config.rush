@@ -186,7 +186,7 @@ rush_style() {
   fi
 
   rush_style_directory="fg=$(color blend "$rush_color_blue" "$rush_color_foreground" 12)"
-  rush_style_option="fg=$(color blend "$rush_color_green" "$rush_color_foreground" 12)"
+  rush_style_option="fg=$(color blend "$rush_color_yellow" "$rush_color_foreground" 12)"
   rush_style_variable="fg=$(color blend "$rush_color_magenta" "$rush_color_foreground" 10)"
   rush_style_function="fg=$(color blend "$rush_color_cyan" "$rush_color_foreground" 10)"
   rush_style_file="fg=$rush_color_foreground"
@@ -196,6 +196,8 @@ rush_style() {
   rush_style_comment="$rush_style_muted"
   rush_style_quote="fg=$(color blend "$rush_color_green" "$rush_color_foreground" 12)"
   rush_style_pending="fg=$(color blend "$rush_color_cyan" "$rush_color_foreground" 12)"
+  rush_style_reserved="fg=$(color blend "$rush_color_magenta" "$rush_color_foreground" 12)"
+  rush_style_operator="fg=$(color blend "$rush_color_foreground" "$rush_color_background" 30)"
 
   if test "$rush_color_scheme" = light; then
     rush_style_selection="bg=$(color blend "$rush_color_background" "$rush_color_blue" 20)"

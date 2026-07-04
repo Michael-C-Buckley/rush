@@ -120,6 +120,8 @@ pub fn theme(state: shell.state.State) editor_render.UiTheme {
     applyUiStyleVariable(state, &ui_theme.comment, "rush_style_comment");
     applyUiStyleVariable(state, &ui_theme.quote, "rush_style_quote");
     applyUiStyleVariable(state, &ui_theme.pending, "rush_style_pending");
+    applyUiStyleVariable(state, &ui_theme.reserved, "rush_style_reserved");
+    applyUiStyleVariable(state, &ui_theme.operator, "rush_style_operator");
     return ui_theme;
 }
 

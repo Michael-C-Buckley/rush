@@ -38,6 +38,8 @@ pub const UiTheme = struct {
     comment: UiStyle = .{ .fg = .{ .index = 8 } },
     quote: UiStyle = .{ .fg = .{ .index = 2 } },
     pending: UiStyle = .{ .fg = .{ .index = 6 } },
+    reserved: UiStyle = .{ .fg = .{ .index = 5 } },
+    operator: UiStyle = .{ .fg = .{ .index = 8 } },
 };
 
 pub const Presentation = struct {

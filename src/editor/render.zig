@@ -259,6 +259,12 @@ pub const DiagnosticSeverity = enum {
     comment,
     quote,
     pending,
+    command,
+    reserved,
+    operator,
+    assignment,
+    expansion,
+    option,
 };
 
 pub const DiagnosticSpan = struct {
@@ -460,6 +466,11 @@ fn diagnosticStyle(theme: UiTheme, severity: DiagnosticSeverity) UiStyle {
         .comment => theme.comment,
         .quote => theme.quote,
         .pending => theme.pending,
+        .command => theme.command,
+        .reserved => theme.reserved,
+        .operator => theme.operator,
+        .assignment, .expansion => theme.variable,
+        .option => theme.option,
     };
 }
 

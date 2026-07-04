@@ -15,15 +15,21 @@ pub fn lex(allocator: std.mem.Allocator, src: source_mod.Source) std.mem.Allocat
 }
 
 /// Display-oriented lexical regions that carry no grammatical meaning and are
-/// therefore absent from the token stream: comments, quoted regions, and
-/// quoted regions still missing their closing delimiter. Spans are byte
-/// offsets into the source text. Interactive highlighting consumes these so
-/// the editor never re-implements quote or comment scanning.
+/// therefore absent from the token stream: comments, quoted regions, quoted
+/// regions still missing their closing delimiter, and expansions embedded in
+/// words. Spans are byte offsets into the source text. Interactive
+/// highlighting consumes these so the editor never re-implements quote,
+/// comment, or expansion scanning.
 pub const Trivia = struct {
     pub const Kind = enum {
         comment,
         quote,
         pending_quote,
+        /// Parameter, command, or arithmetic expansion: `$NAME`, `$1`, `$?`,
+        /// `${...}`, `$(...)`, `$((...))`, backquotes, and process
+        /// substitution. Inner trivia (quotes and comments inside a command
+        /// substitution) is emitted first, so it wins span overlap.
+        expansion,
     };
 
     kind: Kind,
@@ -245,6 +251,7 @@ const Lexer = struct {
     pending_here_docs: std.ArrayList(PendingHereDoc) = .empty,
     here_doc_delimiter_expected: ?bool = null,
     trivia: ?*std.ArrayList(Trivia) = null,
+    bare_expansion_end: usize = 0,
 
     const PendingHereDoc = struct {
         delimiter: []const u8,
@@ -557,6 +564,19 @@ const Lexer = struct {
         try list.append(self.allocator, .{ .kind = kind, .start = start, .end = end });
     }
 
+    /// Emits an expansion span for a bare `$NAME`, `$1`, or `$?` style
+    /// parameter at the current position. Lookahead only: the caller's
+    /// scanning is unchanged, so token output stays identical.
+    fn emitParameterExpansionTrivia(self: *Lexer) std.mem.Allocator.Error!void {
+        if (self.trivia == null) return;
+        const start = self.position.byte_offset;
+        // A `$` inside an already-emitted span (`$$x`) is not a new expansion.
+        if (start < self.bare_expansion_end) return;
+        const length = parameterExpansionLength(self.source.text, start) orelse return;
+        self.bare_expansion_end = start + length;
+        try self.emitTrivia(.expansion, start, start + length);
+    }
+
     fn skipComment(self: *Lexer) std.mem.Allocator.Error!void {
         const start = self.position.byte_offset;
         while (!self.atEnd() and self.peek() != '\n') self.advanceOne();
@@ -585,21 +605,30 @@ const Lexer = struct {
                     continue;
                 }
                 if (delimiter == '"' and byte == '$' and self.peekNextIs('(')) {
+                    const expansion_start = self.position.byte_offset;
                     self.advanceOne();
                     self.advanceOne();
                     try self.skipCommandSubstitution();
+                    try self.emitTrivia(.expansion, expansion_start, self.position.byte_offset);
                     continue;
                 }
                 if (delimiter == '"' and byte == '$' and self.peekNextIs('{')) {
+                    const expansion_start = self.position.byte_offset;
                     self.advanceOne();
                     self.advanceOne();
                     try self.skipBracedParameter();
+                    try self.emitTrivia(.expansion, expansion_start, self.position.byte_offset);
                     continue;
                 }
                 if (delimiter == '"' and byte == '`') {
+                    const expansion_start = self.position.byte_offset;
                     self.advanceOne();
                     try self.skipBackquoteSubstitution();
+                    try self.emitTrivia(.expansion, expansion_start, self.position.byte_offset);
                     continue;
+                }
+                if (delimiter == '"' and byte == '$') {
+                    try self.emitParameterExpansionTrivia();
                 }
                 if (byte == delimiter) {
                     quote = null;
@@ -624,10 +653,12 @@ const Lexer = struct {
                 continue;
             }
             if (byte == '$' and self.peekNextIs('(') and self.peekByte(2) == '(') {
+                const expansion_start = self.position.byte_offset;
                 self.advanceOne();
                 self.advanceOne();
                 self.advanceOne();
                 try self.skipArithmeticExpansion();
+                try self.emitTrivia(.expansion, expansion_start, self.position.byte_offset);
                 continue;
             }
             if (byte == '$' and self.peekNextIs('\'')) {
@@ -639,30 +670,39 @@ const Lexer = struct {
                 continue;
             }
             if (byte == '$' and self.peekNextIs('(')) {
+                const expansion_start = self.position.byte_offset;
                 self.advanceOne();
                 self.advanceOne();
                 try self.skipCommandSubstitution();
+                try self.emitTrivia(.expansion, expansion_start, self.position.byte_offset);
                 continue;
             }
             if (byte == '$' and self.peekNextIs('{')) {
+                const expansion_start = self.position.byte_offset;
                 self.advanceOne();
                 self.advanceOne();
                 try self.skipBracedParameter();
+                try self.emitTrivia(.expansion, expansion_start, self.position.byte_offset);
                 continue;
             }
             if (byte == '`') {
+                const expansion_start = self.position.byte_offset;
                 self.advanceOne();
                 try self.skipBackquoteSubstitution();
+                try self.emitTrivia(.expansion, expansion_start, self.position.byte_offset);
                 continue;
             }
             if (self.startsProcessSubstitution()) {
+                const expansion_start = self.position.byte_offset;
                 self.advanceOne();
                 self.advanceOne();
                 try self.skipCommandSubstitution();
+                try self.emitTrivia(.expansion, expansion_start, self.position.byte_offset);
                 continue;
             }
             if (byte == '[' and self.skipBracketExpression()) continue;
             if (isWordTerminator(byte)) break;
+            if (byte == '$') try self.emitParameterExpansionTrivia();
             self.advanceOne();
         }
         if (quote != null) try self.emitTrivia(.pending_quote, quote_start, self.position.byte_offset);
@@ -1106,6 +1146,24 @@ fn isWordTerminator(byte: u8) bool {
     };
 }
 
+/// Length of the bare parameter expansion starting at the `$` at `index`:
+/// `$NAME`, a single-digit positional like `$1`, or a special parameter like
+/// `$?`. Returns null when the `$` starts no expansion.
+fn parameterExpansionLength(text: []const u8, index: usize) ?usize {
+    std.debug.assert(text[index] == '$');
+    if (index + 1 >= text.len) return null;
+    const next = text[index + 1];
+    if (isNameStart(next)) {
+        var end = index + 2;
+        while (end < text.len and isNameContinue(text[end])) end += 1;
+        return end - index;
+    }
+    return switch (next) {
+        '0'...'9', '@', '*', '#', '?', '-', '$', '!' => 2,
+        else => null,
+    };
+}
+
 fn isDigit(byte: u8) bool {
     return switch (byte) {
         '0'...'9' => true,
@@ -1181,11 +1239,14 @@ test "lexWithTrivia reports quotes and comments inside command substitution" {
     const tokens = try lexWithTrivia(std.testing.allocator, src, &trivia);
     defer std.testing.allocator.free(tokens);
 
-    try std.testing.expectEqual(@as(usize, 2), trivia.items.len);
+    try std.testing.expectEqual(@as(usize, 3), trivia.items.len);
     try std.testing.expectEqual(Trivia.Kind.quote, trivia.items[0].kind);
     try std.testing.expectEqualStrings("'pat'", text[trivia.items[0].start..trivia.items[0].end]);
     try std.testing.expectEqual(Trivia.Kind.comment, trivia.items[1].kind);
     try std.testing.expectEqualStrings("# inner", text[trivia.items[1].start..trivia.items[1].end]);
+    try std.testing.expectEqual(Trivia.Kind.expansion, trivia.items[2].kind);
+    const expansion = text[trivia.items[2].start..trivia.items[2].end];
+    try std.testing.expectEqualStrings("$(grep 'pat' file # inner\n)", expansion);
 }
 
 test "lexWithTrivia reports quotes inside backquote substitutions" {
@@ -1196,11 +1257,63 @@ test "lexWithTrivia reports quotes inside backquote substitutions" {
     const tokens = try lexWithTrivia(std.testing.allocator, src, &trivia);
     defer std.testing.allocator.free(tokens);
 
-    try std.testing.expectEqual(@as(usize, 2), trivia.items.len);
+    try std.testing.expectEqual(@as(usize, 4), trivia.items.len);
     try std.testing.expectEqual(Trivia.Kind.quote, trivia.items[0].kind);
     try std.testing.expectEqualStrings("'pat'", text[trivia.items[0].start..trivia.items[0].end]);
-    try std.testing.expectEqual(Trivia.Kind.pending_quote, trivia.items[1].kind);
-    try std.testing.expectEqualStrings("\"open", text[trivia.items[1].start..trivia.items[1].end]);
+    try std.testing.expectEqual(Trivia.Kind.expansion, trivia.items[1].kind);
+    try std.testing.expectEqualStrings("`grep 'pat' f`", text[trivia.items[1].start..trivia.items[1].end]);
+    try std.testing.expectEqual(Trivia.Kind.pending_quote, trivia.items[2].kind);
+    try std.testing.expectEqualStrings("\"open", text[trivia.items[2].start..trivia.items[2].end]);
+    try std.testing.expectEqual(Trivia.Kind.expansion, trivia.items[3].kind);
+    try std.testing.expectEqualStrings("`x \"open", text[trivia.items[3].start..trivia.items[3].end]);
+}
+
+test "lexWithTrivia reports expansions inside and outside double quotes" {
+    const text = "echo $HOME $? ${PATH} $(id -u) $((1+2)) `date` \"pre $USER $(pwd) post\"";
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = text };
+    var trivia: std.ArrayList(Trivia) = .empty;
+    defer trivia.deinit(std.testing.allocator);
+    const tokens = try lexWithTrivia(std.testing.allocator, src, &trivia);
+    defer std.testing.allocator.free(tokens);
+
+    var expansions: std.ArrayList([]const u8) = .empty;
+    defer expansions.deinit(std.testing.allocator);
+    for (trivia.items) |item| {
+        if (item.kind != .expansion) continue;
+        try expansions.append(std.testing.allocator, text[item.start..item.end]);
+    }
+
+    const expected = [_][]const u8{
+        "$HOME", "$?", "${PATH}", "$(id -u)", "$((1+2))", "`date`", "$USER", "$(pwd)",
+    };
+    try std.testing.expectEqual(expected.len, expansions.items.len);
+    for (expected, expansions.items) |want, got| try std.testing.expectEqualStrings(want, got);
+}
+
+test "lexWithTrivia reports double dollar as one expansion" {
+    const text = "echo $$x";
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = text };
+    var trivia: std.ArrayList(Trivia) = .empty;
+    defer trivia.deinit(std.testing.allocator);
+    const tokens = try lexWithTrivia(std.testing.allocator, src, &trivia);
+    defer std.testing.allocator.free(tokens);
+
+    try std.testing.expectEqual(@as(usize, 1), trivia.items.len);
+    try std.testing.expectEqual(Trivia.Kind.expansion, trivia.items[0].kind);
+    try std.testing.expectEqualStrings("$$", text[trivia.items[0].start..trivia.items[0].end]);
+}
+
+test "lexWithTrivia does not report literal dollars as expansions" {
+    const text = "echo a$ '$HOME' $% cost\\$5";
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = text };
+    var trivia: std.ArrayList(Trivia) = .empty;
+    defer trivia.deinit(std.testing.allocator);
+    const tokens = try lexWithTrivia(std.testing.allocator, src, &trivia);
+    defer std.testing.allocator.free(tokens);
+
+    for (trivia.items) |item| {
+        try std.testing.expect(item.kind != .expansion);
+    }
 }
 
 test "lexWithTrivia produces identical tokens to lex" {
