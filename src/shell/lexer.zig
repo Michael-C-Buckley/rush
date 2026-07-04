@@ -14,6 +14,40 @@ pub fn lex(allocator: std.mem.Allocator, src: source_mod.Source) std.mem.Allocat
     return lexer.lex();
 }
 
+/// Display-oriented lexical regions that carry no grammatical meaning and are
+/// therefore absent from the token stream: comments, quoted regions, and
+/// quoted regions still missing their closing delimiter. Spans are byte
+/// offsets into the source text. Interactive highlighting consumes these so
+/// the editor never re-implements quote or comment scanning.
+pub const Trivia = struct {
+    pub const Kind = enum {
+        comment,
+        quote,
+        pending_quote,
+    };
+
+    kind: Kind,
+    start: usize,
+    end: usize,
+};
+
+/// Lexes like `lex` while also collecting display trivia into `trivia`,
+/// allocated with `allocator`. Token output is identical to `lex`.
+pub fn lexWithTrivia(
+    allocator: std.mem.Allocator,
+    src: source_mod.Source,
+    trivia: *std.ArrayList(Trivia),
+) std.mem.Allocator.Error![]const token.Token {
+    src.validate();
+    var lexer: Lexer = .{
+        .allocator = allocator,
+        .source = src,
+        .position = .{ .source_id = src.id },
+        .trivia = trivia,
+    };
+    return lexer.lex();
+}
+
 pub const AliasLexResult = struct {
     source: source_mod.Source,
     tokens: []const token.Token,
@@ -83,11 +117,11 @@ fn aliasExpandedSource(
 
         if (tok.kind == .word) {
             if (tok.reserved) |reserved| {
-                command_position = reservedWordStartsCommandList(reserved);
+                command_position = token.reservedWordStartsCommandList(reserved);
                 try output.appendSlice(allocator, src.text[tok.span.start..tok.span.end]);
                 continue;
             }
-            if (command_position and !tok.quoted and !isAssignmentWord(tok.text)) {
+            if (command_position and !tok.quoted and !token.isAssignmentWord(tok.text)) {
                 if (shell_state.getAlias(tok.text)) |alias| {
                     try output.appendSlice(allocator, alias.value);
                     command_position = aliasEndsWithBlank(alias.value);
@@ -95,7 +129,7 @@ fn aliasExpandedSource(
                     continue;
                 }
             }
-            if (command_position and isAssignmentWord(tok.text)) {
+            if (command_position and token.isAssignmentWord(tok.text)) {
                 command_position = true;
             } else {
                 command_position = false;
@@ -104,13 +138,13 @@ fn aliasExpandedSource(
             continue;
         }
 
-        if (isRedirectionOperatorKind(tok.kind)) {
+        if (token.isRedirectionOperator(tok.kind)) {
             skip_redirection_target = true;
             try output.appendSlice(allocator, src.text[tok.span.start..tok.span.end]);
             continue;
         }
 
-        command_position = tokenStartsCommandPosition(tok.kind);
+        command_position = token.startsCommandPosition(tok.kind);
         try output.appendSlice(allocator, src.text[tok.span.start..tok.span.end]);
     }
 
@@ -122,64 +156,6 @@ fn aliasExpandedSource(
 
 pub fn aliasesEnabled(shell_state: state_mod.State) bool {
     return shell_state.options.mode == .posix or shell_state.options.interactive or shell_state.options.expand_aliases;
-}
-
-fn reservedWordStartsCommandList(reserved: token.ReservedWord) bool {
-    return switch (reserved) {
-        .if_kw, .then_kw, .else_kw, .elif_kw, .do_kw, .while_kw, .until_kw => true,
-        else => false,
-    };
-}
-
-fn tokenStartsCommandPosition(kind: token.Kind) bool {
-    return switch (kind) {
-        .newline,
-        .semicolon,
-        .ampersand,
-        .ampersand_greater,
-        .ampersand_greater_greater,
-        .pipe,
-        .pipe_ampersand,
-        .pipe_pipe,
-        .ampersand_ampersand,
-        .bang,
-        .left_paren,
-        .right_paren,
-        .left_brace,
-        .here_doc_body,
-        .here_doc_body_unterminated,
-        => true,
-        else => false,
-    };
-}
-
-fn isRedirectionOperatorKind(kind: token.Kind) bool {
-    return switch (kind) {
-        .less,
-        .less_less,
-        .less_less_dash,
-        .less_less_less,
-        .less_ampersand,
-        .less_greater,
-        .greater,
-        .greater_greater,
-        .greater_ampersand,
-        .ampersand_greater,
-        .ampersand_greater_greater,
-        .clobber,
-        => true,
-        else => false,
-    };
-}
-
-fn isAssignmentWord(text: []const u8) bool {
-    const equals_index = std.mem.indexOfScalar(u8, text, '=') orelse return false;
-    const name_end = if (equals_index > 0 and text[equals_index - 1] == '+') equals_index - 1 else equals_index;
-    const name = text[0..name_end];
-    if (name.len == 0) return false;
-    if (!isNameStart(name[0])) return false;
-    for (name[1..]) |byte| if (!isNameContinue(byte)) return false;
-    return true;
 }
 
 fn aliasEndsWithBlank(value: []const u8) bool {
@@ -268,6 +244,7 @@ const Lexer = struct {
     position: source_mod.Position,
     pending_here_docs: std.ArrayList(PendingHereDoc) = .empty,
     here_doc_delimiter_expected: ?bool = null,
+    trivia: ?*std.ArrayList(Trivia) = null,
 
     const PendingHereDoc = struct {
         delimiter: []const u8,
@@ -321,7 +298,7 @@ const Lexer = struct {
                 try self.appendWord(tokens)
             else
                 try self.appendRedirectionOperator(tokens),
-            '#' => self.skipComment(),
+            '#' => try self.skipComment(),
             else => if (self.startsIoNumber()) try self.appendIoNumber(tokens) else try self.appendWord(tokens),
         }
     }
@@ -574,8 +551,16 @@ const Lexer = struct {
         try tokens.append(self.allocator, tok);
     }
 
-    fn skipComment(self: *Lexer) void {
+    fn emitTrivia(self: *Lexer, kind: Trivia.Kind, start: usize, end: usize) std.mem.Allocator.Error!void {
+        const list = self.trivia orelse return;
+        std.debug.assert(start < end);
+        try list.append(self.allocator, .{ .kind = kind, .start = start, .end = end });
+    }
+
+    fn skipComment(self: *Lexer) std.mem.Allocator.Error!void {
+        const start = self.position.byte_offset;
         while (!self.atEnd() and self.peek() != '\n') self.advanceOne();
+        try self.emitTrivia(.comment, start, self.position.byte_offset);
     }
 
     fn skipLineContinuation(self: *Lexer) void {
@@ -590,6 +575,7 @@ const Lexer = struct {
         const start_offset = self.position.byte_offset;
         var quoted = false;
         var quote: ?u8 = null;
+        var quote_start: usize = 0;
         while (!self.atEnd()) {
             const byte = self.peek();
             if (quote) |delimiter| {
@@ -601,27 +587,33 @@ const Lexer = struct {
                 if (delimiter == '"' and byte == '$' and self.peekNextIs('(')) {
                     self.advanceOne();
                     self.advanceOne();
-                    self.skipCommandSubstitution();
+                    try self.skipCommandSubstitution();
                     continue;
                 }
                 if (delimiter == '"' and byte == '$' and self.peekNextIs('{')) {
                     self.advanceOne();
                     self.advanceOne();
-                    self.skipBracedParameter();
+                    try self.skipBracedParameter();
                     continue;
                 }
                 if (delimiter == '"' and byte == '`') {
                     self.advanceOne();
-                    self.skipBackquoteSubstitution();
+                    try self.skipBackquoteSubstitution();
                     continue;
                 }
-                if (byte == delimiter) quote = null;
+                if (byte == delimiter) {
+                    quote = null;
+                    self.advanceOne();
+                    try self.emitTrivia(.quote, quote_start, self.position.byte_offset);
+                    continue;
+                }
                 self.advanceOne();
                 continue;
             }
             if (byte == '\'' or byte == '"') {
                 quoted = true;
                 quote = byte;
+                quote_start = self.position.byte_offset;
                 self.advanceOne();
                 continue;
             }
@@ -635,43 +627,45 @@ const Lexer = struct {
                 self.advanceOne();
                 self.advanceOne();
                 self.advanceOne();
-                self.skipArithmeticExpansion();
+                try self.skipArithmeticExpansion();
                 continue;
             }
             if (byte == '$' and self.peekNextIs('\'')) {
                 quoted = true;
+                const dollar_quote_start = self.position.byte_offset;
                 self.advanceOne();
                 self.advanceOne();
-                self.skipDollarSingleQuote();
+                try self.skipDollarSingleQuote(dollar_quote_start);
                 continue;
             }
             if (byte == '$' and self.peekNextIs('(')) {
                 self.advanceOne();
                 self.advanceOne();
-                self.skipCommandSubstitution();
+                try self.skipCommandSubstitution();
                 continue;
             }
             if (byte == '$' and self.peekNextIs('{')) {
                 self.advanceOne();
                 self.advanceOne();
-                self.skipBracedParameter();
+                try self.skipBracedParameter();
                 continue;
             }
             if (byte == '`') {
                 self.advanceOne();
-                self.skipBackquoteSubstitution();
+                try self.skipBackquoteSubstitution();
                 continue;
             }
             if (self.startsProcessSubstitution()) {
                 self.advanceOne();
                 self.advanceOne();
-                self.skipCommandSubstitution();
+                try self.skipCommandSubstitution();
                 continue;
             }
             if (byte == '[' and self.skipBracketExpression()) continue;
             if (isWordTerminator(byte)) break;
             self.advanceOne();
         }
+        if (quote != null) try self.emitTrivia(.pending_quote, quote_start, self.position.byte_offset);
         const raw_text = self.source.text[start_offset..self.position.byte_offset];
         const text = try self.wordText(raw_text);
         const tok: token.Token = .{
@@ -825,7 +819,7 @@ const Lexer = struct {
         return (byte == '<' or byte == '>') and self.peekNextIs('(');
     }
 
-    fn skipArithmeticExpansion(self: *Lexer) void {
+    fn skipArithmeticExpansion(self: *Lexer) std.mem.Allocator.Error!void {
         var paren_depth: usize = 0;
         while (!self.atEnd()) {
             const byte = self.peek();
@@ -836,9 +830,15 @@ const Lexer = struct {
             }
             if (byte == '\'' or byte == '"') {
                 const quote = byte;
+                const quote_start = self.position.byte_offset;
                 self.advanceOne();
                 while (!self.atEnd() and self.peek() != quote) self.advanceOne();
-                if (!self.atEnd()) self.advanceOne();
+                if (!self.atEnd()) {
+                    self.advanceOne();
+                    try self.emitTrivia(.quote, quote_start, self.position.byte_offset);
+                } else {
+                    try self.emitTrivia(.pending_quote, quote_start, self.position.byte_offset);
+                }
                 continue;
             }
             if (byte == '(') {
@@ -861,22 +861,28 @@ const Lexer = struct {
         }
     }
 
-    fn skipCommandSubstitution(self: *Lexer) void {
+    fn skipCommandSubstitution(self: *Lexer) std.mem.Allocator.Error!void {
         var depth: usize = 1;
         var quote: ?u8 = null;
+        var quote_start: usize = 0;
         while (!self.atEnd() and depth != 0) {
             if (self.startsReservedWord("case")) {
-                self.skipCaseCommandText();
+                try self.skipCaseCommandText();
                 continue;
             }
             const byte = self.peek();
             if (quote) |delimiter| {
-                if (byte == delimiter) quote = null;
+                if (byte == delimiter) {
+                    quote = null;
+                    self.advanceOne();
+                    try self.emitTrivia(.quote, quote_start, self.position.byte_offset);
+                    continue;
+                }
                 self.advanceOne();
                 continue;
             }
             if (byte == '#' and self.commentStartsAtCurrentOffset()) {
-                self.skipComment();
+                try self.skipComment();
                 continue;
             }
             if (byte == '\\') {
@@ -886,6 +892,7 @@ const Lexer = struct {
             }
             if (byte == '\'' or byte == '"') {
                 quote = byte;
+                quote_start = self.position.byte_offset;
                 self.advanceOne();
                 continue;
             }
@@ -899,6 +906,7 @@ const Lexer = struct {
             if (byte == ')') depth -= 1;
             self.advanceOne();
         }
+        if (quote != null) try self.emitTrivia(.pending_quote, quote_start, self.position.byte_offset);
     }
 
     fn commentStartsAtCurrentOffset(self: Lexer) bool {
@@ -910,7 +918,7 @@ const Lexer = struct {
         };
     }
 
-    fn skipCaseCommandText(self: *Lexer) void {
+    fn skipCaseCommandText(self: *Lexer) std.mem.Allocator.Error!void {
         self.advanceBytes("case".len);
         while (!self.atEnd()) {
             if (self.startsReservedWord("esac")) {
@@ -920,7 +928,7 @@ const Lexer = struct {
 
             const byte = self.peek();
             if (byte == '#' and self.commentStartsAtCurrentOffset()) {
-                self.skipComment();
+                try self.skipComment();
                 continue;
             }
             if (byte == '\\') {
@@ -930,15 +938,21 @@ const Lexer = struct {
             }
             if (byte == '\'' or byte == '"') {
                 const quote = byte;
+                const quote_start = self.position.byte_offset;
                 self.advanceOne();
                 while (!self.atEnd() and self.peek() != quote) self.advanceOne();
-                if (!self.atEnd()) self.advanceOne();
+                if (!self.atEnd()) {
+                    self.advanceOne();
+                    try self.emitTrivia(.quote, quote_start, self.position.byte_offset);
+                } else {
+                    try self.emitTrivia(.pending_quote, quote_start, self.position.byte_offset);
+                }
                 continue;
             }
             if (byte == '$' and self.peekNextIs('(')) {
                 self.advanceOne();
                 self.advanceOne();
-                self.skipCommandSubstitution();
+                try self.skipCommandSubstitution();
                 continue;
             }
             self.advanceOne();
@@ -960,18 +974,25 @@ const Lexer = struct {
         while (remaining != 0) : (remaining -= 1) self.advanceOne();
     }
 
-    fn skipBracedParameter(self: *Lexer) void {
+    fn skipBracedParameter(self: *Lexer) std.mem.Allocator.Error!void {
         var depth: usize = 1;
         var quote: ?u8 = null;
+        var quote_start: usize = 0;
         while (!self.atEnd()) {
             const byte = self.peek();
             if (quote) |delimiter| {
-                if (byte == delimiter) quote = null;
+                if (byte == delimiter) {
+                    quote = null;
+                    self.advanceOne();
+                    try self.emitTrivia(.quote, quote_start, self.position.byte_offset);
+                    continue;
+                }
                 self.advanceOne();
                 continue;
             }
             if (byte == '\'' or byte == '"') {
                 quote = byte;
+                quote_start = self.position.byte_offset;
                 self.advanceOne();
                 continue;
             }
@@ -989,7 +1010,7 @@ const Lexer = struct {
             if (byte == '$' and self.peekNextIs('(')) {
                 self.advanceOne();
                 self.advanceOne();
-                self.skipCommandSubstitution();
+                try self.skipCommandSubstitution();
                 continue;
             }
             self.advanceOne();
@@ -998,9 +1019,14 @@ const Lexer = struct {
                 if (depth == 0) break;
             }
         }
+        if (quote != null) try self.emitTrivia(.pending_quote, quote_start, self.position.byte_offset);
     }
 
-    fn skipBackquoteSubstitution(self: *Lexer) void {
+    /// Quote state is tracked only to emit trivia; it must not affect where
+    /// the substitution closes, so the token scan matches the plain lexer.
+    fn skipBackquoteSubstitution(self: *Lexer) std.mem.Allocator.Error!void {
+        var quote: ?u8 = null;
+        var quote_start: usize = 0;
         while (!self.atEnd()) {
             const byte = self.peek();
             self.advanceOne();
@@ -1008,8 +1034,23 @@ const Lexer = struct {
                 self.advanceOne();
                 continue;
             }
-            if (byte == '`') break;
+            if (byte == '`') {
+                if (quote != null) try self.emitTrivia(.pending_quote, quote_start, self.position.byte_offset - 1);
+                return;
+            }
+            if (quote) |delimiter| {
+                if (byte == delimiter) {
+                    quote = null;
+                    try self.emitTrivia(.quote, quote_start, self.position.byte_offset);
+                }
+                continue;
+            }
+            if (byte == '\'' or byte == '"') {
+                quote = byte;
+                quote_start = self.position.byte_offset - 1;
+            }
         }
+        if (quote != null) try self.emitTrivia(.pending_quote, quote_start, self.position.byte_offset);
     }
 
     fn skipBracketExpression(self: *Lexer) bool {
@@ -1041,7 +1082,7 @@ const Lexer = struct {
         return false;
     }
 
-    fn skipDollarSingleQuote(self: *Lexer) void {
+    fn skipDollarSingleQuote(self: *Lexer, quote_start: usize) std.mem.Allocator.Error!void {
         while (!self.atEnd()) {
             const byte = self.peek();
             self.advanceOne();
@@ -1049,8 +1090,12 @@ const Lexer = struct {
                 self.advanceOne();
                 continue;
             }
-            if (byte == '\'') break;
+            if (byte == '\'') {
+                try self.emitTrivia(.quote, quote_start, self.position.byte_offset);
+                return;
+            }
         }
+        try self.emitTrivia(.pending_quote, quote_start, self.position.byte_offset);
     }
 };
 
@@ -1081,6 +1126,100 @@ fn isNameContinue(byte: u8) bool {
 
 fn isRedirectionStart(byte: u8) bool {
     return byte == '<' or byte == '>';
+}
+
+test "lexWithTrivia reports comments quotes and pending quotes" {
+    const text = "printf 'ok' \"a b\" # note\nprintf \"pending";
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = text };
+    var trivia: std.ArrayList(Trivia) = .empty;
+    defer trivia.deinit(std.testing.allocator);
+    const tokens = try lexWithTrivia(std.testing.allocator, src, &trivia);
+    defer std.testing.allocator.free(tokens);
+
+    try std.testing.expectEqual(@as(usize, 4), trivia.items.len);
+    try std.testing.expectEqual(Trivia.Kind.quote, trivia.items[0].kind);
+    try std.testing.expectEqualStrings("'ok'", text[trivia.items[0].start..trivia.items[0].end]);
+    try std.testing.expectEqual(Trivia.Kind.quote, trivia.items[1].kind);
+    try std.testing.expectEqualStrings("\"a b\"", text[trivia.items[1].start..trivia.items[1].end]);
+    try std.testing.expectEqual(Trivia.Kind.comment, trivia.items[2].kind);
+    try std.testing.expectEqualStrings("# note", text[trivia.items[2].start..trivia.items[2].end]);
+    try std.testing.expectEqual(Trivia.Kind.pending_quote, trivia.items[3].kind);
+    try std.testing.expectEqualStrings("\"pending", text[trivia.items[3].start..trivia.items[3].end]);
+}
+
+test "lexWithTrivia spans dollar single quotes" {
+    const text = "printf $'a\\'b' $'open";
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = text };
+    var trivia: std.ArrayList(Trivia) = .empty;
+    defer trivia.deinit(std.testing.allocator);
+    const tokens = try lexWithTrivia(std.testing.allocator, src, &trivia);
+    defer std.testing.allocator.free(tokens);
+
+    try std.testing.expectEqual(@as(usize, 2), trivia.items.len);
+    try std.testing.expectEqual(Trivia.Kind.quote, trivia.items[0].kind);
+    try std.testing.expectEqualStrings("$'a\\'b'", text[trivia.items[0].start..trivia.items[0].end]);
+    try std.testing.expectEqual(Trivia.Kind.pending_quote, trivia.items[1].kind);
+    try std.testing.expectEqualStrings("$'open", text[trivia.items[1].start..trivia.items[1].end]);
+}
+
+test "lexWithTrivia ignores quotes inside here-document bodies" {
+    const text = "cat <<EOF\nit's fine\nEOF\n";
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = text };
+    var trivia: std.ArrayList(Trivia) = .empty;
+    defer trivia.deinit(std.testing.allocator);
+    const tokens = try lexWithTrivia(std.testing.allocator, src, &trivia);
+    defer std.testing.allocator.free(tokens);
+
+    try std.testing.expectEqual(@as(usize, 0), trivia.items.len);
+}
+
+test "lexWithTrivia reports quotes and comments inside command substitution" {
+    const text = "echo $(grep 'pat' file # inner\n)";
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = text };
+    var trivia: std.ArrayList(Trivia) = .empty;
+    defer trivia.deinit(std.testing.allocator);
+    const tokens = try lexWithTrivia(std.testing.allocator, src, &trivia);
+    defer std.testing.allocator.free(tokens);
+
+    try std.testing.expectEqual(@as(usize, 2), trivia.items.len);
+    try std.testing.expectEqual(Trivia.Kind.quote, trivia.items[0].kind);
+    try std.testing.expectEqualStrings("'pat'", text[trivia.items[0].start..trivia.items[0].end]);
+    try std.testing.expectEqual(Trivia.Kind.comment, trivia.items[1].kind);
+    try std.testing.expectEqualStrings("# inner", text[trivia.items[1].start..trivia.items[1].end]);
+}
+
+test "lexWithTrivia reports quotes inside backquote substitutions" {
+    const text = "echo `grep 'pat' f` `x \"open";
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = text };
+    var trivia: std.ArrayList(Trivia) = .empty;
+    defer trivia.deinit(std.testing.allocator);
+    const tokens = try lexWithTrivia(std.testing.allocator, src, &trivia);
+    defer std.testing.allocator.free(tokens);
+
+    try std.testing.expectEqual(@as(usize, 2), trivia.items.len);
+    try std.testing.expectEqual(Trivia.Kind.quote, trivia.items[0].kind);
+    try std.testing.expectEqualStrings("'pat'", text[trivia.items[0].start..trivia.items[0].end]);
+    try std.testing.expectEqual(Trivia.Kind.pending_quote, trivia.items[1].kind);
+    try std.testing.expectEqualStrings("\"open", text[trivia.items[1].start..trivia.items[1].end]);
+}
+
+test "lexWithTrivia produces identical tokens to lex" {
+    const text = "FOO=bar cat <<EOF 2>err # c\nbody\nEOF\necho $((1+2)) \"x $(y 'z')\"";
+    const src: source_mod.Source = .{ .id = 1, .kind = .command_string, .name = "-c", .text = text };
+    var trivia: std.ArrayList(Trivia) = .empty;
+    defer trivia.deinit(std.testing.allocator);
+    const with_trivia = try lexWithTrivia(std.testing.allocator, src, &trivia);
+    defer std.testing.allocator.free(with_trivia);
+    const plain = try lex(std.testing.allocator, src);
+    defer std.testing.allocator.free(plain);
+
+    try std.testing.expectEqual(plain.len, with_trivia.len);
+    for (plain, with_trivia) |expected, actual| {
+        try std.testing.expectEqual(expected.kind, actual.kind);
+        try std.testing.expectEqual(expected.span.start, actual.span.start);
+        try std.testing.expectEqual(expected.span.end, actual.span.end);
+        try std.testing.expectEqualStrings(expected.text, actual.text);
+    }
 }
 
 test "lexer tokenizes colon command" {

@@ -632,13 +632,34 @@ fn analyzeInteractiveInput(
 ) !?editor.render.DiagnosticRender {
     if (text.len == 0) return null;
 
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+
+    const src: shell.source.Source = .{ .id = 0, .kind = .interactive, .name = "interactive", .text = text };
+    var trivia: std.ArrayList(shell.lexer.Trivia) = .empty;
+    const tokens = try shell.lexer.lexWithTrivia(arena.allocator(), src, &trivia);
+
     var spans: std.ArrayList(editor.render.DiagnosticSpan) = .empty;
     errdefer spans.deinit(allocator);
-    try appendLexicalHighlightSpans(allocator, &spans, text);
-    try appendCommandValiditySpans(allocator, &spans, sh, command_cache, text);
+    for (trivia.items) |item| {
+        try spans.append(allocator, .{
+            .start = item.start,
+            .end = item.end,
+            .severity = triviaSeverity(item.kind),
+        });
+    }
+    try appendCommandValiditySpans(allocator, &spans, sh, command_cache, tokens);
 
     if (spans.items.len == 0) return null;
     return .{ .spans = try spans.toOwnedSlice(allocator) };
+}
+
+fn triviaSeverity(kind: shell.lexer.Trivia.Kind) editor.render.DiagnosticSeverity {
+    return switch (kind) {
+        .comment => .comment,
+        .quote => .quote,
+        .pending_quote => .pending,
+    };
 }
 
 fn appendCommandValiditySpans(
@@ -646,114 +667,18 @@ fn appendCommandValiditySpans(
     spans: *std.ArrayList(editor.render.DiagnosticSpan),
     sh: *RushShell,
     command_cache: *const PathCommandCache,
-    text: []const u8,
+    tokens: []const shell.Token,
 ) !void {
-    var arena = std.heap.ArenaAllocator.init(allocator);
-    defer arena.deinit();
-
-    const src: shell.source.Source = .{ .id = 0, .kind = .interactive, .name = "interactive", .text = text };
-    const tokens = try shell.lexer.lex(arena.allocator(), src);
-
-    var command_position = true;
-    var skip_redirection_target = false;
+    var tracker: shell.token.CommandPositionTracker = .{};
     for (tokens) |tok| {
         if (tok.kind == .eof) break;
-
-        if (skip_redirection_target and tok.kind == .word) {
-            skip_redirection_target = false;
-            continue;
-        }
-
-        if (tok.kind == .word) {
-            if (tok.reserved) |reserved| {
-                command_position = reservedWordStartsCommandList(reserved);
-                continue;
-            }
-            if (command_position and isAssignmentWord(tok.text)) {
-                command_position = true;
-                continue;
-            }
-            if (command_position and !commandResolves(allocator, sh, command_cache, tok.text)) {
-                try spans.append(allocator, .{
-                    .start = tok.span.start,
-                    .end = tok.span.end,
-                    .severity = .command_invalid,
-                });
-            }
-            command_position = false;
-            continue;
-        }
-
-        if (isRedirectionOperatorKind(tok.kind)) {
-            skip_redirection_target = true;
-            continue;
-        }
-
-        command_position = tokenStartsCommandPosition(tok.kind);
-    }
-}
-
-fn appendLexicalHighlightSpans(
-    allocator: std.mem.Allocator,
-    spans: *std.ArrayList(editor.render.DiagnosticSpan),
-    text: []const u8,
-) !void {
-    var index: usize = 0;
-    while (index < text.len) {
-        const byte = text[index];
-        if (byte == '#' and commentStartsAt(text, index)) {
-            const start = index;
-            while (index < text.len and text[index] != '\n') index += 1;
-            try spans.append(allocator, .{ .start = start, .end = index, .severity = .comment });
-            continue;
-        }
-        if (byte == '\\') {
-            index += 1;
-            if (index < text.len) index += 1;
-            continue;
-        }
-        if (byte == '$' and index + 1 < text.len and text[index + 1] == '\'') {
-            const start = index;
-            index += 2;
-            while (index < text.len) {
-                if (text[index] == '\\') {
-                    index += 1;
-                    if (index < text.len) index += 1;
-                    continue;
-                }
-                if (text[index] == '\'') {
-                    index += 1;
-                    try spans.append(allocator, .{ .start = start, .end = index, .severity = .quote });
-                    break;
-                }
-                index += 1;
-            } else {
-                try spans.append(allocator, .{ .start = start, .end = text.len, .severity = .pending });
-            }
-            continue;
-        }
-        if (byte == '\'' or byte == '"') {
-            const delimiter = byte;
-            const start = index;
-            index += 1;
-            while (index < text.len) {
-                if (delimiter == '"' and text[index] == '\\') {
-                    index += 1;
-                    if (index < text.len) index += 1;
-                    continue;
-                }
-                if (text[index] == delimiter) {
-                    index += 1;
-                    try spans.append(allocator, .{ .start = start, .end = index, .severity = .quote });
-                    break;
-                }
-                index += 1;
-            } else {
-                try spans.append(allocator, .{ .start = start, .end = text.len, .severity = .pending });
-            }
-            continue;
-        }
-        index += 1;
+        if (tracker.classify(tok) != .command) continue;
+        if (commandResolves(allocator, sh, command_cache, tok.text)) continue;
+        try spans.append(allocator, .{
+            .start = tok.span.start,
+            .end = tok.span.end,
+            .severity = .command_invalid,
+        });
     }
 }
 
@@ -860,73 +785,6 @@ fn interactivePathValue(sh: *RushShell) ?[]const u8 {
         if (std.mem.eql(u8, entry[0.."PATH".len], "PATH")) return entry["PATH".len + 1 ..];
     }
     return "/bin:/usr/bin";
-}
-
-fn reservedWordStartsCommandList(reserved: shell.token.ReservedWord) bool {
-    return switch (reserved) {
-        .if_kw, .then_kw, .else_kw, .elif_kw, .do_kw, .while_kw, .until_kw => true,
-        else => false,
-    };
-}
-
-fn tokenStartsCommandPosition(kind: shell.token.Kind) bool {
-    return switch (kind) {
-        .newline,
-        .semicolon,
-        .ampersand,
-        .pipe,
-        .pipe_pipe,
-        .ampersand_ampersand,
-        .bang,
-        .left_paren,
-        .right_paren,
-        .left_brace,
-        .here_doc_body,
-        .here_doc_body_unterminated,
-        => true,
-        else => false,
-    };
-}
-
-fn isRedirectionOperatorKind(kind: shell.token.Kind) bool {
-    return switch (kind) {
-        .less,
-        .less_less,
-        .less_less_dash,
-        .less_less_less,
-        .less_ampersand,
-        .less_greater,
-        .greater,
-        .greater_greater,
-        .greater_ampersand,
-        .clobber,
-        => true,
-        else => false,
-    };
-}
-
-fn isAssignmentWord(text: []const u8) bool {
-    const equals_index = std.mem.indexOfScalar(u8, text, '=') orelse return false;
-    const name = text[0..equals_index];
-    if (name.len == 0 or !isNameStart(name[0])) return false;
-    for (name[1..]) |byte| if (!isNameContinue(byte)) return false;
-    return true;
-}
-
-fn isNameStart(byte: u8) bool {
-    return std.ascii.isAlphabetic(byte) or byte == '_';
-}
-
-fn isNameContinue(byte: u8) bool {
-    return isNameStart(byte) or std.ascii.isDigit(byte);
-}
-
-fn commentStartsAt(text: []const u8, index: usize) bool {
-    if (index == 0) return true;
-    return switch (text[index - 1]) {
-        ' ', '\t', '\n', '\r', ';', '&', '|', '(', ')' => true,
-        else => false,
-    };
 }
 
 fn pendingEventExit(session: *InteractiveSession, status: u8) void {

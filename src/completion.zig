@@ -88,15 +88,59 @@ const AnalyzedLine = struct {
 
 fn analyzeLine(allocator: std.mem.Allocator, source: []const u8, raw_cursor: usize) !AnalyzedLine {
     const cursor = @min(raw_cursor, source.len);
+
+    var arena = std.heap.ArenaAllocator.init(allocator);
+    defer arena.deinit();
+    const src: shell.source.Source = .{ .id = 0, .kind = .interactive, .name = "completion", .text = source };
+    const tokens = try shell.lexer.lex(arena.allocator(), src);
+
     var words: std.ArrayList(Word) = .empty;
     errdefer words.deinit(allocator);
-    try scanWords(allocator, source, cursor, &words);
 
+    var tracker: shell.token.CommandPositionTracker = .{};
     var current_word_index: ?usize = null;
-    for (words.items, 0..) |word, index| {
-        if (word.start <= cursor and cursor <= word.end) {
+    var current_word_class: ?shell.token.CommandPositionTracker.Class = null;
+    var command_word_index: ?usize = null;
+    for (tokens) |tok| {
+        if (tok.kind == .eof) break;
+        if (tok.span.start >= cursor) break;
+        const class = tracker.classify(tok);
+        if (tok.kind != .word) {
+            // A token that reopens command position starts a new command
+            // segment, so any previous command word no longer applies.
+            if (tracker.command_position) command_word_index = null;
+            continue;
+        }
+        const index = words.items.len;
+        try words.append(allocator, .{
+            .text = source[tok.span.start..tok.span.end],
+            .start = tok.span.start,
+            .end = tok.span.end,
+        });
+        if (class == .command) command_word_index = index;
+        if (class == .reserved and tracker.command_position) command_word_index = null;
+        if (cursor <= tok.span.end) {
             current_word_index = index;
-            break;
+            current_word_class = class;
+        }
+    }
+
+    // Completing inside an unterminated command substitution is really
+    // completing the inner command line, so analyze that line instead.
+    if (current_word_index) |index| {
+        const word = words.items[index];
+        if (try substitutionInteriorStart(arena.allocator(), source[word.start..cursor])) |relative| {
+            const inner_start = word.start + relative;
+            words.deinit(allocator);
+            words = .empty;
+            var inner = try analyzeLine(allocator, source[inner_start..], cursor - inner_start);
+            for (inner.words) |*inner_word| {
+                inner_word.start += inner_start;
+                inner_word.end += inner_start;
+            }
+            inner.replace_start += inner_start;
+            inner.replace_end += inner_start;
+            return inner;
         }
     }
 
@@ -106,11 +150,10 @@ fn analyzeLine(allocator: std.mem.Allocator, source: []const u8, raw_cursor: usi
     const parameter = raw_prefix.len != 0 and raw_prefix[0] == '$';
     const prefix = if (parameter) raw_prefix[1..] else raw_prefix;
 
-    const command_word_index = findCommandWord(source, words.items, cursor);
-    const is_command = if (command_word_index) |command_index|
-        current_word_index != null and current_word_index.? == command_index
+    const is_command = if (current_word_class) |class|
+        class == .command or class == .reserved
     else
-        true;
+        tracker.command_position and !tracker.skip_redirection_target;
     const kind: CompletionKind = if (parameter) .parameter else if (is_command) .command else .argument;
     const root = if (command_word_index) |index| words.items[index].text else null;
 
@@ -126,61 +169,42 @@ fn analyzeLine(allocator: std.mem.Allocator, source: []const u8, raw_cursor: usi
     };
 }
 
-fn scanWords(allocator: std.mem.Allocator, source: []const u8, cursor: usize, words: *std.ArrayList(Word)) !void {
+/// Returns the offset just past the opener of the innermost `$(` or backquote
+/// substitution left unclosed in `text`, or null when every substitution is
+/// closed. Single quotes suppress openers; double quotes do not.
+fn substitutionInteriorStart(allocator: std.mem.Allocator, text: []const u8) !?usize {
+    var open_interiors: std.ArrayList(usize) = .empty;
+    defer open_interiors.deinit(allocator);
+    var backquote: ?usize = null;
+    var quote: ?u8 = null;
     var index: usize = 0;
-    while (index < cursor) {
-        while (index < cursor and isWordSeparator(source[index])) index += 1;
-        if (index >= cursor) break;
-        const start = index;
-        var quote: ?u8 = null;
-        while (index < source.len) : (index += 1) {
-            const byte = source[index];
-            if (quote) |quoted| {
-                if (byte == quoted) quote = null;
+    while (index < text.len) : (index += 1) {
+        const byte = text[index];
+        if (quote) |delimiter| {
+            if (byte == delimiter) {
+                quote = null;
                 continue;
             }
-            if (byte == '\'' or byte == '"') {
-                quote = byte;
-                continue;
-            }
-            if (isWordSeparator(byte)) break;
+            // Single quotes suppress substitutions; double quotes do not.
+            if (delimiter == '\'') continue;
         }
-        try words.append(allocator, .{ .text = source[start..index], .start = start, .end = index });
+        switch (byte) {
+            '\\' => index += 1,
+            '\'', '"' => if (quote == null) {
+                quote = byte;
+            },
+            '`' => backquote = if (backquote == null) index + 1 else null,
+            '$' => if (index + 1 < text.len and text[index + 1] == '(') {
+                try open_interiors.append(allocator, index + 2);
+                index += 1;
+            },
+            ')' => _ = open_interiors.pop(),
+            else => {},
+        }
     }
-}
-
-fn isWordSeparator(byte: u8) bool {
-    return switch (byte) {
-        ' ', '\t', '\n', ';', '|', '&', '(', ')', '<', '>' => true,
-        else => false,
-    };
-}
-
-fn findCommandWord(source: []const u8, words: []const Word, cursor: usize) ?usize {
-    if (words.len == 0) return null;
-    var selected: ?usize = null;
-    for (words, 0..) |word, index| {
-        if (word.start > cursor) break;
-        selected = index;
-    }
-    if (selected == null) return null;
-    if (words[selected.?].end < cursor and commandBoundaryBetween(source, words[selected.?].end, cursor)) return null;
-    var index = selected.?;
-    while (index > 0) {
-        const previous = words[index - 1];
-        // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-        if (previous.end < words[index].start and commandBoundaryBetween(source, previous.end, words[index].start)) return index;
-        index -= 1;
-    }
-    return 0;
-}
-
-fn commandBoundaryBetween(source: []const u8, start: usize, end: usize) bool {
-    for (source[start..end]) |byte| switch (byte) {
-        ';', '|', '&', '\n' => return true,
-        else => {},
-    };
-    return false;
+    const deepest = open_interiors.getLastOrNull();
+    if (deepest != null and backquote != null) return @max(deepest.?, backquote.?);
+    return deepest orelse backquote;
 }
 
 const Builder = struct {
@@ -1094,6 +1118,83 @@ test "completion analyzes command positions after separators" {
     defer analyzed.deinit(std.testing.allocator);
     try std.testing.expectEqual(CompletionKind.command, analyzed.kind);
     try std.testing.expectEqualStrings("zi", analyzed.prefix);
+}
+
+test "completion keeps command position after assignment prefixes" {
+    const analyzed = try analyzeLine(std.testing.allocator, "FOO=bar ", "FOO=bar ".len);
+    defer analyzed.deinit(std.testing.allocator);
+    try std.testing.expectEqual(CompletionKind.command, analyzed.kind);
+    try std.testing.expectEqualStrings("", analyzed.prefix);
+}
+
+test "completion treats redirection targets as arguments" {
+    const analyzed = try analyzeLine(std.testing.allocator, "true; > ", "true; > ".len);
+    defer analyzed.deinit(std.testing.allocator);
+    try std.testing.expectEqual(CompletionKind.argument, analyzed.kind);
+    try std.testing.expectEqual(@as(?[]const u8, null), analyzed.root);
+}
+
+test "completion keeps escaped spaces inside a single word" {
+    const line = "cat foo\\ bar";
+    const analyzed = try analyzeLine(std.testing.allocator, line, line.len);
+    defer analyzed.deinit(std.testing.allocator);
+    try std.testing.expectEqual(CompletionKind.argument, analyzed.kind);
+    try std.testing.expectEqualStrings("foo\\ bar", analyzed.prefix);
+    try std.testing.expectEqualStrings("cat", analyzed.root.?);
+}
+
+test "completion analyzes the inner line of an open command substitution" {
+    const line = "echo $(git ch";
+    const analyzed = try analyzeLine(std.testing.allocator, line, line.len);
+    defer analyzed.deinit(std.testing.allocator);
+    try std.testing.expectEqual(CompletionKind.argument, analyzed.kind);
+    try std.testing.expectEqualStrings("git", analyzed.root.?);
+    try std.testing.expectEqualStrings("ch", analyzed.prefix);
+    try std.testing.expectEqual(@as(usize, "echo $(git ".len), analyzed.replace_start);
+    try std.testing.expectEqual(@as(usize, line.len), analyzed.replace_end);
+}
+
+test "completion analyzes substitutions opened inside double quotes" {
+    const line = "echo \"$(git ch";
+    const analyzed = try analyzeLine(std.testing.allocator, line, line.len);
+    defer analyzed.deinit(std.testing.allocator);
+    try std.testing.expectEqual(CompletionKind.argument, analyzed.kind);
+    try std.testing.expectEqualStrings("git", analyzed.root.?);
+    try std.testing.expectEqualStrings("ch", analyzed.prefix);
+    try std.testing.expectEqual(@as(usize, "echo \"$(git ".len), analyzed.replace_start);
+}
+
+test "completion ignores substitution openers inside single quotes" {
+    const line = "echo '$(li";
+    const analyzed = try analyzeLine(std.testing.allocator, line, line.len);
+    defer analyzed.deinit(std.testing.allocator);
+    try std.testing.expectEqual(CompletionKind.argument, analyzed.kind);
+    try std.testing.expectEqualStrings("echo", analyzed.root.?);
+    try std.testing.expectEqualStrings("'$(li", analyzed.prefix);
+}
+
+test "completion completes commands right after a substitution opener" {
+    const line = "echo $(";
+    const analyzed = try analyzeLine(std.testing.allocator, line, line.len);
+    defer analyzed.deinit(std.testing.allocator);
+    try std.testing.expectEqual(CompletionKind.command, analyzed.kind);
+    try std.testing.expectEqualStrings("", analyzed.prefix);
+}
+
+test "completion ignores closed command substitutions" {
+    const line = "echo $(id) ar";
+    const analyzed = try analyzeLine(std.testing.allocator, line, line.len);
+    defer analyzed.deinit(std.testing.allocator);
+    try std.testing.expectEqual(CompletionKind.argument, analyzed.kind);
+    try std.testing.expectEqualStrings("echo", analyzed.root.?);
+    try std.testing.expectEqualStrings("ar", analyzed.prefix);
+}
+
+test "completion recognizes reserved words as command prefixes" {
+    const analyzed = try analyzeLine(std.testing.allocator, "if tr", "if tr".len);
+    defer analyzed.deinit(std.testing.allocator);
+    try std.testing.expectEqual(CompletionKind.command, analyzed.kind);
+    try std.testing.expectEqualStrings("tr", analyzed.prefix);
 }
 
 test "completion loads manifest subcommands" {
