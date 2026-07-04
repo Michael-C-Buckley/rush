@@ -1312,6 +1312,7 @@ fn appendCompletionCandidate(
         .priority = priority,
         .replace_start = context.replace_start,
         .replace_end = context.replace_end,
+        .append_space = kind != .directory,
         .source_order = context.next_source_order,
     });
     context.next_source_order += 1;

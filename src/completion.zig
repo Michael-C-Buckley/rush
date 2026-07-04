@@ -1252,6 +1252,22 @@ test "completion uses provider arrays from nvim manifest" {
     try std.testing.expect(saw_directory);
 }
 
+test "cd directory completion appends slash without trailing space" {
+    var sh = shell.ShellWithBuiltins(host.RealHost, extensions.rush.registry).init(std.testing.allocator, .{}, .{});
+    defer sh.deinit();
+
+    const source = "cd sr";
+    var application = try complete(&sh, std.testing.allocator, std.testing.io, source, source.len);
+    defer application.deinit(std.testing.allocator);
+
+    const edit = switch (application) {
+        .edit => |edit| edit,
+        else => return error.ExpectedCdDirectoryCompletion,
+    };
+    try std.testing.expectEqualStrings("src/", edit.replacement);
+    try std.testing.expect(!edit.append_space);
+}
+
 test "path completion follows symlinked directories before appending space" {
     const TestHost = struct {
         const Self = @This();
