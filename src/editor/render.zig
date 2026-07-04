@@ -423,18 +423,24 @@ fn appendStyledInput(
         if (flash_active != should_flash) {
             if (flash_active) try appendUiStyleEnd(allocator, out, theme.flash);
             if (should_flash) try appendUiStyleStart(allocator, out, theme.flash);
+            // Toggling flash resets attributes the active span also uses, so
+            // re-apply the span style on top.
+            if (active) |value| try appendUiStyleStart(allocator, out, diagnosticStyle(theme, value));
             flash_active = should_flash;
         }
         const severity = diagnosticSeverityAt(spans, i, grapheme_end);
         if (active != severity) {
-            if (active != null) try out.appendSlice(allocator, "\x1b[24;59m");
+            if (active) |previous| {
+                try appendUiStyleEnd(allocator, out, diagnosticStyle(theme, previous));
+                if (flash_active) try appendUiStyleStart(allocator, out, theme.flash);
+            }
             if (severity) |value| try appendUiStyleStart(allocator, out, diagnosticStyle(theme, value));
             active = severity;
         }
         try out.appendSlice(allocator, text[i..grapheme_end]);
         i = grapheme_end;
     }
-    if (active != null) try out.appendSlice(allocator, "\x1b[24;59m");
+    if (active) |previous| try appendUiStyleEnd(allocator, out, diagnosticStyle(theme, previous));
     if (flash_active) try appendUiStyleEnd(allocator, out, theme.flash);
     if (i < text.len) try out.appendSlice(allocator, text[i..]);
 }

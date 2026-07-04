@@ -91,18 +91,18 @@ each <span class="var">$XDG_DATA_DIRS</span> entry + /rush/functions
   <pre>rush_style() {
   if test "$rush_color_scheme" = light; then
     accent=blue
-    muted=black
     flash='fg=white,bg=black'
+    fallback_bg='#ffffff'
   else
     accent=cyan
-    muted=bright-black
     flash='fg=black,bg=white'
+    fallback_bg='#000000'
   fi
 
   directory_color=$(color dim "${rush_color_blue-#0000ff}" 20)
   rush_style_directory="fg=$directory_color"
   rush_style_selection="fg=$accent,bold"
-  rush_style_muted="fg=$muted,dim"
+  rush_style_muted="fg=$(color blend "${rush_color_foreground-#c0c0c0}" "${rush_color_background-$fallback_bg}" 45)"
   rush_style_flash="$flash"
   rush_style_match='fg=yellow,bold'
   rush_style_error='ul=curly,ul_color=red'

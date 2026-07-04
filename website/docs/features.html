@@ -25,14 +25,14 @@
 
   <pre><span class="cmd">rush_style</span>() {
   <span class="kw">if</span> <span class="cmd">test</span> <span class="str">"$rush_color_scheme"</span> = light; <span class="kw">then</span>
-    muted=black
+    fallback_bg=<span class="str">'#ffffff'</span>
   <span class="kw">else</span>
-    muted=bright-black
+    fallback_bg=<span class="str">'#000000'</span>
   <span class="kw">fi</span>
 
   rush_style_selection=<span class="str">"fg=${rush_color_cyan-#00ffff},bold"</span>
   rush_style_directory=<span class="str">"fg=$(color dim "${rush_color_blue-#0000ff}" 15)"</span>
-  rush_style_muted=<span class="str">"fg=$muted,dim"</span>
+  rush_style_muted=<span class="str">"fg=$(color blend "${rush_color_foreground-#c0c0c0}" "${rush_color_background-$fallback_bg}" 45)"</span>
   rush_style_match=<span class="str">'fg=yellow,bold'</span>
 }</pre>
 
