@@ -1344,6 +1344,10 @@ fn evalHistory(shell: anytype, args: []const []const u8) !result.EvalResult {
         try shell.host.writeAll(.stderr, "history: history not active\n");
         return .{ .status = 1 };
     };
+    // Never record history invocations: recording them would make every
+    // search match its own command line and leave "history clear" behind
+    // as the sole entry after a clear.
+    if (command_history.suppress_next_append) |suppress| suppress(command_history.context);
     if (args.len <= 1) return evalHistoryList(shell, command_history, null);
     const subcommand = args[1];
     if (historyListCount(subcommand)) |count| {
@@ -2838,10 +2842,17 @@ test "history builtin lists searches deletes and clears attached history" {
         entries: []const history_mod.HistoryEntry,
         deleted: std.ArrayList(i64) = .empty,
         cleared: bool = false,
+        suppress_next_append: bool = false,
 
         // ziglint-ignore: Z020 Z030 test helper/reusable deinit; preserve behavior
         fn deinit(self: *@This()) void {
             self.deleted.deinit(std.testing.allocator);
+        }
+
+        fn suppress(context: *anyopaque) void {
+            // ziglint-ignore: Z020 test-local helper uses @This(); avoid non-semantic refactor
+            const self: *@This() = @ptrCast(@alignCast(context));
+            self.suppress_next_append = true;
         }
 
         // ziglint-ignore: Z023 parameter order follows method or callback shape; preserve API
@@ -2931,6 +2942,7 @@ test "history builtin lists searches deletes and clears attached history" {
         .search = TestContext.search,
         .delete_id = TestContext.delete,
         .clear = TestContext.clear,
+        .suppress_next_append = TestContext.suppress,
     };
 
     const history_definition = lookup("history").?;
@@ -2939,6 +2951,8 @@ test "history builtin lists searches deletes and clears attached history" {
         (try eval(&shell, history_definition, &.{"history"})).status,
     );
     try std.testing.expectEqualStrings("11\tprintf one\n12\techo two\n13\techo three\n", shell.host.stdout.items);
+    // history invocations must not record themselves.
+    try std.testing.expect(context.suppress_next_append);
 
     shell.host.stdout.clearRetainingCapacity();
     try std.testing.expectEqual(
