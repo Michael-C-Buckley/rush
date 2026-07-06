@@ -4469,6 +4469,53 @@ test "render line wraps styled diagnostic spans" {
     try std.testing.expect(std.mem.endsWith(u8, rendered, "\r\x1b[8C"));
 }
 
+test "frame renderer diffs wrapped styled continuation with style prefix" {
+    var renderer: FrameRenderer = .{};
+    defer renderer.deinit(std.testing.allocator);
+
+    var first_editor = Editor.init(std.testing.allocator);
+    defer first_editor.deinit();
+    try first_editor.buffer.replace("foo \"this line is wrapped\"");
+    const first_spans = [_]DiagnosticSpan{.{
+        .start = 4,
+        .end = first_editor.buffer.text().len,
+        .severity = .quote,
+    }};
+    var first = try frameFromLine(std.testing.allocator, first_editor, .{
+        .prompt = .{ .bytes = "$ " },
+        .diagnostic_spans = &first_spans,
+        .width = 16,
+        .synchronized_output = false,
+    });
+    defer first.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 2), first.lines.len);
+    const first_output = try renderer.render(std.testing.allocator, first, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(first_output);
+
+    var second_editor = Editor.init(std.testing.allocator);
+    defer second_editor.deinit();
+    try second_editor.buffer.replace("foo \"this line was wrapped\"");
+    const second_spans = [_]DiagnosticSpan{.{
+        .start = 4,
+        .end = second_editor.buffer.text().len,
+        .severity = .quote,
+    }};
+    var second = try frameFromLine(std.testing.allocator, second_editor, .{
+        .prompt = .{ .bytes = "$ " },
+        .diagnostic_spans = &second_spans,
+        .width = 16,
+        .synchronized_output = false,
+    });
+    defer second.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 2), second.lines.len);
+
+    const second_output = try renderer.render(std.testing.allocator, second, .{ .synchronized_output = false });
+    defer std.testing.allocator.free(second_output);
+
+    try std.testing.expect(std.mem.indexOf(u8, second_output, "$ foo") == null);
+    try std.testing.expect(std.mem.indexOf(u8, second_output, "\x1b[38;5;2m was wrapped") != null);
+}
+
 test "relative age formats compact units" {
     var buffer: [16]u8 = undefined;
     try std.testing.expectEqualStrings("30s", relativeAge(&buffer, 100, 70));

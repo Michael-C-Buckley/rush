@@ -599,18 +599,22 @@ fn appendWrappedLine(
 ) !void {
     var row: std.ArrayList(u8) = .empty;
     errdefer row.deinit(allocator);
+    var active_sgr: std.ArrayList(u8) = .empty;
+    defer active_sgr.deinit(allocator);
     var row_width: u16 = 0;
     var i: usize = 0;
     while (i < bytes.len) {
         if (bytes[i] == '\n') {
             try lines.append(allocator, try row.toOwnedSlice(allocator));
             row = .empty;
+            try row.appendSlice(allocator, active_sgr.items);
             row_width = 0;
             i += 1;
             continue;
         }
         if (escapeSequenceEnd(bytes, i)) |end| {
             try row.appendSlice(allocator, bytes[i..end]);
+            try updateActiveSgr(allocator, &active_sgr, bytes[i..end]);
             i = end;
             continue;
         }
@@ -622,6 +626,7 @@ fn appendWrappedLine(
         if (row_width != 0 and row_width + grapheme_width > width) {
             try lines.append(allocator, try row.toOwnedSlice(allocator));
             row = .empty;
+            try row.appendSlice(allocator, active_sgr.items);
             row_width = 0;
         }
         try row.appendSlice(allocator, grapheme_bytes);
@@ -630,10 +635,31 @@ fn appendWrappedLine(
         if (row_width == width and i < bytes.len) {
             try lines.append(allocator, try row.toOwnedSlice(allocator));
             row = .empty;
+            try row.appendSlice(allocator, active_sgr.items);
             row_width = 0;
         }
     }
     try lines.append(allocator, try row.toOwnedSlice(allocator));
+}
+
+fn updateActiveSgr(allocator: std.mem.Allocator, active_sgr: *std.ArrayList(u8), sequence: []const u8) !void {
+    if (!isSgrSequence(sequence)) return;
+    if (isFullSgrReset(sequence)) {
+        active_sgr.clearRetainingCapacity();
+        return;
+    }
+    try active_sgr.appendSlice(allocator, sequence);
+}
+
+fn isSgrSequence(sequence: []const u8) bool {
+    return sequence.len >= 3 and sequence[0] == 0x1b and sequence[1] == '[' and sequence[sequence.len - 1] == 'm';
+}
+
+fn isFullSgrReset(sequence: []const u8) bool {
+    std.debug.assert(isSgrSequence(sequence));
+
+    const parameters = sequence[2 .. sequence.len - 1];
+    return parameters.len == 0 or std.mem.eql(u8, parameters, "0");
 }
 
 const WrappedPosition = struct {
