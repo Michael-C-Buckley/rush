@@ -1045,6 +1045,11 @@ fn appendSqlLikePrefix(allocator: std.mem.Allocator, pattern: *std.ArrayList(u8)
     try pattern.append(allocator, '%');
 }
 
+fn appendSqlLikeSubstring(allocator: std.mem.Allocator, pattern: *std.ArrayList(u8), query: []const u8) !void {
+    try pattern.append(allocator, '%');
+    try appendSqlLikePrefix(allocator, pattern, query);
+}
+
 fn queryHistorySearchEntry(
     allocator: std.mem.Allocator,
     db: *sqlite.sqlite3,
@@ -1055,6 +1060,12 @@ fn queryHistorySearchEntry(
     cursor: ?i64,
     direction: HistoryDirection,
 ) !?line_editor.HistoryView.HistoryEntry {
+    // FTS can only express word-prefix matches, so queries with punctuation
+    // (flags, paths, operators) switch to a literal substring match instead
+    // of silently dropping the bytes FTS cannot tokenize.
+    if (historySearchNeedsSubstring(query)) {
+        return queryHistorySubstringSearchEntry(allocator, db, query, cwd, session_id, filters, cursor, direction);
+    }
     var fts_query: std.ArrayList(u8) = .empty;
     defer fts_query.deinit(allocator);
     try appendHistoryFtsQuery(allocator, &fts_query, query);
@@ -1117,6 +1128,103 @@ fn queryHistorySearchEntry(
     try sqliteCheck(sqlite.sqlite3_prepare_v2(db, sql, -1, &stmt, null), db);
     defer _ = sqlite.sqlite3_finalize(stmt);
     try sqliteCheck(sqlite.sqlite3_bind_text(stmt, 1, fts_query.items.ptr, @intCast(fts_query.items.len), null), db);
+    try sqliteCheck(sqlite.sqlite3_bind_text(stmt, 2, cwd.ptr, @intCast(cwd.len), null), db);
+    try sqliteCheck(sqlite.sqlite3_bind_int64(stmt, 3, offset), db);
+    try sqliteCheck(sqlite.sqlite3_bind_int(stmt, 4, @intFromBool(filters.cwd)), db);
+    try sqliteCheck(sqlite.sqlite3_bind_int(stmt, 5, @intFromBool(filters.successful)), db);
+    try sqliteCheck(sqlite.sqlite3_bind_int(stmt, 6, @intFromBool(filters.session)), db);
+    try sqliteCheck(sqlite.sqlite3_bind_text(stmt, 7, session_id.ptr, @intCast(session_id.len), null), db);
+    const rc = sqlite.sqlite3_step(stmt);
+    if (rc == sqlite.SQLITE_DONE) return null;
+    if (rc != sqlite.SQLITE_ROW) try sqliteCheck(rc, db);
+    const command_text = sqlite.sqlite3_column_text(stmt, 1) orelse return null;
+    return .{
+        .id = offset + 1,
+        .text = try allocator.dupe(u8, std.mem.span(command_text)),
+        .when = sqlite.sqlite3_column_int64(stmt, 2),
+    };
+}
+
+fn historySearchNeedsSubstring(query: []const u8) bool {
+    for (query) |byte| {
+        if (!historyFtsTokenByte(byte) and byte != ' ' and byte != '\t') return true;
+    }
+    return false;
+}
+
+fn queryHistorySubstringSearchEntry(
+    allocator: std.mem.Allocator,
+    db: *sqlite.sqlite3,
+    query: []const u8,
+    cwd: []const u8,
+    session_id: []const u8,
+    filters: line_editor.HistorySearchFilters,
+    cursor: ?i64,
+    direction: HistoryDirection,
+) !?line_editor.HistoryView.HistoryEntry {
+    var like_pattern: std.ArrayList(u8) = .empty;
+    defer like_pattern.deinit(allocator);
+    try appendSqlLikeSubstring(allocator, &like_pattern, query);
+
+    var stmt: ?*sqlite.sqlite3_stmt = null;
+    const offset = if (cursor) |value| @max(value, 0) else 0;
+    const sql = switch (direction) {
+        .previous =>
+        \\select h.id, h.command, h.started_at
+        \\from history h
+        \\where h.command like ?1 escape '\'
+        \\  and (?4 = 0 or h.cwd = ?2)
+        \\  and (?5 = 0 or h.status = 0)
+        \\  and (?6 = 0 or h.session_id = ?7)
+        \\  and not exists (
+        \\    select 1 from history newer
+        \\    where newer.command_key = h.command_key
+        \\      and (?5 = 0 or newer.status = 0)
+        \\      and (?6 = 0 or newer.session_id = ?7)
+        \\      and (
+        \\        (?4 <> 0 and newer.cwd = ?2 and newer.id > h.id) or
+        \\        (?4 = 0 and (
+        \\          (newer.cwd = ?2 and h.cwd <> ?2) or
+        \\          ((newer.cwd = ?2) = (h.cwd = ?2) and newer.id > h.id)
+        \\        ))
+        \\      )
+        \\  )
+        \\order by (h.cwd = ?2) desc, h.id desc
+        \\limit 1 offset ?3
+        ,
+        .next =>
+        \\select h.id, h.command, h.started_at
+        \\from history h
+        \\where h.command like ?1 escape '\'
+        \\  and (?4 = 0 or h.cwd = ?2)
+        \\  and (?5 = 0 or h.status = 0)
+        \\  and (?6 = 0 or h.session_id = ?7)
+        \\  and not exists (
+        \\    select 1 from history newer
+        \\    where newer.command_key = h.command_key
+        \\      and (?5 = 0 or newer.status = 0)
+        \\      and (?6 = 0 or newer.session_id = ?7)
+        \\      and (
+        \\        (?4 <> 0 and newer.cwd = ?2 and newer.id > h.id) or
+        \\        (?4 = 0 and (
+        \\          (newer.cwd = ?2 and h.cwd <> ?2) or
+        \\          ((newer.cwd = ?2) = (h.cwd = ?2) and newer.id > h.id)
+        \\        ))
+        \\      )
+        \\  )
+        \\order by (h.cwd = ?2) asc, h.id asc
+        \\limit 1 offset ?3
+        ,
+    };
+    try sqliteCheck(sqlite.sqlite3_prepare_v2(db, sql, -1, &stmt, null), db);
+    defer _ = sqlite.sqlite3_finalize(stmt);
+    try sqliteCheck(sqlite.sqlite3_bind_text(
+        stmt,
+        1,
+        like_pattern.items.ptr,
+        @intCast(like_pattern.items.len),
+        null,
+    ), db);
     try sqliteCheck(sqlite.sqlite3_bind_text(stmt, 2, cwd.ptr, @intCast(cwd.len), null), db);
     try sqliteCheck(sqlite.sqlite3_bind_int64(stmt, 3, offset), db);
     try sqliteCheck(sqlite.sqlite3_bind_int(stmt, 4, @intFromBool(filters.cwd)), db);
@@ -1627,6 +1735,36 @@ test "history search filters with fts and orders newest first" {
     try std.testing.expectEqual(@as(i64, 30), second.when);
 
     try std.testing.expect(try history.searchEntry(std.testing.allocator, "gco", "", "", .{}, null) == null);
+}
+
+test "history search matches punctuation queries as substrings" {
+    const path = "rush-history-substring-search-test.sqlite";
+    try deleteHistoryDbFilesIfExists(std.testing.io, path);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    try history.load(std.testing.io, path);
+    try insertHistoryRecord(history.db.?, .{ .cmd = "ls -la", .when = 10 });
+    try insertHistoryRecord(history.db.?, .{ .cmd = "echo la la", .when = 20 });
+    try insertHistoryRecord(history.db.?, .{ .cmd = "git push --force", .when = 30 });
+
+    const force = (try history.searchEntry(std.testing.allocator, "--force", "", "", .{}, null)).?;
+    defer force.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("git push --force", force.text);
+    try std.testing.expect(try history.searchEntry(std.testing.allocator, "--force", "", "", .{}, force.id) == null);
+
+    // "-la" is a literal substring: it matches the flag, not the word "la".
+    const flag = (try history.searchEntry(std.testing.allocator, "-la", "", "", .{}, null)).?;
+    defer flag.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("ls -la", flag.text);
+
+    // Word-only queries keep FTS token-prefix semantics.
+    const word = (try history.searchEntry(std.testing.allocator, "la", "", "", .{}, null)).?;
+    defer word.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("echo la la", word.text);
 }
 
 test "history search ranks current cwd first while deduping commands globally" {
