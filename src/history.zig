@@ -331,7 +331,7 @@ pub const History = struct {
     }
 
     pub fn fcEntries(self: *History, allocator: std.mem.Allocator) ![]HistoryEntry {
-        if (self.db) |db| return queryFcHistoryEntries(allocator, db);
+        if (self.db) |db| return queryFcHistoryEntries(allocator, db, fc_history_limit);
         var entries: std.ArrayList(HistoryEntry) = .empty;
         errdefer {
             for (entries.items) |entry| allocator.free(entry.command);
@@ -925,16 +925,26 @@ fn queryHistoryEntryByNumber(
     };
 }
 
-fn queryFcHistoryEntries(allocator: std.mem.Allocator, db: *sqlite.sqlite3) ![]HistoryEntry {
+/// Window of recent entries visible to fc. Command numbers are absolute
+/// rowids, so bounding the window only makes entries older than the window
+/// unaddressable, mirroring HISTSIZE limits in other shells.
+const fc_history_limit: i64 = 10_000;
+
+fn queryFcHistoryEntries(allocator: std.mem.Allocator, db: *sqlite.sqlite3, limit: i64) ![]HistoryEntry {
     var stmt: ?*sqlite.sqlite3_stmt = null;
     try sqliteCheck(sqlite.sqlite3_prepare_v2(
         db,
-        "select id, command from history order by id asc",
+        \\select id, command from (
+        \\  select id, command from history order by id desc limit ?1
+        \\) recent
+        \\order by id asc
+    ,
         -1,
         &stmt,
         null,
     ), db);
     defer _ = sqlite.sqlite3_finalize(stmt);
+    try sqliteCheck(sqlite.sqlite3_bind_int64(stmt, 1, limit), db);
 
     var entries: std.ArrayList(HistoryEntry) = .empty;
     errdefer {
@@ -1765,6 +1775,32 @@ test "history search matches punctuation queries as substrings" {
     const word = (try history.searchEntry(std.testing.allocator, "la", "", "", .{}, null)).?;
     defer word.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("echo la la", word.text);
+}
+
+test "history fc entries are bounded to the most recent window" {
+    const path = "rush-history-fc-window-test.sqlite";
+    try deleteHistoryDbFilesIfExists(std.testing.io, path);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    try history.load(std.testing.io, path);
+    try insertHistoryRecord(history.db.?, .{ .cmd = "echo one", .when = 10 });
+    try insertHistoryRecord(history.db.?, .{ .cmd = "echo two", .when = 20 });
+    try insertHistoryRecord(history.db.?, .{ .cmd = "echo three", .when = 30 });
+
+    const entries = try queryFcHistoryEntries(std.testing.allocator, history.db.?, 2);
+    defer {
+        for (entries) |entry| std.testing.allocator.free(entry.command);
+        std.testing.allocator.free(entries);
+    }
+    try std.testing.expectEqual(@as(usize, 2), entries.len);
+    try std.testing.expectEqualStrings("echo two", entries[0].command);
+    try std.testing.expectEqual(@as(i64, 2), entries[0].number);
+    try std.testing.expectEqualStrings("echo three", entries[1].command);
+    try std.testing.expectEqual(@as(i64, 3), entries[1].number);
 }
 
 test "history search ranks current cwd first while deduping commands globally" {
