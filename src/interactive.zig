@@ -168,6 +168,7 @@ const InteractiveSession = struct {
             .register = registerPromptAsyncFd,
             .unregister = unregisterPromptAsyncFd,
         });
+        if (try self.dispatchStartupEvents()) |status| return self.exit(status);
 
         while (true) {
             const line_result = self.readLine(&terminal) catch |err| switch (err) {
@@ -477,6 +478,32 @@ const InteractiveSession = struct {
         if (dispatched.exit_status) |status| pendingEventExit(self, status);
         try output.appendSlice(allocator, dispatched.output);
         return output.toOwnedSlice(allocator);
+    }
+
+    /// Fire events describing state established before the first prompt, so
+    /// hooks registered during startup observe the initial directory instead
+    /// of waiting for the first `cd`.
+    fn dispatchStartupEvents(self: *InteractiveSession) !?u8 {
+        const initial_pwd = self.currentDirectoryForReporting() catch return null;
+        defer self.allocator.free(initial_pwd);
+
+        // Suppress recursive dispatch if a startup hook itself changes
+        // directory, matching onDirectoryChange.
+        self.dispatching_directory_change = true;
+        defer self.dispatching_directory_change = false;
+
+        var dispatched = try self.events.runEvent(
+            self.allocator,
+            self.io,
+            "directory.change",
+            &.{ "", initial_pwd },
+        );
+        defer dispatched.deinit(self.allocator);
+        if (dispatched.output.len != 0) {
+            // ziglint-ignore: Z026 event output is best effort during startup dispatch
+            self.sh.host.writeAll(.stderr, dispatched.output) catch {};
+        }
+        return dispatched.exit_status;
     }
 
     fn exitWithLastStatus(self: *InteractiveSession) u8 {
@@ -1155,6 +1182,44 @@ test "interactive history cwd remains valid after prompt read" {
     )) orelse return error.TestExpectedEqual;
     defer entry.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("echo previous", entry.text);
+}
+
+test "interactive startup dispatch fires directory.change with empty old directory" {
+    var sh = RushShell.init(std.testing.allocator, .{}, .{});
+    defer sh.deinit();
+
+    const src: shell.source.Source = .{
+        .id = 1,
+        .kind = .command_string,
+        .name = "test",
+        .text = "on_startup_dir(){ startup_old=\"[$1]\"; startup_new=$2; }",
+    };
+    const defined = try sh.evalSource(src);
+    try std.testing.expectEqual(@as(shell.result.ExitStatus, 0), defined.status);
+    try sh.extensions.putEventHandler("directory.change", "startup", "on_startup_dir", 0, null);
+
+    var command_history = history.History.init(std.testing.allocator);
+    defer command_history.deinit();
+    var history_service = history.InteractiveHistoryService.init(&command_history);
+    var source_id: shell.source.SourceId = 2;
+    var session: InteractiveSession = .{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .sh = &sh,
+        .source_id = &source_id,
+        .command_history = &command_history,
+        .history_service = &history_service,
+        .events = .{ .sh = &sh },
+    };
+
+    const status = try session.dispatchStartupEvents();
+    try std.testing.expectEqual(@as(?u8, null), status);
+
+    const old_arg = sh.state.getVariable("startup_old") orelse return error.TestExpectedEqual;
+    try std.testing.expectEqualStrings("[]", old_arg.value);
+    const new_arg = sh.state.getVariable("startup_new") orelse return error.TestExpectedEqual;
+    try std.testing.expect(new_arg.value.len != 0);
+    try std.testing.expect(new_arg.value[0] == '/');
 }
 
 test "interactive prompt render uses last command status when shell status drifted" {

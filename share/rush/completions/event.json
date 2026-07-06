@@ -7,7 +7,7 @@
     "providers": {
       "event.names": {
         "values": [
-          { "value": "directory.change", "description": "after the current directory changes" },
+          { "value": "directory.change", "description": "after the current directory changes, and once at startup" },
           { "value": "prompt.prepare", "description": "before each prompt render" },
           { "value": "prompt.async.start", "description": "when prompt async work becomes active" },
           { "value": "prompt.async.end", "description": "when prompt async work becomes inactive" },

@@ -291,7 +291,7 @@ index:236
 
   <ul>
     <li><code>prompt.prepare</code>: before each prompt render.</li>
-    <li><code>directory.change</code>: after <code>cd</code>; receives old and new directories as <code>$1</code> and <code>$2</code>.</li>
+    <li><code>directory.change</code>: after <code>cd</code>, and once at startup with an empty <code>$1</code>; receives old and new directories as <code>$1</code> and <code>$2</code>.</li>
     <li><code>timer.tick</code>: while the editor is idle; receives the registration name as <code>$1</code>.</li>
     <li>Activity hooks: receive kind as <code>$1</code> and active count as <code>$2</code>.</li>
   </ul>
