@@ -107,6 +107,9 @@ pub const History = struct {
         started_at: i64,
         duration_ms: i64,
     ) !void {
+        // A leading space keeps the command out of history entirely, so
+        // secrets are never persisted (fish behavior, bash ignorespace).
+        if (line.len != 0 and line[0] == ' ') return;
         try self.addCommandRecord(io, line, status, started_at, duration_ms, true);
     }
 
@@ -2046,6 +2049,29 @@ test "interactive history writes and reads the current cwd" {
     const suggestion = (try service.suggestEntry(std.testing.allocator, "echo")) orelse return error.TestExpectedEqual;
     defer suggestion.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("echo hello", suggestion.text);
+}
+
+test "history skips commands with a leading space" {
+    const path = "rush-history-ignorespace-test.sqlite";
+    try deleteHistoryDbFilesIfExists(std.testing.io, path);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    try history.load(std.testing.io, path);
+    history.current_cwd = "/repo";
+    history.session_id = "session-a";
+    try history.addCommand(std.testing.io, "echo visible", 0, 10, 5);
+    try history.addCommand(std.testing.io, " export TOKEN=secret", 0, 20, 5);
+
+    const newest = (try history.previousEntry(std.testing.allocator, "", null)).?;
+    defer newest.deinit(std.testing.allocator);
+    try std.testing.expectEqualStrings("echo visible", newest.text);
+    try std.testing.expect((try history.previousEntry(std.testing.allocator, "", newest.id)) == null);
+    const searched = try history.searchEntry(std.testing.allocator, "TOKEN", "/repo", "session-a", .{}, null);
+    try std.testing.expect(searched == null);
 }
 
 test "interactive autosuggestion falls back to global sqlite history" {
