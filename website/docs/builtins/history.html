@@ -1,0 +1,69 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rush history builtin</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div><a href="../../index.html">rush</a></div>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="../index.html">docs</a>
+      <a href="https://github.com/rockorager/rush">source</a>
+    </nav>
+  </header>
+
+  <h1 id="history"><a href="#history">HISTORY(1)</a></h1>
+
+  <h2 id="name"><a href="#name">NAME</a></h2>
+
+  <p>history - list, search, or delete command history entries.</p>
+
+  <h2 id="synopsis"><a href="#synopsis">SYNOPSIS</a></h2>
+
+  <pre><span class="cmd">history</span> [<span class="var">n</span>]
+<span class="cmd">history</span> <span class="opt">list</span> [<span class="var">n</span>]
+<span class="cmd">history</span> <span class="opt">search</span> <span class="var">text</span> ...
+<span class="cmd">history</span> <span class="opt">delete</span> <span class="opt">--id</span> <span class="var">n</span> ...
+<span class="cmd">history</span> <span class="opt">clear</span></pre>
+
+  <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
+
+  <p><code>history</code> is a Rush-specific regular builtin for managing interactive command history. It is not available in POSIX mode; use <code>fc</code> for portable history access.</p>
+
+  <p>Every listed or matched entry is printed with its history id followed by a tab and the command text. Ids are stable identifiers, so an id printed by <code>history search</code> can be passed to <code>history delete --id</code>.</p>
+
+  <h2 id="subcommands"><a href="#subcommands">SUBCOMMANDS</a></h2>
+
+  <dl>
+    <dt><code>history</code> [<var>n</var>], <code>history list</code> [<var>n</var>]</dt>
+    <dd>List the most recent <var>n</var> entries. The default is 16.</dd>
+
+    <dt><code>history search</code> <var>text</var> ...</dt>
+    <dd>List every entry whose command contains <var>text</var> as a case-insensitive substring. Multiple operands are joined with single spaces into one query. Unlike interactive reverse search, no duplicate hiding is applied: every matching entry is listed with its id so any of them can be deleted.</dd>
+
+    <dt><code>history delete</code> <code>--id</code> <var>n</var> ...</dt>
+    <dd>Delete the entries with the given ids. <code>--id n</code> and <code>--id=n</code> are both accepted and may be repeated. Ids that do not name an entry are reported on standard error and the remaining ids are still processed.</dd>
+
+    <dt><code>history clear</code></dt>
+    <dd>Delete all history entries.</dd>
+  </dl>
+
+  <h2 id="notes"><a href="#notes">NOTES</a></h2>
+
+  <p>Deleting an entry removes it from arrow-key navigation, reverse search, autosuggestions, and <code>z</code> frecency ranking alike, because all of them read the same history store.</p>
+
+  <p>Commands submitted with a leading space are never recorded, so secrets can be kept out of history without needing deletion afterward.</p>
+
+  <h2 id="exit-status"><a href="#exit-status">EXIT STATUS</a></h2>
+
+  <p><code>history</code> returns zero on success. It returns 1 when history is not active, an operation is unavailable, or an id does not name an entry, and 2 on usage errors.</p>
+
+  <h2 id="see-also"><a href="#see-also">SEE ALSO</a></h2>
+
+  <p><a href="index.html">rush-builtins(7)</a>, <a href="fc.html">fc(1)</a>, <a href="z.html">z(1)</a>.</p>
+
+</body>
+</html>

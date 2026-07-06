@@ -44,6 +44,7 @@ pub const Id = enum {
     fg,
     getopts,
     hash,
+    history,
     jobs,
     kill,
     local,
@@ -110,6 +111,7 @@ pub const core_definitions: DefinitionMap = .initComptime(.{
     .{ "fg", Definition{ .name = "fg", .id = .fg, .kind = .regular } },
     .{ "getopts", Definition{ .name = "getopts", .id = .getopts, .kind = .regular } },
     .{ "hash", Definition{ .name = "hash", .id = .hash, .kind = .regular } },
+    .{ "history", Definition{ .name = "history", .id = .history, .kind = .regular } },
     .{ "jobs", Definition{ .name = "jobs", .id = .jobs, .kind = .regular } },
     .{ "kill", Definition{ .name = "kill", .id = .kill, .kind = .regular } },
     .{ "local", Definition{ .name = "local", .id = .local, .kind = .regular } },
@@ -184,11 +186,18 @@ pub fn lookup(name: []const u8) ?Definition {
     return default_registry.lookup(name);
 }
 
+/// Rush-specific and bash-only builtins are hidden in POSIX mode.
+pub fn availableInMode(definition: Definition, mode: state_mod.Mode) bool {
+    if (mode != .posix) return true;
+    return switch (definition.id) {
+        .declare, .local, .source, .shopt, .typeset, .z, .history => false,
+        else => true,
+    };
+}
+
 pub fn lookupInMode(name: []const u8, mode: state_mod.Mode) ?Definition {
     const definition = lookup(name) orelse return null;
-    // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-    if (mode == .posix and (definition.id == .declare or definition.id == .local or definition.id == .source or
-        definition.id == .shopt or definition.id == .typeset or definition.id == .z)) return null;
+    if (!availableInMode(definition, mode)) return null;
     return definition;
 }
 
@@ -224,6 +233,7 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .fg => evalFg(shell, args),
         .getopts => evalGetopts(shell, args),
         .hash => evalHash(shell, args),
+        .history => evalHistory(shell, args),
         .jobs => evalJobs(shell, args),
         .kill => evalKill(shell, args),
         .local => evalLocal(shell, args),
@@ -1325,6 +1335,127 @@ fn fcReexecuteCommand(
     try command_output.appendSlice(allocator, parsed.new);
     try command_output.appendSlice(allocator, command[match + parsed.old.len ..]);
     return .{ .text = try command_output.toOwnedSlice(allocator), .owned = true };
+}
+
+const default_history_list_count = 16;
+
+fn evalHistory(shell: anytype, args: []const []const u8) !result.EvalResult {
+    const command_history = shellCommandHistory(shell) orelse {
+        try shell.host.writeAll(.stderr, "history: history not active\n");
+        return .{ .status = 1 };
+    };
+    if (args.len <= 1) return evalHistoryList(shell, command_history, null);
+    const subcommand = args[1];
+    if (historyListCount(subcommand)) |count| {
+        if (args.len > 2) return historyUsageError(shell);
+        return evalHistoryList(shell, command_history, count);
+    }
+    if (std.mem.eql(u8, subcommand, "list")) {
+        if (args.len > 3) return historyUsageError(shell);
+        const count = if (args.len == 3)
+            historyListCount(args[2]) orelse return historyUsageError(shell)
+        else
+            null;
+        return evalHistoryList(shell, command_history, count);
+    }
+    if (std.mem.eql(u8, subcommand, "search")) return evalHistorySearch(shell, command_history, args[2..]);
+    if (std.mem.eql(u8, subcommand, "delete")) return evalHistoryDelete(shell, command_history, args[2..]);
+    if (std.mem.eql(u8, subcommand, "clear")) {
+        if (args.len > 2) return historyUsageError(shell);
+        const clear = command_history.clear orelse return historyUnavailable(shell);
+        clear(command_history.context) catch return historyError(shell);
+        return .{};
+    }
+    return historyUsageError(shell);
+}
+
+fn historyListCount(operand: []const u8) ?usize {
+    return std.fmt.parseUnsigned(usize, operand, 10) catch null;
+}
+
+fn evalHistoryList(
+    shell: anytype,
+    command_history: *history_mod.CommandHistory,
+    count: ?usize,
+) !result.EvalResult {
+    const allocator = shell.scratchAllocator();
+    const entries = command_history.list(command_history.context, allocator) catch return historyError(shell);
+    defer freeFcEntries(allocator, entries);
+    const limit = count orelse default_history_list_count;
+    const start = entries.len -| limit;
+    for (entries[start..]) |entry| try writeFcEntry(shell, entry, false);
+    return .{};
+}
+
+fn evalHistorySearch(
+    shell: anytype,
+    command_history: *history_mod.CommandHistory,
+    operands: []const []const u8,
+) !result.EvalResult {
+    if (operands.len == 0) return historyUsageError(shell);
+    const search = command_history.search orelse return historyUnavailable(shell);
+    const allocator = shell.scratchAllocator();
+    const query = try std.mem.join(allocator, " ", operands);
+    defer allocator.free(query);
+    const entries = search(command_history.context, allocator, query) catch return historyError(shell);
+    defer freeFcEntries(allocator, entries);
+    for (entries) |entry| try writeFcEntry(shell, entry, false);
+    return .{};
+}
+
+fn evalHistoryDelete(
+    shell: anytype,
+    command_history: *history_mod.CommandHistory,
+    operands: []const []const u8,
+) !result.EvalResult {
+    if (operands.len == 0) return historyUsageError(shell);
+    const delete_id = command_history.delete_id orelse return historyUnavailable(shell);
+    var failed = false;
+    var index: usize = 0;
+    while (index < operands.len) : (index += 1) {
+        const operand = operands[index];
+        var value: []const u8 = undefined;
+        if (std.mem.eql(u8, operand, "--id")) {
+            index += 1;
+            if (index >= operands.len) return historyUsageError(shell);
+            value = operands[index];
+        } else if (std.mem.startsWith(u8, operand, "--id=")) {
+            value = operand["--id=".len..];
+        } else {
+            return historyUsageError(shell);
+        }
+        const id = std.fmt.parseInt(i64, value, 10) catch return historyUsageError(shell);
+        const deleted = delete_id(command_history.context, id) catch return historyError(shell);
+        if (!deleted) {
+            const message = try std.fmt.allocPrint(
+                shell.scratchAllocator(),
+                "history: no entry with id {d}\n",
+                .{id},
+            );
+            defer shell.scratchAllocator().free(message);
+            try shell.host.writeAll(.stderr, message);
+            failed = true;
+        }
+    }
+    return .{ .status = @intFromBool(failed) };
+}
+
+fn historyUsageError(shell: anytype) !result.EvalResult {
+    try shell.host.writeAll(
+        .stderr,
+        "history: usage: history [n] | list [n] | search text ... | delete --id n ... | clear\n",
+    );
+    return .{ .status = 2 };
+}
+
+fn historyUnavailable(shell: anytype) !result.EvalResult {
+    try shell.host.writeAll(.stderr, "history: operation unavailable\n");
+    return .{ .status = 1 };
+}
+
+fn historyError(shell: anytype) !result.EvalResult {
+    try shell.host.writeAll(.stderr, "history: history error\n");
+    return .{ .status = 1 };
 }
 
 fn fcUsageError(shell: anytype) !result.EvalResult {
@@ -2660,6 +2791,196 @@ test "fc lists and re-executes attached command history" {
     try std.testing.expectEqualStrings("echo edited\n", context.appended.items);
     try std.testing.expect(context.suppress_next_append);
     try std.testing.expect(shell.host.deleted);
+}
+
+test "history builtin lists searches deletes and clears attached history" {
+    const TestHost = struct {
+        stdout: std.ArrayList(u8) = .empty,
+        stderr: std.ArrayList(u8) = .empty,
+
+        // ziglint-ignore: Z020 Z030 test helper/reusable deinit; preserve behavior
+        fn deinit(self: *@This()) void {
+            self.stdout.deinit(std.testing.allocator);
+            self.stderr.deinit(std.testing.allocator);
+        }
+
+        // ziglint-ignore: Z020 test-local helper uses @This(); avoid non-semantic refactor
+        pub fn writeAll(self: *@This(), fd: host.Fd, bytes: []const u8) !void {
+            switch (fd) {
+                .stdout => try self.stdout.appendSlice(std.testing.allocator, bytes),
+                else => try self.stderr.appendSlice(std.testing.allocator, bytes),
+            }
+        }
+
+        // ziglint-ignore: Z020 test-local helper uses @This(); avoid non-semantic refactor
+        pub fn setFileCreationMask(_: *@This(), mask: u32) u32 {
+            return mask;
+        }
+
+        // ziglint-ignore: Z020 test-local helper uses @This(); avoid non-semantic refactor
+        pub fn currentProcessId(_: *@This()) host.Pid {
+            return 1;
+        }
+
+        // ziglint-ignore: Z020 test-local helper uses @This(); avoid non-semantic refactor
+        pub fn sendSignal(_: *@This(), _: host.Pid, _: u8) !void {}
+
+        // ziglint-ignore: Z020 test-local helper uses @This(); avoid non-semantic refactor
+        pub fn setSignalDefault(_: *@This(), _: u8) !void {}
+
+        // ziglint-ignore: Z020 test-local helper uses @This(); avoid non-semantic refactor
+        pub fn setSignalIgnored(_: *@This(), _: u8) !void {}
+
+        // ziglint-ignore: Z020 test-local helper uses @This(); avoid non-semantic refactor
+        pub fn installSignalTrap(_: *@This(), _: u8) !void {}
+    };
+    const TestContext = struct {
+        entries: []const history_mod.HistoryEntry,
+        deleted: std.ArrayList(i64) = .empty,
+        cleared: bool = false,
+
+        // ziglint-ignore: Z020 Z030 test helper/reusable deinit; preserve behavior
+        fn deinit(self: *@This()) void {
+            self.deleted.deinit(std.testing.allocator);
+        }
+
+        // ziglint-ignore: Z023 parameter order follows method or callback shape; preserve API
+        fn list(context: *anyopaque, allocator: std.mem.Allocator) ![]history_mod.HistoryEntry {
+            // ziglint-ignore: Z020 test-local helper uses @This(); avoid non-semantic refactor
+            const self: *@This() = @ptrCast(@alignCast(context));
+            const entries = try allocator.alloc(history_mod.HistoryEntry, self.entries.len);
+            for (self.entries, 0..) |entry, index| {
+                entries[index] = .{ .number = entry.number, .command = try allocator.dupe(u8, entry.command) };
+            }
+            return entries;
+        }
+
+        // ziglint-ignore: Z023 parameter order follows CommandHistory.search callback shape
+        fn search(context: *anyopaque, allocator: std.mem.Allocator, text: []const u8) ![]history_mod.HistoryEntry {
+            // ziglint-ignore: Z020 test-local helper uses @This(); avoid non-semantic refactor
+            const self: *@This() = @ptrCast(@alignCast(context));
+            var matches: std.ArrayList(history_mod.HistoryEntry) = .empty;
+            errdefer {
+                for (matches.items) |entry| allocator.free(entry.command);
+                matches.deinit(allocator);
+            }
+            for (self.entries) |entry| {
+                if (std.mem.indexOf(u8, entry.command, text) == null) continue;
+                try matches.append(allocator, .{
+                    .number = entry.number,
+                    .command = try allocator.dupe(u8, entry.command),
+                });
+            }
+            return matches.toOwnedSlice(allocator);
+        }
+
+        fn delete(context: *anyopaque, id: i64) !bool {
+            // ziglint-ignore: Z020 test-local helper uses @This(); avoid non-semantic refactor
+            const self: *@This() = @ptrCast(@alignCast(context));
+            for (self.entries) |entry| {
+                if (entry.number != id) continue;
+                try self.deleted.append(std.testing.allocator, id);
+                return true;
+            }
+            return false;
+        }
+
+        fn clear(context: *anyopaque) !void {
+            // ziglint-ignore: Z020 test-local helper uses @This(); avoid non-semantic refactor
+            const self: *@This() = @ptrCast(@alignCast(context));
+            self.cleared = true;
+        }
+    };
+    const TestShell = struct {
+        host: TestHost = .{},
+        state: state_mod.State,
+        command_history: ?history_mod.CommandHistory = null,
+        // Production scratch allocators are arenas; writeFcEntry relies on that.
+        scratch: std.heap.ArenaAllocator,
+
+        // ziglint-ignore: Z020 Z030 test helper/reusable deinit; preserve behavior
+        fn deinit(self: *@This()) void {
+            self.host.deinit();
+            self.state.deinit();
+            self.scratch.deinit();
+        }
+
+        // ziglint-ignore: Z020 test-local helper uses @This(); avoid non-semantic refactor
+        fn scratchAllocator(self: *@This()) std.mem.Allocator {
+            return self.scratch.allocator();
+        }
+    };
+
+    const entries = [_]history_mod.HistoryEntry{
+        .{ .number = 11, .command = "printf one" },
+        .{ .number = 12, .command = "echo two" },
+        .{ .number = 13, .command = "echo three" },
+    };
+    var context: TestContext = .{ .entries = &entries };
+    defer context.deinit();
+
+    var shell: TestShell = .{
+        .state = state_mod.State.init(std.testing.allocator, .{}),
+        .scratch = std.heap.ArenaAllocator.init(std.testing.allocator),
+    };
+    defer shell.deinit();
+    shell.command_history = .{
+        .context = &context,
+        .io = std.testing.io,
+        .list = TestContext.list,
+        .search = TestContext.search,
+        .delete_id = TestContext.delete,
+        .clear = TestContext.clear,
+    };
+
+    const history_definition = lookup("history").?;
+    try std.testing.expectEqual(
+        @as(result.ExitStatus, 0),
+        (try eval(&shell, history_definition, &.{"history"})).status,
+    );
+    try std.testing.expectEqualStrings("11\tprintf one\n12\techo two\n13\techo three\n", shell.host.stdout.items);
+
+    shell.host.stdout.clearRetainingCapacity();
+    try std.testing.expectEqual(
+        @as(result.ExitStatus, 0),
+        (try eval(&shell, history_definition, &.{ "history", "2" })).status,
+    );
+    try std.testing.expectEqualStrings("12\techo two\n13\techo three\n", shell.host.stdout.items);
+
+    shell.host.stdout.clearRetainingCapacity();
+    try std.testing.expectEqual(
+        @as(result.ExitStatus, 0),
+        (try eval(&shell, history_definition, &.{ "history", "search", "echo" })).status,
+    );
+    try std.testing.expectEqualStrings("12\techo two\n13\techo three\n", shell.host.stdout.items);
+
+    try std.testing.expectEqual(
+        @as(result.ExitStatus, 0),
+        (try eval(&shell, history_definition, &.{ "history", "delete", "--id", "12", "--id=13" })).status,
+    );
+    try std.testing.expectEqualSlices(i64, &.{ 12, 13 }, context.deleted.items);
+
+    try std.testing.expectEqual(
+        @as(result.ExitStatus, 1),
+        (try eval(&shell, history_definition, &.{ "history", "delete", "--id", "99" })).status,
+    );
+    try std.testing.expectEqualStrings("history: no entry with id 99\n", shell.host.stderr.items);
+
+    try std.testing.expectEqual(
+        @as(result.ExitStatus, 0),
+        (try eval(&shell, history_definition, &.{ "history", "clear" })).status,
+    );
+    try std.testing.expect(context.cleared);
+
+    shell.host.stderr.clearRetainingCapacity();
+    try std.testing.expectEqual(
+        @as(result.ExitStatus, 2),
+        (try eval(&shell, history_definition, &.{ "history", "bogus" })).status,
+    );
+    try std.testing.expect(std.mem.startsWith(u8, shell.host.stderr.items, "history: usage:"));
+
+    try std.testing.expect(lookupInMode("history", .posix) == null);
+    try std.testing.expect(lookupInMode("history", .bash) != null);
 }
 
 test "builtin eval returns utility status" {

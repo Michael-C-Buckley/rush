@@ -24,6 +24,9 @@ pub const CommandHistory = struct {
     append: ?*const fn (*anyopaque, std.Io, []const u8, ExitStatus, i64, i64) anyerror!void = null,
     jump: ?*const fn (*anyopaque, std.mem.Allocator, []const []const u8, []const u8, i64) anyerror!?[]const u8 = null,
     suppress_next_append: ?*const fn (*anyopaque) void = null,
+    search: ?*const fn (*anyopaque, std.mem.Allocator, []const u8) anyerror![]HistoryEntry = null,
+    delete_id: ?*const fn (*anyopaque, i64) anyerror!bool = null,
+    clear: ?*const fn (*anyopaque) anyerror!void = null,
 };
 
 fn unixTimestamp(io: std.Io) i64 {
@@ -346,6 +349,54 @@ pub const History = struct {
         return entries.toOwnedSlice(allocator);
     }
 
+    /// Case-insensitive substring search over stored commands, newest-bounded,
+    /// without duplicate hiding: deletion needs every matching row visible.
+    pub fn searchEntries(self: *History, allocator: std.mem.Allocator, text: []const u8) ![]HistoryEntry {
+        if (self.db) |db| return queryHistoryEntriesContaining(allocator, db, text, fc_history_limit);
+        var entries: std.ArrayList(HistoryEntry) = .empty;
+        errdefer {
+            for (entries.items) |entry| allocator.free(entry.command);
+            entries.deinit(allocator);
+        }
+        for (self.entries.items, 0..) |entry, index| {
+            if (std.ascii.indexOfIgnoreCase(entry, text) == null) continue;
+            try entries.append(allocator, .{
+                .number = @intCast(index + 1),
+                .command = try allocator.dupe(u8, entry),
+            });
+        }
+        return entries.toOwnedSlice(allocator);
+    }
+
+    pub fn deleteEntry(self: *History, id: i64) !bool {
+        if (self.db) |db| return deleteHistoryRecordById(db, id);
+        if (id < 1) return false;
+        const index: usize = @intCast(id - 1);
+        if (index >= self.entries.items.len) return false;
+        std.debug.assert(self.entries.items.len == self.records.items.len);
+        // entries items alias the record command allocation; free it once.
+        const record = self.records.items[index];
+        self.allocator.free(record.cmd);
+        self.allocator.free(record.cwd);
+        self.allocator.free(record.hostname);
+        self.allocator.free(record.session_id);
+        _ = self.records.orderedRemove(index);
+        _ = self.entries.orderedRemove(index);
+        return true;
+    }
+
+    pub fn clearEntries(self: *History) !void {
+        if (self.db) |db| return sqliteExec(db, "delete from history;");
+        for (self.records.items) |record| {
+            self.allocator.free(record.cmd);
+            self.allocator.free(record.cwd);
+            self.allocator.free(record.hostname);
+            self.allocator.free(record.session_id);
+        }
+        self.records.clearRetainingCapacity();
+        self.entries.clearRetainingCapacity();
+    }
+
     pub fn searchEntry(
         self: *History,
         allocator: std.mem.Allocator,
@@ -432,6 +483,9 @@ pub const InteractiveHistoryService = struct {
             .append = appendFcCommand,
             .jump = jumpDirectory,
             .suppress_next_append = suppressNextFcAppend,
+            .search = searchCommandEntries,
+            .delete_id = deleteCommandEntry,
+            .clear = clearCommandEntries,
         };
     }
 
@@ -531,6 +585,22 @@ pub const InteractiveHistoryService = struct {
     fn suppressNextFcAppend(context: *anyopaque) void {
         const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
         history_service.suppressNextAppend();
+    }
+
+    // ziglint-ignore: Z023 parameter order follows CommandHistory.search callback shape
+    fn searchCommandEntries(context: *anyopaque, allocator: std.mem.Allocator, text: []const u8) ![]HistoryEntry {
+        const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
+        return history_service.history.searchEntries(allocator, text);
+    }
+
+    fn deleteCommandEntry(context: *anyopaque, id: i64) !bool {
+        const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
+        return history_service.history.deleteEntry(id);
+    }
+
+    fn clearCommandEntries(context: *anyopaque) !void {
+        const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
+        return history_service.history.clearEntries();
     }
 
     fn searchEntry(
@@ -962,6 +1032,74 @@ fn queryFcHistoryEntries(allocator: std.mem.Allocator, db: *sqlite.sqlite3, limi
         });
     }
     return entries.toOwnedSlice(allocator);
+}
+
+fn queryHistoryEntriesContaining(
+    allocator: std.mem.Allocator,
+    db: *sqlite.sqlite3,
+    text: []const u8,
+    limit: i64,
+) ![]HistoryEntry {
+    var like_pattern: std.ArrayList(u8) = .empty;
+    defer like_pattern.deinit(allocator);
+    try appendSqlLikeSubstring(allocator, &like_pattern, text);
+
+    var stmt: ?*sqlite.sqlite3_stmt = null;
+    try sqliteCheck(sqlite.sqlite3_prepare_v2(
+        db,
+        \\select id, command from (
+        \\  select id, command from history
+        \\  where command like ?1 escape '\'
+        \\  order by id desc limit ?2
+        \\) recent
+        \\order by id asc
+    ,
+        -1,
+        &stmt,
+        null,
+    ), db);
+    defer _ = sqlite.sqlite3_finalize(stmt);
+    try sqliteCheck(sqlite.sqlite3_bind_text(
+        stmt,
+        1,
+        like_pattern.items.ptr,
+        @intCast(like_pattern.items.len),
+        null,
+    ), db);
+    try sqliteCheck(sqlite.sqlite3_bind_int64(stmt, 2, limit), db);
+
+    var entries: std.ArrayList(HistoryEntry) = .empty;
+    errdefer {
+        for (entries.items) |entry| allocator.free(entry.command);
+        entries.deinit(allocator);
+    }
+    while (true) {
+        const rc = sqlite.sqlite3_step(stmt);
+        if (rc == sqlite.SQLITE_DONE) break;
+        if (rc != sqlite.SQLITE_ROW) try sqliteCheck(rc, db);
+        const command_text = sqlite.sqlite3_column_text(stmt, 1) orelse continue;
+        try entries.append(allocator, .{
+            .number = sqlite.sqlite3_column_int64(stmt, 0),
+            .command = try allocator.dupe(u8, std.mem.span(command_text)),
+        });
+    }
+    return entries.toOwnedSlice(allocator);
+}
+
+fn deleteHistoryRecordById(db: *sqlite.sqlite3, id: i64) !bool {
+    var stmt: ?*sqlite.sqlite3_stmt = null;
+    try sqliteCheck(sqlite.sqlite3_prepare_v2(
+        db,
+        "delete from history where id = ?1",
+        -1,
+        &stmt,
+        null,
+    ), db);
+    defer _ = sqlite.sqlite3_finalize(stmt);
+    try sqliteCheck(sqlite.sqlite3_bind_int64(stmt, 1, id), db);
+    const rc = sqlite.sqlite3_step(stmt);
+    if (rc != sqlite.SQLITE_DONE) try sqliteCheck(rc, db);
+    return sqlite.sqlite3_changes(db) > 0;
 }
 
 fn queryLatestCommand(
@@ -2246,6 +2384,49 @@ test "history skips commands with a leading space" {
     try std.testing.expect((try history.previousEntry(std.testing.allocator, "", newest.id)) == null);
     const searched = try history.searchEntry(std.testing.allocator, "TOKEN", "/repo", "session-a", .{}, null);
     try std.testing.expect(searched == null);
+}
+
+test "history search delete and clear manage sqlite entries" {
+    const path = "rush-history-manage-test.sqlite";
+    try deleteHistoryDbFilesIfExists(std.testing.io, path);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    try history.load(std.testing.io, path);
+    try insertHistoryRecord(history.db.?, .{ .cmd = "export TOKEN=abc", .when = 10 });
+    try insertHistoryRecord(history.db.?, .{ .cmd = "ls -la", .when = 20 });
+    try insertHistoryRecord(history.db.?, .{ .cmd = "echo TOKEN done", .when = 30 });
+
+    const matches = try history.searchEntries(std.testing.allocator, "token");
+    defer {
+        for (matches) |entry| std.testing.allocator.free(entry.command);
+        std.testing.allocator.free(matches);
+    }
+    try std.testing.expectEqual(@as(usize, 2), matches.len);
+    try std.testing.expectEqualStrings("export TOKEN=abc", matches[0].command);
+    try std.testing.expectEqual(@as(i64, 1), matches[0].number);
+    try std.testing.expectEqualStrings("echo TOKEN done", matches[1].command);
+
+    try std.testing.expect(try history.deleteEntry(1));
+    try std.testing.expect(!try history.deleteEntry(99));
+
+    // The delete trigger keeps the FTS index in sync for reverse search.
+    try std.testing.expect(try history.searchEntry(std.testing.allocator, "abc", "", "", .{}, null) == null);
+    const remaining = try history.searchEntries(std.testing.allocator, "token");
+    defer {
+        for (remaining) |entry| std.testing.allocator.free(entry.command);
+        std.testing.allocator.free(remaining);
+    }
+    try std.testing.expectEqual(@as(usize, 1), remaining.len);
+    try std.testing.expectEqualStrings("echo TOKEN done", remaining[0].command);
+
+    try history.clearEntries();
+    const cleared = try history.fcEntries(std.testing.allocator);
+    defer std.testing.allocator.free(cleared);
+    try std.testing.expectEqual(@as(usize, 0), cleared.len);
 }
 
 test "interactive autosuggestion falls back to global sqlite history" {
