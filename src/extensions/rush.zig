@@ -2,6 +2,7 @@
 
 const std = @import("std");
 
+const completion_path = @import("../completion_path.zig");
 const completion = @import("../editor/completion.zig");
 const editor_render = @import("../editor/render.zig");
 const host = @import("../host.zig");
@@ -1274,7 +1275,13 @@ fn appendPathCompletionCandidates(context: *CompletionContext, sh: anytype, dire
     const dir_prefix = if (slash) |index| context.prefix[0 .. index + 1] else "";
     const entry_prefix = if (slash) |index| context.prefix[index + 1 ..] else context.prefix;
     // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-    const dir_path = if (dir_prefix.len == 0) "." else if (std.mem.eql(u8, dir_prefix, "/")) "/" else std.mem.trimEnd(u8, dir_prefix, "/");
+    const unexpanded_dir_path = if (dir_prefix.len == 0) "." else if (std.mem.eql(u8, dir_prefix, "/")) "/" else std.mem.trimEnd(u8, dir_prefix, "/");
+    const dir_path = try completion_path.expandLeadingTilde(
+        context.allocator,
+        unexpanded_dir_path,
+        shellValue(sh, "HOME"),
+    );
+    defer context.allocator.free(dir_path);
     var entries = sh.host.listDir(context.allocator, dir_path) catch return;
     defer entries.deinit();
     const include_hidden = std.mem.startsWith(u8, entry_prefix, ".");
@@ -1562,6 +1569,11 @@ fn shellEnvValue(sh: anytype, name: []const u8) ?[]const u8 {
         if (std.mem.eql(u8, entry[0..name.len], name)) return entry[name.len + 1 ..];
     }
     return null;
+}
+
+fn shellValue(sh: anytype, name: []const u8) ?[]const u8 {
+    if (sh.state.getVariable(name)) |variable| return variable.value;
+    return shellEnvValue(sh, name);
 }
 
 pub fn expandAbbreviation(

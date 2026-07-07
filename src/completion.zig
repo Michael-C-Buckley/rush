@@ -3,6 +3,7 @@
 const std = @import("std");
 const build_config = @import("build_config");
 
+const completion_path = @import("completion_path.zig");
 const editor_completion = @import("editor/completion.zig");
 const extensions = @import("extensions.zig");
 const host = @import("host.zig");
@@ -964,7 +965,13 @@ fn appendPathCandidates(allocator: std.mem.Allocator, builder: *Builder, sh: any
     const dir_prefix = if (slash) |index| prefix[0 .. index + 1] else "";
     const entry_prefix = if (slash) |index| prefix[index + 1 ..] else prefix;
     // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-    const dir_path = if (dir_prefix.len == 0) "." else if (std.mem.eql(u8, dir_prefix, "/")) "/" else std.mem.trimEnd(u8, dir_prefix, "/");
+    const unexpanded_dir_path = if (dir_prefix.len == 0) "." else if (std.mem.eql(u8, dir_prefix, "/")) "/" else std.mem.trimEnd(u8, dir_prefix, "/");
+    const dir_path = try completion_path.expandLeadingTilde(
+        allocator,
+        unexpanded_dir_path,
+        shellValue(sh, "HOME"),
+    );
+    defer allocator.free(dir_path);
     var entries = sh.host.listDir(allocator, dir_path) catch return;
     defer entries.deinit();
     const include_hidden = std.mem.startsWith(u8, entry_prefix, ".");
@@ -993,7 +1000,13 @@ fn pathCandidateIsDirectory(
     if (entry.kind == .directory) return true;
     if (entry.kind != .symlink and entry.kind != .other) return false;
 
-    const path = try std.fmt.allocPrint(allocator, "{s}{s}", .{ dir_prefix, entry.name });
+    const unexpanded_path = try std.fmt.allocPrint(allocator, "{s}{s}", .{ dir_prefix, entry.name });
+    defer allocator.free(unexpanded_path);
+    const path = try completion_path.expandLeadingTilde(
+        allocator,
+        unexpanded_path,
+        shellValue(sh, "HOME"),
+    );
     defer allocator.free(path);
     const path_z = try allocator.dupeZ(u8, path);
     defer allocator.free(path_z);
@@ -1269,6 +1282,13 @@ test "cd directory completion appends slash without trailing space" {
 }
 
 test "path completion follows symlinked directories before appending space" {
+    const TestState = struct {
+        const Self = @This();
+
+        fn getVariable(_: Self, _: []const u8) ?shell.state.Variable {
+            return null;
+        }
+    };
     const TestHost = struct {
         const Self = @This();
 
@@ -1286,9 +1306,13 @@ test "path completion follows symlinked directories before appending space" {
             return .{ .kind = .directory };
         }
     };
-    const TestShell = struct { host: TestHost };
+    const TestShell = struct {
+        host: TestHost,
+        state: TestState,
+        env: []const [*:0]const u8 = &.{},
+    };
 
-    var sh: TestShell = .{ .host = .{} };
+    var sh: TestShell = .{ .host = .{}, .state = .{} };
     var builder: Builder = .{};
     defer builder.deinit(std.testing.allocator);
 
@@ -1309,5 +1333,60 @@ test "path completion follows symlinked directories before appending space" {
         else => return error.ExpectedSingleSymlinkDirectoryCompletion,
     };
     try std.testing.expectEqualStrings(".config/rush/", edit.replacement);
+    try std.testing.expect(!edit.append_space);
+}
+
+test "path completion expands tilde for lookup and preserves it in candidates" {
+    const TestState = struct {
+        const Self = @This();
+
+        fn getVariable(_: Self, name: []const u8) ?shell.state.Variable {
+            if (!std.mem.eql(u8, name, "HOME")) return null;
+            return .{ .name = "HOME", .value = "/home/alice" };
+        }
+    };
+    const TestHost = struct {
+        const Self = @This();
+
+        pub fn listDir(_: *Self, allocator: std.mem.Allocator, path: []const u8) !host.ListDirResult {
+            try std.testing.expectEqualStrings("/home/alice/.config", path);
+            const entries = try allocator.alloc(host.DirectoryEntry, 1);
+            errdefer allocator.free(entries);
+            entries[0] = .{ .name = try allocator.dupe(u8, "rush"), .kind = .directory };
+            return .{ .allocator = allocator, .entries = entries };
+        }
+
+        pub fn fileTestStatusZ(_: *Self, _: [:0]const u8, _: bool) ?host.FileStatus {
+            unreachable;
+        }
+    };
+    const TestShell = struct {
+        host: TestHost,
+        state: TestState,
+        env: []const [*:0]const u8 = &.{},
+    };
+
+    const source = "nvim ~/.config/ru";
+    var sh: TestShell = .{ .host = .{}, .state = .{} };
+    var builder: Builder = .{};
+    defer builder.deinit(std.testing.allocator);
+
+    try appendPathCandidates(
+        std.testing.allocator,
+        &builder,
+        &sh,
+        "~/.config/ru",
+        "nvim ".len,
+        source.len,
+        false,
+    );
+    var application = try applyBuiltCandidates(std.testing.allocator, source, &builder);
+    defer application.deinit(std.testing.allocator);
+
+    const edit = switch (application) {
+        .edit => |edit| edit,
+        else => return error.ExpectedTildePathCompletion,
+    };
+    try std.testing.expectEqualStrings("~/.config/rush/", edit.replacement);
     try std.testing.expect(!edit.append_space);
 }
