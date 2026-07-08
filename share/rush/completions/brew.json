@@ -1216,7 +1216,7 @@
               "description": "formula or cask to install",
               "index": 0,
               "repeatable": true,
-              "provider": "brew.formulae"
+              "provider": "brew.packages"
             }
           ]
         }
@@ -1325,7 +1325,7 @@
               "name": "formula",
               "index": 0,
               "repeatable": true,
-              "provider": "brew.formulae"
+              "provider": "brew.installed"
             }
           ]
         }
@@ -1343,7 +1343,7 @@
               "name": "formula",
               "index": 0,
               "repeatable": true,
-              "provider": "brew.formulae"
+              "provider": "brew.installed"
             }
           ]
         }
@@ -1809,7 +1809,7 @@
               "description": "formula or cask to install",
               "index": 0,
               "repeatable": true,
-              "provider": "brew.formulae"
+              "provider": "brew.packages"
             }
           ]
         }
@@ -1847,7 +1847,7 @@
               "description": "formula or cask to open homepage for",
               "index": 0,
               "repeatable": true,
-              "provider": "brew.formulae"
+              "provider": "brew.packages"
             }
           ]
         }
@@ -1921,6 +1921,9 @@
       },
       "brew.casks": {
         "function": "__rush_complete_brew_casks"
+      },
+      "brew.packages": {
+        "function": "__rush_complete_brew_packages"
       },
       "brew.installed": {
         "function": "__rush_complete_brew_installed"

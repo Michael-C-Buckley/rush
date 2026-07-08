@@ -1,0 +1,468 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "pacman",
+    "description": "manage arch linux packages",
+    "options": [
+      {
+        "short": "D",
+        "long": "database",
+        "description": "modify the local package database",
+        "exclusiveGroup": "pacman.operation"
+      },
+      {
+        "short": "F",
+        "long": "files",
+        "description": "query the files database",
+        "exclusiveGroup": "pacman.operation"
+      },
+      {
+        "short": "Q",
+        "long": "query",
+        "description": "query the local package database",
+        "exclusiveGroup": "pacman.operation"
+      },
+      {
+        "short": "R",
+        "long": "remove",
+        "description": "remove package(s)",
+        "exclusiveGroup": "pacman.operation"
+      },
+      {
+        "short": "S",
+        "long": "sync",
+        "description": "synchronize packages",
+        "exclusiveGroup": "pacman.operation"
+      },
+      {
+        "short": "T",
+        "long": "deptest",
+        "description": "check dependencies",
+        "exclusiveGroup": "pacman.operation"
+      },
+      {
+        "short": "U",
+        "long": "upgrade",
+        "description": "install package file(s)",
+        "exclusiveGroup": "pacman.operation"
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help"
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "show version"
+      },
+      {
+        "short": "b",
+        "long": "dbpath",
+        "description": "use an alternate database path",
+        "value": {
+          "name": "path",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "r",
+        "long": "root",
+        "description": "use an alternate installation root",
+        "value": {
+          "name": "path",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "show verbose output"
+      },
+      {
+        "long": "arch",
+        "description": "use an alternate architecture",
+        "value": {
+          "name": "arch",
+          "provider": "pacman.architectures"
+        }
+      },
+      {
+        "long": "cachedir",
+        "description": "use an alternate package cache",
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        },
+        "repeatable": true
+      },
+      {
+        "long": "color",
+        "description": "colorize output",
+        "value": {
+          "name": "when",
+          "provider": "pacman.color-modes"
+        }
+      },
+      {
+        "long": "config",
+        "description": "use an alternate config file",
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "confirm",
+        "description": "always ask for confirmation"
+      },
+      {
+        "long": "debug",
+        "description": "show debug messages"
+      },
+      {
+        "long": "disable-download-timeout",
+        "description": "use relaxed download timeouts"
+      },
+      {
+        "long": "disable-sandbox",
+        "description": "disable downloader sandboxing"
+      },
+      {
+        "long": "disable-sandbox-filesystem",
+        "description": "disable downloader filesystem sandboxing"
+      },
+      {
+        "long": "disable-sandbox-syscalls",
+        "description": "disable downloader syscall sandboxing"
+      },
+      {
+        "long": "gpgdir",
+        "description": "use an alternate GnuPG home",
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "hookdir",
+        "description": "use an alternate hook directory",
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        },
+        "repeatable": true
+      },
+      {
+        "long": "logfile",
+        "description": "use an alternate log file",
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "noconfirm",
+        "description": "do not ask for confirmation"
+      },
+      {
+        "long": "sysroot",
+        "description": "operate on a mounted guest system"
+      },
+      {
+        "short": "c",
+        "description": "operation-specific clean/check action"
+      },
+      {
+        "short": "d",
+        "description": "skip dependency checks or filter dependencies"
+      },
+      {
+        "short": "e",
+        "long": "explicit",
+        "description": "filter explicitly installed packages"
+      },
+      {
+        "short": "g",
+        "long": "groups",
+        "description": "show package groups"
+      },
+      {
+        "short": "i",
+        "long": "info",
+        "description": "show package information"
+      },
+      {
+        "short": "k",
+        "long": "check",
+        "description": "check database or package files"
+      },
+      {
+        "short": "l",
+        "long": "list",
+        "description": "list packages or package files",
+        "value": {
+          "name": "repo",
+          "provider": "pacman.repositories"
+        }
+      },
+      {
+        "short": "m",
+        "long": "foreign",
+        "description": "filter foreign packages"
+      },
+      {
+        "short": "n",
+        "long": "native",
+        "description": "filter native packages or remove configs"
+      },
+      {
+        "short": "o",
+        "long": "owns",
+        "description": "query the package owning a file",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "p",
+        "description": "print targets or read a package file"
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "show less information"
+      },
+      {
+        "short": "s",
+        "long": "search",
+        "description": "search packages",
+        "value": {
+          "name": "regex"
+        }
+      },
+      {
+        "short": "t",
+        "long": "unrequired",
+        "description": "filter unrequired packages"
+      },
+      {
+        "short": "u",
+        "description": "sysupgrade, upgrades, or unneeded action"
+      },
+      {
+        "short": "w",
+        "long": "downloadonly",
+        "description": "download packages only"
+      },
+      {
+        "short": "x",
+        "long": "regex",
+        "description": "enable regular expression search"
+      },
+      {
+        "short": "y",
+        "long": "refresh",
+        "description": "refresh package databases"
+      },
+      {
+        "long": "asdeps",
+        "description": "mark packages as dependencies"
+      },
+      {
+        "long": "asexplicit",
+        "description": "mark packages as explicitly installed"
+      },
+      {
+        "long": "assume-installed",
+        "description": "add a virtual package dependency",
+        "value": {
+          "name": "package-version",
+          "grammar": {
+            "kind": "keyValue",
+            "separator": "=",
+            "key": {
+              "name": "package",
+              "provider": "pacman.packages"
+            },
+            "value": {
+              "name": "version",
+              "grammar": {
+                "kind": "string"
+              }
+            }
+          }
+        },
+        "repeatable": true
+      },
+      {
+        "long": "cascade",
+        "description": "remove packages and dependents"
+      },
+      {
+        "long": "changelog",
+        "description": "show package changelog"
+      },
+      {
+        "long": "clean",
+        "description": "remove old packages from the cache"
+      },
+      {
+        "long": "dbonly",
+        "description": "only modify database entries"
+      },
+      {
+        "long": "deps",
+        "description": "filter packages installed as dependencies"
+      },
+      {
+        "long": "file",
+        "description": "query a package file",
+        "value": {
+          "name": "package",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "ignore",
+        "description": "ignore a package upgrade",
+        "value": {
+          "name": "package",
+          "provider": "pacman.installed-packages"
+        },
+        "repeatable": true
+      },
+      {
+        "long": "ignoregroup",
+        "description": "ignore a group upgrade",
+        "value": {
+          "name": "group",
+          "provider": "pacman.groups"
+        },
+        "repeatable": true
+      },
+      {
+        "long": "machinereadable",
+        "description": "produce machine-readable output"
+      },
+      {
+        "long": "needed",
+        "description": "skip reinstalling up-to-date packages"
+      },
+      {
+        "long": "nodeps",
+        "description": "skip dependency checks"
+      },
+      {
+        "long": "noprogressbar",
+        "description": "hide download progress bars"
+      },
+      {
+        "long": "nosave",
+        "description": "remove configuration files"
+      },
+      {
+        "long": "noscriptlet",
+        "description": "skip install scriptlets"
+      },
+      {
+        "long": "overwrite",
+        "description": "overwrite conflicting files",
+        "value": {
+          "name": "glob"
+        },
+        "repeatable": true
+      },
+      {
+        "long": "print",
+        "description": "print targets without performing operation"
+      },
+      {
+        "long": "print-format",
+        "description": "format printed targets",
+        "value": {
+          "name": "format"
+        }
+      },
+      {
+        "long": "recursive",
+        "description": "remove unnecessary dependencies"
+      },
+      {
+        "long": "sysupgrade",
+        "description": "upgrade installed packages"
+      },
+      {
+        "long": "unneeded",
+        "description": "remove unneeded packages"
+      },
+      {
+        "long": "upgrades",
+        "description": "filter outdated packages"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "target",
+          "description": "package, group, or file",
+          "index": 0,
+          "repeatable": true,
+          "provider": "pacman.targets"
+        }
+      ]
+    },
+    "providers": {
+      "pacman.targets": {
+        "function": "__rush_complete_pacman_targets"
+      },
+      "pacman.packages": {
+        "function": "__rush_complete_pacman_packages"
+      },
+      "pacman.installed-packages": {
+        "function": "__rush_complete_pacman_installed_packages"
+      },
+      "pacman.sync-packages": {
+        "function": "__rush_complete_pacman_sync_packages"
+      },
+      "pacman.groups": {
+        "function": "__rush_complete_pacman_groups"
+      },
+      "pacman.repositories": {
+        "function": "__rush_complete_pacman_repositories"
+      },
+      "pacman.color-modes": {
+        "values": [
+          {
+            "value": "auto",
+            "description": "color when output is a terminal"
+          },
+          {
+            "value": "always",
+            "description": "always color output"
+          },
+          {
+            "value": "never",
+            "description": "never color output"
+          }
+        ]
+      },
+      "pacman.architectures": {
+        "values": [
+          "x86_64",
+          "aarch64",
+          "armv7h",
+          "i686"
+        ]
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      }
+    }
+  }
+}

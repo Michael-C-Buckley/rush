@@ -1,0 +1,863 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "yay",
+    "description": "manage repository and AUR packages",
+    "options": [
+      {
+        "short": "D",
+        "long": "database",
+        "description": "modify the local package database",
+        "exclusiveGroup": "yay.operation"
+      },
+      {
+        "short": "F",
+        "long": "files",
+        "description": "query the files database",
+        "exclusiveGroup": "yay.operation"
+      },
+      {
+        "short": "Q",
+        "long": "query",
+        "description": "query the local package database",
+        "exclusiveGroup": "yay.operation"
+      },
+      {
+        "short": "R",
+        "long": "remove",
+        "description": "remove package(s)",
+        "exclusiveGroup": "yay.operation"
+      },
+      {
+        "short": "S",
+        "long": "sync",
+        "description": "synchronize packages",
+        "exclusiveGroup": "yay.operation"
+      },
+      {
+        "short": "T",
+        "long": "deptest",
+        "description": "check dependencies",
+        "exclusiveGroup": "yay.operation"
+      },
+      {
+        "short": "U",
+        "long": "upgrade",
+        "description": "install package file(s)",
+        "exclusiveGroup": "yay.operation"
+      },
+      {
+        "short": "B",
+        "long": "build",
+        "description": "build packages from a directory",
+        "exclusiveGroup": "yay.operation"
+      },
+      {
+        "short": "G",
+        "long": "getpkgbuild",
+        "description": "download PKGBUILD files",
+        "exclusiveGroup": "yay.operation"
+      },
+      {
+        "short": "P",
+        "long": "show",
+        "description": "show yay information",
+        "exclusiveGroup": "yay.operation"
+      },
+      {
+        "short": "W",
+        "long": "web",
+        "description": "open package web pages",
+        "exclusiveGroup": "yay.operation"
+      },
+      {
+        "short": "Y",
+        "long": "yay",
+        "description": "run yay-specific package actions",
+        "exclusiveGroup": "yay.operation"
+      },
+      {
+        "short": "h",
+        "long": "help",
+        "description": "show help"
+      },
+      {
+        "short": "V",
+        "long": "version",
+        "description": "show version"
+      },
+      {
+        "short": "b",
+        "long": "dbpath",
+        "description": "use an alternate database path",
+        "value": {
+          "name": "path",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "r",
+        "long": "root",
+        "description": "use an alternate installation root",
+        "value": {
+          "name": "path",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "short": "v",
+        "long": "verbose",
+        "description": "show verbose output"
+      },
+      {
+        "long": "arch",
+        "description": "use an alternate architecture",
+        "value": {
+          "name": "arch",
+          "provider": "yay.architectures"
+        }
+      },
+      {
+        "long": "cachedir",
+        "description": "use an alternate package cache",
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        },
+        "repeatable": true
+      },
+      {
+        "long": "color",
+        "description": "colorize output",
+        "value": {
+          "name": "when",
+          "provider": "yay.color-modes"
+        }
+      },
+      {
+        "long": "config",
+        "description": "use an alternate config file",
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "confirm",
+        "description": "always ask for confirmation"
+      },
+      {
+        "long": "debug",
+        "description": "show debug messages"
+      },
+      {
+        "long": "disable-download-timeout",
+        "description": "use relaxed download timeouts"
+      },
+      {
+        "long": "disable-sandbox",
+        "description": "disable downloader sandboxing"
+      },
+      {
+        "long": "disable-sandbox-filesystem",
+        "description": "disable downloader filesystem sandboxing"
+      },
+      {
+        "long": "disable-sandbox-syscalls",
+        "description": "disable downloader syscall sandboxing"
+      },
+      {
+        "long": "gpgdir",
+        "description": "use an alternate GnuPG home",
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "hookdir",
+        "description": "use an alternate hook directory",
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        },
+        "repeatable": true
+      },
+      {
+        "long": "logfile",
+        "description": "use an alternate log file",
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "noconfirm",
+        "description": "do not ask for confirmation"
+      },
+      {
+        "long": "sysroot",
+        "description": "operate on a mounted guest system"
+      },
+      {
+        "short": "c",
+        "description": "operation-specific clean/check action"
+      },
+      {
+        "short": "d",
+        "description": "skip dependency checks or filter dependencies"
+      },
+      {
+        "short": "e",
+        "long": "explicit",
+        "description": "filter explicitly installed packages"
+      },
+      {
+        "short": "g",
+        "long": "groups",
+        "description": "show package groups"
+      },
+      {
+        "short": "i",
+        "long": "info",
+        "description": "show package information"
+      },
+      {
+        "short": "k",
+        "long": "check",
+        "description": "check database or package files"
+      },
+      {
+        "short": "l",
+        "long": "list",
+        "description": "list packages or package files",
+        "value": {
+          "name": "repo",
+          "provider": "yay.repositories"
+        }
+      },
+      {
+        "short": "m",
+        "long": "foreign",
+        "description": "filter foreign packages"
+      },
+      {
+        "short": "n",
+        "long": "native",
+        "description": "filter native packages or remove configs"
+      },
+      {
+        "short": "o",
+        "long": "owns",
+        "description": "query the package owning a file",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "short": "p",
+        "description": "print targets or read a package file"
+      },
+      {
+        "short": "q",
+        "long": "quiet",
+        "description": "show less information"
+      },
+      {
+        "short": "s",
+        "long": "search",
+        "description": "search packages",
+        "value": {
+          "name": "regex"
+        }
+      },
+      {
+        "short": "t",
+        "long": "unrequired",
+        "description": "filter unrequired packages"
+      },
+      {
+        "short": "u",
+        "description": "sysupgrade, upgrades, or unneeded action"
+      },
+      {
+        "short": "w",
+        "long": "downloadonly",
+        "description": "download packages only"
+      },
+      {
+        "short": "x",
+        "long": "regex",
+        "description": "enable regular expression search"
+      },
+      {
+        "short": "y",
+        "long": "refresh",
+        "description": "refresh package databases"
+      },
+      {
+        "long": "asdeps",
+        "description": "mark packages as dependencies"
+      },
+      {
+        "long": "asexplicit",
+        "description": "mark packages as explicitly installed"
+      },
+      {
+        "long": "assume-installed",
+        "description": "add a virtual package dependency",
+        "value": {
+          "name": "package-version",
+          "grammar": {
+            "kind": "keyValue",
+            "separator": "=",
+            "key": {
+              "name": "package",
+              "provider": "yay.packages"
+            },
+            "value": {
+              "name": "version",
+              "grammar": {
+                "kind": "string"
+              }
+            }
+          }
+        },
+        "repeatable": true
+      },
+      {
+        "long": "cascade",
+        "description": "remove packages and dependents"
+      },
+      {
+        "long": "changelog",
+        "description": "show package changelog"
+      },
+      {
+        "long": "clean",
+        "description": "remove old packages from the cache"
+      },
+      {
+        "long": "dbonly",
+        "description": "only modify database entries"
+      },
+      {
+        "long": "deps",
+        "description": "filter packages installed as dependencies"
+      },
+      {
+        "long": "file",
+        "description": "query a package file",
+        "value": {
+          "name": "package",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "ignore",
+        "description": "ignore a package upgrade",
+        "value": {
+          "name": "package",
+          "provider": "yay.installed-packages"
+        },
+        "repeatable": true
+      },
+      {
+        "long": "ignoregroup",
+        "description": "ignore a group upgrade",
+        "value": {
+          "name": "group",
+          "provider": "yay.groups"
+        },
+        "repeatable": true
+      },
+      {
+        "long": "machinereadable",
+        "description": "produce machine-readable output"
+      },
+      {
+        "long": "needed",
+        "description": "skip reinstalling up-to-date packages"
+      },
+      {
+        "long": "nodeps",
+        "description": "skip dependency checks"
+      },
+      {
+        "long": "noprogressbar",
+        "description": "hide download progress bars"
+      },
+      {
+        "long": "nosave",
+        "description": "remove configuration files"
+      },
+      {
+        "long": "noscriptlet",
+        "description": "skip install scriptlets"
+      },
+      {
+        "long": "overwrite",
+        "description": "overwrite conflicting files",
+        "value": {
+          "name": "glob"
+        },
+        "repeatable": true
+      },
+      {
+        "long": "print",
+        "description": "print targets without performing operation"
+      },
+      {
+        "long": "print-format",
+        "description": "format printed targets",
+        "value": {
+          "name": "format"
+        }
+      },
+      {
+        "long": "recursive",
+        "description": "remove unnecessary dependencies"
+      },
+      {
+        "long": "sysupgrade",
+        "description": "upgrade installed packages"
+      },
+      {
+        "long": "unneeded",
+        "description": "remove unneeded packages"
+      },
+      {
+        "long": "upgrades",
+        "description": "filter outdated packages"
+      },
+      {
+        "short": "N",
+        "long": "repo",
+        "description": "assume targets are repository packages",
+        "exclusiveGroup": "yay.source"
+      },
+      {
+        "short": "a",
+        "long": "aur",
+        "description": "assume targets are AUR packages",
+        "exclusiveGroup": "yay.source"
+      },
+      {
+        "long": "save",
+        "description": "save following options to config"
+      },
+      {
+        "long": "aururl",
+        "description": "use an alternate AUR URL",
+        "value": {
+          "name": "url"
+        }
+      },
+      {
+        "long": "aurrpcurl",
+        "description": "use an alternate AUR RPC URL",
+        "value": {
+          "name": "url"
+        }
+      },
+      {
+        "long": "builddir",
+        "description": "use a build directory",
+        "value": {
+          "name": "dir",
+          "provider": "builtin.directories"
+        }
+      },
+      {
+        "long": "editor",
+        "description": "use an editor executable",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "editorflags",
+        "description": "pass flags to editor",
+        "value": {
+          "name": "flags"
+        }
+      },
+      {
+        "long": "makepkg",
+        "description": "use a makepkg executable",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "mflags",
+        "description": "pass flags to makepkg",
+        "value": {
+          "name": "flags"
+        }
+      },
+      {
+        "long": "pacman",
+        "description": "use a pacman executable",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "git",
+        "description": "use a git executable",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "gitflags",
+        "description": "pass flags to git",
+        "value": {
+          "name": "flags"
+        }
+      },
+      {
+        "long": "gpg",
+        "description": "use a gpg executable",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "gpgflags",
+        "description": "pass flags to gpg",
+        "value": {
+          "name": "flags"
+        }
+      },
+      {
+        "long": "makepkgconf",
+        "description": "use a makepkg config file",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "nomakepkgconf",
+        "description": "use the default makepkg config"
+      },
+      {
+        "long": "requestsplitn",
+        "description": "set max packages per AUR request",
+        "value": {
+          "name": "count"
+        }
+      },
+      {
+        "long": "completioninterval",
+        "description": "set completion cache interval",
+        "value": {
+          "name": "days"
+        }
+      },
+      {
+        "long": "sortby",
+        "description": "sort AUR search results",
+        "value": {
+          "name": "field",
+          "provider": "yay.sort-fields"
+        }
+      },
+      {
+        "long": "searchby",
+        "description": "search AUR packages by field",
+        "value": {
+          "name": "field",
+          "provider": "yay.search-fields"
+        }
+      },
+      {
+        "long": "answerclean",
+        "description": "preset clean build answer",
+        "value": {
+          "name": "answer"
+        }
+      },
+      {
+        "long": "answerdiff",
+        "description": "preset diff answer",
+        "value": {
+          "name": "answer"
+        }
+      },
+      {
+        "long": "answeredit",
+        "description": "preset edit answer",
+        "value": {
+          "name": "answer"
+        }
+      },
+      {
+        "long": "answerupgrade",
+        "description": "preset upgrade answer",
+        "value": {
+          "name": "answer"
+        }
+      },
+      {
+        "long": "noanswerclean",
+        "description": "unset clean build answer"
+      },
+      {
+        "long": "noanswerdiff",
+        "description": "unset diff answer"
+      },
+      {
+        "long": "noansweredit",
+        "description": "unset edit answer"
+      },
+      {
+        "long": "noanswerupgrade",
+        "description": "unset upgrade answer"
+      },
+      {
+        "long": "cleanmenu",
+        "description": "show the clean build menu"
+      },
+      {
+        "long": "diffmenu",
+        "description": "show the diff menu"
+      },
+      {
+        "long": "editmenu",
+        "description": "show the edit PKGBUILD menu"
+      },
+      {
+        "long": "askremovemake",
+        "description": "ask to remove make dependencies"
+      },
+      {
+        "long": "askyesremovemake",
+        "description": "ask to remove make dependencies, default yes"
+      },
+      {
+        "long": "removemake",
+        "description": "remove make dependencies after install"
+      },
+      {
+        "long": "noremovemake",
+        "description": "keep make dependencies after install"
+      },
+      {
+        "long": "cleanafter",
+        "description": "remove sources after successful install"
+      },
+      {
+        "long": "keepsrc",
+        "description": "keep package source directories"
+      },
+      {
+        "long": "bottomup",
+        "description": "show AUR packages before repository packages"
+      },
+      {
+        "long": "topdown",
+        "description": "show repository packages before AUR packages"
+      },
+      {
+        "long": "singlelineresults",
+        "description": "show one line per search result"
+      },
+      {
+        "long": "doublelineresults",
+        "description": "show two lines per search result"
+      },
+      {
+        "long": "devel",
+        "description": "check development packages on sysupgrade"
+      },
+      {
+        "long": "rebuild",
+        "description": "always build target packages"
+      },
+      {
+        "long": "rebuildall",
+        "description": "always build all AUR packages"
+      },
+      {
+        "long": "norebuild",
+        "description": "skip cached up-to-date builds"
+      },
+      {
+        "long": "rebuildtree",
+        "description": "always build installed AUR package tree"
+      },
+      {
+        "long": "redownload",
+        "description": "always download target PKGBUILDs"
+      },
+      {
+        "long": "noredownload",
+        "description": "skip cached up-to-date PKGBUILDs"
+      },
+      {
+        "long": "redownloadall",
+        "description": "always download all AUR PKGBUILDs"
+      },
+      {
+        "long": "provides",
+        "description": "search matching providers"
+      },
+      {
+        "long": "pgpfetch",
+        "description": "prompt to import PGP keys"
+      },
+      {
+        "long": "useask",
+        "description": "resolve conflicts using pacman's ask flag"
+      },
+      {
+        "long": "sudo",
+        "description": "use a sudo executable",
+        "value": {
+          "name": "file",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "sudoflags",
+        "description": "pass flags to sudo",
+        "value": {
+          "name": "flags"
+        }
+      },
+      {
+        "long": "sudoloop",
+        "description": "keep sudo credentials alive"
+      },
+      {
+        "long": "complete",
+        "description": "print completion cache entries"
+      },
+      {
+        "long": "defaultconfig",
+        "description": "print default configuration"
+      },
+      {
+        "long": "currentconfig",
+        "description": "print current configuration"
+      },
+      {
+        "long": "stats",
+        "description": "show package statistics"
+      },
+      {
+        "long": "news",
+        "description": "show arch news"
+      },
+      {
+        "long": "gendb",
+        "description": "generate development package database"
+      },
+      {
+        "long": "clean",
+        "description": "remove unneeded dependencies"
+      },
+      {
+        "long": "force",
+        "description": "overwrite existing PKGBUILD directories"
+      }
+    ],
+    "arguments": {
+      "states": [
+        {
+          "name": "target",
+          "description": "package, group, directory, or file",
+          "index": 0,
+          "repeatable": true,
+          "provider": "yay.targets"
+        }
+      ]
+    },
+    "providers": {
+      "yay.targets": {
+        "function": "__rush_complete_yay_targets"
+      },
+      "yay.packages": {
+        "function": "__rush_complete_yay_packages"
+      },
+      "yay.aur-packages": {
+        "function": "__rush_complete_yay_aur_packages"
+      },
+      "yay.installed-packages": {
+        "function": "__rush_complete_yay_installed_packages"
+      },
+      "yay.sync-packages": {
+        "function": "__rush_complete_yay_sync_packages"
+      },
+      "yay.groups": {
+        "function": "__rush_complete_yay_groups"
+      },
+      "yay.repositories": {
+        "function": "__rush_complete_yay_repositories"
+      },
+      "yay.sort-fields": {
+        "values": [
+          "votes",
+          "popularity",
+          "id",
+          "baseid",
+          "name",
+          "base",
+          "submitted",
+          "modified"
+        ]
+      },
+      "yay.search-fields": {
+        "values": [
+          "name",
+          "name-desc",
+          "maintainer",
+          "depends",
+          "makedepends",
+          "optdepends",
+          "checkdepends"
+        ]
+      },
+      "builtin.files": {
+        "builtin": "files"
+      },
+      "builtin.directories": {
+        "builtin": "directories"
+      },
+      "yay.color-modes": {
+        "values": [
+          {
+            "value": "auto",
+            "description": "color when output is a terminal"
+          },
+          {
+            "value": "always",
+            "description": "always color output"
+          },
+          {
+            "value": "never",
+            "description": "never color output"
+          }
+        ]
+      },
+      "yay.architectures": {
+        "values": [
+          "x86_64",
+          "aarch64",
+          "armv7h",
+          "i686"
+        ]
+      }
+    }
+  }
+}

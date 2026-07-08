@@ -1,0 +1,121 @@
+__rush_complete_yay_candidate_lines() {
+  description=$1
+  while IFS= read -r value; do
+    test -n "$value" && rush_complete candidate "$value" --kind plain --description "$description"
+  done
+}
+
+__rush_complete_yay_installed_packages() {
+  pacman -Qq 2>/dev/null | __rush_complete_yay_candidate_lines 'installed package'
+}
+
+__rush_complete_yay_sync_packages() {
+  pacman -Slq 2>/dev/null | __rush_complete_yay_candidate_lines package
+}
+
+__rush_complete_yay_aur_packages() {
+  yay -Pc 2>/dev/null | while IFS=$(printf '\t') read -r package source rest; do
+    case "$source" in
+      AUR) test -n "$package" && rush_complete candidate "$package" --kind plain --description 'AUR package' ;;
+    esac
+  done
+}
+
+__rush_complete_yay_packages() {
+  __rush_complete_yay_sync_packages
+  __rush_complete_yay_aur_packages
+  __rush_complete_yay_installed_packages
+}
+
+__rush_complete_yay_groups() {
+  pacman -Sgq 2>/dev/null | __rush_complete_yay_candidate_lines group
+}
+
+__rush_complete_yay_repositories() {
+  pacman-conf --repo-list 2>/dev/null | __rush_complete_yay_candidate_lines repository
+}
+
+__rush_complete_yay_targets() {
+  if rush_complete option-present --short U || rush_complete option-present --long upgrade; then
+    rush_complete files
+    return 0
+  fi
+
+  if rush_complete option-present --short B || rush_complete option-present --long build; then
+    rush_complete directories --append-slash
+    return 0
+  fi
+
+  if rush_complete option-present --short Q || rush_complete option-present --long query; then
+    if rush_complete option-present --short o || rush_complete option-present --long owns; then
+      rush_complete files
+      return 0
+    fi
+    if rush_complete option-present --long file; then
+      rush_complete files
+      return 0
+    fi
+    __rush_complete_yay_installed_packages
+    return 0
+  fi
+
+  if rush_complete option-present --short R || rush_complete option-present --long remove; then
+    __rush_complete_yay_installed_packages
+    return 0
+  fi
+
+  if rush_complete option-present --short D || rush_complete option-present --long database; then
+    __rush_complete_yay_installed_packages
+    return 0
+  fi
+
+  if rush_complete option-present --short S || rush_complete option-present --long sync; then
+    if rush_complete option-present --short a || rush_complete option-present --long aur; then
+      __rush_complete_yay_aur_packages
+      return 0
+    fi
+    if rush_complete option-present --short N || rush_complete option-present --long repo; then
+      __rush_complete_yay_sync_packages
+      __rush_complete_yay_groups
+      return 0
+    fi
+    if rush_complete option-present --short g || rush_complete option-present --long groups; then
+      __rush_complete_yay_groups
+      return 0
+    fi
+    __rush_complete_yay_sync_packages
+    __rush_complete_yay_aur_packages
+    __rush_complete_yay_groups
+    return 0
+  fi
+
+  if rush_complete option-present --short G || rush_complete option-present --long getpkgbuild; then
+    __rush_complete_yay_aur_packages
+    return 0
+  fi
+
+  if rush_complete option-present --short W || rush_complete option-present --long web; then
+    __rush_complete_yay_packages
+    return 0
+  fi
+
+  if rush_complete option-present --short Y || rush_complete option-present --long yay; then
+    __rush_complete_yay_installed_packages
+    __rush_complete_yay_aur_packages
+    return 0
+  fi
+
+  if rush_complete option-present --short F || rush_complete option-present --long files; then
+    __rush_complete_yay_sync_packages
+    rush_complete files
+    return 0
+  fi
+
+  if rush_complete option-present --short T || rush_complete option-present --long deptest; then
+    __rush_complete_yay_packages
+    return 0
+  fi
+
+  __rush_complete_yay_sync_packages
+  __rush_complete_yay_aur_packages
+}

@@ -10,6 +10,19 @@ __rush_complete_brew_casks() {
   done
 }
 
+__rush_complete_brew_packages() {
+  if rush_complete option-present --long cask; then
+    __rush_complete_brew_casks
+    return 0
+  fi
+  if rush_complete option-present --long formula; then
+    __rush_complete_brew_formulae
+    return 0
+  fi
+  __rush_complete_brew_formulae
+  __rush_complete_brew_casks
+}
+
 __rush_complete_brew_installed() {
   brew list --formula 2>/dev/null | while IFS= read -r formula; do
     test -n "$formula" && rush_complete candidate "$formula" --kind plain --description 'installed formula'
