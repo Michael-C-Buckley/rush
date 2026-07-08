@@ -1,7 +1,15 @@
 __rush_complete_yay_candidate_lines() {
   description=$1
+  prefix=${rush_completion_prefix-}
   while IFS= read -r value; do
-    test -n "$value" && rush_complete candidate "$value" --kind plain --description "$description"
+    test -n "$value" || continue
+    if test -n "$prefix"; then
+      case "$value" in
+        "$prefix"*) ;;
+        *) continue ;;
+      esac
+    fi
+    rush_complete candidate "$value" --kind plain --description "$description"
   done
 }
 
@@ -14,10 +22,12 @@ __rush_complete_yay_sync_packages() {
 }
 
 __rush_complete_yay_aur_packages() {
-  yay -Pc 2>/dev/null | while IFS=$(printf '\t') read -r package source rest; do
-    case "$source" in
-      AUR) test -n "$package" && rush_complete candidate "$package" --kind plain --description 'AUR package' ;;
-    esac
+  prefix=${rush_completion_prefix-}
+  test -n "$prefix" || return 0
+  yay -Pc 2>/dev/null | awk -F '\t' -v prefix="$prefix" '
+    $2 == "AUR" && substr($1, 1, length(prefix)) == prefix { print $1 }
+  ' | while IFS= read -r package; do
+    test -n "$package" && rush_complete candidate "$package" --kind plain --description 'AUR package'
   done
 }
 

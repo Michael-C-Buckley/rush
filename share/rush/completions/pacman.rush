@@ -1,7 +1,15 @@
 __rush_complete_pacman_candidate_lines() {
   description=$1
+  prefix=${rush_completion_prefix-}
   while IFS= read -r value; do
-    test -n "$value" && rush_complete candidate "$value" --kind plain --description "$description"
+    test -n "$value" || continue
+    if test -n "$prefix"; then
+      case "$value" in
+        "$prefix"*) ;;
+        *) continue ;;
+      esac
+    fi
+    rush_complete candidate "$value" --kind plain --description "$description"
   done
 }
 
