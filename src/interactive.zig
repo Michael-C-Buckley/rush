@@ -707,7 +707,7 @@ fn appendTokenSpans(
                 .command_invalid,
             .reserved => .reserved,
             .assignment => {
-                try appendAssignmentNameSpan(allocator, spans, tok);
+                try appendAssignmentSpans(allocator, spans, tok);
                 continue;
             },
             .argument => {
@@ -734,20 +734,43 @@ fn appendTokenSpans(
     }
 }
 
-/// Styles only the `NAME=` (or `NAME+=`) prefix so the value keeps its own
-/// quote and expansion styling.
-fn appendAssignmentNameSpan(
+/// Styles `NAME` as a variable, `=` (or `+=`) as muted syntax, and any
+/// unquoted value text as a variable. Quote trivia is appended before these
+/// token spans, so quoted values keep string styling.
+fn appendAssignmentSpans(
     allocator: std.mem.Allocator,
     spans: *std.ArrayList(editor.render.DiagnosticSpan),
     tok: shell.Token,
 ) !void {
     const equals_index = std.mem.indexOfScalar(u8, tok.text, '=') orelse return;
-    const end = @min(tok.span.start + equals_index + 1, tok.span.end);
-    try spans.append(allocator, .{
-        .start = tok.span.start,
-        .end = end,
-        .severity = .assignment,
-    });
+    const name_end = if (equals_index > 0 and tok.text[equals_index - 1] == '+') equals_index - 1 else equals_index;
+    const name_span_end = @min(tok.span.start + name_end, tok.span.end);
+    if (tok.span.start != name_span_end) {
+        try spans.append(allocator, .{
+            .start = tok.span.start,
+            .end = name_span_end,
+            .severity = .assignment,
+        });
+    }
+
+    const operator_start = tok.span.start + name_end;
+    const operator_end = @min(tok.span.start + equals_index + 1, tok.span.end);
+    if (operator_start < operator_end) {
+        try spans.append(allocator, .{
+            .start = operator_start,
+            .end = operator_end,
+            .severity = .assignment_operator,
+        });
+    }
+
+    const value_start = operator_end;
+    if (value_start < tok.span.end) {
+        try spans.append(allocator, .{
+            .start = value_start,
+            .end = tok.span.end,
+            .severity = .assignment,
+        });
+    }
 }
 
 fn commandResolves(
@@ -1367,18 +1390,70 @@ test "interactive input analysis marks unresolved command tokens only" {
     const analyzed = (try analyzeInteractiveInput(std.testing.allocator, &sh, &command_cache, text)).?;
     defer analyzed.deinit(std.testing.allocator);
 
-    try std.testing.expectEqual(@as(usize, 6), analyzed.spans.len);
+    try std.testing.expectEqual(@as(usize, 8), analyzed.spans.len);
     const Severity = editor.render.DiagnosticSeverity;
     try std.testing.expectEqual(Severity.command, analyzed.spans[0].severity); // echo
     try std.testing.expectEqual(Severity.command, analyzed.spans[1].severity); // ll alias
     try std.testing.expectEqual(Severity.command_invalid, analyzed.spans[2].severity);
     try std.testing.expectEqualStrings("nope", text[analyzed.spans[2].start..analyzed.spans[2].end]);
     try std.testing.expectEqual(Severity.assignment, analyzed.spans[3].severity);
-    try std.testing.expectEqualStrings("FOO=", text[analyzed.spans[3].start..analyzed.spans[3].end]);
-    try std.testing.expectEqual(Severity.command, analyzed.spans[4].severity);
-    try std.testing.expectEqualStrings("cached", text[analyzed.spans[4].start..analyzed.spans[4].end]);
-    try std.testing.expectEqual(Severity.operator, analyzed.spans[5].severity);
-    try std.testing.expectEqualStrings("<", text[analyzed.spans[5].start..analyzed.spans[5].end]);
+    try std.testing.expectEqualStrings("FOO", text[analyzed.spans[3].start..analyzed.spans[3].end]);
+    try std.testing.expectEqual(Severity.assignment_operator, analyzed.spans[4].severity);
+    try std.testing.expectEqualStrings("=", text[analyzed.spans[4].start..analyzed.spans[4].end]);
+    try std.testing.expectEqual(Severity.assignment, analyzed.spans[5].severity);
+    try std.testing.expectEqualStrings("bar", text[analyzed.spans[5].start..analyzed.spans[5].end]);
+    try std.testing.expectEqual(Severity.command, analyzed.spans[6].severity);
+    try std.testing.expectEqualStrings("cached", text[analyzed.spans[6].start..analyzed.spans[6].end]);
+    try std.testing.expectEqual(Severity.operator, analyzed.spans[7].severity);
+    try std.testing.expectEqualStrings("<", text[analyzed.spans[7].start..analyzed.spans[7].end]);
+}
+
+test "interactive input analysis styles assignment operator and expanded value separately" {
+    var sh = RushShell.init(std.testing.allocator, .{}, .{});
+    defer sh.deinit();
+    var command_cache: PathCommandCache = .{};
+    defer command_cache.deinit(std.testing.allocator);
+
+    const text = "FOO=$HOME/foo";
+    const analyzed = (try analyzeInteractiveInput(std.testing.allocator, &sh, &command_cache, text)).?;
+    defer analyzed.deinit(std.testing.allocator);
+
+    const Severity = editor.render.DiagnosticSeverity;
+    const expected = [_]struct { severity: Severity, text: []const u8 }{
+        .{ .severity = .expansion, .text = "$HOME" },
+        .{ .severity = .assignment, .text = "FOO" },
+        .{ .severity = .assignment_operator, .text = "=" },
+        .{ .severity = .assignment, .text = "$HOME/foo" },
+    };
+    try std.testing.expectEqual(expected.len, analyzed.spans.len);
+    for (expected, analyzed.spans) |want, span| {
+        try std.testing.expectEqual(want.severity, span.severity);
+        try std.testing.expectEqualStrings(want.text, text[span.start..span.end]);
+    }
+}
+
+test "interactive input analysis lets quoted assignment values keep quote styling" {
+    var sh = RushShell.init(std.testing.allocator, .{}, .{});
+    defer sh.deinit();
+    var command_cache: PathCommandCache = .{};
+    defer command_cache.deinit(std.testing.allocator);
+
+    const text = "FOO='val'";
+    const analyzed = (try analyzeInteractiveInput(std.testing.allocator, &sh, &command_cache, text)).?;
+    defer analyzed.deinit(std.testing.allocator);
+
+    const Severity = editor.render.DiagnosticSeverity;
+    const expected = [_]struct { severity: Severity, text: []const u8 }{
+        .{ .severity = .quote, .text = "'val'" },
+        .{ .severity = .assignment, .text = "FOO" },
+        .{ .severity = .assignment_operator, .text = "=" },
+        .{ .severity = .assignment, .text = "'val'" },
+    };
+    try std.testing.expectEqual(expected.len, analyzed.spans.len);
+    for (expected, analyzed.spans) |want, span| {
+        try std.testing.expectEqual(want.severity, span.severity);
+        try std.testing.expectEqualStrings(want.text, text[span.start..span.end]);
+    }
 }
 
 test "interactive input analysis styles comments quotes and pending quote" {

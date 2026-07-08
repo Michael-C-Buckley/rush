@@ -262,6 +262,7 @@ pub const DiagnosticSeverity = enum {
     command,
     reserved,
     operator,
+    assignment_operator,
     assignment,
     expansion,
     option,
@@ -475,6 +476,7 @@ fn diagnosticStyle(theme: UiTheme, severity: DiagnosticSeverity) UiStyle {
         .command => theme.command,
         .reserved => theme.reserved,
         .operator => theme.operator,
+        .assignment_operator => theme.muted,
         .assignment, .expansion => theme.variable,
         .option => theme.option,
     };
