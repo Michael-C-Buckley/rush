@@ -978,7 +978,6 @@ fn appendPathCandidates(allocator: std.mem.Allocator, builder: *Builder, sh: any
     for (entries.entries) |entry| {
         if (entry.name.len == 0 or std.mem.eql(u8, entry.name, ".") or std.mem.eql(u8, entry.name, "..")) continue;
         if (!include_hidden and entry.name[0] == '.') continue;
-        if (!std.mem.startsWith(u8, entry.name, entry_prefix)) continue;
         const is_directory = try pathCandidateIsDirectory(allocator, sh, dir_prefix, entry);
         if (directories_only and !is_directory) continue;
         const value = if (is_directory)
@@ -1263,6 +1262,21 @@ test "completion uses provider arrays from nvim manifest" {
     }
     try std.testing.expect(saw_file);
     try std.testing.expect(saw_directory);
+}
+
+test "path completion matches file names case insensitively" {
+    var sh = shell.ShellWithBuiltins(host.RealHost, extensions.rush.registry).init(std.testing.allocator, .{}, .{});
+    defer sh.deinit();
+
+    const source = "nvim agents";
+    var application = try complete(&sh, std.testing.allocator, std.testing.io, source, source.len);
+    defer application.deinit(std.testing.allocator);
+
+    const edit = switch (application) {
+        .edit => |edit| edit,
+        else => return error.ExpectedCaseInsensitivePathCompletion,
+    };
+    try std.testing.expectEqualStrings("AGENTS.md", edit.replacement);
 }
 
 test "cd directory completion appends slash without trailing space" {

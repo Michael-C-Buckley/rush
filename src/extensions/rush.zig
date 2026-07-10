@@ -1288,7 +1288,6 @@ fn appendPathCompletionCandidates(context: *CompletionContext, sh: anytype, dire
     for (entries.entries) |entry| {
         if (entry.name.len == 0 or std.mem.eql(u8, entry.name, ".") or std.mem.eql(u8, entry.name, "..")) continue;
         if (!include_hidden and entry.name[0] == '.') continue;
-        if (!std.mem.startsWith(u8, entry.name, entry_prefix)) continue;
         const is_directory = entry.kind == .directory;
         if (directories_only and !is_directory) continue;
         const value = if (is_directory)
@@ -1299,6 +1298,58 @@ fn appendPathCompletionCandidates(context: *CompletionContext, sh: anytype, dire
         // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
         try appendCompletionCandidate(context, value, if (is_directory) .directory else .file, if (is_directory) "directory" else "file", 0);
     }
+}
+
+test "rush_complete path provider leaves case-insensitive filtering to the matcher" {
+    const TestState = struct {
+        const Self = @This();
+
+        fn getVariable(_: Self, _: []const u8) ?shell.state.Variable {
+            return null;
+        }
+    };
+    const TestHost = struct {
+        const Self = @This();
+
+        pub fn listDir(_: *Self, allocator: std.mem.Allocator, path: []const u8) !host.ListDirResult {
+            try std.testing.expectEqualStrings(".", path);
+            const entries = try allocator.alloc(host.DirectoryEntry, 1);
+            errdefer allocator.free(entries);
+            entries[0] = .{ .name = try allocator.dupe(u8, "AGENTS.md"), .kind = .file };
+            return .{ .allocator = allocator, .entries = entries };
+        }
+    };
+    const TestShell = struct {
+        host: TestHost,
+        state: TestState,
+        env: []const [*:0]const u8 = &.{},
+    };
+
+    var context: CompletionContext = .init(
+        std.testing.allocator,
+        "agents",
+        0,
+        "agents".len,
+        0,
+        false,
+        "item",
+        &.{},
+        &.{},
+    );
+    defer context.deinit();
+    var sh: TestShell = .{ .host = .{}, .state = .{} };
+
+    try appendPathCompletionCandidates(&context, &sh, false);
+    const candidates = try context.takeCandidates();
+    defer completion.freeCandidates(std.testing.allocator, candidates);
+
+    try std.testing.expectEqual(@as(usize, 1), candidates.len);
+    try std.testing.expectEqualStrings("AGENTS.md", candidates[0].value);
+    try std.testing.expectEqual(completion.MatchRank.prefix, completion.candidateMatchRank(
+        candidates[0],
+        context.prefix,
+        .prefixOnly(),
+    ).?);
 }
 
 fn appendCompletionCandidate(
