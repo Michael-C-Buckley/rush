@@ -45,6 +45,13 @@ pub const History = struct {
     /// so concurrent sessions do not interleave into each other mid-session.
     session_start_id: i64 = 0,
     db: ?*sqlite.sqlite3 = null,
+    active_command: ?CommandHandle = null,
+    next_memory_id: u64 = 1,
+
+    pub const CommandHandle = union(enum) {
+        database: i64,
+        memory: u64,
+    };
 
     pub const HistoryRecord = struct {
         cmd: []const u8,
@@ -55,6 +62,7 @@ pub const History = struct {
         duration_ms: ?i64 = null,
         hostname: []const u8 = "",
         session_id: []const u8 = "",
+        memory_id: u64 = 0,
     };
 
     pub fn init(allocator: std.mem.Allocator) History {
@@ -101,6 +109,80 @@ pub const History = struct {
         try self.addRecord(.{ .cmd = line });
     }
 
+    /// Persists an interactive command before evaluation begins. The temporary
+    /// failure status keeps an interrupted command out of successful-only
+    /// searches; `finishCommand` replaces it with the actual result.
+    pub fn startCommand(
+        self: *History,
+        io: std.Io,
+        line: []const u8,
+        started_at: i64,
+    ) !?CommandHandle {
+        if (line.len == 0 or line[0] == ' ') return null;
+        std.debug.assert(self.active_command == null);
+
+        var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
+        var record: HistoryRecord = .{
+            .cmd = line,
+            .when = started_at,
+            .status = 1,
+            .cwd = self.commandCwd(io, &cwd_buffer),
+            .hostname = self.hostname,
+            .session_id = self.session_id,
+        };
+        const handle: CommandHandle = if (self.db) |db|
+            .{ .database = try insertHistoryRecordWithAllocator(self.allocator, db, record) }
+        else memory: {
+            if (self.entries.items.len != 0 and
+                std.mem.eql(u8, self.entries.items[self.entries.items.len - 1], line)) return null;
+            const memory_id = self.next_memory_id;
+            self.next_memory_id +%= 1;
+            std.debug.assert(self.next_memory_id != 0);
+            record.memory_id = memory_id;
+            try self.appendRecord(record);
+            break :memory .{ .memory = memory_id };
+        };
+        self.active_command = handle;
+        return handle;
+    }
+
+    // ziglint-ignore: Z012 existing public API type exposure; preserve API
+    pub fn finishCommand(
+        self: *History,
+        handle: CommandHandle,
+        status: ExitStatus,
+        duration_ms: i64,
+    ) !void {
+        std.debug.assert(duration_ms >= 0);
+        std.debug.assert(self.active_command != null);
+        std.debug.assert(std.meta.eql(self.active_command.?, handle));
+        defer self.active_command = null;
+
+        switch (handle) {
+            .database => |id| try updateHistoryRecordResult(self.db.?, id, status, duration_ms),
+            .memory => |memory_id| if (self.memoryRecordIndex(memory_id)) |index| {
+                self.records.items[index].status = status;
+                self.records.items[index].exit_signal = exitSignalFromStatus(status);
+                self.records.items[index].duration_ms = duration_ms;
+            },
+        }
+    }
+
+    pub fn discardCommand(self: *History, handle: CommandHandle) !void {
+        std.debug.assert(self.active_command != null);
+        std.debug.assert(std.meta.eql(self.active_command.?, handle));
+        defer self.active_command = null;
+
+        switch (handle) {
+            .database => |id| _ = try deleteHistoryRecordById(self.db.?, id),
+            .memory => |memory_id| {
+                // The history builtin may already have removed the active row
+                // through `clear` or an explicit deletion.
+                if (self.memoryRecordIndex(memory_id)) |index| try self.deleteMemoryRecord(index);
+            },
+        }
+    }
+
     // ziglint-ignore: Z012 existing public API type exposure; preserve API
     pub fn addCommand(
         self: *History,
@@ -139,25 +221,31 @@ pub const History = struct {
     ) !void {
         if (line.len == 0) return;
         var cwd_buffer: [std.Io.Dir.max_path_bytes]u8 = undefined;
-        const cwd = if (self.current_cwd.len != 0) self.current_cwd else cwd: {
-            const cwd_len = std.Io.Dir.cwd().realPath(io, &cwd_buffer) catch 0;
-            break :cwd cwd_buffer[0..cwd_len];
-        };
         const record: HistoryRecord = .{
             .cmd = line,
             .when = started_at,
             .status = status,
             .exit_signal = exitSignalFromStatus(status),
-            .cwd = cwd,
+            .cwd = self.commandCwd(io, &cwd_buffer),
             .duration_ms = duration_ms,
             .hostname = self.hostname,
             .session_id = self.session_id,
         };
         if (self.db) |db| {
-            try insertHistoryRecordWithAllocator(self.allocator, db, record);
+            _ = try insertHistoryRecordWithAllocator(self.allocator, db, record);
             return;
         }
         if (dedupe) try self.addRecord(record) else try self.appendRecord(record);
+    }
+
+    fn commandCwd(
+        self: *History,
+        io: std.Io,
+        buffer: *[std.Io.Dir.max_path_bytes]u8,
+    ) []const u8 {
+        if (self.current_cwd.len != 0) return self.current_cwd;
+        const cwd_len = std.Io.Dir.cwd().realPath(io, buffer) catch 0;
+        return buffer[0..cwd_len];
     }
 
     fn addRecord(self: *History, record: HistoryRecord) !void {
@@ -186,6 +274,7 @@ pub const History = struct {
             .duration_ms = record.duration_ms,
             .hostname = hostname,
             .session_id = session_id,
+            .memory_id = record.memory_id,
         });
         try self.entries.append(self.allocator, cmd);
     }
@@ -209,8 +298,22 @@ pub const History = struct {
         now: i64,
     ) !?[]const u8 {
         if (terms.len == 0) return null;
-        if (self.db) |db| return queryJumpDirectory(allocator, db, terms, exclude, now);
-        return rankJumpDirectoryRecords(allocator, self.records.items, terms, exclude, now);
+        if (self.db) |db| return queryJumpDirectory(
+            allocator,
+            db,
+            terms,
+            exclude,
+            now,
+            self.activeDatabaseId(),
+        );
+        return rankJumpDirectoryRecords(
+            allocator,
+            self.records.items,
+            terms,
+            exclude,
+            now,
+            self.activeMemoryId(),
+        );
     }
 
     pub fn load(self: *History, io: std.Io, path: []const u8) !void {
@@ -257,7 +360,9 @@ pub const History = struct {
         try initHistorySchema(handle);
         try migrateHistoryCommandKeys(self.allocator, handle);
         try sqliteExec(handle, "delete from history;");
-        for (self.records.items) |record| try insertHistoryRecordWithAllocator(self.allocator, handle, record);
+        for (self.records.items) |record| {
+            _ = try insertHistoryRecordWithAllocator(self.allocator, handle, record);
+        }
     }
 
     fn loadRecentRows(self: *History, db: *sqlite.sqlite3, limit: usize) !void {
@@ -334,13 +439,19 @@ pub const History = struct {
     }
 
     pub fn fcEntries(self: *History, allocator: std.mem.Allocator) ![]HistoryEntry {
-        if (self.db) |db| return queryFcHistoryEntries(allocator, db, fc_history_limit);
+        if (self.db) |db| return queryFcHistoryEntries(
+            allocator,
+            db,
+            fc_history_limit,
+            self.activeDatabaseId(),
+        );
         var entries: std.ArrayList(HistoryEntry) = .empty;
         errdefer {
             for (entries.items) |entry| allocator.free(entry.command);
             entries.deinit(allocator);
         }
         for (self.entries.items, 0..) |entry, index| {
+            if (self.activeMemoryIndex() == index) continue;
             try entries.append(allocator, .{
                 .number = @intCast(index + 1),
                 .command = try allocator.dupe(u8, entry),
@@ -352,13 +463,20 @@ pub const History = struct {
     /// Case-insensitive substring search over stored commands, newest-bounded,
     /// without duplicate hiding: deletion needs every matching row visible.
     pub fn searchEntries(self: *History, allocator: std.mem.Allocator, text: []const u8) ![]HistoryEntry {
-        if (self.db) |db| return queryHistoryEntriesContaining(allocator, db, text, fc_history_limit);
+        if (self.db) |db| return queryHistoryEntriesContaining(
+            allocator,
+            db,
+            text,
+            fc_history_limit,
+            self.activeDatabaseId(),
+        );
         var entries: std.ArrayList(HistoryEntry) = .empty;
         errdefer {
             for (entries.items) |entry| allocator.free(entry.command);
             entries.deinit(allocator);
         }
         for (self.entries.items, 0..) |entry, index| {
+            if (self.activeMemoryIndex() == index) continue;
             if (std.ascii.indexOfIgnoreCase(entry, text) == null) continue;
             try entries.append(allocator, .{
                 .number = @intCast(index + 1),
@@ -373,6 +491,12 @@ pub const History = struct {
         if (id < 1) return false;
         const index: usize = @intCast(id - 1);
         if (index >= self.entries.items.len) return false;
+        try self.deleteMemoryRecord(index);
+        return true;
+    }
+
+    fn deleteMemoryRecord(self: *History, index: usize) !void {
+        std.debug.assert(index < self.entries.items.len);
         std.debug.assert(self.entries.items.len == self.records.items.len);
         // entries items alias the record command allocation; free it once.
         const record = self.records.items[index];
@@ -382,7 +506,35 @@ pub const History = struct {
         self.allocator.free(record.session_id);
         _ = self.records.orderedRemove(index);
         _ = self.entries.orderedRemove(index);
-        return true;
+    }
+
+    fn activeDatabaseId(self: History) ?i64 {
+        const active = self.active_command orelse return null;
+        return switch (active) {
+            .database => |id| id,
+            .memory => null,
+        };
+    }
+
+    fn activeMemoryIndex(self: History) ?usize {
+        const memory_id = self.activeMemoryId() orelse return null;
+        return self.memoryRecordIndex(memory_id);
+    }
+
+    fn activeMemoryId(self: History) ?u64 {
+        const active = self.active_command orelse return null;
+        return switch (active) {
+            .database => null,
+            .memory => |memory_id| memory_id,
+        };
+    }
+
+    fn memoryRecordIndex(self: History, memory_id: u64) ?usize {
+        std.debug.assert(memory_id != 0);
+        for (self.records.items, 0..) |record, index| {
+            if (record.memory_id == memory_id) return index;
+        }
+        return null;
     }
 
     pub fn clearEntries(self: *History) !void {
@@ -499,6 +651,28 @@ pub const InteractiveHistoryService = struct {
         duration_ms: i64,
     ) !void {
         try self.history.addCommand(io, line, status, started_at, duration_ms);
+    }
+
+    pub fn startCommand(
+        self: *InteractiveHistoryService,
+        io: std.Io,
+        line: []const u8,
+        started_at: i64,
+    ) !?History.CommandHandle {
+        return self.history.startCommand(io, line, started_at);
+    }
+
+    // ziglint-ignore: Z012 existing public API type exposure; preserve API
+    pub fn completeCommand(
+        self: *InteractiveHistoryService,
+        handle: ?History.CommandHandle,
+        status: ExitStatus,
+        duration_ms: i64,
+    ) !void {
+        const suppress = self.consumeSuppressNextAppend();
+        const active = handle orelse return;
+        if (suppress) return self.history.discardCommand(active);
+        return self.history.finishCommand(active, status, duration_ms);
     }
 
     pub fn suppressNextAppend(self: *InteractiveHistoryService) void {
@@ -760,16 +934,25 @@ fn queryJumpDirectory(
     terms: []const []const u8,
     exclude: []const u8,
     now: i64,
+    excluded_id: ?i64,
 ) !?[]const u8 {
     var stmt: ?*sqlite.sqlite3_stmt = null;
     try sqliteCheck(sqlite.sqlite3_prepare_v2(
         db,
-        "select cwd, count(*), max(started_at) from history where cwd <> '' group by cwd",
+        \\select cwd, count(*), max(started_at) from history
+        \\where cwd <> '' and (?1 is null or id <> ?1)
+        \\group by cwd
+    ,
         -1,
         &stmt,
         null,
     ), db);
     defer _ = sqlite.sqlite3_finalize(stmt);
+    if (excluded_id) |id| {
+        try sqliteCheck(sqlite.sqlite3_bind_int64(stmt, 1, id), db);
+    } else {
+        try sqliteCheck(sqlite.sqlite3_bind_null(stmt, 1), db);
+    }
 
     var best: ?DirectoryJumpCandidate = null;
     var best_path: ?[]const u8 = null;
@@ -805,10 +988,12 @@ fn rankJumpDirectoryRecords(
     terms: []const []const u8,
     exclude: []const u8,
     now: i64,
+    excluded_memory_id: ?u64,
 ) !?[]const u8 {
     var candidates: std.StringHashMapUnmanaged(DirectoryJumpCandidate) = .empty;
     defer candidates.deinit(allocator);
     for (records) |record| {
+        if (excluded_memory_id == record.memory_id) continue;
         if (record.cwd.len == 0) continue;
         if (std.mem.eql(u8, record.cwd, exclude)) continue;
         if (!directoryJumpMatches(record.cwd, terms)) continue;
@@ -1000,12 +1185,19 @@ fn queryHistoryEntryByNumber(
 /// unaddressable, mirroring HISTSIZE limits in other shells.
 const fc_history_limit: i64 = 10_000;
 
-fn queryFcHistoryEntries(allocator: std.mem.Allocator, db: *sqlite.sqlite3, limit: i64) ![]HistoryEntry {
+fn queryFcHistoryEntries(
+    allocator: std.mem.Allocator,
+    db: *sqlite.sqlite3,
+    limit: i64,
+    excluded_id: ?i64,
+) ![]HistoryEntry {
     var stmt: ?*sqlite.sqlite3_stmt = null;
     try sqliteCheck(sqlite.sqlite3_prepare_v2(
         db,
         \\select id, command from (
-        \\  select id, command from history order by id desc limit ?1
+        \\  select id, command from history
+        \\  where (?2 is null or id <> ?2)
+        \\  order by id desc limit ?1
         \\) recent
         \\order by id asc
     ,
@@ -1015,6 +1207,11 @@ fn queryFcHistoryEntries(allocator: std.mem.Allocator, db: *sqlite.sqlite3, limi
     ), db);
     defer _ = sqlite.sqlite3_finalize(stmt);
     try sqliteCheck(sqlite.sqlite3_bind_int64(stmt, 1, limit), db);
+    if (excluded_id) |id| {
+        try sqliteCheck(sqlite.sqlite3_bind_int64(stmt, 2, id), db);
+    } else {
+        try sqliteCheck(sqlite.sqlite3_bind_null(stmt, 2), db);
+    }
 
     var entries: std.ArrayList(HistoryEntry) = .empty;
     errdefer {
@@ -1039,6 +1236,7 @@ fn queryHistoryEntriesContaining(
     db: *sqlite.sqlite3,
     text: []const u8,
     limit: i64,
+    excluded_id: ?i64,
 ) ![]HistoryEntry {
     var like_pattern: std.ArrayList(u8) = .empty;
     defer like_pattern.deinit(allocator);
@@ -1049,7 +1247,7 @@ fn queryHistoryEntriesContaining(
         db,
         \\select id, command from (
         \\  select id, command from history
-        \\  where command like ?1 escape '\'
+        \\  where command like ?1 escape '\' and (?3 is null or id <> ?3)
         \\  order by id desc limit ?2
         \\) recent
         \\order by id asc
@@ -1067,6 +1265,11 @@ fn queryHistoryEntriesContaining(
         null,
     ), db);
     try sqliteCheck(sqlite.sqlite3_bind_int64(stmt, 2, limit), db);
+    if (excluded_id) |id| {
+        try sqliteCheck(sqlite.sqlite3_bind_int64(stmt, 3, id), db);
+    } else {
+        try sqliteCheck(sqlite.sqlite3_bind_null(stmt, 3), db);
+    }
 
     var entries: std.ArrayList(HistoryEntry) = .empty;
     errdefer {
@@ -1620,14 +1823,14 @@ fn migrateHistoryCommandKeys(allocator: std.mem.Allocator, db: *sqlite.sqlite3) 
 
 fn insertHistoryRecord(db: *sqlite.sqlite3, record: History.HistoryRecord) !void {
     std.debug.assert(build_options.is_test);
-    return insertHistoryRecordWithAllocator(std.testing.allocator, db, record);
+    _ = try insertHistoryRecordWithAllocator(std.testing.allocator, db, record);
 }
 
 fn insertHistoryRecordWithAllocator(
     allocator: std.mem.Allocator,
     db: *sqlite.sqlite3,
     record: History.HistoryRecord,
-) !void {
+) !i64 {
     const command_key = try historyCommandKey(allocator, record.cmd);
     defer allocator.free(command_key);
 
@@ -1666,6 +1869,41 @@ fn insertHistoryRecordWithAllocator(
         @intCast(record.session_id.len),
         null,
     ), db);
+    const rc = sqlite.sqlite3_step(stmt);
+    if (rc != sqlite.SQLITE_DONE) try sqliteCheck(rc, db);
+    const id = sqlite.sqlite3_last_insert_rowid(db);
+    std.debug.assert(id > 0);
+    return id;
+}
+
+fn updateHistoryRecordResult(
+    db: *sqlite.sqlite3,
+    id: i64,
+    status: ExitStatus,
+    duration_ms: i64,
+) !void {
+    std.debug.assert(id > 0);
+    std.debug.assert(duration_ms >= 0);
+    var stmt: ?*sqlite.sqlite3_stmt = null;
+    try sqliteCheck(sqlite.sqlite3_prepare_v2(
+        db,
+        \\update history
+        \\set status = ?1, exit_signal = ?2, duration_ms = ?3
+        \\where id = ?4
+    ,
+        -1,
+        &stmt,
+        null,
+    ), db);
+    defer _ = sqlite.sqlite3_finalize(stmt);
+    try sqliteCheck(sqlite.sqlite3_bind_int(stmt, 1, status), db);
+    if (exitSignalFromStatus(status)) |signal| {
+        try sqliteCheck(sqlite.sqlite3_bind_int(stmt, 2, signal), db);
+    } else {
+        try sqliteCheck(sqlite.sqlite3_bind_null(stmt, 2), db);
+    }
+    try sqliteCheck(sqlite.sqlite3_bind_int64(stmt, 3, duration_ms), db);
+    try sqliteCheck(sqlite.sqlite3_bind_int64(stmt, 4, id), db);
     const rc = sqlite.sqlite3_step(stmt);
     if (rc != sqlite.SQLITE_DONE) try sqliteCheck(rc, db);
 }
@@ -1832,6 +2070,105 @@ test "history writes commands through to sqlite fts" {
     try std.testing.expectEqual(@as(c_int, 1), count);
 }
 
+test "history persists commands before execution and updates their result" {
+    const path = "rush-history-command-lifecycle-test.sqlite";
+    try deleteHistoryDbFilesIfExists(std.testing.io, path);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    try history.load(std.testing.io, path);
+    history.current_cwd = "/repo";
+    history.session_id = "session-a";
+
+    const handle = (try history.startCommand(std.testing.io, "sleep 100", 1234)).?;
+
+    // The executing command is hidden from this session, so `fc` and the
+    // history builtin retain their pre-execution view.
+    const active_entries = try history.fcEntries(std.testing.allocator);
+    defer std.testing.allocator.free(active_entries);
+    try std.testing.expectEqual(@as(usize, 0), active_entries.len);
+
+    // A separate history instance models a new shell after an abrupt exit:
+    // the committed row is already present without a completion update.
+    {
+        var interrupted = History.init(std.testing.allocator);
+        defer interrupted.deinit();
+        try interrupted.load(std.testing.io, path);
+        try std.testing.expectEqual(@as(usize, 1), interrupted.records.items.len);
+        const pending = interrupted.records.items[0];
+        try std.testing.expectEqualStrings("sleep 100", pending.cmd);
+        try std.testing.expectEqual(@as(ExitStatus, 1), pending.status);
+        try std.testing.expectEqual(@as(?i64, null), pending.duration_ms);
+        try std.testing.expectEqualStrings("/repo", pending.cwd);
+    }
+
+    try history.finishCommand(handle, 130, 55);
+
+    const finished_entries = try history.fcEntries(std.testing.allocator);
+    defer {
+        for (finished_entries) |entry| std.testing.allocator.free(entry.command);
+        std.testing.allocator.free(finished_entries);
+    }
+    try std.testing.expectEqual(@as(usize, 1), finished_entries.len);
+    try std.testing.expectEqualStrings("sleep 100", finished_entries[0].command);
+
+    var completed = History.init(std.testing.allocator);
+    defer completed.deinit();
+    try completed.load(std.testing.io, path);
+    try std.testing.expectEqual(@as(usize, 1), completed.records.items.len);
+    const record = completed.records.items[0];
+    try std.testing.expectEqual(@as(ExitStatus, 130), record.status);
+    try std.testing.expectEqual(@as(?u8, 2), record.exit_signal);
+    try std.testing.expectEqual(@as(?i64, 55), record.duration_ms);
+}
+
+test "history can discard a suppressed active command" {
+    const path = "rush-history-command-discard-test.sqlite";
+    try deleteHistoryDbFilesIfExists(std.testing.io, path);
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
+    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
+
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    try history.load(std.testing.io, path);
+    const handle = (try history.startCommand(std.testing.io, "history clear", 10)).?;
+    try history.discardCommand(handle);
+
+    const entries = try history.fcEntries(std.testing.allocator);
+    defer std.testing.allocator.free(entries);
+    try std.testing.expectEqual(@as(usize, 0), entries.len);
+    try std.testing.expectEqual(@as(c_int, 0), try historyFtsMatchCount(history.db.?, "history"));
+}
+
+test "in-memory active command identity survives deletion and append" {
+    var history = History.init(std.testing.allocator);
+    defer history.deinit();
+    try history.addCommand(std.testing.io, "echo older", 0, 1, 1);
+
+    const handle = (try history.startCommand(std.testing.io, "fc -s", 2)).?;
+    try std.testing.expect(try history.deleteEntry(1));
+    try history.appendCommand(std.testing.io, "echo reexecuted", 0, 3, 1);
+
+    const active_entries = try history.fcEntries(std.testing.allocator);
+    defer {
+        for (active_entries) |entry| std.testing.allocator.free(entry.command);
+        std.testing.allocator.free(active_entries);
+    }
+    try std.testing.expectEqual(@as(usize, 1), active_entries.len);
+    try std.testing.expectEqualStrings("echo reexecuted", active_entries[0].command);
+
+    var service = InteractiveHistoryService.init(&history);
+    service.suppressNextAppend();
+    try service.completeCommand(handle, 2, 1);
+    try std.testing.expect(!service.consumeSuppressNextAppend());
+    try std.testing.expectEqual(@as(usize, 1), history.records.items.len);
+    try std.testing.expectEqualStrings("echo reexecuted", history.records.items[0].cmd);
+}
+
 test "history exposes POSIX fc command numbers from sqlite" {
     const path = "rush-history-fc-test.sqlite";
     try deleteHistoryDbFilesIfExists(std.testing.io, path);
@@ -1929,7 +2266,7 @@ test "history fc entries are bounded to the most recent window" {
     try insertHistoryRecord(history.db.?, .{ .cmd = "echo two", .when = 20 });
     try insertHistoryRecord(history.db.?, .{ .cmd = "echo three", .when = 30 });
 
-    const entries = try queryFcHistoryEntries(std.testing.allocator, history.db.?, 2);
+    const entries = try queryFcHistoryEntries(std.testing.allocator, history.db.?, 2, null);
     defer {
         for (entries) |entry| std.testing.allocator.free(entry.command);
         std.testing.allocator.free(entries);

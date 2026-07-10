@@ -368,9 +368,23 @@ const InteractiveSession = struct {
 
         const background_jobs_before = self.sh.state.background_jobs.items.len;
         const started_at = unixTimestamp(self.io);
+        // Commit before evaluation so a terminal or process exit cannot lose
+        // the command that was already submitted.
+        const history_handle = self.history_service.startCommand(self.io, line, started_at) catch |err| switch (err) {
+            error.OutOfMemory => return error.OutOfMemory,
+            // History remains best effort when persistent storage fails; a
+            // broken history database must not prevent command execution.
+            else => null,
+        };
         const evaluated = self.sh.evalSource(src) catch |err| {
             self.sh.state.last_status = 2;
             self.last_command_status = 2;
+            const duration_ms = @max(unixTimestamp(self.io) - started_at, 0) * 1000;
+            self.last_command_duration_ms = duration_ms;
+            // Consume suppression even when an earlier command ran before a
+            // later parse/evaluation failure, so it cannot leak to the next line.
+            // ziglint-ignore: Z026 intentional best-effort history update; the pre-execution row remains on failure
+            self.history_service.completeCommand(history_handle, 2, duration_ms) catch {};
             // Parse errors already produced a positioned syntax diagnostic.
             if (!shell.parser.isParseError(err)) try self.sh.host.writeAll(.stderr, "rush: shell error\n");
             // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
@@ -380,10 +394,8 @@ const InteractiveSession = struct {
         };
         const duration_ms = @max(unixTimestamp(self.io) - started_at, 0) * 1000;
         self.last_command_duration_ms = duration_ms;
-        if (!self.history_service.consumeSuppressNextAppend()) {
-            // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
-            self.history_service.addCommand(self.io, line, evaluated.status, started_at, duration_ms) catch {};
-        }
+        // ziglint-ignore: Z026 intentional best-effort history update; the pre-execution row remains on failure
+        self.history_service.completeCommand(history_handle, evaluated.status, duration_ms) catch {};
         self.last_command_status = evaluated.status;
         // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
         terminal.finishSemanticCommand(evaluated.status) catch {};
