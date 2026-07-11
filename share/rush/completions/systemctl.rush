@@ -2,9 +2,6 @@ __rush_complete_systemctl_scope_args() {
   if rush_complete option-present --long host || rush_complete option-present --short H; then
     return 1
   fi
-  if rush_complete option-present --long machine || rush_complete option-present --short M; then
-    return 1
-  fi
 
   if rush_complete option-present --long user; then
     printf ' --user'
@@ -16,6 +13,10 @@ __rush_complete_systemctl_scope_args() {
     printf ' --global'
   fi
 
+  for machine in $(rush_complete option-values --long machine 2>/dev/null); do
+    test -n "$machine" && printf ' --machine=%s' "$machine"
+  done
+
   for root in $(rush_complete option-values --long root 2>/dev/null); do
     test -n "$root" && printf ' --root=%s' "$root"
   done
@@ -23,36 +24,44 @@ __rush_complete_systemctl_scope_args() {
 
 __rush_complete_systemctl_list_units() {
   scope=$(__rush_complete_systemctl_scope_args) || return
-  systemctl $scope --full --legend=no --no-pager --plain list-units "$@" 2>/dev/null |
-    while read unit load active sub description; do
-      case "$unit" in ''|UNIT) continue ;; esac
-      if test -n "$active" && test -n "$sub"; then
-        description="$active $sub"
+  tmp=$(mktemp) || return
+  SYSTEMD_COLORS= systemctl $scope --full --legend=no --no-pager --plain list-units "$@" > "$tmp" 2>/dev/null
+  while read -r unit load active sub description; do
+    case "$unit" in ''|UNIT) continue ;; esac
+    if test -n "$active" && test -n "$sub"; then
+      if test -n "$description"; then
+        description="$active/$sub $description"
       else
-        description='loaded unit'
+        description="$active/$sub"
       fi
-      rush_complete candidate "$unit" --kind plain --description "$description" --priority 20
-    done
+    else
+      description='loaded unit'
+    fi
+    rush_complete candidate "$unit" --kind plain --description "$description" --priority 20
+  done < "$tmp"
+  rm -f "$tmp"
 }
 
 __rush_complete_systemctl_list_unit_files() {
   scope=$(__rush_complete_systemctl_scope_args) || return
-  systemctl $scope --full --legend=no --no-pager --plain list-unit-files "$@" 2>/dev/null |
-    while read unit state preset; do
-      case "$unit" in ''|'UNIT FILE') continue ;; esac
-      if test -n "$state"; then
-        description="$state unit file"
-      else
-        description='unit file'
-      fi
-      rush_complete candidate "$unit" --kind plain --description "$description" --priority 10
-    done
+  tmp=$(mktemp) || return
+  SYSTEMD_COLORS= systemctl $scope --full --legend=no --no-pager --plain list-unit-files "$@" > "$tmp" 2>/dev/null
+  while read -r unit state preset; do
+    case "$unit" in ''|'UNIT FILE') continue ;; esac
+    if test -n "$state"; then
+      description="$state unit file"
+    else
+      description='unit file'
+    fi
+    rush_complete candidate "$unit" --kind plain --description "$description" --priority 10
+  done < "$tmp"
+  rm -f "$tmp"
 }
 
 __rush_complete_systemctl_unit_names_from_list_units() {
   scope=$(__rush_complete_systemctl_scope_args) || return
-  systemctl $scope --full --legend=no --no-pager --plain list-units "$@" 2>/dev/null |
-    while read unit rest; do
+  SYSTEMD_COLORS= systemctl $scope --full --legend=no --no-pager --plain list-units "$@" 2>/dev/null |
+    while read -r unit rest; do
       case "$unit" in ''|UNIT) continue ;; esac
       printf '%s\n' "$unit"
     done
@@ -60,8 +69,8 @@ __rush_complete_systemctl_unit_names_from_list_units() {
 
 __rush_complete_systemctl_unit_names_from_list_unit_files() {
   scope=$(__rush_complete_systemctl_scope_args) || return
-  systemctl $scope --full --legend=no --no-pager --plain list-unit-files "$@" 2>/dev/null |
-    while read unit rest; do
+  SYSTEMD_COLORS= systemctl $scope --full --legend=no --no-pager --plain list-unit-files "$@" 2>/dev/null |
+    while read -r unit rest; do
       case "$unit" in ''|'UNIT FILE') continue ;; esac
       printf '%s\n' "$unit"
     done
@@ -74,18 +83,42 @@ __rush_complete_systemctl_emit_property_units() {
   shift 3
 
   scope=$(__rush_complete_systemctl_scope_args) || return
-  systemctl $scope show --no-pager --property="Id,$property" -- "$@" 2>/dev/null |
-    while IFS='=' read key value; do
-      case "$key" in
-        Id) unit=$value ;;
-        "$property")
-          if test "$value" = "$expected" && test -n "$unit"; then
-            rush_complete candidate "$unit" --kind plain --description "$description" --priority 25
+  tmp=$(mktemp) || return
+  SYSTEMD_COLORS= systemctl $scope show --no-pager \
+    --property="Id,Description,ActiveState,SubState,$property" -- "$@" > "$tmp" 2>/dev/null
+  while IFS='=' read -r key value; do
+    case "$key" in
+      Id) unit=$value ;;
+      Description) unit_description=$value ;;
+      ActiveState) active=$value ;;
+      SubState) sub=$value ;;
+      '')
+        if test "$matches" = yes && test -n "$unit"; then
+          detail=$description
+          if test -n "$active" && test -n "$sub"; then
+            detail="$active/$sub"
           fi
-          unit=
-          ;;
-      esac
-    done
+          if test -n "$unit_description"; then
+            detail="$detail $unit_description"
+          fi
+          case "$unit" in
+            *.service) priority=30 ;;
+            *) priority=25 ;;
+          esac
+          rush_complete candidate "$unit" --kind plain --description "$detail" --priority "$priority"
+        fi
+        unit=
+        unit_description=
+        active=
+        sub=
+        matches=
+        ;;
+    esac
+    if test "$key" = "$property" && test "$value" = "$expected"; then
+      matches=yes
+    fi
+  done < "$tmp"
+  rm -f "$tmp"
 }
 
 __rush_complete_systemctl_unit_names_by_property() {
@@ -94,8 +127,8 @@ __rush_complete_systemctl_unit_names_by_property() {
   shift 2
 
   scope=$(__rush_complete_systemctl_scope_args) || return
-  systemctl $scope show --no-pager --property="Id,$property" -- "$@" 2>/dev/null |
-    while IFS='=' read key value; do
+  SYSTEMD_COLORS= systemctl $scope show --no-pager --property="Id,$property" -- "$@" 2>/dev/null |
+    while IFS='=' read -r key value; do
       case "$key" in
         Id) unit=$value ;;
         "$property")
@@ -113,8 +146,8 @@ __rush_complete_systemctl_units() {
   __rush_complete_systemctl_unit_files
 }
 
-__rush_complete_systemctl_active_units() {
-  __rush_complete_systemctl_list_units
+__rush_complete_systemctl_active_service_units() {
+  __rush_complete_systemctl_list_units --type=service
 }
 
 __rush_complete_systemctl_failed_units() {
@@ -143,11 +176,11 @@ __rush_complete_systemctl_disabled_unit_files_and_files() {
 }
 
 __rush_complete_systemctl_enabled_unit_files() {
-  __rush_complete_systemctl_list_unit_files --state=enabled,enabled-runtime
+  __rush_complete_systemctl_list_unit_files --state=enabled,enabled-runtime,linked,linked-runtime,alias
 }
 
 __rush_complete_systemctl_enabled_or_disabled_unit_files() {
-  __rush_complete_systemctl_list_unit_files --state=enabled,enabled-runtime,disabled
+  __rush_complete_systemctl_list_unit_files --state=enabled,enabled-runtime,linked,linked-runtime,alias,disabled
 }
 
 __rush_complete_systemctl_masked_unit_files() {
@@ -162,6 +195,16 @@ __rush_complete_systemctl_socket_units() {
 __rush_complete_systemctl_timer_units() {
   __rush_complete_systemctl_list_units --type=timer
   __rush_complete_systemctl_list_unit_files --type=timer
+}
+
+__rush_complete_systemctl_automount_units() {
+  __rush_complete_systemctl_list_units --type=automount
+  __rush_complete_systemctl_list_unit_files --type=automount
+}
+
+__rush_complete_systemctl_path_units() {
+  __rush_complete_systemctl_list_units --type=path
+  __rush_complete_systemctl_list_unit_files --type=path
 }
 
 __rush_complete_systemctl_target_units() {
@@ -183,7 +226,8 @@ __rush_complete_systemctl_reloadable_units() {
 
 __rush_complete_systemctl_restartable_units() {
   units=$(
-    __rush_complete_systemctl_unit_names_from_list_unit_files --state=enabled,disabled,static
+    __rush_complete_systemctl_unit_names_from_list_unit_files \
+      --state=enabled,enabled-runtime,linked,linked-runtime,static,indirect,disabled,generated,transient
     __rush_complete_systemctl_unit_names_from_list_units
   )
   test -n "$units" || return
@@ -198,20 +242,114 @@ __rush_complete_systemctl_isolatable_units() {
 
 __rush_complete_systemctl_jobs() {
   scope=$(__rush_complete_systemctl_scope_args) || return
-  systemctl $scope --full --legend=no --no-pager --plain list-jobs 2>/dev/null |
-    while read job unit type state; do
-      case "$job" in ''|JOB) continue ;; esac
-      rush_complete candidate "$job" --kind plain --description "job for $unit" --priority 30
-      test -n "$unit" && rush_complete candidate "$unit" --kind plain --description "job $state" --priority 20
-    done
+  tmp=$(mktemp) || return
+  SYSTEMD_COLORS= systemctl $scope --full --legend=no --no-pager --plain list-jobs > "$tmp" 2>/dev/null
+  while read -r job unit type state; do
+    case "$job" in ''|JOB) continue ;; esac
+    rush_complete candidate "$job" --kind plain --description "job for $unit" --priority 30
+    test -n "$unit" && rush_complete candidate "$unit" --kind plain --description "job $state" --priority 20
+  done < "$tmp"
+  rm -f "$tmp"
 }
 
 __rush_complete_systemctl_environment_names() {
   scope=$(__rush_complete_systemctl_scope_args) || return
-  systemctl $scope show-environment 2>/dev/null |
-    while IFS='=' read name value; do
-      test -n "$name" && rush_complete candidate "$name" --kind plain --description 'manager variable'
-    done
+  tmp=$(mktemp) || return
+  SYSTEMD_COLORS= systemctl $scope show-environment > "$tmp" 2>/dev/null
+  while IFS='=' read -r name value; do
+    test -n "$name" && rush_complete candidate "$name" --kind plain --description 'manager variable'
+  done < "$tmp"
+  rm -f "$tmp"
+}
+
+__rush_complete_systemctl_environment_assignments() {
+  scope=$(__rush_complete_systemctl_scope_args) || return
+  tmp=$(mktemp) || return
+  SYSTEMD_COLORS= systemctl $scope show-environment > "$tmp" 2>/dev/null
+  while IFS='=' read -r name value; do
+    test -n "$name" && rush_complete candidate "$name=" --kind plain \
+      --description 'manager variable' --no-space
+  done < "$tmp"
+  rm -f "$tmp"
+}
+
+__rush_complete_systemctl_unit_types() {
+  tmp=$(mktemp) || return
+  SYSTEMD_COLORS= systemctl --type=help > "$tmp" 2>/dev/null
+  while read -r value rest; do
+    case "$value" in ''|Available) continue ;; esac
+    rush_complete candidate "$value" --kind plain --description 'unit type'
+  done < "$tmp"
+  rm -f "$tmp"
+}
+
+__rush_complete_systemctl_unit_states() {
+  tmp=$(mktemp) || return
+  SYSTEMD_COLORS= systemctl --state=help > "$tmp" 2>/dev/null
+  while read -r value rest; do
+    case "$value" in ''|Available) continue ;; esac
+    rush_complete candidate "$value" --kind plain --description 'unit state'
+  done < "$tmp"
+  rm -f "$tmp"
+}
+
+__rush_complete_systemctl_unit_properties() {
+  for binary in /usr/lib/systemd/systemd /lib/systemd/systemd; do
+    test -x "$binary" || continue
+    tmp=$(mktemp) || return
+    "$binary" --no-pager --dump-bus-properties > "$tmp" 2>/dev/null
+    while read -r property rest; do
+      test -n "$property" && rush_complete candidate "$property" --kind plain \
+        --description 'unit property'
+    done < "$tmp"
+    rm -f "$tmp"
+    return
+  done
+}
+
+__rush_complete_systemctl_machines() {
+  tmp=$(mktemp) || return
+  machinectl --no-legend --no-pager list --all > "$tmp" 2>/dev/null
+  while read -r machine class service os version addresses; do
+    test -n "$machine" && rush_complete candidate "$machine" --kind plain \
+      --description "${class:-machine}"
+  done < "$tmp"
+  rm -f "$tmp"
+}
+
+__rush_complete_systemctl_hosts() {
+  if test -r /etc/hosts; then
+    while read -r address name rest; do
+      case "$address" in ''|'#'*) continue ;; esac
+      test -n "$name" && rush_complete candidate "$name" --kind plain \
+        --description "host at $address"
+    done < /etc/hosts
+  fi
+
+  for config in "$HOME/.ssh/config" /etc/ssh/ssh_config; do
+    test -r "$config" || continue
+    while read -r keyword name rest; do
+      case "$keyword" in Host|host) ;; *) continue ;; esac
+      case "$name" in ''|*'*'*|*'?'*|*'!'*) continue ;; esac
+      rush_complete candidate "$name" --kind plain --description 'ssh host'
+    done < "$config"
+  done
+}
+
+__rush_complete_systemctl_boot_loader_entries() {
+  tmp=$(mktemp) || return
+  SYSTEMD_COLORS= systemctl --boot-loader-entry=help > "$tmp" 2>/dev/null
+  while read -r entry rest; do
+    test -n "$entry" && rush_complete candidate "$entry" --kind plain \
+      --description 'boot loader entry'
+  done < "$tmp"
+  rm -f "$tmp"
+}
+
+__rush_complete_systemctl_signals() {
+  for signal in $(kill -l 2>/dev/null); do
+    rush_complete candidate "$signal" --kind plain --description 'signal'
+  done
 }
 
 __rush_complete_systemctl_log_levels() {

@@ -27,12 +27,22 @@
         "inherit": false
       },
       {
+        "short": "C",
+        "long": "capsule",
+        "description": "connect to service manager of a capsule",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
         "short": "H",
         "long": "host",
         "description": "operate on remote host",
         "inherit": false,
         "value": {
-          "name": "[user@]host"
+          "name": "[user@]host",
+          "provider": "systemctl.hosts"
         }
       },
       {
@@ -41,7 +51,8 @@
         "description": "operate on a local container",
         "inherit": false,
         "value": {
-          "name": "container"
+          "name": "container",
+          "provider": "systemctl.machines"
         }
       },
       {
@@ -51,21 +62,7 @@
         "inherit": false,
         "value": {
           "name": "type",
-          "provider": {
-            "values": [
-              "service",
-              "socket",
-              "target",
-              "device",
-              "mount",
-              "automount",
-              "swap",
-              "timer",
-              "path",
-              "slice",
-              "scope"
-            ]
-          }
+          "provider": "systemctl.unit-types"
         }
       },
       {
@@ -74,21 +71,7 @@
         "inherit": false,
         "value": {
           "name": "state",
-          "provider": {
-            "values": [
-              "loaded",
-              "active",
-              "inactive",
-              "failed",
-              "running",
-              "exited",
-              "dead",
-              "enabled",
-              "disabled",
-              "masked",
-              "static"
-            ]
-          }
+          "provider": "systemctl.unit-states"
         }
       },
       {
@@ -102,13 +85,18 @@
         "description": "show only named properties",
         "inherit": false,
         "value": {
-          "name": "name"
+          "name": "name",
+          "provider": "systemctl.unit-properties"
         }
       },
       {
         "short": "P",
         "description": "equivalent to --value --property",
-        "inherit": false
+        "inherit": false,
+        "value": {
+          "name": "name",
+          "provider": "systemctl.unit-properties"
+        }
       },
       {
         "short": "a",
@@ -131,6 +119,16 @@
       {
         "long": "reverse",
         "description": "show reverse dependencies with 'list-dependencies'",
+        "inherit": false
+      },
+      {
+        "long": "before",
+        "description": "show units ordered before with list-dependencies",
+        "inherit": false
+      },
+      {
+        "long": "after",
+        "description": "show units ordered after with list-dependencies",
         "inherit": false
       },
       {
@@ -179,7 +177,14 @@
         "description": "specify if checking inhibitors before shutting down sleeping or hibernating",
         "inherit": false,
         "value": {
-          "name": "mode"
+          "name": "mode",
+          "provider": {
+            "values": [
+              "auto",
+              "yes",
+              "no"
+            ]
+          }
         }
       },
       {
@@ -188,7 +193,7 @@
         "inherit": false
       },
       {
-        "long": "kill-who",
+        "long": "kill-whom",
         "description": "whom to send signal to",
         "inherit": false,
         "value": {
@@ -197,9 +202,26 @@
             "values": [
               "main",
               "control",
+              "cgroup",
               "all"
             ]
           }
+        }
+      },
+      {
+        "long": "kill-value",
+        "description": "signal value to enqueue",
+        "inherit": false,
+        "value": {
+          "name": "integer"
+        }
+      },
+      {
+        "long": "kill-subgroup",
+        "description": "send signal to a sub-control group only",
+        "inherit": false,
+        "value": {
+          "name": "path"
         }
       },
       {
@@ -208,7 +230,8 @@
         "description": "which signal to send",
         "inherit": false,
         "value": {
-          "name": "signal"
+          "name": "signal",
+          "provider": "systemctl.signals"
         }
       },
       {
@@ -223,7 +246,9 @@
               "state",
               "cache",
               "logs",
-              "runtime"
+              "runtime",
+              "fdstore",
+              "switch-root"
             ]
           }
         }
@@ -245,6 +270,17 @@
         "inherit": false
       },
       {
+        "short": "v",
+        "long": "verbose",
+        "description": "show unit logs while executing operation",
+        "inherit": false
+      },
+      {
+        "long": "no-warn",
+        "description": "suppress warnings shown by default",
+        "inherit": false
+      },
+      {
         "long": "wait",
         "description": "for (re)start, wait until service stopped again. For is-system-running, wait until startup is completed",
         "inherit": false
@@ -258,6 +294,14 @@
         "long": "no-wall",
         "description": "don't send wall message before halt/power-off/reboot",
         "inherit": false
+      },
+      {
+        "long": "message",
+        "description": "human-readable reason for system shutdown",
+        "inherit": false,
+        "value": {
+          "name": "message"
+        }
       },
       {
         "long": "no-reload",
@@ -313,7 +357,14 @@
         "description": "apply only enable, only disable, or all presets",
         "inherit": false,
         "value": {
-          "name": "mode"
+          "name": "mode",
+          "provider": {
+            "values": [
+              "full",
+              "enable-only",
+              "disable-only"
+            ]
+          }
         }
       },
       {
@@ -323,6 +374,23 @@
         "value": {
           "name": "path",
           "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "image",
+        "description": "edit unit files in the specified disk image",
+        "inherit": false,
+        "value": {
+          "name": "path",
+          "provider": "builtin.files"
+        }
+      },
+      {
+        "long": "image-policy",
+        "description": "use a disk image dissection policy",
+        "inherit": false,
+        "value": {
+          "name": "policy"
         }
       },
       {
@@ -350,12 +418,15 @@
               "short-full",
               "short-monotonic",
               "short-unix",
+              "short-delta",
               "verbose",
               "export",
               "json",
               "json-pretty",
               "json-sse",
-              "cat"
+              "json-seq",
+              "cat",
+              "with-unit"
             ]
           }
         }
@@ -378,7 +449,24 @@
         "description": "boot into a specific boot loader entry on next boot",
         "inherit": false,
         "value": {
-          "name": "name"
+          "name": "name",
+          "provider": "systemctl.boot-loader-entries"
+        }
+      },
+      {
+        "long": "reboot-argument",
+        "description": "pass an argument string to reboot",
+        "inherit": false,
+        "value": {
+          "name": "argument"
+        }
+      },
+      {
+        "long": "kernel-cmdline",
+        "description": "append to the kernel command line",
+        "inherit": false,
+        "value": {
+          "name": "command-line"
         }
       },
       {
@@ -417,6 +505,34 @@
         "long": "marked",
         "description": "restart/reload previously marked units",
         "inherit": false
+      },
+      {
+        "long": "drop-in",
+        "description": "edit unit files using a named drop-in",
+        "inherit": false,
+        "value": {
+          "name": "name"
+        }
+      },
+      {
+        "long": "when",
+        "description": "schedule a shutdown action",
+        "inherit": false,
+        "value": {
+          "name": "time",
+          "provider": {
+            "values": [
+              "show",
+              "cancel",
+              "auto"
+            ]
+          }
+        }
+      },
+      {
+        "long": "stdin",
+        "description": "read edited unit file contents from stdin",
+        "inherit": false
       }
     ],
     "subcommands": [
@@ -430,6 +546,34 @@
               "index": 0,
               "repeatable": true,
               "provider": "systemctl.units"
+            }
+          ]
+        }
+      },
+      {
+        "name": "list-automounts",
+        "description": "list automount units ordered by path",
+        "arguments": {
+          "states": [
+            {
+              "name": "pattern",
+              "index": 0,
+              "repeatable": true,
+              "provider": "systemctl.automount-units"
+            }
+          ]
+        }
+      },
+      {
+        "name": "list-paths",
+        "description": "list path units ordered by path",
+        "arguments": {
+          "states": [
+            {
+              "name": "pattern",
+              "index": 0,
+              "repeatable": true,
+              "provider": "systemctl.path-units"
             }
           ]
         }
@@ -634,6 +778,10 @@
         }
       },
       {
+        "name": "enqueue-marked",
+        "description": "enqueue jobs for all marked units"
+      },
+      {
         "name": "reload-or-restart",
         "description": "reload one or more units if possible, otherwise start or restart",
         "arguments": {
@@ -805,7 +953,7 @@
             {
               "name": "service",
               "index": 0,
-              "provider": "systemctl.active-units"
+              "provider": "systemctl.active-service-units"
             },
             {
               "name": "level",
@@ -823,7 +971,7 @@
             {
               "name": "service",
               "index": 0,
-              "provider": "systemctl.active-units"
+              "provider": "systemctl.active-service-units"
             },
             {
               "name": "target",
@@ -843,6 +991,19 @@
               "index": 0,
               "repeatable": true,
               "provider": "systemctl.failed-units"
+            }
+          ]
+        }
+      },
+      {
+        "name": "whoami",
+        "description": "show which unit contains the caller or specified PIDs",
+        "arguments": {
+          "states": [
+            {
+              "name": "pid",
+              "index": 0,
+              "repeatable": true
             }
           ]
         }
@@ -922,7 +1083,11 @@
       },
       {
         "name": "preset-all",
-        "description": "enable/disable all unit files based on preset configuration",
+        "description": "enable/disable all unit files based on preset configuration"
+      },
+      {
+        "name": "is-enabled",
+        "description": "check whether unit files are enabled",
         "arguments": {
           "states": [
             {
@@ -1060,6 +1225,20 @@
         }
       },
       {
+        "name": "list-machines",
+        "description": "list local containers and host",
+        "arguments": {
+          "states": [
+            {
+              "name": "pattern",
+              "index": 0,
+              "repeatable": true,
+              "provider": "systemctl.machines"
+            }
+          ]
+        }
+      },
+      {
         "name": "list-jobs",
         "description": "list jobs",
         "arguments": {
@@ -1068,7 +1247,7 @@
               "name": "pattern",
               "index": 0,
               "repeatable": true,
-              "provider": "systemctl.jobs"
+              "provider": "systemctl.units"
             }
           ]
         }
@@ -1100,7 +1279,7 @@
               "name": "variable=value",
               "index": 0,
               "repeatable": true,
-              "provider": "systemctl.environment-names"
+              "provider": "systemctl.environment-assignments"
             }
           ]
         }
@@ -1177,7 +1356,11 @@
               "provider": {
                 "values": [
                   "true",
-                  "false"
+                  "false",
+                  "yes",
+                  "no",
+                  "1",
+                  "0"
                 ]
               },
               "index": 0
@@ -1218,6 +1401,10 @@
         "description": "shut down and reboot the system with kexec"
       },
       {
+        "name": "soft-reboot",
+        "description": "shut down and reboot userspace"
+      },
+      {
         "name": "exit",
         "description": "request user instance or container exit",
         "arguments": {
@@ -1248,6 +1435,10 @@
         }
       },
       {
+        "name": "sleep",
+        "description": "put the system to sleep"
+      },
+      {
         "name": "suspend",
         "description": "suspend the system"
       },
@@ -1274,8 +1465,8 @@
       "systemctl.units": {
         "function": "__rush_complete_systemctl_units"
       },
-      "systemctl.active-units": {
-        "function": "__rush_complete_systemctl_active_units"
+      "systemctl.active-service-units": {
+        "function": "__rush_complete_systemctl_active_service_units"
       },
       "systemctl.startable-units": {
         "function": "__rush_complete_systemctl_start_units"
@@ -1316,6 +1507,12 @@
       "systemctl.timer-units": {
         "function": "__rush_complete_systemctl_timer_units"
       },
+      "systemctl.automount-units": {
+        "function": "__rush_complete_systemctl_automount_units"
+      },
+      "systemctl.path-units": {
+        "function": "__rush_complete_systemctl_path_units"
+      },
       "systemctl.target-units": {
         "function": "__rush_complete_systemctl_target_units"
       },
@@ -1324,6 +1521,30 @@
       },
       "systemctl.environment-names": {
         "function": "__rush_complete_systemctl_environment_names"
+      },
+      "systemctl.environment-assignments": {
+        "function": "__rush_complete_systemctl_environment_assignments"
+      },
+      "systemctl.unit-types": {
+        "function": "__rush_complete_systemctl_unit_types"
+      },
+      "systemctl.unit-states": {
+        "function": "__rush_complete_systemctl_unit_states"
+      },
+      "systemctl.unit-properties": {
+        "function": "__rush_complete_systemctl_unit_properties"
+      },
+      "systemctl.machines": {
+        "function": "__rush_complete_systemctl_machines"
+      },
+      "systemctl.hosts": {
+        "function": "__rush_complete_systemctl_hosts"
+      },
+      "systemctl.boot-loader-entries": {
+        "function": "__rush_complete_systemctl_boot_loader_entries"
+      },
+      "systemctl.signals": {
+        "function": "__rush_complete_systemctl_signals"
       },
       "systemctl.log-levels": {
         "function": "__rush_complete_systemctl_log_levels"

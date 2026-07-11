@@ -305,7 +305,7 @@ fn completeFromManifest(
         null;
     // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
     const current = selectedCommand(command, analyzed.words[command_word_index + 1 ..], current_relative_word_index, providers) orelse command;
-    const semantic = semanticContext(analyzed, command_word_index, current);
+    const semantic = semanticContext(analyzed, command_word_index, command);
 
     if (semantic.complete_options) {
         try appendOptionCandidates(allocator, builder, current, analyzed.replace_start, analyzed.replace_end);
@@ -316,6 +316,7 @@ fn completeFromManifest(
             builder,
             analyzed,
             semantic,
+            command,
             current,
             providers,
             companion_path,
@@ -325,7 +326,19 @@ fn completeFromManifest(
 
     if (semantic.option_value_provider) |provider| {
         // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-        try appendProviderCandidates(allocator, io, sh, builder, analyzed, semantic, current, providers, provider, companion_path);
+        try appendProviderCandidates(
+            allocator,
+            io,
+            sh,
+            builder,
+            analyzed,
+            semantic,
+            command,
+            current,
+            providers,
+            provider,
+            companion_path,
+        );
         return true;
     }
 
@@ -337,7 +350,19 @@ fn completeFromManifest(
 
     if (argumentProvider(current, semantic.operand_index)) |provider| {
         // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-        try appendProviderCandidates(allocator, io, sh, builder, analyzed, semantic, current, providers, provider, companion_path);
+        try appendProviderCandidates(
+            allocator,
+            io,
+            sh,
+            builder,
+            analyzed,
+            semantic,
+            command,
+            current,
+            providers,
+            provider,
+            companion_path,
+        );
         return true;
     }
     return false;
@@ -351,24 +376,18 @@ const Semantic = struct {
     option_value_provider: ?std.json.Value = null,
 };
 
-fn semanticContext(analyzed: AnalyzedLine, command_word_index: usize, command: std.json.Value) Semantic {
+fn semanticContext(analyzed: AnalyzedLine, command_word_index: usize, root_command: std.json.Value) Semantic {
     var operand_index: usize = 0;
     var options_terminated = false;
     var pending_option_value: ?std.json.Value = null;
     var pending_option_word_index: ?usize = null;
+    var command = root_command;
+    var command_path: [16]std.json.Value = undefined;
+    command_path[0] = command;
+    var command_path_len: usize = 1;
     const current_word_index = analyzed.current_word_index orelse analyzed.words.len;
-    var skipped_selected_subcommand = false;
     for (analyzed.words[command_word_index + 1 ..], command_word_index + 1..) |word, absolute_index| {
         if (absolute_index >= current_word_index) break;
-        if (!skipped_selected_subcommand) {
-            if (commandName(command)) |name| {
-                if (std.mem.eql(u8, word.text, name)) {
-                    skipped_selected_subcommand = true;
-                    continue;
-                }
-            }
-            skipped_selected_subcommand = true;
-        }
         if (pending_option_value != null) {
             pending_option_value = null;
             pending_option_word_index = null;
@@ -379,13 +398,27 @@ fn semanticContext(analyzed: AnalyzedLine, command_word_index: usize, command: s
             continue;
         }
         if (!options_terminated and std.mem.startsWith(u8, word.text, "-")) {
-            if (optionForSpelling(command, word.text)) |option| {
-                if (jsonObjectField(option, "value")) |value| {
+            if (optionTokenForContext(command_path[0..command_path_len], word.text)) |parsed| {
+                if (jsonObjectField(parsed.option, "value")) |value| {
+                    if (parsed.value != null) continue;
                     pending_option_value = value;
                     pending_option_word_index = absolute_index;
                 }
             }
             continue;
+        }
+        if (!options_terminated) {
+            if (subcommandForName(command, null, word.text)) |subcommand| {
+                command = subcommand;
+                if (command_path_len == command_path.len) return .{
+                    .operand_index = operand_index,
+                    .options_terminated = options_terminated,
+                };
+                command_path[command_path_len] = command;
+                command_path_len += 1;
+                operand_index = 0;
+                continue;
+            }
         }
         operand_index += 1;
     }
@@ -416,12 +449,34 @@ fn selectedCommand(
     providers: ?std.json.Value,
 ) ?std.json.Value {
     var command = root;
+    var command_path: [16]std.json.Value = undefined;
+    command_path[0] = command;
+    var command_path_len: usize = 1;
+    var pending_option_value = false;
+    var options_terminated = false;
     const limit = if (current_word_index) |index| @min(index, words.len) else words.len;
     for (words, 0..) |word, relative_index| {
         if (relative_index >= limit) break;
-        if (std.mem.startsWith(u8, word.text, "-")) continue;
+        if (pending_option_value) {
+            pending_option_value = false;
+            continue;
+        }
+        if (std.mem.eql(u8, word.text, "--")) {
+            options_terminated = true;
+            continue;
+        }
+        if (!options_terminated and std.mem.startsWith(u8, word.text, "-")) {
+            if (optionTokenForContext(command_path[0..command_path_len], word.text)) |parsed| {
+                pending_option_value = parsed.value == null and jsonObjectField(parsed.option, "value") != null;
+            }
+            continue;
+        }
+        if (options_terminated) break;
         if (subcommandForName(command, providers, word.text)) |subcommand| {
             command = subcommand;
+            if (command_path_len == command_path.len) return command;
+            command_path[command_path_len] = command;
+            command_path_len += 1;
             continue;
         }
         break;
@@ -447,6 +502,7 @@ fn appendOptionProviderCandidates(
     builder: *Builder,
     analyzed: AnalyzedLine,
     semantic: Semantic,
+    root_command: std.json.Value,
     command: std.json.Value,
     providers: ?std.json.Value,
     companion_path: ?[]const u8,
@@ -461,6 +517,7 @@ fn appendOptionProviderCandidates(
             builder,
             analyzed,
             semantic,
+            root_command,
             command,
             providers,
             provider,
@@ -535,6 +592,7 @@ fn appendProviderCandidates(
     builder: *Builder,
     analyzed: AnalyzedLine,
     semantic: Semantic,
+    root_command: std.json.Value,
     command: std.json.Value,
     providers: ?std.json.Value,
     provider_ref: std.json.Value,
@@ -549,6 +607,7 @@ fn appendProviderCandidates(
                 builder,
                 analyzed,
                 semantic,
+                root_command,
                 command,
                 providers,
                 item,
@@ -564,7 +623,17 @@ fn appendProviderCandidates(
         if (jsonArrayField(provider, "values")) |values| return appendStaticValues(allocator, builder, analyzed, values);
         if (jsonStringField(provider, "function")) |function_name| {
             // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-            return appendFunctionProvider(allocator, io, sh, builder, analyzed, semantic, command, function_name, companion_path);
+            return appendFunctionProvider(
+                allocator,
+                io,
+                sh,
+                builder,
+                analyzed,
+                semantic,
+                root_command,
+                function_name,
+                companion_path,
+            );
         }
     } else if (jsonString(provider_ref)) |builtin_name| {
         if (std.mem.startsWith(u8, builtin_name, "builtin.")) {
@@ -622,15 +691,15 @@ fn appendFunctionProvider(
     builder: *Builder,
     analyzed: AnalyzedLine,
     semantic: Semantic,
-    command: std.json.Value,
+    root_command: std.json.Value,
     function_name: []const u8,
     companion_path: ?[]const u8,
 ) !void {
     if (companion_path) |path| try sourceCompanionIfNeeded(allocator, io, sh, path);
 
-    const parsed_options = try parsedOptionsForProvider(allocator, analyzed, command);
+    const parsed_options = try parsedOptionsForProvider(allocator, analyzed, root_command);
     defer allocator.free(parsed_options);
-    const operands = try operandsForProvider(allocator, analyzed, command);
+    const operands = try operandsForProvider(allocator, analyzed, root_command);
     defer allocator.free(operands);
     var provider_context = extensions.rush.CompletionContext.init(
         allocator,
@@ -671,32 +740,52 @@ fn appendFunctionProvider(
 fn parsedOptionsForProvider(
     allocator: std.mem.Allocator,
     analyzed: AnalyzedLine,
-    command: std.json.Value,
+    root_command: std.json.Value,
 ) ![]extensions.rush.CompletionParsedOption {
     // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
     const command_index = analyzed.command_word_index orelse return allocator.alloc(extensions.rush.CompletionParsedOption, 0);
     var options: std.ArrayList(extensions.rush.CompletionParsedOption) = .empty;
     errdefer options.deinit(allocator);
     var pending_index: ?usize = null;
-    var skipped_selected_subcommand = false;
+    var options_terminated = false;
+    var command = root_command;
+    var command_path: [16]std.json.Value = undefined;
+    command_path[0] = command;
+    var command_path_len: usize = 1;
     const current_word_index = analyzed.current_word_index orelse analyzed.words.len;
     for (analyzed.words[command_index + 1 ..], command_index + 1..) |word, absolute_index| {
         if (absolute_index >= current_word_index) break;
-        if (!skipped_selected_subcommand and wordMatchesCommandName(command, word.text)) {
-            skipped_selected_subcommand = true;
-            continue;
-        }
-        skipped_selected_subcommand = true;
         if (pending_index) |index| {
             options.items[index].value = word.text;
             pending_index = null;
             continue;
         }
-        if (!std.mem.startsWith(u8, word.text, "-")) continue;
-        const option = optionForSpelling(command, word.text) orelse continue;
-        const name = optionName(option, word.text);
-        try options.append(allocator, .{ .spelling = word.text, .name = name, .key = name });
-        if (jsonObjectField(option, "value") != null) pending_index = options.items.len - 1;
+        if (std.mem.eql(u8, word.text, "--")) {
+            options_terminated = true;
+            continue;
+        }
+        if (!options_terminated and std.mem.startsWith(u8, word.text, "-")) {
+            const parsed = optionTokenForContext(command_path[0..command_path_len], word.text) orelse continue;
+            const name = optionName(parsed.option, word.text);
+            try options.append(allocator, .{
+                .spelling = word.text,
+                .name = name,
+                .key = name,
+                .value = parsed.value,
+            });
+            if (parsed.value == null and jsonObjectField(parsed.option, "value") != null) {
+                pending_index = options.items.len - 1;
+            }
+            continue;
+        }
+        if (!options_terminated) {
+            if (subcommandForName(command, null, word.text)) |subcommand| {
+                command = subcommand;
+                if (command_path_len == command_path.len) break;
+                command_path[command_path_len] = command;
+                command_path_len += 1;
+            }
+        }
     }
     return options.toOwnedSlice(allocator);
 }
@@ -704,23 +793,47 @@ fn parsedOptionsForProvider(
 fn operandsForProvider(
     allocator: std.mem.Allocator,
     analyzed: AnalyzedLine,
-    command: std.json.Value,
+    root_command: std.json.Value,
 ) ![]extensions.rush.CompletionParsedOperand {
     // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
     const command_index = analyzed.command_word_index orelse return allocator.alloc(extensions.rush.CompletionParsedOperand, 0);
     var operands: std.ArrayList(extensions.rush.CompletionParsedOperand) = .empty;
     errdefer operands.deinit(allocator);
     var operand_index: usize = 0;
-    var skipped_selected_subcommand = false;
+    var pending_option_value = false;
+    var options_terminated = false;
+    var command = root_command;
+    var command_path: [16]std.json.Value = undefined;
+    command_path[0] = command;
+    var command_path_len: usize = 1;
     const current_word_index = analyzed.current_word_index orelse analyzed.words.len;
     for (analyzed.words[command_index + 1 ..], command_index + 1..) |word, absolute_index| {
         if (absolute_index >= current_word_index) break;
-        if (!skipped_selected_subcommand and wordMatchesCommandName(command, word.text)) {
-            skipped_selected_subcommand = true;
+        if (pending_option_value) {
+            pending_option_value = false;
             continue;
         }
-        skipped_selected_subcommand = true;
-        if (std.mem.startsWith(u8, word.text, "-")) continue;
+        if (std.mem.eql(u8, word.text, "--")) {
+            options_terminated = true;
+            continue;
+        }
+        if (!options_terminated and std.mem.startsWith(u8, word.text, "-")) {
+            if (optionTokenForContext(command_path[0..command_path_len], word.text)) |parsed| {
+                pending_option_value = parsed.value == null and jsonObjectField(parsed.option, "value") != null;
+            }
+            continue;
+        }
+        if (!options_terminated) {
+            if (subcommandForName(command, null, word.text)) |subcommand| {
+                command = subcommand;
+                if (command_path_len == command_path.len) break;
+                command_path[command_path_len] = command;
+                command_path_len += 1;
+                operands.clearRetainingCapacity();
+                operand_index = 0;
+                continue;
+            }
+        }
         try operands.append(allocator, .{ .value = word.text, .index = operand_index });
         operand_index += 1;
     }
@@ -757,6 +870,46 @@ fn optionForSpelling(command: std.json.Value, spelling: []const u8) ?std.json.Va
     const options = jsonArrayField(command, "options") orelse return null;
     for (options.items) |option| {
         if (optionMatchesSpelling(option, spelling)) return option;
+    }
+    return null;
+}
+
+const ParsedOptionToken = struct {
+    option: std.json.Value,
+    value: ?[]const u8 = null,
+};
+
+fn optionTokenForContext(command_path: []const std.json.Value, token: []const u8) ?ParsedOptionToken {
+    var index = command_path.len;
+    while (index > 0) {
+        index -= 1;
+        const options = jsonArrayField(command_path[index], "options") orelse continue;
+        for (options.items) |option| {
+            if (index + 1 != command_path.len and !(jsonBoolField(option, "inherit") orelse true)) continue;
+            if (optionToken(option, token)) |parsed| return parsed;
+        }
+    }
+    return null;
+}
+
+fn optionToken(option: std.json.Value, token: []const u8) ?ParsedOptionToken {
+    if (optionMatchesSpelling(option, token)) return .{ .option = option };
+    if (jsonObjectField(option, "value") == null) return null;
+
+    if (jsonStringField(option, "long")) |long| {
+        if (token.len >= long.len + 3 and
+            std.mem.eql(u8, token[0..2], "--") and
+            std.mem.eql(u8, token[2 .. long.len + 2], long) and
+            token[long.len + 2] == '=')
+        {
+            return .{ .option = option, .value = token[long.len + 3 ..] };
+        }
+    }
+    if (jsonStringField(option, "short")) |short| {
+        if (short.len == 1 and token.len > 2 and token[0] == '-' and token[1] == short[0]) {
+            const value = if (token[2] == '=') token[3..] else token[2..];
+            return .{ .option = option, .value = value };
+        }
     }
     return null;
 }
@@ -1241,6 +1394,71 @@ test "completion includes dynamic option provider candidates" {
         if (std.mem.eql(u8, candidate.value, "-Doptimize=ReleaseSafe")) return;
     }
     return error.ExpectedOptimizeReleaseSafeCandidate;
+}
+
+test "provider context preserves root options before a subcommand" {
+    const manifest =
+        \\{
+        \\  "name": "tool",
+        \\  "options": [
+        \\    { "long": "user", "inherit": false },
+        \\    { "long": "host", "inherit": false, "value": { "name": "host" } }
+        \\  ],
+        \\  "subcommands": [
+        \\    { "name": "stop", "arguments": { "states": [
+        \\      { "name": "unit", "index": 0, "repeatable": true }
+        \\    ] } }
+        \\  ]
+        \\}
+    ;
+    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, manifest, .{});
+    defer parsed.deinit();
+
+    const source = "tool --user --host example stop alpha ";
+    const analyzed = try analyzeLine(std.testing.allocator, source, source.len);
+    defer analyzed.deinit(std.testing.allocator);
+
+    const semantic = semanticContext(analyzed, analyzed.command_word_index.?, parsed.value);
+    try std.testing.expectEqual(@as(usize, 1), semantic.operand_index);
+
+    const options = try parsedOptionsForProvider(std.testing.allocator, analyzed, parsed.value);
+    defer std.testing.allocator.free(options);
+    try std.testing.expectEqual(@as(usize, 2), options.len);
+    try std.testing.expectEqualStrings("user", options[0].name);
+    try std.testing.expectEqualStrings("host", options[1].name);
+    try std.testing.expectEqualStrings("example", options[1].value.?);
+
+    const operands = try operandsForProvider(std.testing.allocator, analyzed, parsed.value);
+    defer std.testing.allocator.free(operands);
+    try std.testing.expectEqual(@as(usize, 1), operands.len);
+    try std.testing.expectEqualStrings("alpha", operands[0].value);
+    try std.testing.expectEqual(@as(usize, 0), operands[0].index);
+}
+
+test "manifest selection accepts attached root option values before a subcommand" {
+    const manifest =
+        \\{
+        \\  "name": "tool",
+        \\  "options": [
+        \\    { "long": "host", "value": { "name": "host" } }
+        \\  ],
+        \\  "subcommands": [ { "name": "stop" } ]
+        \\}
+    ;
+    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, manifest, .{});
+    defer parsed.deinit();
+
+    const source = "tool --host=example stop ";
+    const analyzed = try analyzeLine(std.testing.allocator, source, source.len);
+    defer analyzed.deinit(std.testing.allocator);
+    const words = analyzed.words[analyzed.command_word_index.? + 1 ..];
+    const current = selectedCommand(parsed.value, words, null, null).?;
+    try std.testing.expectEqualStrings("stop", commandName(current).?);
+
+    const options = try parsedOptionsForProvider(std.testing.allocator, analyzed, parsed.value);
+    defer std.testing.allocator.free(options);
+    try std.testing.expectEqual(@as(usize, 1), options.len);
+    try std.testing.expectEqualStrings("example", options[0].value.?);
 }
 
 test "z completion uses Rush frecent directory history" {
