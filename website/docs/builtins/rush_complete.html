@@ -28,6 +28,7 @@
 <span class="cmd">rush_complete</span> variables
 <span class="cmd">rush_complete</span> functions
 <span class="cmd">rush_complete</span> jobs
+<span class="cmd">rush_complete</span> history-directories
 <span class="cmd">rush_complete</span> option-present (<span class="opt">--long</span> <span class="var">name</span> | <span class="opt">--short</span> <span class="var">name</span>)
 <span class="cmd">rush_complete</span> option-values (<span class="opt">--long</span> <span class="var">name</span> | <span class="opt">--short</span> <span class="var">name</span>)
 <span class="cmd">rush_complete</span> operand <span class="var">index</span></pre>
@@ -45,6 +46,7 @@
     <dt><code>variables</code></dt><dd>Add variable-name candidates from the current shell state.</dd>
     <dt><code>functions</code></dt><dd>Add function-name candidates from the current shell state.</dd>
     <dt><code>jobs</code></dt><dd>Add job-spec candidates for active jobs in the current shell state.</dd>
+    <dt><code>history-directories</code></dt><dd>Add frecent directory keywords from Rush command history. Previous operands and the current prefix filter the matches using <code>z</code> semantics.</dd>
     <dt><code>option-present</code></dt><dd>Exit zero when the selected option is present in the parsed command line.</dd>
     <dt><code>option-values</code></dt><dd>Print values already provided for the selected option, one per line.</dd>
     <dt><code>operand</code></dt><dd>Print the parsed positional operand at the zero-based index.</dd>

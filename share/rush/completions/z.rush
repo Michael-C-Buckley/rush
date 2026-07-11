@@ -1,53 +1,16 @@
-__rush_complete_z_current_directories() {
-    for dir in */; do
-        [ -d "$dir" ] || continue
-        dir=${dir%/}
-        rush_complete candidate "$dir" --kind directory --description "$PWD/$dir" --priority 80
-    done
-}
-
-__rush_complete_z_data_file() {
-    if [ -n "$ZSHZ_DATA" ]; then
-        printf '%s\n' "$ZSHZ_DATA"
-    elif [ -n "$_Z_DATA" ]; then
-        printf '%s\n' "$_Z_DATA"
-    else
-        printf '%s/.z\n' "$HOME"
-    fi
-}
-
-__rush_complete_z_history() {
-    data_file=$(__rush_complete_z_data_file)
-    [ -r "$data_file" ] || return 0
-
-    while IFS='|' read -r path weight _time; do
-        [ -n "$path" ] || continue
-        [ -d "$path" ] || continue
-        name=${path##*/}
-        [ -n "$name" ] || name=$path
-        priority=40
-        case $weight in
-            ''|*[!0-9.]* ) ;;
-            * ) priority=60 ;;
-        esac
-        rush_complete candidate "$name" --kind directory --description "$path" --priority "$priority"
-    done < "$data_file"
-}
-
-__rush_complete_zoxide_directories() {
-    command -v zoxide >/dev/null 2>&1 || return 1
-    zoxide query --list --score 2>/dev/null | while IFS= read -r line; do
-        [ -n "$line" ] || continue
-        score=${line%% *}
-        path=${line#* }
-        [ -n "$path" ] || continue
-        name=${path##*/}
-        [ -n "$name" ] || name=$path
-        rush_complete candidate "$name" --kind directory --description "$path" --priority 70
-    done
-}
-
 __rush_complete_z_directories() {
-    __rush_complete_zoxide_directories || __rush_complete_z_history
-    __rush_complete_z_current_directories
+    if [ "$rush_completion_options_terminated" = true ]; then
+        rush_complete directories --append-slash
+        return
+    fi
+
+    case $rush_completion_prefix in
+        */*) rush_complete directories --append-slash ;;
+        *)
+            if [ "$rush_completion_argument_index" -eq 0 ]; then
+                rush_complete directories --append-slash
+            fi
+            rush_complete history-directories
+            ;;
+    esac
 }

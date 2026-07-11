@@ -3,19 +3,20 @@
   "manifestVersion": 1,
   "command": {
     "name": "z",
-    "description": "jump to frequently used directories",
+    "description": "jump to frecent directories",
     "options": [
-      { "short": "c", "description": "restrict matches to subdirectories of the current directory" },
-      { "short": "e", "description": "echo the best match without changing directory" },
-      { "short": "h", "description": "show help" },
-      { "short": "l", "description": "list matches only" },
-      { "short": "r", "description": "match by rank only" },
-      { "short": "t", "description": "match by recent access only" },
-      { "short": "x", "description": "remove the current directory from the data file" }
+      { "spellings": ["-"], "priority": 20, "description": "change to previous directory" }
     ],
     "arguments": {
+      "terminator": "--",
       "states": [
-        { "name": "directory", "index": 0, "repeatable": true, "provider": "z.directories" }
+        {
+          "name": "keyword",
+          "index": 0,
+          "repeatable": true,
+          "provider": "z.directories",
+          "description": "directory keyword or path"
+        }
       ]
     },
     "providers": {

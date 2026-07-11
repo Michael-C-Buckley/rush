@@ -6,6 +6,7 @@ const build_config = @import("build_config");
 const completion_path = @import("completion_path.zig");
 const editor_completion = @import("editor/completion.zig");
 const extensions = @import("extensions.zig");
+const history = @import("history.zig");
 const host = @import("host.zig");
 const shell = @import("shell.zig");
 
@@ -1240,6 +1241,42 @@ test "completion includes dynamic option provider candidates" {
         if (std.mem.eql(u8, candidate.value, "-Doptimize=ReleaseSafe")) return;
     }
     return error.ExpectedOptimizeReleaseSafeCandidate;
+}
+
+test "z completion uses Rush frecent directory history" {
+    var command_history = history.History.init(std.testing.allocator);
+    defer command_history.deinit();
+    command_history.current_cwd = "/work/mywebsite";
+    try command_history.addCommand(std.testing.io, "first", 0, 10, 1);
+    try command_history.addCommand(std.testing.io, "second", 0, 20, 1);
+    command_history.current_cwd = "/work/web-docs";
+    try command_history.addCommand(std.testing.io, "third", 0, 30, 1);
+    command_history.current_cwd = "work-web";
+    try command_history.addCommand(std.testing.io, "corrupt", 0, 40, 1);
+
+    var history_service = history.InteractiveHistoryService.init(&command_history);
+    var sh = shell.ShellWithBuiltins(host.RealHost, extensions.rush.registry).init(std.testing.allocator, .{}, .{});
+    defer sh.deinit();
+    sh.setCommandHistory(history_service.commandHistory(std.testing.io));
+    try sh.state.putVariable(.{ .name = "PWD", .value = "/work/current" });
+    try sh.state.putVariable(.{ .name = "HOME", .value = "/work" });
+
+    const source = "z work web";
+    var application = try complete(&sh, std.testing.allocator, std.testing.io, source, source.len);
+    defer application.deinit(std.testing.allocator);
+    const candidates = switch (application) {
+        .ambiguous => |candidates| candidates,
+        else => return error.ExpectedDirectoryHistoryCandidates,
+    };
+
+    try std.testing.expect(candidates.len >= 2);
+    try std.testing.expectEqualStrings("website", candidates[0].value);
+    try std.testing.expectEqualStrings("mywebsite", candidates[0].display.?);
+    try std.testing.expectEqualStrings("~/mywebsite", candidates[0].description.?);
+    try std.testing.expect(candidates[0].append_space);
+    for (candidates) |candidate| {
+        if (candidate.display) |display| try std.testing.expect(!std.mem.eql(u8, display, "work-web"));
+    }
 }
 
 test "completion uses provider arrays from nvim manifest" {

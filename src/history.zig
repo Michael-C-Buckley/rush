@@ -17,12 +17,33 @@ pub const HistoryEntry = struct {
     command: []const u8,
 };
 
+pub const DirectoryHistory = struct {
+    entries: []DirectoryEntry,
+
+    pub const DirectoryEntry = struct {
+        path: []const u8,
+    };
+
+    pub fn deinit(self: *DirectoryHistory, allocator: std.mem.Allocator) void {
+        for (self.entries) |entry| allocator.free(entry.path);
+        allocator.free(self.entries);
+        self.* = undefined;
+    }
+};
+
 pub const CommandHistory = struct {
     context: *anyopaque,
     io: std.Io,
     list: *const fn (*anyopaque, std.mem.Allocator) anyerror![]HistoryEntry,
     append: ?*const fn (*anyopaque, std.Io, []const u8, ExitStatus, i64, i64) anyerror!void = null,
     jump: ?*const fn (*anyopaque, std.mem.Allocator, []const []const u8, []const u8, i64) anyerror!?[]const u8 = null,
+    directories: ?*const fn (
+        *anyopaque,
+        std.mem.Allocator,
+        []const []const u8,
+        []const u8,
+        i64,
+    ) anyerror!DirectoryHistory = null,
     suppress_next_append: ?*const fn (*anyopaque) void = null,
     search: ?*const fn (*anyopaque, std.mem.Allocator, []const u8) anyerror![]HistoryEntry = null,
     delete_id: ?*const fn (*anyopaque, i64) anyerror!bool = null,
@@ -307,6 +328,31 @@ pub const History = struct {
             self.activeDatabaseId(),
         );
         return rankJumpDirectoryRecords(
+            allocator,
+            self.records.items,
+            terms,
+            exclude,
+            now,
+            self.activeMemoryId(),
+        );
+    }
+
+    pub fn rankDirectories(
+        self: *History,
+        allocator: std.mem.Allocator,
+        terms: []const []const u8,
+        exclude: []const u8,
+        now: i64,
+    ) !DirectoryHistory {
+        if (self.db) |db| return queryJumpDirectories(
+            allocator,
+            db,
+            terms,
+            exclude,
+            now,
+            self.activeDatabaseId(),
+        );
+        return rankDirectoryHistoryRecords(
             allocator,
             self.records.items,
             terms,
@@ -634,6 +680,7 @@ pub const InteractiveHistoryService = struct {
             .list = listFcEntries,
             .append = appendFcCommand,
             .jump = jumpDirectory,
+            .directories = rankDirectories,
             .suppress_next_append = suppressNextFcAppend,
             .search = searchCommandEntries,
             .delete_id = deleteCommandEntry,
@@ -725,6 +772,16 @@ pub const InteractiveHistoryService = struct {
         return self.history.jumpDirectory(allocator, terms, exclude, now);
     }
 
+    fn rankedDirectoryHistory(
+        self: *InteractiveHistoryService,
+        allocator: std.mem.Allocator,
+        terms: []const []const u8,
+        exclude: []const u8,
+        now: i64,
+    ) !DirectoryHistory {
+        return self.history.rankDirectories(allocator, terms, exclude, now);
+    }
+
     // ziglint-ignore: Z023 parameter order follows method or callback shape; preserve API
     fn listFcEntries(context: *anyopaque, allocator: std.mem.Allocator) ![]HistoryEntry {
         const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
@@ -754,6 +811,18 @@ pub const InteractiveHistoryService = struct {
     ) !?[]const u8 {
         const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
         return history_service.jumpDirectoryPath(allocator, terms, exclude, now);
+    }
+
+    fn rankDirectories(
+        context: *anyopaque,
+        // ziglint-ignore: Z023 parameter order follows CommandHistory.directories callback shape
+        allocator: std.mem.Allocator,
+        terms: []const []const u8,
+        exclude: []const u8,
+        now: i64,
+    ) !DirectoryHistory {
+        const history_service: *InteractiveHistoryService = @ptrCast(@alignCast(context));
+        return history_service.rankedDirectoryHistory(allocator, terms, exclude, now);
     }
 
     fn suppressNextFcAppend(context: *anyopaque) void {
@@ -937,22 +1006,8 @@ fn queryJumpDirectory(
     excluded_id: ?i64,
 ) !?[]const u8 {
     var stmt: ?*sqlite.sqlite3_stmt = null;
-    try sqliteCheck(sqlite.sqlite3_prepare_v2(
-        db,
-        \\select cwd, count(*), max(started_at) from history
-        \\where cwd <> '' and (?1 is null or id <> ?1)
-        \\group by cwd
-    ,
-        -1,
-        &stmt,
-        null,
-    ), db);
+    try prepareJumpDirectoryQuery(db, &stmt, excluded_id);
     defer _ = sqlite.sqlite3_finalize(stmt);
-    if (excluded_id) |id| {
-        try sqliteCheck(sqlite.sqlite3_bind_int64(stmt, 1, id), db);
-    } else {
-        try sqliteCheck(sqlite.sqlite3_bind_null(stmt, 1), db);
-    }
 
     var best: ?DirectoryJumpCandidate = null;
     var best_path: ?[]const u8 = null;
@@ -969,7 +1024,7 @@ fn queryJumpDirectory(
         };
         if (std.mem.eql(u8, candidate.path, exclude)) continue;
         if (!directoryJumpMatches(candidate.path, terms)) continue;
-        if (best == null or directoryJumpCandidateBefore(candidate, best.?, now)) {
+        if (best == null or directoryJumpCandidateBefore(now, candidate, best.?)) {
             const path = try allocator.dupe(u8, candidate.path);
             if (best_path) |old_path| allocator.free(old_path);
             best_path = path;
@@ -982,6 +1037,64 @@ fn queryJumpDirectory(
     return path;
 }
 
+fn queryJumpDirectories(
+    allocator: std.mem.Allocator,
+    db: *sqlite.sqlite3,
+    terms: []const []const u8,
+    exclude: []const u8,
+    now: i64,
+    excluded_id: ?i64,
+) !DirectoryHistory {
+    var stmt: ?*sqlite.sqlite3_stmt = null;
+    try prepareJumpDirectoryQuery(db, &stmt, excluded_id);
+    defer _ = sqlite.sqlite3_finalize(stmt);
+
+    var candidates: std.ArrayList(DirectoryJumpCandidate) = .empty;
+    errdefer {
+        for (candidates.items) |candidate| allocator.free(candidate.path);
+        candidates.deinit(allocator);
+    }
+    while (true) {
+        const rc = sqlite.sqlite3_step(stmt);
+        if (rc == sqlite.SQLITE_DONE) break;
+        if (rc != sqlite.SQLITE_ROW) try sqliteCheck(rc, db);
+        const cwd_text = sqlite.sqlite3_column_text(stmt, 0) orelse continue;
+        const path = std.mem.span(cwd_text);
+        if (std.mem.eql(u8, path, exclude)) continue;
+        if (!directoryJumpMatches(path, terms)) continue;
+        const owned_path = try allocator.dupe(u8, path);
+        candidates.append(allocator, .{
+            .path = owned_path,
+            .visits = sqlite.sqlite3_column_int64(stmt, 1),
+            .last_seen = sqlite.sqlite3_column_int64(stmt, 2),
+        }) catch |err| {
+            allocator.free(owned_path);
+            return err;
+        };
+    }
+    std.mem.sort(DirectoryJumpCandidate, candidates.items, now, directoryJumpCandidateBefore);
+    return directoryHistoryFromCandidates(allocator, &candidates);
+}
+
+fn prepareJumpDirectoryQuery(db: *sqlite.sqlite3, stmt: *?*sqlite.sqlite3_stmt, excluded_id: ?i64) !void {
+    try sqliteCheck(sqlite.sqlite3_prepare_v2(
+        db,
+        \\select cwd, count(*), max(started_at) from history
+        \\where cwd <> '' and (?1 is null or id <> ?1)
+        \\group by cwd
+    ,
+        -1,
+        stmt,
+        null,
+    ), db);
+    errdefer _ = sqlite.sqlite3_finalize(stmt.*);
+    if (excluded_id) |id| {
+        try sqliteCheck(sqlite.sqlite3_bind_int64(stmt.*, 1, id), db);
+    } else {
+        try sqliteCheck(sqlite.sqlite3_bind_null(stmt.*, 1), db);
+    }
+}
+
 fn rankJumpDirectoryRecords(
     allocator: std.mem.Allocator,
     records: []const History.HistoryRecord,
@@ -992,6 +1105,58 @@ fn rankJumpDirectoryRecords(
 ) !?[]const u8 {
     var candidates: std.StringHashMapUnmanaged(DirectoryJumpCandidate) = .empty;
     defer candidates.deinit(allocator);
+    try collectDirectoryHistoryRecords(allocator, &candidates, records, terms, exclude, excluded_memory_id);
+
+    var best: ?DirectoryJumpCandidate = null;
+    var iterator = candidates.valueIterator();
+    while (iterator.next()) |candidate| {
+        if (best == null or directoryJumpCandidateBefore(now, candidate.*, best.?)) best = candidate.*;
+    }
+    const candidate = best orelse return null;
+    return try allocator.dupe(u8, candidate.path);
+}
+
+fn rankDirectoryHistoryRecords(
+    allocator: std.mem.Allocator,
+    records: []const History.HistoryRecord,
+    terms: []const []const u8,
+    exclude: []const u8,
+    now: i64,
+    excluded_memory_id: ?u64,
+) !DirectoryHistory {
+    var candidates: std.StringHashMapUnmanaged(DirectoryJumpCandidate) = .empty;
+    defer candidates.deinit(allocator);
+    try collectDirectoryHistoryRecords(allocator, &candidates, records, terms, exclude, excluded_memory_id);
+
+    var ranked: std.ArrayList(DirectoryJumpCandidate) = .empty;
+    errdefer {
+        for (ranked.items) |candidate| allocator.free(candidate.path);
+        ranked.deinit(allocator);
+    }
+    var iterator = candidates.valueIterator();
+    while (iterator.next()) |candidate| {
+        const owned_path = try allocator.dupe(u8, candidate.path);
+        ranked.append(allocator, .{
+            .path = owned_path,
+            .visits = candidate.visits,
+            .last_seen = candidate.last_seen,
+        }) catch |err| {
+            allocator.free(owned_path);
+            return err;
+        };
+    }
+    std.mem.sort(DirectoryJumpCandidate, ranked.items, now, directoryJumpCandidateBefore);
+    return directoryHistoryFromCandidates(allocator, &ranked);
+}
+
+fn collectDirectoryHistoryRecords(
+    allocator: std.mem.Allocator,
+    candidates: *std.StringHashMapUnmanaged(DirectoryJumpCandidate),
+    records: []const History.HistoryRecord,
+    terms: []const []const u8,
+    exclude: []const u8,
+    excluded_memory_id: ?u64,
+) !void {
     for (records) |record| {
         if (excluded_memory_id == record.memory_id) continue;
         if (record.cwd.len == 0) continue;
@@ -1004,25 +1169,30 @@ fn rankJumpDirectoryRecords(
         result.value_ptr.visits += 1;
         result.value_ptr.last_seen = @max(result.value_ptr.last_seen, record.when);
     }
-
-    var best: ?DirectoryJumpCandidate = null;
-    var iterator = candidates.valueIterator();
-    while (iterator.next()) |candidate| {
-        if (best == null or directoryJumpCandidateBefore(candidate.*, best.?, now)) best = candidate.*;
-    }
-    const candidate = best orelse return null;
-    return try allocator.dupe(u8, candidate.path);
 }
 
 fn directoryJumpCandidateBefore(
+    now: i64,
     candidate: DirectoryJumpCandidate,
     best: DirectoryJumpCandidate,
-    now: i64,
 ) bool {
     const candidate_score = directoryJumpFrecencyScore(candidate, now);
     const best_score = directoryJumpFrecencyScore(best, now);
     if (candidate_score != best_score) return candidate_score > best_score;
     return false;
+}
+
+fn directoryHistoryFromCandidates(
+    allocator: std.mem.Allocator,
+    candidates: *std.ArrayList(DirectoryJumpCandidate),
+) !DirectoryHistory {
+    const entries = try allocator.alloc(DirectoryHistory.DirectoryEntry, candidates.items.len);
+    for (candidates.items, entries) |candidate, *entry| {
+        entry.* = .{ .path = candidate.path };
+    }
+    candidates.deinit(allocator);
+    candidates.* = .empty;
+    return .{ .entries = entries };
 }
 
 fn directoryJumpFrecencyScore(candidate: DirectoryJumpCandidate, now: i64) f64 {
@@ -2516,6 +2686,11 @@ test "history directory jump ranks frecent matching directories" {
         return error.TestExpectedEqual;
     defer std.testing.allocator.free(target);
     try std.testing.expectEqualStrings("/work/project-new", target);
+
+    var directories = try history.rankDirectories(std.testing.allocator, &.{"proj"}, "", 1_000);
+    defer directories.deinit(std.testing.allocator);
+    try std.testing.expectEqual(@as(usize, 3), directories.entries.len);
+    try std.testing.expectEqualStrings("/work/project-new", directories.entries[0].path);
 }
 
 test "history directory jump matches multiple terms in path order" {

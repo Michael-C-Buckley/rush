@@ -984,18 +984,45 @@ fn parsePromptPwdOptions(args: []const []const u8) ?PromptPwdOptions {
 
 // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
 fn formatPromptPwd(allocator: std.mem.Allocator, cwd: []const u8, maybe_home: ?[]const u8, options: PromptPwdOptions) ![]const u8 {
-    var display: []const u8 = cwd;
+    const display = try abbreviateHomePath(allocator, cwd, maybe_home);
+    const dir_length = options.dir_length orelse return display;
+    if (dir_length == 0) return display;
+    defer allocator.free(display);
+    return abbreviatePromptPath(allocator, display, dir_length, options.full_length_dirs);
+}
+
+fn abbreviateHomePath(
+    allocator: std.mem.Allocator,
+    path: []const u8,
+    maybe_home: ?[]const u8,
+) ![]const u8 {
     if (maybe_home) |home| {
-        if (home.len != 0 and std.mem.eql(u8, cwd, home)) {
-            display = "~";
-            // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-        } else if (home.len != 0 and std.mem.startsWith(u8, cwd, home) and cwd.len > home.len and cwd[home.len] == '/') {
-            display = try std.mem.concat(allocator, u8, &.{ "~", cwd[home.len..] });
+        var normalized_home = home;
+        while (normalized_home.len > 1 and normalized_home[normalized_home.len - 1] == '/') {
+            normalized_home = normalized_home[0 .. normalized_home.len - 1];
+        }
+        if (normalized_home.len != 0 and std.mem.eql(u8, path, normalized_home)) {
+            return allocator.dupe(u8, "~");
+        }
+        if (normalized_home.len != 0 and std.mem.startsWith(u8, path, normalized_home) and
+            (normalized_home.len == 1 or
+                (path.len > normalized_home.len and path[normalized_home.len] == '/')))
+        {
+            const suffix = if (normalized_home.len == 1) path else path[normalized_home.len..];
+            return std.mem.concat(allocator, u8, &.{ "~", suffix });
         }
     }
-    const dir_length = options.dir_length orelse return allocator.dupe(u8, display);
-    if (dir_length == 0) return allocator.dupe(u8, display);
-    return abbreviatePromptPath(allocator, display, dir_length, options.full_length_dirs);
+    return allocator.dupe(u8, path);
+}
+
+test "home path abbreviation preserves directory boundaries" {
+    const descendant = try abbreviateHomePath(std.testing.allocator, "/home/tim/project", "/home/tim/");
+    defer std.testing.allocator.free(descendant);
+    try std.testing.expectEqualStrings("~/project", descendant);
+
+    const sibling = try abbreviateHomePath(std.testing.allocator, "/home/timothy/project", "/home/tim");
+    defer std.testing.allocator.free(sibling);
+    try std.testing.expectEqualStrings("/home/timothy/project", sibling);
 }
 
 fn abbreviatePromptPath(
@@ -1125,6 +1152,7 @@ fn evalRushComplete(state: *State, sh: anytype, args: []const []const u8) !resul
     if (std.mem.eql(u8, args[1], "variables")) return rushCompleteNames(context, sh.state.variables, .variable, "variable");
     if (std.mem.eql(u8, args[1], "functions")) return rushCompleteFunctions(context, sh);
     if (std.mem.eql(u8, args[1], "jobs")) return rushCompleteJobs(context, sh);
+    if (std.mem.eql(u8, args[1], "history-directories")) return rushCompleteHistoryDirectories(context, sh, args);
     if (std.mem.eql(u8, args[1], "option-present")) return rushCompleteOptionPresent(context, args);
     if (std.mem.eql(u8, args[1], "option-values")) return rushCompleteOptionValues(context, sh, args);
     if (std.mem.eql(u8, args[1], "operand")) return rushCompleteOperand(context, sh, args);
@@ -1210,6 +1238,52 @@ fn rushCompleteJobs(context: *CompletionContext, sh: anytype) !result.EvalResult
         const value = try std.fmt.allocPrint(context.allocator, "%{d}", .{job.id});
         defer context.allocator.free(value);
         try appendCompletionCandidate(context, value, .plain, "job", 0);
+    }
+    return .{};
+}
+
+fn rushCompleteHistoryDirectories(
+    context: *CompletionContext,
+    sh: anytype,
+    args: []const []const u8,
+) !result.EvalResult {
+    if (args.len != 2) return .{ .status = 2 };
+    if (comptime !@hasField(@TypeOf(sh.*), "command_history")) return .{};
+    const command_history = sh.command_history orelse return .{};
+    const list_directories = command_history.directories orelse return .{};
+
+    var terms: std.ArrayList([]const u8) = .empty;
+    defer terms.deinit(context.allocator);
+    for (context.operands) |operand| try terms.append(context.allocator, operand.value);
+    if (context.prefix.len != 0) try terms.append(context.allocator, context.prefix);
+
+    const exclude = shellValue(sh, "PWD") orelse "";
+    const now = std.Io.Clock.real.now(command_history.io).toSeconds();
+    var directories = list_directories(
+        command_history.context,
+        context.allocator,
+        terms.items,
+        exclude,
+        now,
+    ) catch return .{};
+    defer directories.deinit(context.allocator);
+
+    for (directories.entries) |entry| {
+        if (entry.path.len == 0 or entry.path[0] != '/') continue;
+        const name = std.fs.path.basename(entry.path);
+        if (name.len == 0) continue;
+        const value = if (context.prefix.len == 0)
+            name
+        else suffix: {
+            const start = std.ascii.findIgnoreCase(name, context.prefix) orelse continue;
+            break :suffix name[start..];
+        };
+        const description = try abbreviateHomePath(context.allocator, entry.path, shellValue(sh, "HOME"));
+        defer context.allocator.free(description);
+        try appendCompletionCandidate(context, value, .directory, description, 0);
+        const candidate = &context.candidates.items[context.candidates.items.len - 1];
+        candidate.append_space = true;
+        if (!std.mem.eql(u8, value, name)) candidate.display = try context.allocator.dupe(u8, name);
     }
     return .{};
 }
