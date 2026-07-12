@@ -392,7 +392,12 @@ test "ShellWithBuiltins uses the supplied compile-time builtin registry" {
     defer shell.deinit();
 
     try std.testing.expect(shell.lookupBuiltin("printf") != null);
+    try std.testing.expect(shell.lookupBuiltin("history") != null);
     try std.testing.expectEqual(@as(?builtin.Definition, null), shell.lookupBuiltin("abbr"));
+
+    shell.state.options.mode = .posix;
+    try std.testing.expect(shell.lookupBuiltin("printf") != null);
+    try std.testing.expectEqual(@as(?builtin.Definition, null), shell.lookupBuiltin("history"));
 }
 
 test "Shell directory change callback reports only current-shell changes" {

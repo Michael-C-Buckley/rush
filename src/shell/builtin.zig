@@ -195,12 +195,6 @@ pub fn availableInMode(definition: Definition, mode: state_mod.Mode) bool {
     };
 }
 
-pub fn lookupInMode(name: []const u8, mode: state_mod.Mode) ?Definition {
-    const definition = lookup(name) orelse return null;
-    if (!availableInMode(definition, mode)) return null;
-    return definition;
-}
-
 pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !result.EvalResult {
     definition.validate();
     std.debug.assert(args.len != 0);
@@ -2992,9 +2986,6 @@ test "history builtin lists searches deletes and clears attached history" {
         (try eval(&shell, history_definition, &.{ "history", "bogus" })).status,
     );
     try std.testing.expect(std.mem.startsWith(u8, shell.host.stderr.items, "history: usage:"));
-
-    try std.testing.expect(lookupInMode("history", .posix) == null);
-    try std.testing.expect(lookupInMode("history", .bash) != null);
 }
 
 test "builtin eval returns utility status" {
