@@ -1146,8 +1146,7 @@ fn evalRushComplete(state: *State, sh: anytype, args: []const []const u8) !resul
     if (std.mem.eql(u8, args[1], "files")) return rushCompletePaths(context, sh, args, false);
     if (std.mem.eql(u8, args[1], "directories")) return rushCompletePaths(context, sh, args, true);
     if (std.mem.eql(u8, args[1], "aliases")) return rushCompleteNames(context, sh.state.aliases, .plain, "alias");
-    // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-    if (std.mem.eql(u8, args[1], "variables")) return rushCompleteNames(context, sh.state.variables, .variable, "variable");
+    if (std.mem.eql(u8, args[1], "variables")) return rushCompleteVariables(context, sh);
     if (std.mem.eql(u8, args[1], "functions")) return rushCompleteFunctions(context, sh);
     if (std.mem.eql(u8, args[1], "jobs")) return rushCompleteJobs(context, sh);
     if (std.mem.eql(u8, args[1], "history-directories")) return rushCompleteHistoryDirectories(context, sh, args);
@@ -1218,6 +1217,15 @@ fn rushCompletePaths(context: *CompletionContext, sh: anytype, args: []const []c
 fn rushCompleteNames(context: *CompletionContext, map: anytype, kind: completion.Kind, description: []const u8) !result.EvalResult {
     var iterator = map.iterator();
     while (iterator.next()) |entry| try appendCompletionCandidate(context, entry.key_ptr.*, kind, description, 0);
+    return .{};
+}
+
+fn rushCompleteVariables(context: *CompletionContext, sh: anytype) !result.EvalResult {
+    var iterator = sh.state.bindings.iterator();
+    while (iterator.next()) |entry| {
+        const variable = entry.value_ptr.variable() orelse continue;
+        try appendCompletionCandidate(context, variable.name, .variable, "variable", 0);
+    }
     return .{};
 }
 

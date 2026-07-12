@@ -1063,9 +1063,12 @@ fn appendAliasCandidates(allocator: std.mem.Allocator, builder: *Builder, sh: an
 
 // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
 fn appendVariableCandidates(allocator: std.mem.Allocator, builder: *Builder, sh: anytype, replace_start: usize, replace_end: usize) !void {
-    var iterator = sh.state.variables.iterator();
-    // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-    while (iterator.next()) |entry| try builder.append(allocator, .{ .value = entry.key_ptr.*, .kind = .variable, .replace_start = replace_start, .replace_end = replace_end, .append_space = false });
+    var iterator = sh.state.bindings.iterator();
+    while (iterator.next()) |entry| {
+        const variable = entry.value_ptr.variable() orelse continue;
+        // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
+        try builder.append(allocator, .{ .value = variable.name, .kind = .variable, .replace_start = replace_start, .replace_end = replace_end, .append_space = false });
+    }
 }
 
 // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup

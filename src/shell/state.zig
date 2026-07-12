@@ -90,12 +90,6 @@ pub const ArrayVariable = struct {
         }
         return null;
     }
-
-    fn deinit(self: ArrayVariable, allocator: std.mem.Allocator) void {
-        allocator.free(self.name);
-        for (self.elements) |element| allocator.free(element.value);
-        allocator.free(self.elements);
-    }
 };
 
 pub const ArrayAttributes = struct {
@@ -104,20 +98,77 @@ pub const ArrayAttributes = struct {
     integer: bool = false,
 };
 
+pub const Binding = struct {
+    name: []const u8,
+    value: Value,
+    exported: bool = false,
+    readonly: bool = false,
+    integer: bool = false,
+
+    pub const Value = union(enum) {
+        unset,
+        scalar: []const u8,
+        array: []ArrayElement,
+    };
+
+    pub fn variable(self: Binding) ?Variable {
+        const value = switch (self.value) {
+            .scalar => |value| value,
+            else => return null,
+        };
+        return .{
+            .name = self.name,
+            .value = value,
+            .exported = self.exported,
+            .readonly = self.readonly,
+            .integer = self.integer,
+        };
+    }
+
+    pub fn attributes(self: Binding) ?VariableAttributes {
+        if (self.value != .unset) return null;
+        return .{
+            .name = self.name,
+            .exported = self.exported,
+            .readonly = self.readonly,
+            .integer = self.integer,
+        };
+    }
+
+    pub fn array(self: Binding) ?ArrayVariable {
+        const elements = switch (self.value) {
+            .array => |elements| elements,
+            else => return null,
+        };
+        return .{
+            .name = self.name,
+            .elements = elements,
+            .exported = self.exported,
+            .readonly = self.readonly,
+            .integer = self.integer,
+        };
+    }
+
+    fn deinit(self: Binding, allocator: std.mem.Allocator) void {
+        allocator.free(self.name);
+        switch (self.value) {
+            .unset => {},
+            .scalar => |value| allocator.free(value),
+            .array => |elements| {
+                for (elements) |element| allocator.free(element.value);
+                allocator.free(elements);
+            },
+        }
+    }
+};
+
 const SavedLocalBinding = struct {
     name: []const u8,
-    variable: ?Variable = null,
-    attributes: ?VariableAttributes = null,
-    array: ?ArrayVariable = null,
+    binding: ?Binding,
 
     fn deinit(self: SavedLocalBinding, allocator: std.mem.Allocator) void {
         allocator.free(self.name);
-        if (self.variable) |variable| {
-            allocator.free(variable.name);
-            allocator.free(variable.value);
-        }
-        if (self.attributes) |attributes| allocator.free(attributes.name);
-        if (self.array) |array| array.deinit(allocator);
+        if (self.binding) |binding| binding.deinit(allocator);
     }
 };
 
@@ -221,9 +272,7 @@ pub const State = struct {
     allocator: std.mem.Allocator,
     definition_arena: memory.Arena,
     options: Options = .{},
-    variables: std.StringHashMapUnmanaged(Variable) = .empty,
-    arrays: std.StringHashMapUnmanaged(ArrayVariable) = .empty,
-    variable_attributes: std.StringHashMapUnmanaged(VariableAttributes) = .empty,
+    bindings: std.StringHashMapUnmanaged(Binding) = .empty,
     local_frames: std.ArrayListUnmanaged(LocalFrame) = .empty,
     function_call_stack: std.ArrayListUnmanaged(FunctionCallFrame) = .empty,
     functions: std.StringHashMapUnmanaged(Function) = .empty,
@@ -269,18 +318,9 @@ pub const State = struct {
     }
 
     pub fn deinit(self: *State) void {
-        var iterator = self.variables.iterator();
-        while (iterator.next()) |entry| {
-            self.allocator.free(entry.value_ptr.name);
-            self.allocator.free(entry.value_ptr.value);
-        }
-        self.variables.deinit(self.allocator);
-        var array_iterator = self.arrays.iterator();
-        while (array_iterator.next()) |entry| entry.value_ptr.deinit(self.allocator);
-        self.arrays.deinit(self.allocator);
-        var attributes_iterator = self.variable_attributes.iterator();
-        while (attributes_iterator.next()) |entry| self.allocator.free(entry.value_ptr.name);
-        self.variable_attributes.deinit(self.allocator);
+        var binding_iterator = self.bindings.valueIterator();
+        while (binding_iterator.next()) |binding| binding.deinit(self.allocator);
+        self.bindings.deinit(self.allocator);
         for (self.local_frames.items) |*frame| frame.deinit(self.allocator);
         self.local_frames.deinit(self.allocator);
         self.function_call_stack.deinit(self.allocator);
@@ -322,17 +362,24 @@ pub const State = struct {
 
     pub fn getVariable(self: State, name: []const u8) ?Variable {
         std.debug.assert(name.len != 0);
-        return self.variables.get(name);
+        const binding = self.bindings.get(name) orelse return null;
+        return binding.variable();
     }
 
     pub fn getArray(self: State, name: []const u8) ?ArrayVariable {
         std.debug.assert(name.len != 0);
-        return self.arrays.get(name);
+        const binding = self.bindings.get(name) orelse return null;
+        return binding.array();
     }
 
     pub fn getVariableAttributes(self: State, name: []const u8) ?VariableAttributes {
         std.debug.assert(name.len != 0);
-        return self.variable_attributes.get(name);
+        const binding = self.bindings.get(name) orelse return null;
+        return binding.attributes();
+    }
+
+    fn getBindingPtr(self: *State, name: []const u8) ?*Binding {
+        return self.bindings.getPtr(name);
     }
 
     pub fn resetStartTime(self: *State, now_ns: i128) void {
@@ -387,43 +434,39 @@ pub const State = struct {
         const owned_value = try self.allocator.dupe(u8, variable.value);
         errdefer self.allocator.free(owned_value);
 
-        if (self.variables.getPtr(variable.name)) |existing| {
-            if (existing.readonly and !std.mem.eql(u8, existing.value, variable.value)) return error.ReadonlyVariable;
-            self.allocator.free(existing.value);
-            existing.value = owned_value;
-            existing.exported = variable.exported or (attributes != null and attributes.?.exported);
-            existing.readonly = variable.readonly or (attributes != null and attributes.?.readonly);
-            existing.integer = existing.integer or variable.integer or (attributes != null and attributes.?.integer);
-            self.removeVariableAttributes(variable.name);
-            self.clearFunctionAutoloadMissesIfSearchVariable(variable.name);
-            return;
-        }
-
-        self.removeArray(variable.name);
+        if (self.getBindingPtr(variable.name)) |binding| switch (binding.value) {
+            .scalar => |existing| {
+                if (binding.readonly and !std.mem.eql(u8, existing, variable.value)) return error.ReadonlyVariable;
+                self.allocator.free(existing);
+                binding.value = .{ .scalar = owned_value };
+                binding.exported = variable.exported;
+                binding.readonly = variable.readonly;
+                binding.integer = binding.integer or variable.integer;
+                self.clearFunctionAutoloadMissesIfSearchVariable(variable.name);
+                return;
+            },
+            else => {},
+        };
 
         const owned_name = try self.allocator.dupe(u8, variable.name);
         errdefer self.allocator.free(owned_name);
 
-        try self.variables.put(self.allocator, owned_name, .{
+        self.removeVariable(variable.name);
+        try self.bindings.put(self.allocator, owned_name, .{
             .name = owned_name,
-            .value = owned_value,
+            .value = .{ .scalar = owned_value },
             .exported = variable.exported or (attributes != null and attributes.?.exported),
             .readonly = variable.readonly or (attributes != null and attributes.?.readonly),
             .integer = variable.integer or (attributes != null and attributes.?.integer),
         });
-        self.removeVariableAttributes(variable.name);
-        self.clearFunctionAutoloadMissesIfSearchVariable(variable.name);
+        self.clearFunctionAutoloadMissesIfSearchVariable(owned_name);
     }
 
     pub fn removeVariable(self: *State, name: []const u8) void {
         std.debug.assert(name.len != 0);
-        if (self.variables.fetchRemove(name)) |entry| {
-            self.allocator.free(entry.value.name);
-            self.allocator.free(entry.value.value);
-        }
-        self.removeArray(name);
-        self.removeVariableAttributes(name);
-        self.clearFunctionAutoloadMissesIfSearchVariable(name);
+        const clears_autoload_misses = functionAutoloadSearchUsesVariable(name);
+        if (self.bindings.fetchRemove(name)) |entry| entry.value.deinit(self.allocator);
+        if (clears_autoload_misses) self.clearFunctionAutoloadMisses();
     }
 
     pub fn putArray(self: *State, name: []const u8, values: []const []const u8) !void {
@@ -456,16 +499,14 @@ pub const State = struct {
             (attributes != null and attributes.?.integer) or declared.integer;
 
         self.removeVariable(name);
-        self.removeArray(name);
-        try self.arrays.put(self.allocator, owned_name, .{
+        try self.bindings.put(self.allocator, owned_name, .{
             .name = owned_name,
-            .elements = owned_elements,
+            .value = .{ .array = owned_elements },
             .exported = exported,
             .readonly = readonly,
             .integer = integer,
         });
-        self.removeVariableAttributes(name);
-        self.clearFunctionAutoloadMissesIfSearchVariable(name);
+        self.clearFunctionAutoloadMissesIfSearchVariable(owned_name);
     }
 
     pub fn putArrayElements(self: *State, name: []const u8, elements: []const ArrayElement) !void {
@@ -515,65 +556,60 @@ pub const State = struct {
         var value_transferred = false;
         errdefer if (!value_transferred) self.allocator.free(owned_value);
 
-        if (self.arrays.getPtr(name)) |array| {
-            try self.putExistingArrayElement(array, index, owned_value);
-            value_transferred = true;
-            return;
-        }
+        if (self.getBindingPtr(name)) |binding| switch (binding.value) {
+            .array => |*elements| {
+                try self.putExistingArrayElement(elements, index, owned_value);
+                value_transferred = true;
+                return;
+            },
+            else => {},
+        };
 
-        self.removeVariable(name);
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
         const elements = try self.allocator.alloc(ArrayElement, 1);
         errdefer self.allocator.free(elements);
         elements[0] = .{ .index = index, .value = owned_value };
         value_transferred = true;
-        try self.arrays.put(self.allocator, owned_name, .{
+        self.removeVariable(name);
+        try self.bindings.put(self.allocator, owned_name, .{
             .name = owned_name,
-            .elements = elements,
+            .value = .{ .array = elements },
             .exported = (attributes != null and attributes.?.exported) or (variable != null and variable.?.exported),
             .integer = (attributes != null and attributes.?.integer) or (variable != null and variable.?.integer),
         });
-        self.removeVariableAttributes(name);
-        self.clearFunctionAutoloadMissesIfSearchVariable(name);
+        self.clearFunctionAutoloadMissesIfSearchVariable(owned_name);
     }
 
     pub fn putArrayAttributes(self: *State, attributes: VariableAttributes) !void {
-        attributes.validate();
-        if (self.arrays.getPtr(attributes.name)) |array| {
-            array.exported = array.exported or attributes.exported;
-            array.readonly = array.readonly or attributes.readonly;
-            array.integer = array.integer or attributes.integer;
-            self.removeVariableAttributes(attributes.name);
-            self.clearFunctionAutoloadMissesIfSearchVariable(attributes.name);
-            return;
-        }
+        const updates_array = self.getArray(attributes.name) != null;
         try self.putVariableAttributes(attributes);
+        if (updates_array) self.clearFunctionAutoloadMissesIfSearchVariable(attributes.name);
     }
 
-    fn putExistingArrayElement(self: *State, array: *ArrayVariable, index: usize, owned_value: []const u8) !void {
-        for (array.elements, 0..) |*element, element_index| {
+    fn putExistingArrayElement(self: *State, elements: *[]ArrayElement, index: usize, owned_value: []const u8) !void {
+        for (elements.*, 0..) |*element, element_index| {
             if (element.index == index) {
                 self.allocator.free(element.value);
                 element.value = owned_value;
                 return;
             }
             if (element.index > index) {
-                try self.insertArrayElement(array, element_index, .{ .index = index, .value = owned_value });
+                try self.insertArrayElement(elements, element_index, .{ .index = index, .value = owned_value });
                 return;
             }
         }
-        try self.insertArrayElement(array, array.elements.len, .{ .index = index, .value = owned_value });
+        try self.insertArrayElement(elements, elements.len, .{ .index = index, .value = owned_value });
     }
 
-    fn insertArrayElement(self: *State, array: *ArrayVariable, insert_index: usize, element: ArrayElement) !void {
-        std.debug.assert(insert_index <= array.elements.len);
-        const resized = try self.allocator.alloc(ArrayElement, array.elements.len + 1);
-        @memcpy(resized[0..insert_index], array.elements[0..insert_index]);
+    fn insertArrayElement(self: *State, elements: *[]ArrayElement, insert_index: usize, element: ArrayElement) !void {
+        std.debug.assert(insert_index <= elements.len);
+        const resized = try self.allocator.alloc(ArrayElement, elements.len + 1);
+        @memcpy(resized[0..insert_index], elements.*[0..insert_index]);
         resized[insert_index] = element;
-        @memcpy(resized[insert_index + 1 ..], array.elements[insert_index..]);
-        self.allocator.free(array.elements);
-        array.elements = resized;
+        @memcpy(resized[insert_index + 1 ..], elements.*[insert_index..]);
+        self.allocator.free(elements.*);
+        elements.* = resized;
     }
 
     fn dupeArrayValues(self: *State, values: []const []const u8) ![]ArrayElement {
@@ -610,20 +646,27 @@ pub const State = struct {
     }
 
     pub fn removeArray(self: *State, name: []const u8) void {
-        if (self.arrays.fetchRemove(name)) |entry| entry.value.deinit(self.allocator);
+        const binding = self.bindings.get(name) orelse return;
+        if (binding.value != .array) return;
+        const removed = self.bindings.fetchRemove(name).?;
+        removed.value.deinit(self.allocator);
     }
 
     pub fn removeArrayElement(self: *State, name: []const u8, index: usize) !void {
-        const array = self.arrays.getPtr(name) orelse return;
-        for (array.elements, 0..) |element, element_index| {
+        const binding = self.getBindingPtr(name) orelse return;
+        const elements = switch (binding.value) {
+            .array => |*elements| elements,
+            else => return,
+        };
+        for (elements.*, 0..) |element, element_index| {
             if (element.index == index) {
-                const old_elements = array.elements;
+                const old_elements = elements.*;
                 const new_elements = try self.allocator.alloc(ArrayElement, old_elements.len - 1);
                 @memcpy(new_elements[0..element_index], old_elements[0..element_index]);
                 @memcpy(new_elements[element_index..], old_elements[element_index + 1 ..]);
                 self.allocator.free(element.value);
                 self.allocator.free(old_elements);
-                array.elements = new_elements;
+                elements.* = new_elements;
                 self.clearFunctionAutoloadMissesIfSearchVariable(name);
                 return;
             }
@@ -633,28 +676,17 @@ pub const State = struct {
 
     pub fn putVariableAttributes(self: *State, attributes: VariableAttributes) !void {
         attributes.validate();
-        if (self.variables.getPtr(attributes.name)) |variable| {
-            variable.exported = variable.exported or attributes.exported;
-            variable.readonly = variable.readonly or attributes.readonly;
-            variable.integer = variable.integer or attributes.integer;
-            return;
-        }
-        if (self.arrays.getPtr(attributes.name)) |array| {
-            array.exported = array.exported or attributes.exported;
-            array.readonly = array.readonly or attributes.readonly;
-            array.integer = array.integer or attributes.integer;
-            return;
-        }
-        if (self.variable_attributes.getPtr(attributes.name)) |existing| {
-            existing.exported = existing.exported or attributes.exported;
-            existing.readonly = existing.readonly or attributes.readonly;
-            existing.integer = existing.integer or attributes.integer;
+        if (self.bindings.getPtr(attributes.name)) |binding| {
+            binding.exported = binding.exported or attributes.exported;
+            binding.readonly = binding.readonly or attributes.readonly;
+            binding.integer = binding.integer or attributes.integer;
             return;
         }
         const owned_name = try self.allocator.dupe(u8, attributes.name);
         errdefer self.allocator.free(owned_name);
-        try self.variable_attributes.put(self.allocator, owned_name, .{
+        try self.bindings.put(self.allocator, owned_name, .{
             .name = owned_name,
+            .value = .unset,
             .exported = attributes.exported,
             .readonly = attributes.readonly,
             .integer = attributes.integer,
@@ -662,7 +694,10 @@ pub const State = struct {
     }
 
     pub fn removeVariableAttributes(self: *State, name: []const u8) void {
-        if (self.variable_attributes.fetchRemove(name)) |entry| self.allocator.free(entry.value.name);
+        const binding = self.bindings.get(name) orelse return;
+        if (binding.value != .unset) return;
+        const removed = self.bindings.fetchRemove(name).?;
+        removed.value.deinit(self.allocator);
     }
 
     pub fn pushLocalFrame(self: *State, assignment_prefixes: []const []const u8) !void {
@@ -688,9 +723,7 @@ pub const State = struct {
     pub fn popLocalFrame(self: *State) !void {
         std.debug.assert(self.local_frames.items.len != 0);
         const saved_count = self.local_frames.items[self.local_frames.items.len - 1].saved.count();
-        try self.variables.ensureUnusedCapacity(self.allocator, saved_count);
-        try self.variable_attributes.ensureUnusedCapacity(self.allocator, saved_count);
-        try self.arrays.ensureUnusedCapacity(self.allocator, saved_count);
+        try self.bindings.ensureUnusedCapacity(self.allocator, saved_count);
 
         var frame = self.local_frames.pop().?;
         defer frame.deinit(self.allocator);
@@ -700,25 +733,10 @@ pub const State = struct {
     }
 
     fn restoreSavedBinding(self: *State, binding: *SavedLocalBinding) void {
-        // A name lives in at most one value map: putVariable and putArray
-        // remove each other, and putVariableAttributes only inserts when no
-        // scalar variable exists.
-        std.debug.assert(binding.variable == null or binding.attributes == null);
-        std.debug.assert(binding.variable == null or binding.array == null);
-        std.debug.assert(binding.attributes == null or binding.array == null);
         self.removeVariable(binding.name);
-        self.removeArray(binding.name);
-        if (binding.variable) |variable| {
-            self.variables.putAssumeCapacity(variable.name, variable);
-            binding.variable = null;
-            self.clearFunctionAutoloadMissesIfSearchVariable(variable.name);
-        } else if (binding.attributes) |attributes| {
-            self.variable_attributes.putAssumeCapacity(attributes.name, attributes);
-            binding.attributes = null;
-        } else if (binding.array) |array| {
-            self.arrays.putAssumeCapacity(array.name, array);
-            binding.array = null;
-            self.clearFunctionAutoloadMissesIfSearchVariable(array.name);
+        if (binding.binding) |saved| {
+            self.bindings.putAssumeCapacity(saved.name, saved);
+            binding.binding = null;
         }
     }
 
@@ -807,53 +825,30 @@ pub const State = struct {
         const owned_name = try self.allocator.dupe(u8, name);
         errdefer self.allocator.free(owned_name);
 
-        const variable = if (self.getVariable(name)) |existing| variable: {
-            const owned_variable_name = try self.allocator.dupe(u8, existing.name);
-            errdefer self.allocator.free(owned_variable_name);
-            const owned_value = try self.allocator.dupe(u8, existing.value);
-            errdefer self.allocator.free(owned_value);
-            break :variable Variable{
-                .name = owned_variable_name,
-                .value = owned_value,
-                .exported = existing.exported,
-                .readonly = existing.readonly,
-                .integer = existing.integer,
-            };
-        } else null;
-        errdefer if (variable) |saved_variable| {
-            self.allocator.free(saved_variable.name);
-            self.allocator.free(saved_variable.value);
-        };
-
-        const attributes = if (self.getVariableAttributes(name)) |existing| attributes: {
-            const owned_attributes_name = try self.allocator.dupe(u8, existing.name);
-            errdefer self.allocator.free(owned_attributes_name);
-            break :attributes VariableAttributes{
-                .name = owned_attributes_name,
-                .exported = existing.exported,
-                .readonly = existing.readonly,
-                .integer = existing.integer,
-            };
-        } else null;
-        errdefer if (attributes) |saved_attributes| self.allocator.free(saved_attributes.name);
-
-        const array = if (self.getArray(name)) |existing| array: {
-            break :array ArrayVariable{
-                .name = try self.allocator.dupe(u8, existing.name),
-                .elements = try self.dupeArrayElements(existing.elements),
-                .exported = existing.exported,
-                .readonly = existing.readonly,
-                .integer = existing.integer,
-            };
-        } else null;
-        errdefer if (array) |saved_array| saved_array.deinit(self.allocator);
+        const binding = if (self.bindings.get(name)) |existing| try self.dupeBinding(existing) else null;
+        errdefer if (binding) |saved| saved.deinit(self.allocator);
 
         try frame.saved.put(self.allocator, owned_name, .{
             .name = owned_name,
-            .variable = variable,
-            .attributes = attributes,
-            .array = array,
+            .binding = binding,
         });
+    }
+
+    fn dupeBinding(self: *State, binding: Binding) !Binding {
+        const name = try self.allocator.dupe(u8, binding.name);
+        errdefer self.allocator.free(name);
+        const value: Binding.Value = switch (binding.value) {
+            .unset => .unset,
+            .scalar => |value| .{ .scalar = try self.allocator.dupe(u8, value) },
+            .array => |elements| .{ .array = try self.dupeArrayElements(elements) },
+        };
+        return .{
+            .name = name,
+            .value = value,
+            .exported = binding.exported,
+            .readonly = binding.readonly,
+            .integer = binding.integer,
+        };
     }
 
     pub fn pushFunctionCall(self: *State, function: Function) !void {

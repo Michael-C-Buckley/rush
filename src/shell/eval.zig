@@ -2744,9 +2744,9 @@ fn makeEnvBuiltinEntries(
     const exported_count = countExportedVariables(shell);
     const entries = try allocator.alloc(AssignmentEnvEntry, exported_count + assignments.len + env_operands.len);
     var entry_count: usize = 0;
-    var variable_iterator = shell.state.variables.iterator();
+    var variable_iterator = shell.state.bindings.iterator();
     while (variable_iterator.next()) |entry| {
-        const variable = entry.value_ptr.*;
+        const variable = entry.value_ptr.variable() orelse continue;
         if (!variable.exported) continue;
         entries[entry_count] = .{ .name = variable.name, .value = variable.value };
         entry_count += 1;
@@ -4060,9 +4060,9 @@ fn declarationName(id: builtin.Id) []const u8 {
 }
 
 fn evalDeclarationList(shell: anytype, id: builtin.Id) !result.EvalResult {
-    var attributes_iterator = shell.state.variable_attributes.iterator();
+    var attributes_iterator = shell.state.bindings.iterator();
     while (attributes_iterator.next()) |entry| {
-        const attributes = entry.value_ptr.*;
+        const attributes = entry.value_ptr.attributes() orelse continue;
         const include = switch (id) {
             .declare, .typeset => true,
             .export_ => attributes.exported,
@@ -4081,9 +4081,9 @@ fn evalDeclarationList(shell: anytype, id: builtin.Id) !result.EvalResult {
         );
     }
 
-    var iterator = shell.state.variables.iterator();
+    var iterator = shell.state.bindings.iterator();
     while (iterator.next()) |entry| {
-        const variable = entry.value_ptr.*;
+        const variable = entry.value_ptr.variable() orelse continue;
         const include = switch (id) {
             .declare, .typeset => true,
             .export_ => variable.exported,
@@ -4102,8 +4102,11 @@ fn evalDeclarationList(shell: anytype, id: builtin.Id) !result.EvalResult {
         );
     }
     if (id == .declare or id == .typeset) {
-        var array_iterator = shell.state.arrays.iterator();
-        while (array_iterator.next()) |entry| try writeArrayDeclarationEntry(shell, id, entry.value_ptr.*);
+        var array_iterator = shell.state.bindings.iterator();
+        while (array_iterator.next()) |entry| {
+            const array = entry.value_ptr.array() orelse continue;
+            try writeArrayDeclarationEntry(shell, id, array);
+        }
     }
     return .{};
 }
@@ -8874,9 +8877,9 @@ fn makeExecEnvp(shell: anytype, assignments: []const ast.Assignment) ![:null]con
     const allocator = shell.scratchAllocator();
     const assignment_entries = try allocator.alloc(AssignmentEnvEntry, exported_count + assignments.len);
     var entry_count: usize = 0;
-    var variable_iterator = shell.state.variables.iterator();
+    var variable_iterator = shell.state.bindings.iterator();
     while (variable_iterator.next()) |entry| {
-        const variable = entry.value_ptr.*;
+        const variable = entry.value_ptr.variable() orelse continue;
         if (!variable.exported) continue;
         assignment_entries[entry_count] = .{ .name = variable.name, .value = variable.value };
         entry_count += 1;
@@ -8927,9 +8930,10 @@ fn makeEnvpFromEntries(shell: anytype, assignment_entries: []const AssignmentEnv
 
 fn countExportedVariables(shell: anytype) usize {
     var count: usize = 0;
-    var iterator = shell.state.variables.iterator();
-    while (iterator.next()) |entry| {
-        if (entry.value_ptr.exported) count += 1;
+    var iterator = shell.state.bindings.valueIterator();
+    while (iterator.next()) |binding| {
+        const variable = binding.variable() orelse continue;
+        if (variable.exported) count += 1;
     }
     return count;
 }

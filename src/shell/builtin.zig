@@ -2167,8 +2167,11 @@ fn evalSet(shell: anytype, args: []const []const u8) !result.EvalResult {
 fn listSetVariables(shell: anytype) !result.EvalResult {
     const allocator = shell.scratchAllocator();
     var variables: std.ArrayList(state_mod.Variable) = .empty;
-    var iterator = shell.state.variables.iterator();
-    while (iterator.next()) |entry| try variables.append(allocator, entry.value_ptr.*);
+    var iterator = shell.state.bindings.iterator();
+    while (iterator.next()) |entry| {
+        const variable = entry.value_ptr.variable() orelse continue;
+        try variables.append(allocator, variable);
+    }
 
     std.mem.sort(state_mod.Variable, variables.items, {}, variableLessThan);
     for (variables.items) |variable| {
