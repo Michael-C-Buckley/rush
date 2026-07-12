@@ -2027,13 +2027,23 @@ fn parseLoopControlCount(args: []const []const u8) ?usize {
 }
 
 fn evalPrintf(shell: anytype, args: []const []const u8) !result.EvalResult {
-    const Writer = output.HostFdWriter(@TypeOf(shell.host));
-    var stdout: Writer = .{ .host = &shell.host, .fd = .stdout };
-    var stderr: Writer = .{ .host = &shell.host, .fd = .stderr };
+    const HostWriter = output.HostWriter(@TypeOf(shell.host));
+    var stdout_buffer: [4096]u8 = undefined;
+    var stdout = HostWriter.init(&shell.host, .stdout, &stdout_buffer);
+    var stderr_buffer: [4096]u8 = undefined;
+    var stderr = HostWriter.init(&shell.host, .stderr, &stderr_buffer);
 
-    const status = try printf.evaluate(Writer, shell.scratchAllocator(), args, &stdout, &stderr);
-    try stdout.flush();
-    try stderr.flush();
+    const status = printf.evaluate(
+        shell.scratchAllocator(),
+        args,
+        &stdout.interface,
+        &stderr.interface,
+    ) catch |err| switch (err) {
+        error.WriteFailed => return .{ .status = 1 },
+        else => return err,
+    };
+    stdout.interface.flush() catch return .{ .status = 1 };
+    stderr.interface.flush() catch return .{ .status = 1 };
     return .{ .status = status };
 }
 

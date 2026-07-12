@@ -4,64 +4,57 @@ const std = @import("std");
 
 const host_mod = @import("../host.zig");
 
-pub fn HostFdWriter(comptime Host: type) type {
+pub fn HostWriter(comptime Host: type) type {
     return struct {
         host: *Host,
         fd: host_mod.Fd,
-        buffer: [4096]u8 = undefined,
-        len: usize = 0,
+        interface: std.Io.Writer,
 
         const Self = @This();
 
-        pub fn append(self: *Self, allocator: std.mem.Allocator, byte: u8) !void {
-            _ = allocator;
-            try self.writeByte(byte);
+        pub fn init(host: *Host, fd: host_mod.Fd, buffer: []u8) Self {
+            std.debug.assert(buffer.len != 0);
+            return .{
+                .host = host,
+                .fd = fd,
+                .interface = .{
+                    .vtable = &.{ .drain = drain },
+                    .buffer = buffer,
+                },
+            };
         }
 
-        pub fn appendSlice(self: *Self, allocator: std.mem.Allocator, bytes: []const u8) !void {
-            _ = allocator;
-            try self.writeAll(bytes);
-        }
-
-        pub fn appendNTimes(self: *Self, allocator: std.mem.Allocator, byte: u8, count: usize) !void {
-            _ = allocator;
-            var remaining = count;
-            while (remaining != 0) {
-                if (self.len == self.buffer.len) try self.flush();
-                const write_len = @min(remaining, self.buffer.len - self.len);
-                @memset(self.buffer[self.len..][0..write_len], byte);
-                self.len += write_len;
-                remaining -= write_len;
+        fn drain(writer: *std.Io.Writer, data: []const []const u8, splat: usize) std.Io.Writer.Error!usize {
+            const self: *Self = @alignCast(@fieldParentPtr("interface", writer));
+            if (writer.end != 0) {
+                self.host.writeAll(self.fd, writer.buffer[0..writer.end]) catch return error.WriteFailed;
+                writer.end = 0;
             }
-        }
-
-        pub fn writeByte(self: *Self, byte: u8) !void {
-            if (self.len == self.buffer.len) try self.flush();
-            self.buffer[self.len] = byte;
-            self.len += 1;
-        }
-
-        pub fn writeAll(self: *Self, bytes: []const u8) !void {
-            if (bytes.len >= self.buffer.len) {
-                try self.flush();
-                try self.host.writeAll(self.fd, bytes);
-                return;
+            for (data[0 .. data.len - 1]) |bytes| {
+                self.host.writeAll(self.fd, bytes) catch return error.WriteFailed;
             }
 
-            if (bytes.len > self.buffer.len - self.len) try self.flush();
-            @memcpy(self.buffer[self.len..][0..bytes.len], bytes);
-            self.len += bytes.len;
-        }
-
-        pub fn flush(self: *Self) !void {
-            if (self.len == 0) return;
-            try self.host.writeAll(self.fd, self.buffer[0..self.len]);
-            self.len = 0;
+            const pattern = data[data.len - 1];
+            if (pattern.len == 1) {
+                var remaining = splat;
+                while (remaining >= writer.buffer.len) {
+                    @memset(writer.buffer, pattern[0]);
+                    self.host.writeAll(self.fd, writer.buffer) catch return error.WriteFailed;
+                    remaining -= writer.buffer.len;
+                }
+                if (remaining != 0) {
+                    @memset(writer.buffer[0..remaining], pattern[0]);
+                    writer.end = remaining;
+                }
+            } else if (pattern.len != 0) {
+                for (0..splat) |_| self.host.writeAll(self.fd, pattern) catch return error.WriteFailed;
+            }
+            return std.Io.Writer.countSplat(data, splat);
         }
     };
 }
 
-test "HostFdWriter buffers writes until flush" {
+test "HostWriter buffers writes until flush" {
     const TestHost = struct {
         bytes: std.ArrayList(u8) = .empty,
 
@@ -80,14 +73,15 @@ test "HostFdWriter buffers writes until flush" {
     var host: TestHost = .{};
     defer host.deinit();
 
-    var writer: HostFdWriter(TestHost) = .{ .host = &host, .fd = .stdout };
-    try writer.writeAll("hello");
+    var buffer: [4096]u8 = undefined;
+    var writer = HostWriter(TestHost).init(&host, .stdout, &buffer);
+    try writer.interface.writeAll("hello");
     try std.testing.expectEqualStrings("", host.bytes.items);
-    try writer.flush();
+    try writer.interface.flush();
     try std.testing.expectEqualStrings("hello", host.bytes.items);
 }
 
-test "HostFdWriter flushes repeated bytes in buffer-sized chunks" {
+test "HostWriter flushes repeated bytes in buffer-sized chunks" {
     const TestHost = struct {
         bytes: std.ArrayList(u8) = .empty,
         writes: usize = 0,
@@ -108,13 +102,14 @@ test "HostFdWriter flushes repeated bytes in buffer-sized chunks" {
     var host: TestHost = .{};
     defer host.deinit();
 
-    var writer: HostFdWriter(TestHost) = .{ .host = &host, .fd = .stdout };
-    try writer.appendNTimes(std.testing.allocator, 'x', writer.buffer.len + 3);
+    var buffer: [4096]u8 = undefined;
+    var writer = HostWriter(TestHost).init(&host, .stdout, &buffer);
+    try writer.interface.splatByteAll('x', buffer.len + 3);
 
     try std.testing.expectEqual(@as(usize, 1), host.writes);
-    try std.testing.expectEqual(writer.buffer.len, host.bytes.items.len);
-    try writer.flush();
+    try std.testing.expectEqual(buffer.len, host.bytes.items.len);
+    try writer.interface.flush();
     try std.testing.expectEqual(@as(usize, 2), host.writes);
-    try std.testing.expectEqual(writer.buffer.len + 3, host.bytes.items.len);
+    try std.testing.expectEqual(buffer.len + 3, host.bytes.items.len);
     try std.testing.expect(std.mem.allEqual(u8, host.bytes.items, 'x'));
 }
