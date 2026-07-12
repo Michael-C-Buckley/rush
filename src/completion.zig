@@ -1462,7 +1462,7 @@ test "manifest selection accepts attached root option values before a subcommand
 }
 
 test "z completion uses Rush frecent directory history" {
-    var command_history = history.History.init(std.testing.allocator);
+    var command_history = try history.History.init(std.testing.allocator);
     defer command_history.deinit();
     command_history.current_cwd = "/work/mywebsite";
     try command_history.addCommand(std.testing.io, "first", 0, 10, 1);

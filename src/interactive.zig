@@ -53,14 +53,14 @@ pub fn run(
 
     if (!interactive) return runStdinScript(allocator, &sh, &source_id);
 
-    var command_history = history.History.init(allocator);
+    var command_history = try history.History.init(allocator);
     defer command_history.deinit();
     if (try startup.historyPath(allocator, env)) |path| {
         defer allocator.free(path);
         command_history.load(io, path) catch |err| {
             const message = try std.fmt.allocPrint(
                 sh.scratchAllocator(),
-                "rush: history disabled: {s}\n",
+                "rush: persistent history unavailable ({s}); using memory\n",
                 .{@errorName(err)},
             );
             try sh.host.writeAll(.stderr, message);
@@ -1172,7 +1172,7 @@ test "interactive history cwd remains valid after prompt read" {
     var sh = RushShell.init(std.testing.allocator, .{}, .{});
     defer sh.deinit();
 
-    var command_history = history.History.init(std.testing.allocator);
+    var command_history = try history.History.init(std.testing.allocator);
     defer command_history.deinit();
     try command_history.load(std.testing.io, path);
     command_history.session_id = "test-session";
@@ -1217,7 +1217,7 @@ test "interactive startup dispatch fires directory.change with empty old directo
     try std.testing.expectEqual(@as(shell.result.ExitStatus, 0), defined.status);
     try sh.extensions.putEventHandler("directory.change", "startup", "on_startup_dir", 0, null);
 
-    var command_history = history.History.init(std.testing.allocator);
+    var command_history = try history.History.init(std.testing.allocator);
     defer command_history.deinit();
     var history_service = history.InteractiveHistoryService.init(&command_history);
     var source_id: shell.source.SourceId = 2;
@@ -1262,7 +1262,7 @@ test "interactive prompt render uses last command status when shell status drift
     const defined = try sh.evalSource(src);
     try std.testing.expectEqual(@as(shell.result.ExitStatus, 0), defined.status);
 
-    var command_history = history.History.init(std.testing.allocator);
+    var command_history = try history.History.init(std.testing.allocator);
     defer command_history.deinit();
     var history_service = history.InteractiveHistoryService.init(&command_history);
     var source_id: shell.source.SourceId = 2;
@@ -1306,7 +1306,7 @@ test "interactive transient prompt uses prompt helpers and last command status" 
     const defined = try sh.evalSource(src);
     try std.testing.expectEqual(@as(shell.result.ExitStatus, 0), defined.status);
 
-    var command_history = history.History.init(std.testing.allocator);
+    var command_history = try history.History.init(std.testing.allocator);
     defer command_history.deinit();
     var history_service = history.InteractiveHistoryService.init(&command_history);
     var source_id: shell.source.SourceId = 2;
@@ -1350,7 +1350,7 @@ test "interactive right prompt uses prompt helpers and last command status" {
     const defined = try sh.evalSource(src);
     try std.testing.expectEqual(@as(shell.result.ExitStatus, 0), defined.status);
 
-    var command_history = history.History.init(std.testing.allocator);
+    var command_history = try history.History.init(std.testing.allocator);
     defer command_history.deinit();
     var history_service = history.InteractiveHistoryService.init(&command_history);
     var source_id: shell.source.SourceId = 2;
