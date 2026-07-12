@@ -11,7 +11,6 @@ pub const Source = enum(u32) {
     resize,
     prompt_redraw,
     prompt_async,
-    completion_result,
     child_signal,
     interrupt_signal,
     trap_signal,

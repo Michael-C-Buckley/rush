@@ -20,4 +20,3 @@ pub const session = @import("editor/session.zig");
 pub const line = session;
 pub const terminal = @import("editor/terminal.zig");
 pub const vi = @import("editor/vi.zig");
-pub const worker = @import("editor/worker.zig");

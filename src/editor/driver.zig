@@ -11,7 +11,6 @@ const line_editor = @import("session.zig");
 const completion = @import("completion.zig");
 const signal = @import("signal.zig");
 const terminal = @import("terminal.zig");
-const worker = @import("worker.zig");
 
 const log = std.log.scoped(.editor_driver);
 
@@ -28,9 +27,6 @@ const read_chunk_size = 4096;
 const semantic_command_start = "\x1b]133;A;cl=w;click_events=2\x07";
 const semantic_input_end = "\x1b]133;C\x07";
 const semantic_input_cancel = "\x1b]133;D;err=CANCEL\x07";
-const completion_progress_start = "\x1b]9;4;3\x07";
-const completion_progress_stop = "\x1b]9;4;0\x07";
-const completion_progress_delay_ms = 500;
 const clear_screen_cursor_query_timeout_ms = 200;
 const stale_cursor_query_timeout_ms = 1000;
 
@@ -54,10 +50,6 @@ const rawRead = signal.rawRead;
 const rawWriteAll = signal.rawWriteAll;
 const setNonBlocking = signal.setNonBlocking;
 
-const CompletionController = worker.Controller;
-const CompletionRequestReason = worker.RequestReason;
-const CompletionWorker = worker.Worker;
-
 pub const ReadLineOptions = struct {
     prompt: []const u8,
     right_prompt: []const u8 = "",
@@ -66,13 +58,6 @@ pub const ReadLineOptions = struct {
     hook_context: ?*anyopaque = null,
     run_hooks: ?*const fn (*anyopaque, std.mem.Allocator, std.Io) anyerror!HookResult = null,
     next_hook_interval_ms: ?*const fn (*anyopaque, std.Io) anyerror!?u64 = null,
-    run_activity_event: ?*const fn (
-        *anyopaque,
-        std.mem.Allocator,
-        std.Io,
-        []const u8,
-        []const []const u8,
-    ) anyerror!HookResult = null,
     prompt_context: ?*anyopaque = null,
     refresh_prompt: ?*const fn (
         *anyopaque,
@@ -100,12 +85,6 @@ pub const ReadLineOptions = struct {
         []const u8,
         usize,
     ) anyerror!completion.Application = null,
-    clone_completion_context: ?*const fn (
-        *anyopaque,
-        std.mem.Allocator,
-        *completion.CancellationToken,
-    ) anyerror!*anyopaque = null,
-    free_completion_context: ?*const fn (*anyopaque, std.mem.Allocator) void = null,
     expand_abbreviation: ?*const fn (
         *anyopaque,
         std.mem.Allocator,
@@ -172,7 +151,6 @@ pub const TerminalSession = struct {
     tty_buffer: []u8,
     tty: vaxis.tty.PosixTty,
     prompt_redraw: Pipe,
-    completion_wake: Pipe,
     trap_signal: Pipe,
     resize: ResizeSignalSource,
     child_signal: ChildSignalSource,
@@ -180,7 +158,6 @@ pub const TerminalSession = struct {
     loop: event_loop.EventLoop,
     terminal_parser: TerminalParser,
     renderer: line_editor.FrameRenderer = .{},
-    completion: CompletionController,
     capabilities: TerminalCapabilities = .{},
     query_batch_sent: bool = false,
     color_scheme: ColorScheme = .unknown,
@@ -197,10 +174,6 @@ pub const TerminalSession = struct {
         errdefer prompt_redraw.close(io);
         try setNonBlocking(prompt_redraw.read.handle);
         try setNonBlocking(prompt_redraw.write.handle);
-        var completion_wake = try makePipe(io);
-        errdefer completion_wake.close(io);
-        try setNonBlocking(completion_wake.read.handle);
-        try setNonBlocking(completion_wake.write.handle);
         var trap_signal = try makePipe(io);
         errdefer trap_signal.close(io);
         try setNonBlocking(trap_signal.read.handle);
@@ -215,7 +188,6 @@ pub const TerminalSession = struct {
         errdefer loop.deinit();
         try loop.addReadFd(tty.fd.handle, .tty_input);
         try loop.addReadFd(prompt_redraw.read.handle, .prompt_redraw);
-        try loop.addReadFd(completion_wake.read.handle, .completion_result);
         try loop.addReadFd(trap_signal.read.handle, .trap_signal);
         try loop.addReadFd(resize.readFd(), .resize);
         try loop.addReadFd(child_signal.readFd(), .child_signal);
@@ -229,25 +201,20 @@ pub const TerminalSession = struct {
             .tty_buffer = tty_buffer,
             .tty = tty,
             .prompt_redraw = prompt_redraw,
-            .completion_wake = completion_wake,
             .trap_signal = trap_signal,
             .resize = resize,
             .child_signal = child_signal,
             .interrupt_signal = interrupt_signal,
             .loop = loop,
             .terminal_parser = .init(allocator),
-            .completion = .init(allocator),
             .winsize = winsize,
         };
         return self;
     }
 
     pub fn deinit(self: *TerminalSession) void {
-        // ziglint-ignore: Z026 best-effort terminal cleanup during deinit
-        writeTtyAll(&self.tty, completion_progress_stop) catch {};
         self.resetTerminalCapabilities();
         self.events.deinit(self.allocator);
-        self.completion.deinit();
         self.terminal_parser.deinit();
         self.renderer.deinit(self.allocator);
         self.interrupt_signal.deinit(self.io, &self.loop);
@@ -255,7 +222,6 @@ pub const TerminalSession = struct {
         self.resize.deinit(self.io, &self.loop);
         self.loop.deinit();
         self.trap_signal.close(self.io);
-        self.completion_wake.close(self.io);
         self.prompt_redraw.close(self.io);
         deinitPosixTtyPreserveInput(self.tty);
         self.allocator.free(self.tty_buffer);
@@ -467,21 +433,17 @@ pub const TerminalSession = struct {
             null;
         var next_completion_flash_clear_ms: ?u64 = null;
         var next_hook_interval_ms = try nextHookIntervalDeadlineMs(read_options, self.io);
-        var completion_async_event_active = self.completion.active != null;
         var pending_clear_screen_deadline_ms: ?u64 = null;
         var stale_cursor_query_deadline_ms: ?u64 = null;
         read_loop: while (true) {
             while (session.state == .editing or session.state == .history_search) {
                 var render_needed = false;
                 var loop_events: [8]event_loop.Event = undefined;
-                const wait_now_ms = nowMs(self.io);
                 const ready = try self.loop.waitTimeout(&loop_events, nextWaitMs(
                     self.io,
                     next_prompt_refresh_ms,
                     next_hook_interval_ms,
-                    self.completion.debounceWaitMs(wait_now_ms),
                     next_completion_flash_clear_ms,
-                    self.completion.progressWaitMs(wait_now_ms),
                     pending_clear_screen_deadline_ms,
                     stale_cursor_query_deadline_ms,
                 ));
@@ -490,9 +452,6 @@ pub const TerminalSession = struct {
                 {
                     self.terminal_parser.cancelCursorPositionReport();
                     stale_cursor_query_deadline_ms = null;
-                }
-                if (ready.len == 0 and self.completion.progressWaitMs(nowMs(self.io)) == 0) {
-                    try self.startCompletionProgress();
                 }
                 if (pending_clear_screen_deadline_ms != null and
                     promptRefreshWaitMs(self.io, pending_clear_screen_deadline_ms) == 0)
@@ -526,13 +485,6 @@ pub const TerminalSession = struct {
                     session.invalidatePrompt();
                     next_prompt_refresh_ms = nowMs(self.io) + read_options.prompt_refresh_interval_ms.?;
                 }
-                try self.startReadyCompletion(read_options);
-                if (try self.syncCompletionActivityEvent(
-                    read_options,
-                    &session,
-                    &render_needed,
-                    &completion_async_event_active,
-                )) return self.finishInterruptedReadLine();
                 self.events.clearRetainingCapacity();
                 self.terminal_parser.resetEventText();
                 var hook_ready = false;
@@ -543,9 +495,6 @@ pub const TerminalSession = struct {
                         .prompt_redraw => try self.processPromptRedraw(),
                         .prompt_async => {
                             if (read_options.pump_prompt_async) |pump| pump(read_options.prompt_async_context.?);
-                        },
-                        .completion_result => {
-                            if (try self.processCompletionResult(&session)) render_needed = true;
                         },
                         .child_signal => {
                             self.processChildSignal();
@@ -665,13 +614,6 @@ pub const TerminalSession = struct {
                     }
                 }
                 if (session.state == .editing or session.state == .history_search) {
-                    try self.startReadyCompletion(read_options);
-                    if (try self.syncCompletionActivityEvent(
-                        read_options,
-                        &session,
-                        &render_needed,
-                        &completion_async_event_active,
-                    )) return self.finishInterruptedReadLine();
                     if (render_needed) {
                         if (session.takePromptInvalidation() and
                             read_options.refresh_prompt != null and
@@ -755,18 +697,6 @@ pub const TerminalSession = struct {
                     continue :read_loop;
                 },
                 .submitted => {
-                    self.quiesceCompletionWorker();
-                    if (completion_async_event_active) {
-                        var render_needed = false;
-                        if (try self.runActivityEvent(
-                            read_options,
-                            &session,
-                            &render_needed,
-                            "completion.async.end",
-                            &.{ "completion", "0" },
-                        )) return self.finishInterruptedReadLine();
-                        completion_async_event_active = false;
-                    }
                     // Accepting the line may have rewritten the buffer (e.g.
                     // abbreviation expansion on Enter); paint the final text so
                     // the scrollback shows the command that actually runs.
@@ -804,36 +734,12 @@ pub const TerminalSession = struct {
                     return .{ .submitted = session.takeSubmittedLine().? };
                 },
                 .canceled => {
-                    self.quiesceCompletionWorker();
-                    if (completion_async_event_active) {
-                        var render_needed = false;
-                        if (try self.runActivityEvent(
-                            read_options,
-                            &session,
-                            &render_needed,
-                            "completion.async.end",
-                            &.{ "completion", "0" },
-                        )) return self.finishInterruptedReadLine();
-                        completion_async_event_active = false;
-                    }
                     try self.clearRenderedRowsAfterFirst();
                     self.renderer.reset(self.allocator);
                     try writeTtyAll(&self.tty, semantic_input_cancel ++ "^C\r\n");
                     return .canceled;
                 },
                 .eof => {
-                    self.quiesceCompletionWorker();
-                    if (completion_async_event_active) {
-                        var render_needed = false;
-                        if (try self.runActivityEvent(
-                            read_options,
-                            &session,
-                            &render_needed,
-                            "completion.async.end",
-                            &.{ "completion", "0" },
-                        )) return self.finishInterruptedReadLine();
-                        completion_async_event_active = false;
-                    }
                     try self.clearRenderedRowsAfterFirst();
                     self.renderer.reset(self.allocator);
                     try writeTtyAll(&self.tty, "\r\n");
@@ -844,28 +750,7 @@ pub const TerminalSession = struct {
         }
     }
 
-    /// Cancels and joins any active completion worker thread.
-    ///
-    /// Must run before `readLine` hands control back to the shell: the shell
-    /// forks children that keep allocating (subshells, command substitutions),
-    /// and a forked child inherits any allocator lock a live worker thread
-    /// happens to hold at that instant, deadlocking the child.
-    fn quiesceCompletionWorker(self: *TerminalSession) void {
-        const completion_thread = self.completion.active orelse return;
-        self.completion.active = null;
-        completion_thread.cancel.cancel();
-        completion_thread.thread.join();
-        // ziglint-ignore: Z026 best-effort terminal progress cleanup
-        if (self.completion.progress_started) writeTtyAll(&self.tty, completion_progress_stop) catch {};
-        self.completion.progress_started = false;
-        self.completion.progress_deadline_ms = null;
-        if (completion_thread.takeResult()) |result| result.deinit(self.allocator);
-        completion_thread.deinit();
-        self.allocator.destroy(completion_thread);
-    }
-
     fn finishInterruptedReadLine(self: *TerminalSession) !ReadLineResult {
-        self.quiesceCompletionWorker();
         try self.clearRenderedRowsAfterFirst();
         self.renderer.reset(self.allocator);
         try writeTtyAll(&self.tty, semantic_input_cancel ++ "\r\n");
@@ -883,7 +768,7 @@ pub const TerminalSession = struct {
             .menu_tab => try session.handleKey(.{ .key = .tab, .modifiers = key.modifiers }),
             .explicit_completion => {
                 _ = try expandAbbreviationBeforeAccept(session, options, false);
-                try self.applyCompletionProvider(options, session, .explicit);
+                try self.applyCompletionProvider(options, session);
             },
             .enter_accept => {
                 _ = try expandAbbreviationBeforeAccept(session, options, false);
@@ -907,24 +792,14 @@ pub const TerminalSession = struct {
     ) !void {
         try session.handleKey(key);
         if (!session.hasCompletionMenu() or !has_provider) return;
-        try self.applyCompletionProvider(options, session, .refresh);
+        try self.applyCompletionProvider(options, session);
     }
 
     fn applyCompletionProvider(
         self: *TerminalSession,
         options: ReadLineOptions,
         session: *line_editor.LineSession,
-        reason: CompletionRequestReason,
     ) !void {
-        if (options.clone_completion_context != null and options.free_completion_context != null) {
-            try self.requestCompletion(
-                options,
-                session.editor.buffer.text(),
-                session.editor.buffer.cursor_byte,
-                reason,
-            );
-            return;
-        }
         const application = try options.complete.?(
             options.completion_context.?,
             self.allocator,
@@ -966,50 +841,6 @@ pub const TerminalSession = struct {
     ) !bool {
         if (options.run_hooks == null or options.hook_context == null) return false;
         const hook_result = try options.run_hooks.?(options.hook_context.?, self.allocator, self.io);
-        defer self.allocator.free(hook_result.output);
-        if (hook_result.output.len != 0) try self.writeInterruptOutput(hook_result.output);
-        if (hook_result.refresh_prompt or hook_result.output.len != 0) {
-            render_needed.* = true;
-            session.invalidatePrompt();
-        }
-        return hook_result.stop;
-    }
-
-    fn syncCompletionActivityEvent(
-        self: *TerminalSession,
-        options: ReadLineOptions,
-        session: *line_editor.LineSession,
-        render_needed: *bool,
-        event_active: *bool,
-    ) !bool {
-        const active = self.completion.active != null;
-        if (active == event_active.*) return false;
-        event_active.* = active;
-        return self.runActivityEvent(
-            options,
-            session,
-            render_needed,
-            if (active) "completion.async.start" else "completion.async.end",
-            if (active) &.{ "completion", "1" } else &.{ "completion", "0" },
-        );
-    }
-
-    fn runActivityEvent(
-        self: *TerminalSession,
-        options: ReadLineOptions,
-        session: *line_editor.LineSession,
-        render_needed: *bool,
-        event_name: []const u8,
-        args: []const []const u8,
-    ) !bool {
-        if (options.run_activity_event == null or options.hook_context == null) return false;
-        const hook_result = try options.run_activity_event.?(
-            options.hook_context.?,
-            self.allocator,
-            self.io,
-            event_name,
-            args,
-        );
         defer self.allocator.free(hook_result.output);
         if (hook_result.output.len != 0) try self.writeInterruptOutput(hook_result.output);
         if (hook_result.refresh_prompt or hook_result.output.len != 0) {
@@ -1143,80 +974,6 @@ pub const TerminalSession = struct {
 
     fn processInterruptSignal(self: *TerminalSession) void {
         self.interrupt_signal.drain();
-    }
-
-    fn requestCompletion(
-        self: *TerminalSession,
-        options: ReadLineOptions,
-        source: []const u8,
-        cursor: usize,
-        reason: CompletionRequestReason,
-    ) !void {
-        if (options.complete == null or options.completion_context == null) return;
-        try self.completion.request(nowMs(self.io), source, cursor, reason);
-        try self.startReadyCompletion(options);
-    }
-
-    fn startReadyCompletion(self: *TerminalSession, options: ReadLineOptions) !void {
-        var request = self.completion.takeReadyRequest(nowMs(self.io)) orelse return;
-        errdefer request.deinit(self.allocator);
-        const clone = options.clone_completion_context orelse return;
-        const free = options.free_completion_context orelse return;
-        const completion_thread = try self.allocator.create(CompletionWorker);
-        errdefer self.allocator.destroy(completion_thread);
-        completion_thread.* = .{
-            .allocator = self.allocator,
-            .io = self.io,
-            .complete = options.complete,
-            .free_context = free,
-            .request = request,
-            .context = null,
-            .wake_fd = self.completion_wake.write.handle,
-        };
-        errdefer completion_thread.deinit();
-        const context = try clone(options.completion_context.?, self.allocator, &completion_thread.cancel);
-        completion_thread.context = context;
-        request = undefined;
-        try completion_thread.start();
-        self.completion.active = completion_thread;
-        self.completion.progress_deadline_ms = nowMs(self.io) + completion_progress_delay_ms;
-        self.completion.progress_started = false;
-    }
-
-    fn startCompletionProgress(self: *TerminalSession) !void {
-        if (self.completion.active == null or self.completion.progress_started) return;
-        self.completion.progress_started = true;
-        self.completion.progress_deadline_ms = null;
-        try writeTtyAll(&self.tty, completion_progress_start);
-    }
-
-    fn processCompletionResult(self: *TerminalSession, session: *line_editor.LineSession) !bool {
-        var buffer: [32]u8 = undefined;
-        // ziglint-ignore: Z026 best-effort completion wake-pipe drain
-        _ = rawRead(self.completion_wake.read.handle, &buffer) catch {};
-        const completion_thread = self.completion.active orelse return false;
-        if (!completion_thread.done.load(.acquire)) return false;
-        self.completion.active = null;
-        completion_thread.thread.join();
-        // ziglint-ignore: Z026 best-effort terminal progress cleanup
-        if (self.completion.progress_started) writeTtyAll(&self.tty, completion_progress_stop) catch {};
-        self.completion.progress_started = false;
-        self.completion.progress_deadline_ms = null;
-        const result = completion_thread.takeResult();
-        completion_thread.deinit();
-        self.allocator.destroy(completion_thread);
-        const completion_result = result orelse return false;
-        defer completion_result.deinit(self.allocator);
-        switch (completion_result) {
-            .success => |payload| {
-                if (self.completion.hasSupersedingRequest(payload.generation)) return false;
-                if (!std.mem.eql(u8, session.editor.buffer.text(), payload.source)) return false;
-                if (session.editor.buffer.cursor_byte != payload.cursor) return false;
-                try session.applyCompletion(payload.application);
-                return true;
-            },
-            .failed => return false,
-        }
     }
 };
 
@@ -1528,15 +1285,13 @@ fn promptRefreshWaitMs(io: std.Io, next_prompt_refresh_ms: ?u64) ?u64 {
     return next - now;
 }
 
-fn nextWaitMs(io: std.Io, a: ?u64, b: ?u64, c: ?u64, d: ?u64, e: ?u64, f: ?u64, g: ?u64) ?u64 {
+fn nextWaitMs(io: std.Io, a: ?u64, b: ?u64, c: ?u64, d: ?u64, e: ?u64) ?u64 {
     var wait_ms: ?u64 = null;
     if (promptRefreshWaitMs(io, a)) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
     if (promptRefreshWaitMs(io, b)) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
-    if (c) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
+    if (promptRefreshWaitMs(io, c)) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
     if (promptRefreshWaitMs(io, d)) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
-    if (e) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
-    if (promptRefreshWaitMs(io, f)) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
-    if (promptRefreshWaitMs(io, g)) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
+    if (promptRefreshWaitMs(io, e)) |wait| wait_ms = if (wait_ms) |current| @min(current, wait) else wait;
     return wait_ms;
 }
 

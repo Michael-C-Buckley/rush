@@ -245,7 +245,6 @@ const InteractiveSession = struct {
             .hook_context = self,
             .run_hooks = runInteractiveHooks,
             .next_hook_interval_ms = nextInteractiveHookIntervalMs,
-            .run_activity_event = runInteractiveActivityEvent,
             .prompt_context = self,
             .refresh_prompt = refreshInteractivePrompt,
             .refresh_right_prompt = refreshInteractiveRightPrompt,
@@ -609,21 +608,6 @@ fn runInteractiveHooks(context: *anyopaque, allocator: std.mem.Allocator, io: st
 fn nextInteractiveHookIntervalMs(context: *anyopaque, io: std.Io) !?u64 {
     const session: *InteractiveSession = @ptrCast(@alignCast(context));
     return session.events.nextTimerDelayMs(io);
-}
-
-fn runInteractiveActivityEvent(
-    context: *anyopaque,
-    // ziglint-ignore: Z023 parameter order follows method or callback shape; preserve API
-    allocator: std.mem.Allocator,
-    // ziglint-ignore: Z023 parameter order follows method or callback shape; preserve API
-    io: std.Io,
-    event_name: []const u8,
-    args: []const []const u8,
-) !editor.driver.HookResult {
-    const session: *InteractiveSession = @ptrCast(@alignCast(context));
-    var dispatched = try session.events.runEvent(allocator, io, event_name, args);
-    if (dispatched.exit_status) |status| pendingEventExit(session, status);
-    return dispatched.hookResult();
 }
 
 // ziglint-ignore: Z023 parameter order follows method or callback shape; preserve API

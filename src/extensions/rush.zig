@@ -583,8 +583,6 @@ fn isEventName(name: []const u8) bool {
         std.mem.eql(u8, name, "prompt.prepare") or
         std.mem.eql(u8, name, "prompt.async.start") or
         std.mem.eql(u8, name, "prompt.async.end") or
-        std.mem.eql(u8, name, "completion.async.start") or
-        std.mem.eql(u8, name, "completion.async.end") or
         std.mem.eql(u8, name, "job.start") or
         std.mem.eql(u8, name, "job.end") or
         std.mem.eql(u8, name, "timer.tick");
