@@ -364,31 +364,6 @@ pub const History = struct {
         self.db = handle;
     }
 
-    pub fn save(self: History, io: std.Io, path: []const u8) !void {
-        if (self.db != null) return;
-        if (std.fs.path.dirname(path)) |parent| try std.Io.Dir.cwd().createDirPath(io, parent);
-        const path_z = try self.allocator.dupeZ(u8, path);
-        defer self.allocator.free(path_z);
-        var db: ?*sqlite.sqlite3 = null;
-        try sqliteCheck(sqlite.sqlite3_open_v2(
-            path_z.ptr,
-            &db,
-            sqlite.SQLITE_OPEN_READWRITE | sqlite.SQLITE_OPEN_CREATE | sqlite.SQLITE_OPEN_NOMUTEX,
-            null,
-        ), db);
-        defer if (db) |handle| {
-            _ = sqlite.sqlite3_close(handle);
-        };
-        const handle = db.?;
-        try configureHistoryDb(handle);
-        try initHistorySchema(handle);
-        try migrateHistoryCommandKeys(self.allocator, handle);
-        try sqliteExec(handle, "delete from history;");
-        for (self.records.items) |record| {
-            _ = try insertHistoryRecordWithAllocator(self.allocator, handle, record);
-        }
-    }
-
     fn loadRecentRows(self: *History, db: *sqlite.sqlite3, limit: usize) !void {
         var stmt: ?*sqlite.sqlite3_stmt = null;
         try sqliteCheck(sqlite.sqlite3_prepare_v2(
@@ -2144,27 +2119,6 @@ test "history stores commands and suggests by prefix" {
     try std.testing.expectEqualStrings("echo second", history.suggest("ec").?);
     try std.testing.expectEqualStrings("git status", history.suggest("git").?);
     try std.testing.expect(history.suggest("missing") == null);
-}
-
-test "history can persist and reload" {
-    const path = "rush-history-test.sqlite";
-    try deleteHistoryDbFilesIfExists(std.testing.io, path);
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path) catch {};
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-wal") catch {};
-    defer std.Io.Dir.cwd().deleteFile(std.testing.io, path ++ "-shm") catch {};
-
-    var history = History.init(std.testing.allocator);
-    defer history.deinit();
-    try history.addRecord(.{ .cmd = "echo saved", .when = 42, .status = 0, .cwd = "/tmp" });
-    try history.save(std.testing.io, path);
-
-    var loaded = History.init(std.testing.allocator);
-    defer loaded.deinit();
-    try loaded.load(std.testing.io, path);
-    try std.testing.expectEqualStrings("echo saved", loaded.suggest("echo").?);
-    try std.testing.expectEqual(@as(i64, 42), loaded.records.items[0].when);
-    try std.testing.expectEqual(@as(ExitStatus, 0), loaded.records.items[0].status);
-    try std.testing.expectEqualStrings("/tmp", loaded.records.items[0].cwd);
 }
 
 test "history reload keeps recent cache in chronological order" {
