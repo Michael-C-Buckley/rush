@@ -53,6 +53,8 @@
 
   <h2 id="notes"><a href="#notes">NOTES</a></h2>
 
+  <p>Rush stores history in <span class="var">$XDG_STATE_HOME</span><code>/rush/history.sqlite</code>, falling back to <span class="var">$HOME</span><code>/.local/state/rush/history.sqlite</code>.</p>
+
   <p><code>history</code> invocations are not recorded in history. Searches would otherwise match their own command line, and <code>history clear</code> would leave itself behind as the sole entry.</p>
 
   <p>Deleting an entry removes it from arrow-key navigation, reverse search, autosuggestions, and <code>z</code> frecency ranking alike, because all of them read the same history store.</p>

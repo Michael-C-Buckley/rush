@@ -23,11 +23,11 @@
 
   <h2 id="synopsis"><a href="#synopsis">SYNOPSIS</a></h2>
 
-  <pre><span class="cmd">hash</span> [<span class="var">utility</span> ...]</pre>
+  <pre><span class="cmd">hash</span> [<span class="opt">-r</span>] [<span class="var">utility</span> ...]</pre>
 
   <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
 
-  <p><code>hash</code> is a POSIX regular builtin provided by Rush. Remember or report command path lookups.</p>
+  <p><code>hash</code> is a POSIX regular builtin provided by Rush. Utility operands search <code>PATH</code> and remember the resulting command paths. Without operands, it prints remembered paths. <code>-r</code> clears all remembered paths before processing any operands.</p>
 
   <p>This page summarizes the builtin in Rush documentation. POSIX is the normative reference for detailed portable behavior.</p>
 

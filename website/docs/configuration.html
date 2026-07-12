@@ -36,6 +36,8 @@
 
   <p>Point <span class="var">$ENV</span> at a trusted file. Rush accepts relative expanded <span class="var">$ENV</span> paths against the current directory and is not designed for setuid/setgid installation.</p>
 
+  <p>Interactive command history is stored in <span class="var">$XDG_STATE_HOME</span><code>/rush/history.sqlite</code>, falling back to <span class="var">$HOME</span><code>/.local/state/rush/history.sqlite</code> when <span class="var">$XDG_STATE_HOME</span> is unset.</p>
+
   <p>The embedded defaults come from <code>share/rush/config.rush</code> and define the <a href="#prompt">default prompt</a>, style defaults, and <code>ll</code>/<code>la</code> <a href="#abbreviations">abbreviations</a>. Redefine or <code>abbr --erase</code> them in a later file to opt out.</p>
 
   <h2 id="autoloaded-functions"><a href="#autoloaded-functions">Autoloaded functions</a></h2>
@@ -57,6 +59,8 @@
 <span class="var">$XDG_DATA_HOME</span>/rush/functions
 each <span class="var">$XDG_DATA_DIRS</span> entry + /rush/functions
 <span class="var">$datadir</span>/rush/functions</pre>
+
+  <p><span class="var">$XDG_DATA_HOME</span> falls back to <span class="var">$HOME</span><code>/.local/share</code>. When <span class="var">$XDG_DATA_DIRS</span> is unset, Rush searches <code>/usr/local/share</code> and <code>/usr/share</code>.</p>
 
   <p>If a name exists in more than one directory, the first matching file wins. Shipped autoload functions in <code>share/rush/functions</code> include colorized <code>ls</code>/<code>grep</code>/<code>diff</code> helpers, <code>path_add</code>/<code>path_prepend</code>/<code>path_append</code>/<code>path_remove</code> PATH helpers, and opt-in <a href="#project-environments">project environment hooks</a>.</p>
 
@@ -350,9 +354,5 @@ index:236
 
   <span class="cmd">prompt</span> text <span class="str">' ● '</span>
 }</pre>
-
-  <h2 id="status"><a href="#status">Status</a></h2>
-
-  <p>Configuration is early. Expect changes.</p>
 </body>
 </html>

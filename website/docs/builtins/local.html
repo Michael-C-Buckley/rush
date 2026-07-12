@@ -23,21 +23,31 @@
 
   <h2 id="synopsis"><a href="#synopsis">SYNOPSIS</a></h2>
 
-  <pre><span class="cmd">local</span> [<span class="var">name</span>[=<span class="var">value</span>] ...]</pre>
+  <pre><span class="cmd">local</span> [<span class="opt">-airx</span>] [<span class="var">name</span>[=<span class="var">value</span>] ...]</pre>
 
   <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
 
   <p><code>local</code> declares variables local to the current function invocation. It may only be used while a shell function is running. With no operands, it succeeds without changing state.</p>
 
-  <p>Each operand must be a valid shell variable name or assignment. If a name is declared without an explicit value, Rush initializes the local from a matching assignment prefix when one is present; otherwise the local starts unset.</p>
+  <p>Each operand must be a valid shell variable name, assignment, or indexed-array assignment. If a name is declared without an explicit value, Rush initializes the local from a matching assignment prefix when one is present; otherwise the local starts unset.</p>
+
+  <h2 id="options"><a href="#options">OPTIONS</a></h2>
+
+  <dl>
+    <dt><code>-a</code></dt><dd>Declare an indexed array.</dd>
+    <dt><code>-i</code></dt><dd>Apply the integer attribute and evaluate assignment values arithmetically.</dd>
+    <dt><code>-r</code></dt><dd>Apply the readonly attribute.</dd>
+    <dt><code>-x</code></dt><dd>Apply the export attribute.</dd>
+    <dt><code>--</code></dt><dd>End option parsing.</dd>
+  </dl>
 
   <h2 id="exit-status"><a href="#exit-status">EXIT STATUS</a></h2>
 
-  <p>Zero on success, one when used outside a function, and two for invalid variable names or readonly variables.</p>
+  <p>Zero on success, one when used outside a function or when a declaration fails, and two for invalid options.</p>
 
   <h2 id="see-also"><a href="#see-also">SEE ALSO</a></h2>
 
-  <p><a href="index.html">rush-builtins(7)</a>.</p>
+  <p><a href="index.html">rush-builtins(7)</a>, <a href="declare.html">declare(1)</a>.</p>
 
 </body>
 </html>

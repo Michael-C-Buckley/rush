@@ -23,17 +23,32 @@
 
   <h2 id="synopsis"><a href="#synopsis">SYNOPSIS</a></h2>
 
-  <pre><span class="cmd">read</span> [<span class="opt">-r</span>] <span class="var">var</span> ...</pre>
+  <pre><span class="cmd">read</span> [<span class="opt">-r</span>] [<span class="opt">-d</span> <span class="var">delimiter</span>] [<span class="var">name</span> ...]
+<span class="cmd">read</span> [<span class="opt">-r</span>] [<span class="opt">-a</span> <span class="var">array</span>] [<span class="opt">-n</span> <span class="var">count</span> | <span class="opt">-N</span> <span class="var">count</span>] [<span class="opt">-p</span> <span class="var">prompt</span>] [<span class="opt">-s</span>] [<span class="opt">-t</span> <span class="var">seconds</span>] [<span class="var">name</span> ...]</pre>
 
   <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
 
-  <p><code>read</code> is a POSIX regular builtin provided by Rush. Read a line and assign fields to variables.</p>
+  <p><code>read</code> reads input and assigns fields to variables using <code>IFS</code>. Without names, it assigns <code>REPLY</code>. The last name receives the unsplit remainder. Without <code>-r</code>, backslashes escape the next character and a backslash-newline pair continues the input line.</p>
 
-  <p>This page summarizes the builtin in Rush documentation. POSIX is the normative reference for detailed portable behavior.</p>
+  <p><code>-a</code>, <code>-n</code>, <code>-N</code>, <code>-p</code>, <code>-s</code>, and <code>-t</code> are available in Rush's default Bash-compatible mode and are rejected in POSIX mode.</p>
+
+  <h2 id="options"><a href="#options">OPTIONS</a></h2>
+
+  <dl>
+    <dt><code>-a</code> <var>array</var></dt><dd>Assign all split fields to an indexed array instead of scalar variables.</dd>
+    <dt><code>-d</code> <var>delimiter</var></dt><dd>Stop at the first byte of <var>delimiter</var> instead of newline.</dd>
+    <dt><code>-n</code> <var>count</var></dt><dd>Return after at most <var>count</var> characters, or earlier at the input delimiter.</dd>
+    <dt><code>-N</code> <var>count</var></dt><dd>Read exactly <var>count</var> characters unless end-of-file or a timeout occurs; delimiters do not stop the read.</dd>
+    <dt><code>-p</code> <var>prompt</var></dt><dd>Write <var>prompt</var> to standard error when standard input is a terminal.</dd>
+    <dt><code>-r</code></dt><dd>Treat backslashes literally.</dd>
+    <dt><code>-s</code></dt><dd>Disable terminal echo while reading.</dd>
+    <dt><code>-t</code> <var>seconds</var></dt><dd>Time out after the given number of seconds; fractional values are accepted. A value of zero probes input readiness without consuming input.</dd>
+    <dt><code>--</code></dt><dd>End option parsing.</dd>
+  </dl>
 
   <h2 id="exit-status"><a href="#exit-status">EXIT STATUS</a></h2>
 
-  <p>See the POSIX definition for command-specific status rules. Usage errors generally return a non-zero status.</p>
+  <p>Zero when the delimiter or requested character count is reached, one at end-of-file, 142 on timeout, and two for usage errors.</p>
 
   <h2 id="see-also"><a href="#see-also">SEE ALSO</a></h2>
 

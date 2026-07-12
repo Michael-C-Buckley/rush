@@ -6,6 +6,7 @@ const ast = @import("ast.zig");
 const builtin = @import("builtin.zig");
 const eval = @import("eval.zig");
 const history = @import("../history.zig");
+const host_mod = @import("../host.zig");
 const lexer = @import("lexer.zig");
 const memory = @import("memory.zig");
 const parser = @import("parser.zig");
@@ -383,6 +384,24 @@ test "Shell initializes IFS from the shell default instead of the environment" {
     defer shell.deinit();
 
     try std.testing.expectEqualStrings(" \t\n", shell.state.getVariable("IFS").?.value);
+}
+
+test "Shell parameter-only expansion preserves non-parameter substitutions" {
+    var shell = Shell(host_mod.RealHost).init(std.testing.allocator, .{}, .{});
+    defer shell.deinit();
+    try shell.state.putVariable(.{ .name = "USER", .value = "rush-user" });
+
+    const scratch = try shell.beginScratchScope();
+    defer scratch.end();
+    const expanded = try eval.expandParametersScalar(
+        &shell,
+        "'$USER':${MISSING:-$USER}:$(printf '$USER'):`printf '$USER'`:$((1 + $USER)):$'$USER'",
+    );
+
+    try std.testing.expectEqualStrings(
+        "'rush-user':rush-user:$(printf '$USER'):`printf '$USER'`:$((1 + $USER)):$'$USER'",
+        expanded,
+    );
 }
 
 test "ShellWithBuiltins uses the supplied compile-time builtin registry" {

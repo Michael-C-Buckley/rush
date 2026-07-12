@@ -23,19 +23,21 @@
 
   <h2 id="synopsis"><a href="#synopsis">SYNOPSIS</a></h2>
 
-  <pre><span class="cmd">source</span> <span class="var">file</span></pre>
+  <pre><span class="cmd">source</span> <span class="var">file</span> [<span class="var">argument</span> ...]</pre>
 
   <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
 
-  <p><code>source</code> reads and executes commands from <var>file</var> in the current shell environment. It is a compatibility alias for the POSIX <code>.</code> builtin.</p>
+  <p><code>source</code> reads and executes commands from <var>file</var> in the current shell environment. It is a compatibility alias for the POSIX <code>.</code> builtin. When <var>file</var> contains no slash, Rush searches <code>PATH</code>.</p>
+
+  <p>Additional operands initialize the positional parameters seen by the sourced script.</p>
 
   <h2 id="exit-status"><a href="#exit-status">EXIT STATUS</a></h2>
 
-  <p>The status of the sourced script, or two when the file operand is missing. Passing additional source arguments is not implemented yet and is reported as a usage error.</p>
+  <p>The status of the sourced script, one when the file cannot be opened, or two when the file operand is missing, cannot be found, or contains a syntax error.</p>
 
   <h2 id="see-also"><a href="#see-also">SEE ALSO</a></h2>
 
-  <p><a href="index.html">rush-builtins(7)</a>.</p>
+  <p><a href="index.html">rush-builtins(7)</a>, <a href="dot.html">dot(1)</a>.</p>
 
 </body>
 </html>

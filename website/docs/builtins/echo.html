@@ -23,11 +23,11 @@
 
   <h2 id="synopsis"><a href="#synopsis">SYNOPSIS</a></h2>
 
-  <pre><span class="cmd">echo</span> [<span class="var">string</span> ...]</pre>
+  <pre><span class="cmd">echo</span> [<span class="opt">-n</span>] [<span class="opt">-e</span> | <span class="opt">-E</span>] [<span class="var">string</span> ...]</pre>
 
   <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
 
-  <p><code>echo</code> is a POSIX regular builtin provided by Rush. Write arguments to standard output.</p>
+  <p><code>echo</code> writes its operands separated by spaces. It writes a trailing newline unless <code>-n</code> is used. <code>-e</code> enables backslash escapes and <code>-E</code> disables them. Options may be combined and repeated; option parsing stops at the first unrecognized operand.</p>
 
   <p>This page summarizes the builtin in Rush documentation. POSIX is the normative reference for detailed portable behavior.</p>
 

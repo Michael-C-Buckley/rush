@@ -122,63 +122,6 @@
 
   <p>Do not chase bug-for-bug Bash emulation by default. Choose clearer behavior when Bash is undocumented, surprising, unsafe, or inconsistent.</p>
 
-  <h2 id="third-party-suite-snapshot"><a href="#third-party-suite-snapshot">Third-party suite snapshot</a></h2>
-
-  <p>Rush also tracks third-party shell suites as compatibility evidence. These numbers are a progress snapshot, not a POSIX certification claim.</p>
-
-  <table>
-    <thead>
-      <tr>
-        <th scope="col">Shell</th>
-        <th scope="col">Mode tested</th>
-        <th scope="col">Smoosh</th>
-        <th scope="col">Modernish</th>
-        <th scope="col">Notes</th>
-      </tr>
-    </thead>
-    <tbody>
-      <tr>
-        <td>Rush</td>
-        <td><code>rush --posix</code></td>
-        <td>162 / 186 passed (87.1%)</td>
-        <td>368 / 389 succeeded</td>
-        <td>Modernish reported 20 skipped, 1 warning, and no failures; <code>bc</code> was unavailable.</td>
-      </tr>
-      <tr>
-        <td>macOS Bash 3.2</td>
-        <td><code>/bin/bash --posix</code></td>
-        <td>148 / 186 passed</td>
-        <td>352 / 389 succeeded</td>
-        <td>Modernish reported 5 skipped, 30 expected failures, and 2 unexpected failures.</td>
-      </tr>
-      <tr>
-        <td>GNU Bash 5</td>
-        <td><code>bash --posix</code></td>
-        <td>156 / 186 passed</td>
-        <td>384 / 389 succeeded</td>
-        <td>Modernish reported 5 skipped and no failures.</td>
-      </tr>
-      <tr>
-        <td>dash</td>
-        <td><code>dash</code></td>
-        <td>151 / 186 passed</td>
-        <td>373 / 389 succeeded</td>
-        <td>Modernish reported 11 skipped, 1 warning, 3 expected failures, and 1 unexpected failure.</td>
-      </tr>
-      <tr>
-        <td>yash</td>
-        <td><code>yash -o posixlycorrect</code></td>
-        <td>149 / 186 passed</td>
-        <td>373 / 389 succeeded</td>
-        <td>Modernish reported 15 skipped, 1 warning, and no failures.</td>
-      </tr>
-    </tbody>
-  </table>
-
-  <p>Reference shell rows were measured 2026-06-28 on macOS arm64 using Smoosh <code>cc67dbe6a495</code> and Modernish <code>cde49fa37f93</code>. The Rush row was refreshed 2026-07-01 on Linux x86_64 after the Smoosh and Modernish compatibility fixes, using the same suite commits. Smoosh counts are exact pass counts. Modernish separates succeeded, skipped, expected failures, warnings, and unexpected failures; counted rows report succeeded tests and summarize the rest.</p>
-
-  <p>Some third-party suite expectations need POSIX classification before they become Rush requirements. See the <a href="smoosh.html">Smoosh suite notes</a> for Rush's documented expected Smoosh failures.</p>
-
   <h2 id="recording-decisions"><a href="#recording-decisions">Recording decisions</a></h2>
 
   <p>Turn compatibility decisions into tests when practical. Include:</p>

@@ -31,6 +31,8 @@
 
   <p>In Rush mode, <code>unset -f name</code> also suppresses <a href="../configuration.html#autoloaded-functions">autoloading</a> of <code>name</code> for the current shell. Defining <code>name()</code> again clears that suppression.</p>
 
+  <p>In the default Bash-compatible mode, variable operands may select indexed-array elements, for example <code>unset 'values[2]'</code>. Unsetting the last element leaves an empty array declaration.</p>
+
   <p>This page summarizes the builtin in Rush documentation. POSIX is the normative reference for detailed portable behavior.</p>
 
   <h2 id="exit-status"><a href="#exit-status">EXIT STATUS</a></h2>

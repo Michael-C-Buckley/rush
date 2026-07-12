@@ -6600,6 +6600,24 @@ fn expandWord(shell: anytype, word: ast.Word) ![]const u8 {
     return expandWordTracking(shell, word, null);
 }
 
+pub fn expandParametersScalar(shell: anytype, text: []const u8) ![]const u8 {
+    const allocator = shell.scratchAllocator();
+    const expansions = try parser.parseParameterExpansionText(allocator, text);
+    if (expansions.len == 0) return text;
+
+    var output: std.ArrayList(u8) = .empty;
+    var cursor: usize = 0;
+    for (expansions) |expansion| {
+        std.debug.assert(expansion.span.start >= cursor);
+        std.debug.assert(expansion.span.end <= text.len);
+        try output.appendSlice(allocator, text[cursor..expansion.span.start]);
+        try output.appendSlice(allocator, try expandParameter(shell, expansion));
+        cursor = expansion.span.end;
+    }
+    try output.appendSlice(allocator, text[cursor..]);
+    return output.toOwnedSlice(allocator);
+}
+
 fn expandWordTracking(shell: anytype, word: ast.Word, substitution_status: ?*?result.ExitStatus) ![]const u8 {
     const expanded = switch (word.data) {
         .literal => |literal| literal,

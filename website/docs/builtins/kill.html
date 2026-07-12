@@ -23,11 +23,12 @@
 
   <h2 id="synopsis"><a href="#synopsis">SYNOPSIS</a></h2>
 
-  <pre><span class="cmd">kill</span> [<span class="opt">-s</span> <span class="var">signal</span>|<span class="opt">-signal</span>] <span class="var">pid</span> ...</pre>
+  <pre><span class="cmd">kill</span> [<span class="opt">-s</span> <span class="var">signal</span> | <span class="opt">-signal</span>] (<span class="var">pid</span> | <span class="var">job_id</span>) ...
+<span class="cmd">kill</span> <span class="opt">-l</span> [<span class="var">status</span>]</pre>
 
   <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
 
-  <p><code>kill</code> is a POSIX regular builtin provided by Rush. Send signals to processes or jobs.</p>
+  <p><code>kill</code> is a POSIX regular builtin provided by Rush. It sends <code>TERM</code> by default. Signals may be selected by name or number, and targets may be process IDs or shell job specifications. <code>kill -l</code> lists signal names; with a numeric status, it prints the corresponding signal name.</p>
 
   <p>This page summarizes the builtin in Rush documentation. POSIX is the normative reference for detailed portable behavior.</p>
 

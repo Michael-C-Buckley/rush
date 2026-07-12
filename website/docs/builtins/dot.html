@@ -23,11 +23,13 @@
 
   <h2 id="synopsis"><a href="#synopsis">SYNOPSIS</a></h2>
 
-  <pre><span class="cmd">.</span> <span class="var">file</span></pre>
+  <pre><span class="cmd">.</span> <span class="var">file</span> [<span class="var">argument</span> ...]</pre>
 
   <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
 
-  <p><code>.</code> is a POSIX special builtin provided by Rush. Read and execute commands from a file in the current shell environment.</p>
+  <p><code>.</code> is a POSIX special builtin provided by Rush. It reads and executes commands from a file in the current shell environment. When <var>file</var> contains no slash, Rush searches <code>PATH</code>.</p>
+
+  <p>Additional operands initialize the positional parameters seen by the sourced script.</p>
 
   <p>This page summarizes the builtin in Rush documentation. POSIX is the normative reference for detailed portable behavior.</p>
 
@@ -37,7 +39,7 @@
 
   <h2 id="see-also"><a href="#see-also">SEE ALSO</a></h2>
 
-  <p><a href="index.html">rush-builtins(7)</a>, POSIX Shell Command Language.</p>
+  <p><a href="index.html">rush-builtins(7)</a>, <a href="source.html">source(1)</a>, POSIX Shell Command Language.</p>
 
 </body>
 </html>

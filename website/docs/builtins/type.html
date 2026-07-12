@@ -27,7 +27,7 @@
 
   <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
 
-  <p><code>type</code> describes how each command name would be resolved. Rush reports aliases, special builtins, shell functions, regular builtins, and external commands in command lookup order. Short options may be combined, for example <code>type -at name</code>.</p>
+  <p><code>type</code> describes how each command name would be resolved. Rush reports aliases, shell functions, reserved words, builtins, and external commands in command lookup order. Short options may be combined, for example <code>type -at name</code>.</p>
 
   <h2 id="options"><a href="#options">OPTIONS</a></h2>
 
@@ -35,8 +35,8 @@
     <dt><code>-a</code></dt><dd>Print all matching resolutions instead of stopping at the first match.</dd>
     <dt><code>-f</code></dt><dd>Suppress shell function lookup.</dd>
     <dt><code>-p</code></dt><dd>Print only the path for external command matches.</dd>
-    <dt><code>-P</code></dt><dd>Force <code>PATH</code> lookup and skip aliases, functions, and builtins.</dd>
-    <dt><code>-t</code></dt><dd>Print only the resolution kind: <code>alias</code>, <code>builtin</code>, <code>function</code>, or <code>file</code>.</dd>
+    <dt><code>-P</code></dt><dd>Force <code>PATH</code> lookup and skip aliases, functions, reserved words, and builtins.</dd>
+    <dt><code>-t</code></dt><dd>Print only the resolution kind: <code>alias</code>, <code>function</code>, <code>keyword</code>, <code>builtin</code>, or <code>file</code>.</dd>
     <dt><code>--</code></dt><dd>End option parsing.</dd>
   </dl>
 

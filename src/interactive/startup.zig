@@ -18,7 +18,13 @@ pub fn source(
     }
 
     if (envValue(sh.env, "ENV")) |env_path| {
-        if (try sourceFileIfExists(sh, source_id, env_path)) |status| return status;
+        if (env_path.len != 0) {
+            const expanded_env_path = try expandEnvPath(sh, env_path);
+            defer sh.allocator.free(expanded_env_path);
+            if (expanded_env_path.len != 0) {
+                if (try sourceFileIfExists(sh, source_id, expanded_env_path)) |status| return status;
+            }
+        }
     }
 
     if (login) {
@@ -47,6 +53,13 @@ pub fn source(
     }
 
     return null;
+}
+
+fn expandEnvPath(sh: anytype, path: []const u8) ![]const u8 {
+    const scratch = try sh.beginScratchScope();
+    defer scratch.end();
+    const expanded = try shell.eval.expandParametersScalar(sh, path);
+    return sh.allocator.dupe(u8, expanded);
 }
 
 fn sourceFileIfExists(

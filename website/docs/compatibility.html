@@ -21,11 +21,9 @@
 
   <p>This is not a full matrix. For decision rules, see the <a href="conformance.html">conformance policy</a>.</p>
 
-  <h2 id="current-scope"><a href="#current-scope">Current scope</a></h2>
+  <h2 id="c-locale-shell-semantics"><a href="#c-locale-shell-semantics">C locale shell semantics</a></h2>
 
-  <h3 id="c-locale-shell-semantics"><a href="#c-locale-shell-semantics">C locale shell semantics</a></h3>
-
-  <p>Rush currently uses POSIX/C-locale shell semantics. Pathname ordering, bracket expression collation, and character classes do not yet follow <code>LC_COLLATE</code> or <code>LC_CTYPE</code>.</p>
+  <p>Rush uses POSIX/C-locale shell semantics. <code>LC_COLLATE</code> and <code>LC_CTYPE</code> do not alter pathname ordering, bracket expression collation, or character classes.</p>
 
   <p>Rush sorts pathname expansion matches by byte value. Locale-aware shells may order mixed-case names differently:</p>
 

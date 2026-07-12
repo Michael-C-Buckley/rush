@@ -72,6 +72,81 @@ pub fn parseWordExpansionText(
     return parser_state.parseWordText(text, span);
 }
 
+/// Parses parameter expansions from raw text without applying shell quote
+/// semantics. Other expansion forms are skipped as complete units so callers
+/// can preserve them literally.
+// ziglint-ignore: Z015 matches the existing public parse API error set exposure
+pub fn parseParameterExpansionText(
+    allocator: std.mem.Allocator,
+    text: []const u8,
+) ParserError![]const ast.ParameterExpansion {
+    const src: source_mod.Source = .{ .id = 0, .kind = .command_string, .name = "parameter expansion", .text = text };
+    var parser_state: Parser = .{ .allocator = allocator, .source = src, .tokens = &.{}, .alias_state = null };
+    var expansions: std.ArrayList(ast.ParameterExpansion) = .empty;
+    errdefer expansions.deinit(allocator);
+
+    var index: usize = 0;
+    while (index < text.len) {
+        if (text[index] == '`') {
+            index = try scanBackquoteSubstitution(text, index, text.len) + 1;
+            continue;
+        }
+        if (text[index] != '$') {
+            index += 1;
+            continue;
+        }
+
+        const name_start = index + 1;
+        if (name_start >= text.len) break;
+        if (text[name_start] == '\'') {
+            index = try scanDollarSingleQuoteEnd(text, name_start + 1, text.len) + 1;
+            continue;
+        }
+        if (name_start + 1 < text.len and text[name_start] == '(' and text[name_start + 1] == '(') {
+            index = try scanArithmeticExpansion(text, index, text.len) + 2;
+            continue;
+        }
+        if (text[name_start] == '(') {
+            index = try scanCommandSubstitution(text, name_start, text.len) + 1;
+            continue;
+        }
+        if (text[name_start] == '{') {
+            const expansion_end = scanBracedParameterEnd(text, name_start, text.len) orelse {
+                index += 1;
+                continue;
+            };
+            const expansion_span = Parser.spanFromRelativeOffsets(.{}, text, index, expansion_end + 1);
+            const expansion = try parser_state.parseBracedParameter(
+                text[name_start + 1 .. expansion_end],
+                expansion_span,
+            ) orelse return error.InvalidParameterExpansion;
+            try expansions.append(allocator, expansion);
+            index = expansion_end + 1;
+            continue;
+        }
+        if (parseSingleParameter(text[name_start])) |parameter| {
+            try expansions.append(allocator, .{
+                .parameter = parameter,
+                .span = Parser.spanFromRelativeOffsets(.{}, text, index, name_start + 1),
+            });
+            index = name_start + 1;
+            continue;
+        }
+
+        const name_end = scanParameterName(text, name_start, text.len);
+        if (name_end == name_start) {
+            index += 1;
+            continue;
+        }
+        try expansions.append(allocator, .{
+            .parameter = .{ .variable = text[name_start..name_end] },
+            .span = Parser.spanFromRelativeOffsets(.{}, text, index, name_end),
+        });
+        index = name_end;
+    }
+    return expansions.toOwnedSlice(allocator);
+}
+
 fn parseWithAliasState(
     allocator: std.mem.Allocator,
     src: source_mod.Source,
@@ -2719,4 +2794,21 @@ test "whole-program parse reports failure at end of input" {
     try std.testing.expectError(error.UnexpectedToken, parsed);
     try std.testing.expectEqual(@as(usize, 3), parse_failure.?.line);
     try std.testing.expectEqual(@as(?[]const u8, null), parse_failure.?.near);
+}
+
+test "parameter-only parser skips other substitution forms" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    const text = "'$USER':${MISSING:-$USER}:$(printf '$USER'):`printf '$USER'`:$((1 + $USER)):$'$USER'";
+    const expansions = try parseParameterExpansionText(arena.allocator(), text);
+
+    try std.testing.expectEqual(@as(usize, 2), expansions.len);
+    try std.testing.expectEqualStrings("$USER", text[expansions[0].span.start..expansions[0].span.end]);
+    try std.testing.expectEqualStrings("USER", expansions[0].parameter.variable);
+    try std.testing.expectEqualStrings(
+        "${MISSING:-$USER}",
+        text[expansions[1].span.start..expansions[1].span.end],
+    );
+    try std.testing.expectEqualStrings("MISSING", expansions[1].parameter.variable);
 }

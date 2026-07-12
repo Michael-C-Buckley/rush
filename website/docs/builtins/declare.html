@@ -1,0 +1,56 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>rush declare builtin</title>
+  <link rel="stylesheet" href="/style.css">
+</head>
+<body>
+  <header class="site-header">
+    <div><a href="../../index.html">rush</a></div>
+    <nav class="site-nav" aria-label="Primary">
+      <a href="../index.html">docs</a>
+      <a href="https://github.com/rockorager/rush">source</a>
+    </nav>
+  </header>
+
+  <h1 id="declare"><a href="#declare">DECLARE(1)</a></h1>
+
+  <h2 id="name"><a href="#name">NAME</a></h2>
+
+  <p>declare - declare variables and indexed arrays with attributes.</p>
+
+  <h2 id="synopsis"><a href="#synopsis">SYNOPSIS</a></h2>
+
+  <pre><span class="cmd">declare</span> [<span class="opt">-agirx</span>] [<span class="var">name</span>[=<span class="var">value</span>] ...]
+<span class="cmd">declare</span> <span class="opt">-p</span> [<span class="var">name</span> ...]</pre>
+
+  <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
+
+  <p><code>declare</code> is a Bash-compatible builtin available in Rush's default mode. It creates variables or indexed arrays and applies attributes. Inside a function, declarations are local to that invocation unless <code>-g</code> is used. With no operands, it prints all declarations.</p>
+
+  <p>Assignment values use assignment-word expansion. Integer variables evaluate later assignments as arithmetic expressions. Array assignments accept Bash-style indexed values such as <code>declare -a values=([2]=two [4]=four)</code>.</p>
+
+  <h2 id="options"><a href="#options">OPTIONS</a></h2>
+
+  <dl>
+    <dt><code>-a</code></dt><dd>Declare an indexed array.</dd>
+    <dt><code>-g</code></dt><dd>Use global scope when called from a function.</dd>
+    <dt><code>-i</code></dt><dd>Apply the integer attribute and evaluate assignment values arithmetically.</dd>
+    <dt><code>-p</code></dt><dd>Print reusable declarations, optionally restricted to the named variables.</dd>
+    <dt><code>-r</code></dt><dd>Apply the readonly attribute.</dd>
+    <dt><code>-x</code></dt><dd>Apply the export attribute.</dd>
+    <dt><code>--</code></dt><dd>End option parsing.</dd>
+  </dl>
+
+  <h2 id="exit-status"><a href="#exit-status">EXIT STATUS</a></h2>
+
+  <p>Zero on success, one for invalid identifiers, missing names requested with <code>-p</code>, or readonly assignment failures, and two for invalid options.</p>
+
+  <h2 id="see-also"><a href="#see-also">SEE ALSO</a></h2>
+
+  <p><a href="index.html">rush-builtins(7)</a>, <a href="typeset.html">typeset(1)</a>, <a href="local.html">local(1)</a>, <a href="export.html">export(1)</a>, <a href="readonly.html">readonly(1)</a>.</p>
+
+</body>
+</html>

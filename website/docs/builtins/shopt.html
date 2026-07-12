@@ -31,7 +31,7 @@
 
   <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
 
-  <p><code>shopt</code> inspects or updates compatibility shell options. Rush currently models <code>expand_aliases</code>. Without operands, <code>shopt</code> lists all modeled options and <code>shopt -p</code> prints reusable commands.</p>
+  <p><code>shopt</code> inspects or updates compatibility shell options. Rush models <code>expand_aliases</code>. Without operands, <code>shopt</code> lists all modeled options and <code>shopt -p</code> prints reusable commands.</p>
 
   <h2 id="options"><a href="#options">OPTIONS</a></h2>
 
@@ -45,7 +45,7 @@
 
   <h2 id="exit-status"><a href="#exit-status">EXIT STATUS</a></h2>
 
-  <p>Zero on success, one for invalid option names or failed queries, and two for usage errors.</p>
+  <p>Zero when every listed or queried option is enabled, one when any is disabled or invalid, and two for usage errors. Setting or unsetting valid options succeeds regardless of their previous state.</p>
 
   <h2 id="see-also"><a href="#see-also">SEE ALSO</a></h2>
 

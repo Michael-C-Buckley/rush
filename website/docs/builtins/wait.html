@@ -23,11 +23,11 @@
 
   <h2 id="synopsis"><a href="#synopsis">SYNOPSIS</a></h2>
 
-  <pre><span class="cmd">wait</span> [<span class="var">pid</span> ...]</pre>
+  <pre><span class="cmd">wait</span> [(<span class="var">pid</span> | <span class="var">job_id</span>) ...]</pre>
 
   <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
 
-  <p><code>wait</code> is a POSIX regular builtin provided by Rush. Wait for jobs or process IDs to complete.</p>
+  <p><code>wait</code> is a POSIX regular builtin provided by Rush. It waits for each process ID or shell job specification and returns the final target's status. Without operands, it waits for all known background processes.</p>
 
   <p>This page summarizes the builtin in Rush documentation. POSIX is the normative reference for detailed portable behavior.</p>
 

@@ -23,21 +23,29 @@
 
   <h2 id="synopsis"><a href="#synopsis">SYNOPSIS</a></h2>
 
-  <pre><span class="cmd">export</span> <span class="var">name</span>[=<span class="var">value</span>] ...</pre>
+  <pre><span class="cmd">export</span> [<span class="opt">-aprx</span>] [<span class="var">name</span>[=<span class="var">value</span>] ...]</pre>
 
   <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
 
-  <p><code>export</code> is a POSIX special builtin provided by Rush. Mark variables for export to child process environments.</p>
+  <p><code>export</code> is a POSIX special builtin provided by Rush. It marks variables for export to child process environments. Assignment operands set a value while applying the export attribute. Without operands, it prints exported declarations.</p>
 
-  <p>This page summarizes the builtin in Rush documentation. POSIX is the normative reference for detailed portable behavior.</p>
+  <h2 id="options"><a href="#options">OPTIONS</a></h2>
+
+  <dl>
+    <dt><code>-a</code></dt><dd>Accept Bash-style indexed-array declarations. This option is available only in Rush's default Bash-compatible mode.</dd>
+    <dt><code>-p</code></dt><dd>Print reusable exported declarations, optionally restricted to the named variables.</dd>
+    <dt><code>-r</code></dt><dd>Also apply the readonly attribute.</dd>
+    <dt><code>-x</code></dt><dd>Apply the export attribute explicitly.</dd>
+    <dt><code>--</code></dt><dd>End option parsing.</dd>
+  </dl>
 
   <h2 id="exit-status"><a href="#exit-status">EXIT STATUS</a></h2>
 
-  <p>See the POSIX definition for command-specific status rules. Usage errors generally return a non-zero status.</p>
+  <p>Zero on success, one when a declaration fails, and two for invalid options or, in POSIX mode, invalid identifiers.</p>
 
   <h2 id="see-also"><a href="#see-also">SEE ALSO</a></h2>
 
-  <p><a href="index.html">rush-builtins(7)</a>, POSIX Shell Command Language.</p>
+  <p><a href="index.html">rush-builtins(7)</a>, <a href="declare.html">declare(1)</a>, <a href="readonly.html">readonly(1)</a>, POSIX Shell Command Language.</p>
 
 </body>
 </html>
