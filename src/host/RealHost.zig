@@ -1,9 +1,13 @@
-//! Platform syscall shims used by `RealHost`.
+//! Real host effects implemented with platform syscalls.
+
+const RealHost = @This();
 
 const std = @import("std");
 const builtin = @import("builtin");
 
 const host = @import("../host.zig");
+
+const real_host: RealHost = .{};
 
 extern "c" fn readdir(dir: *std.c.DIR) ?*std.c.dirent;
 extern "c" fn getpgrp() c_int;
@@ -25,7 +29,7 @@ pub const WriteError = error{
     Unexpected,
 };
 
-pub fn wallTimeNs() i128 {
+pub fn wallTimeNs(_: RealHost) i128 {
     return clockTimeNs(.REALTIME) orelse 0;
 }
 
@@ -95,7 +99,7 @@ pub const SignalDispositionError = host.SignalDispositionError;
 
 pub const ResourceLimitError = host.ResourceLimitError;
 
-pub fn read(fd: host.Fd, buffer: []u8) ReadError!usize {
+pub fn read(_: RealHost, fd: host.Fd, buffer: []u8) ReadError!usize {
     if (buffer.len == 0) return 0;
     return switch (builtin.os.tag) {
         .linux => linuxRead(fd, buffer),
@@ -104,13 +108,13 @@ pub fn read(fd: host.Fd, buffer: []u8) ReadError!usize {
     };
 }
 
-pub fn readWithTimeout(fd: host.Fd, buffer: []u8, timeout_ms: u64) ReadError!host.TimedReadResult {
+pub fn readWithTimeout(self: RealHost, fd: host.Fd, buffer: []u8, timeout_ms: u64) ReadError!host.TimedReadResult {
     if (buffer.len == 0) return .{ .read = 0 };
-    if (!readReady(fd, timeout_ms)) return .timeout;
-    return .{ .read = try read(fd, buffer) };
+    if (!self.readReady(fd, timeout_ms)) return .timeout;
+    return .{ .read = try self.read(fd, buffer) };
 }
 
-pub fn readReady(fd: host.Fd, timeout_ms: u64) bool {
+pub fn readReady(_: RealHost, fd: host.Fd, timeout_ms: u64) bool {
     var fds = [_]std.posix.pollfd{.{
         .fd = @intCast(fd.raw()),
         .events = @intCast(std.c.POLL.IN),
@@ -122,8 +126,9 @@ pub fn readReady(fd: host.Fd, timeout_ms: u64) bool {
     return (fds[0].revents & @as(i16, @intCast(std.c.POLL.IN))) != 0;
 }
 
-pub fn readInteractiveKey(fd: host.Fd, timeout_ms: u64) ?u8 {
-    if (!isTerminalFd(fd)) return null;
+pub fn readInteractiveKey(self: RealHost, timeout_ms: u64) ?u8 {
+    const fd: host.Fd = .stdin;
+    if (!self.isTerminalFd(fd)) return null;
     const raw_fd: std.posix.fd_t = @intCast(fd.raw());
     const saved = std.posix.tcgetattr(raw_fd) catch return null;
     var raw = saved;
@@ -135,14 +140,14 @@ pub fn readInteractiveKey(fd: host.Fd, timeout_ms: u64) ?u8 {
     std.posix.tcsetattr(raw_fd, .DRAIN, raw) catch return null;
     defer std.posix.tcsetattr(raw_fd, .DRAIN, saved) catch {};
 
-    if (!readReady(fd, timeout_ms)) return null;
+    if (!self.readReady(fd, timeout_ms)) return null;
 
     var byte: [1]u8 = undefined;
-    return if ((read(fd, &byte) catch return null) == 1) byte[0] else null;
+    return if ((self.read(fd, &byte) catch return null) == 1) byte[0] else null;
 }
 
-pub fn disableTerminalEcho(fd: host.Fd) ?TerminalMode {
-    if (!isTerminalFd(fd)) return null;
+pub fn disableTerminalEcho(self: RealHost, fd: host.Fd) ?TerminalMode {
+    if (!self.isTerminalFd(fd)) return null;
     const raw_fd: std.posix.fd_t = @intCast(fd.raw());
     const saved = std.posix.tcgetattr(raw_fd) catch return null;
     var silent = saved;
@@ -152,20 +157,20 @@ pub fn disableTerminalEcho(fd: host.Fd) ?TerminalMode {
     return saved;
 }
 
-pub fn restoreTerminalMode(fd: host.Fd, mode: TerminalMode) void {
+pub fn restoreTerminalMode(_: RealHost, fd: host.Fd, mode: TerminalMode) void {
     const raw_fd: std.posix.fd_t = @intCast(fd.raw());
     // ziglint-ignore: Z026 best-effort terminal cleanup cannot report through this API
     std.posix.tcsetattr(raw_fd, .DRAIN, mode) catch {};
 }
 
-pub fn writeAll(fd: host.Fd, bytes: []const u8) WriteError!void {
+pub fn writeAll(self: RealHost, fd: host.Fd, bytes: []const u8) WriteError!void {
     var written: usize = 0;
     while (written < bytes.len) {
-        written += try write(fd, bytes[written..]);
+        written += try self.write(fd, bytes[written..]);
     }
 }
 
-pub fn write(fd: host.Fd, bytes: []const u8) WriteError!usize {
+pub fn write(_: RealHost, fd: host.Fd, bytes: []const u8) WriteError!usize {
     if (bytes.len == 0) return 0;
     return switch (builtin.os.tag) {
         .linux => linuxWrite(fd, bytes),
@@ -174,7 +179,7 @@ pub fn write(fd: host.Fd, bytes: []const u8) WriteError!usize {
     };
 }
 
-pub fn openZ(path: [:0]const u8, options: host.OpenOptions) OpenError!host.Fd {
+pub fn openZ(_: RealHost, path: [:0]const u8, options: host.OpenOptions) OpenError!host.Fd {
     std.debug.assert(path.len != 0);
     return switch (builtin.os.tag) {
         .linux => linuxOpenZ(path, options),
@@ -183,7 +188,7 @@ pub fn openZ(path: [:0]const u8, options: host.OpenOptions) OpenError!host.Fd {
     };
 }
 
-pub fn close(fd: host.Fd) CloseError!void {
+pub fn close(_: RealHost, fd: host.Fd) CloseError!void {
     return switch (builtin.os.tag) {
         .linux => linuxClose(fd),
         .macos, .freebsd, .openbsd, .netbsd => libcClose(fd),
@@ -191,7 +196,7 @@ pub fn close(fd: host.Fd) CloseError!void {
     };
 }
 
-pub fn deleteFileZ(path: [:0]const u8) DeleteFileError!void {
+pub fn deleteFileZ(_: RealHost, path: [:0]const u8) DeleteFileError!void {
     return switch (builtin.os.tag) {
         .linux => linuxDeleteFileZ(path),
         .macos, .freebsd, .openbsd, .netbsd => libcDeleteFileZ(path),
@@ -199,7 +204,7 @@ pub fn deleteFileZ(path: [:0]const u8) DeleteFileError!void {
     };
 }
 
-pub fn duplicate(fd: host.Fd) DuplicateError!host.Fd {
+pub fn duplicate(_: RealHost, fd: host.Fd) DuplicateError!host.Fd {
     return switch (builtin.os.tag) {
         .linux => linuxDuplicate(fd),
         .macos, .freebsd, .openbsd, .netbsd => libcDuplicate(fd),
@@ -207,7 +212,7 @@ pub fn duplicate(fd: host.Fd) DuplicateError!host.Fd {
     };
 }
 
-pub fn duplicateAtLeast(fd: host.Fd, min_fd: u31) DuplicateError!host.Fd {
+pub fn duplicateAtLeast(_: RealHost, fd: host.Fd, min_fd: u31) DuplicateError!host.Fd {
     return switch (builtin.os.tag) {
         .linux => linuxDuplicateAtLeast(fd, min_fd),
         .macos, .freebsd, .openbsd, .netbsd => libcDuplicateAtLeast(fd, min_fd),
@@ -215,7 +220,7 @@ pub fn duplicateAtLeast(fd: host.Fd, min_fd: u31) DuplicateError!host.Fd {
     };
 }
 
-pub fn duplicateTo(from: host.Fd, to: host.Fd) DuplicateError!void {
+pub fn duplicateTo(_: RealHost, from: host.Fd, to: host.Fd) DuplicateError!void {
     return switch (builtin.os.tag) {
         .linux => linuxDuplicateTo(from, to),
         .macos, .freebsd, .openbsd, .netbsd => libcDuplicateTo(from, to),
@@ -223,7 +228,7 @@ pub fn duplicateTo(from: host.Fd, to: host.Fd) DuplicateError!void {
     };
 }
 
-pub fn setCloseOnExec(fd: host.Fd, enabled: bool) FdFlagError!void {
+pub fn setCloseOnExec(_: RealHost, fd: host.Fd, enabled: bool) FdFlagError!void {
     return switch (builtin.os.tag) {
         .linux => linuxSetCloseOnExec(fd, enabled),
         .macos, .freebsd, .openbsd, .netbsd => libcSetCloseOnExec(fd, enabled),
@@ -231,7 +236,7 @@ pub fn setCloseOnExec(fd: host.Fd, enabled: bool) FdFlagError!void {
     };
 }
 
-pub fn pipe() PipeError!host.Pipe {
+pub fn pipe(_: RealHost) PipeError!host.Pipe {
     return switch (builtin.os.tag) {
         .linux => linuxPipe(),
         .macos, .freebsd, .openbsd, .netbsd => libcPipe(),
@@ -239,7 +244,7 @@ pub fn pipe() PipeError!host.Pipe {
     };
 }
 
-pub fn forkProcess() ForkError!host.ForkResult {
+pub fn forkProcess(_: RealHost) ForkError!host.ForkResult {
     return switch (builtin.os.tag) {
         .linux => linuxForkProcess(),
         .macos, .freebsd, .openbsd, .netbsd => libcForkProcess(),
@@ -247,7 +252,7 @@ pub fn forkProcess() ForkError!host.ForkResult {
     };
 }
 
-pub fn exit(status: u8) noreturn {
+pub fn exit(_: RealHost, status: u8) noreturn {
     switch (builtin.os.tag) {
         .linux => std.os.linux.exit(status),
         .macos, .freebsd, .openbsd, .netbsd => std.c._exit(status),
@@ -255,7 +260,7 @@ pub fn exit(status: u8) noreturn {
     }
 }
 
-pub fn currentProcessId() host.Pid {
+pub fn currentProcessId(_: RealHost) host.Pid {
     return switch (builtin.os.tag) {
         .linux => @intCast(std.os.linux.getpid()),
         .macos, .freebsd, .openbsd, .netbsd => @intCast(std.c.getpid()),
@@ -263,11 +268,11 @@ pub fn currentProcessId() host.Pid {
     };
 }
 
-pub fn currentProcessGroup() host.Pid {
+pub fn currentProcessGroup(_: RealHost) host.Pid {
     return @intCast(getpgrp());
 }
 
-pub fn currentParentProcessId() host.Pid {
+pub fn currentParentProcessId(_: RealHost) host.Pid {
     return switch (builtin.os.tag) {
         .linux => @intCast(std.os.linux.getppid()),
         .macos, .freebsd, .openbsd, .netbsd => @intCast(std.c.getppid()),
@@ -275,7 +280,7 @@ pub fn currentParentProcessId() host.Pid {
     };
 }
 
-pub fn sendSignal(pid: host.Pid, signal: u8) KillError!void {
+pub fn sendSignal(_: RealHost, pid: host.Pid, signal: u8) KillError!void {
     return switch (builtin.os.tag) {
         .linux => linuxSendSignal(pid, signal),
         .macos, .freebsd, .openbsd, .netbsd => libcSendSignal(pid, signal),
@@ -283,7 +288,7 @@ pub fn sendSignal(pid: host.Pid, signal: u8) KillError!void {
     };
 }
 
-pub fn setProcessGroup(pid: host.Pid, process_group: host.Pid) ProcessGroupError!void {
+pub fn setProcessGroup(_: RealHost, pid: host.Pid, process_group: host.Pid) ProcessGroupError!void {
     return switch (builtin.os.tag) {
         .linux => linuxSetProcessGroup(pid, process_group),
         .macos, .freebsd, .openbsd, .netbsd => libcSetProcessGroup(pid, process_group),
@@ -291,7 +296,7 @@ pub fn setProcessGroup(pid: host.Pid, process_group: host.Pid) ProcessGroupError
     };
 }
 
-pub fn terminalProcessGroup(fd: host.Fd) TerminalProcessGroupError!host.Pid {
+pub fn terminalProcessGroup(_: RealHost, fd: host.Fd) TerminalProcessGroupError!host.Pid {
     while (true) {
         const process_group = tcgetpgrp(fd.raw());
         if (process_group >= 0) return @intCast(process_group);
@@ -303,7 +308,7 @@ pub fn terminalProcessGroup(fd: host.Fd) TerminalProcessGroupError!host.Pid {
     }
 }
 
-pub fn setTerminalProcessGroup(fd: host.Fd, process_group: host.Pid) TerminalProcessGroupError!void {
+pub fn setTerminalProcessGroup(_: RealHost, fd: host.Fd, process_group: host.Pid) TerminalProcessGroupError!void {
     while (true) {
         const rc = tcsetpgrp(fd.raw(), @intCast(process_group));
         switch (std.c.errno(rc)) {
@@ -316,26 +321,26 @@ pub fn setTerminalProcessGroup(fd: host.Fd, process_group: host.Pid) TerminalPro
     }
 }
 
-pub fn setSignalIgnored(signal: u8) SignalDispositionError!void {
+pub fn setSignalIgnored(_: RealHost, signal: u8) SignalDispositionError!void {
     setSignalAction(signal, std.posix.SIG.IGN) catch return error.InvalidSignal;
 }
 
-pub fn setSignalDefault(signal: u8) SignalDispositionError!void {
+pub fn setSignalDefault(self: RealHost, signal: u8) SignalDispositionError!void {
     setSignalAction(signal, std.posix.SIG.DFL) catch return error.InvalidSignal;
-    _ = consumePendingSignal(signal);
+    _ = self.consumePendingSignal(signal);
 }
 
-pub fn installSignalTrap(signal: u8) SignalDispositionError!void {
+pub fn installSignalTrap(_: RealHost, signal: u8) SignalDispositionError!void {
     setSignalAction(signal, trapSignalHandler) catch return error.InvalidSignal;
 }
 
-pub fn consumePendingSignal(signal: u8) bool {
+pub fn consumePendingSignal(_: RealHost, signal: u8) bool {
     if (signal >= 64) return false;
     const mask = @as(u64, 1) << @intCast(signal);
     return (pending_signal_bits.fetchAnd(~mask, .seq_cst) & mask) != 0;
 }
 
-pub fn getResourceLimit(kind: host.ResourceLimitKind) ResourceLimitError!host.ResourceLimit {
+pub fn getResourceLimit(_: RealHost, kind: host.ResourceLimitKind) ResourceLimitError!host.ResourceLimit {
     const limit = std.posix.getrlimit(resourceLimitKind(kind)) catch return error.Unexpected;
     return .{
         .soft = resourceLimitFromNative(limit.cur),
@@ -343,7 +348,7 @@ pub fn getResourceLimit(kind: host.ResourceLimitKind) ResourceLimitError!host.Re
     };
 }
 
-pub fn setResourceLimit(kind: host.ResourceLimitKind, limit: host.ResourceLimit) ResourceLimitError!void {
+pub fn setResourceLimit(_: RealHost, kind: host.ResourceLimitKind, limit: host.ResourceLimit) ResourceLimitError!void {
     const native: std.posix.rlimit = .{
         .cur = try resourceLimitToNative(limit.soft),
         .max = try resourceLimitToNative(limit.hard),
@@ -380,7 +385,7 @@ fn peekPendingSignal() ?u8 {
     return @intCast(@ctz(bits));
 }
 
-pub fn isExecutableZ(path: [:0]const u8) bool {
+pub fn isExecutableZ(_: RealHost, path: [:0]const u8) bool {
     std.debug.assert(path.len != 0);
     return switch (builtin.os.tag) {
         .linux => linuxIsExecutableZ(path),
@@ -389,7 +394,7 @@ pub fn isExecutableZ(path: [:0]const u8) bool {
     };
 }
 
-pub fn existsZ(path: [:0]const u8) bool {
+pub fn existsZ(_: RealHost, path: [:0]const u8) bool {
     std.debug.assert(path.len != 0);
     return switch (builtin.os.tag) {
         .linux => linuxExistsZ(path),
@@ -398,7 +403,7 @@ pub fn existsZ(path: [:0]const u8) bool {
     };
 }
 
-pub fn fileStatusZ(path: [:0]const u8) FileStatusError!host.FileStatus {
+pub fn fileStatusZ(_: RealHost, path: [:0]const u8) FileStatusError!host.FileStatus {
     std.debug.assert(path.len != 0);
     return switch (builtin.os.tag) {
         .linux => linuxFileStatusZ(path),
@@ -407,7 +412,7 @@ pub fn fileStatusZ(path: [:0]const u8) FileStatusError!host.FileStatus {
     };
 }
 
-pub fn fileTestStatusZ(path: [:0]const u8, follow_symlinks: bool) ?host.FileStatus {
+pub fn fileTestStatusZ(_: RealHost, path: [:0]const u8, follow_symlinks: bool) ?host.FileStatus {
     std.debug.assert(path.len != 0);
     return switch (builtin.os.tag) {
         .linux => linuxFileTestStatusZ(path, follow_symlinks),
@@ -416,7 +421,7 @@ pub fn fileTestStatusZ(path: [:0]const u8, follow_symlinks: bool) ?host.FileStat
     };
 }
 
-pub fn fileAccessZ(path: [:0]const u8, access: host.FileAccess) bool {
+pub fn fileAccessZ(_: RealHost, path: [:0]const u8, access: host.FileAccess) bool {
     std.debug.assert(path.len != 0);
     return switch (builtin.os.tag) {
         .linux => linuxFileAccessZ(path, access),
@@ -425,12 +430,12 @@ pub fn fileAccessZ(path: [:0]const u8, access: host.FileAccess) bool {
     };
 }
 
-pub fn isTerminalFd(fd: host.Fd) bool {
+pub fn isTerminalFd(_: RealHost, fd: host.Fd) bool {
     return std.c.isatty(@intCast(fd.raw())) == 1;
 }
 
 // ziglint-ignore: Z015 existing public API error set exposure; preserve API
-pub fn listDir(allocator: std.mem.Allocator, path: []const u8) ListDirError!host.ListDirResult {
+pub fn listDir(_: RealHost, allocator: std.mem.Allocator, path: []const u8) ListDirError!host.ListDirResult {
     std.debug.assert(path.len != 0);
     return switch (builtin.os.tag) {
         .linux => linuxListDir(allocator, path),
@@ -439,7 +444,7 @@ pub fn listDir(allocator: std.mem.Allocator, path: []const u8) ListDirError!host
     };
 }
 
-pub fn changeDir(path: []const u8) ChangeDirError!void {
+pub fn changeDir(_: RealHost, path: []const u8) ChangeDirError!void {
     std.debug.assert(path.len != 0);
     return switch (builtin.os.tag) {
         .linux => linuxChangeDir(path),
@@ -449,7 +454,7 @@ pub fn changeDir(path: []const u8) ChangeDirError!void {
 }
 
 // ziglint-ignore: Z015 existing public API error set exposure; preserve API
-pub fn currentDir(allocator: std.mem.Allocator) CurrentDirError![]const u8 {
+pub fn currentDir(_: RealHost, allocator: std.mem.Allocator) CurrentDirError![]const u8 {
     return switch (builtin.os.tag) {
         .linux => linuxCurrentDir(allocator),
         .macos, .freebsd, .openbsd, .netbsd => libcCurrentDir(allocator),
@@ -457,17 +462,17 @@ pub fn currentDir(allocator: std.mem.Allocator) CurrentDirError![]const u8 {
     };
 }
 
-pub fn setFileCreationMask(mask: u32) u32 {
+pub fn setFileCreationMask(_: RealHost, mask: u32) u32 {
     return @intCast(std.c.umask(@intCast(mask)));
 }
 
-pub fn spawnAndWait(request: host.SpawnRequest) SpawnError!host.WaitStatus {
+pub fn spawnAndWait(self: RealHost, request: host.SpawnRequest) SpawnError!host.WaitStatus {
     request.validate();
-    const spawned = try spawn(request);
-    return wait(spawned.pid) catch error.Unexpected;
+    const spawned = try self.spawn(request);
+    return self.wait(spawned.pid) catch error.Unexpected;
 }
 
-pub fn spawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
+pub fn spawn(_: RealHost, request: host.SpawnRequest) SpawnError!host.SpawnResult {
     request.validate();
     return switch (builtin.os.tag) {
         .linux => linuxSpawn(request),
@@ -476,7 +481,7 @@ pub fn spawn(request: host.SpawnRequest) SpawnError!host.SpawnResult {
     };
 }
 
-pub fn exec(request: host.SpawnRequest) SpawnError!void {
+pub fn exec(_: RealHost, request: host.SpawnRequest) SpawnError!void {
     request.validate();
     return switch (builtin.os.tag) {
         .linux => linuxExec(request),
@@ -485,7 +490,7 @@ pub fn exec(request: host.SpawnRequest) SpawnError!void {
     };
 }
 
-pub fn wait(pid: host.Pid) WaitError!host.WaitStatus {
+pub fn wait(_: RealHost, pid: host.Pid) WaitError!host.WaitStatus {
     return switch (builtin.os.tag) {
         .linux => linuxWait(pid),
         .macos, .freebsd, .openbsd, .netbsd => libcWait(pid),
@@ -493,7 +498,7 @@ pub fn wait(pid: host.Pid) WaitError!host.WaitStatus {
     };
 }
 
-pub fn waitNonBlocking(pid: host.Pid) WaitError!?host.WaitStatus {
+pub fn waitNonBlocking(_: RealHost, pid: host.Pid) WaitError!?host.WaitStatus {
     return switch (builtin.os.tag) {
         .linux => linuxWaitNonBlocking(pid),
         .macos, .freebsd, .openbsd, .netbsd => libcWaitNonBlocking(pid),
@@ -501,7 +506,7 @@ pub fn waitNonBlocking(pid: host.Pid) WaitError!?host.WaitStatus {
     };
 }
 
-pub fn waitJobEvent(pid: host.Pid) WaitError!host.WaitStatus {
+pub fn waitJobEvent(_: RealHost, pid: host.Pid) WaitError!host.WaitStatus {
     return switch (builtin.os.tag) {
         .linux => linuxWaitJobEvent(pid),
         .macos, .freebsd, .openbsd, .netbsd => libcWaitJobEvent(pid),
@@ -509,7 +514,7 @@ pub fn waitJobEvent(pid: host.Pid) WaitError!host.WaitStatus {
     };
 }
 
-pub fn waitJobEventInterruptible(pid: host.Pid) WaitError!host.WaitStatus {
+pub fn waitJobEventInterruptible(_: RealHost, pid: host.Pid) WaitError!host.WaitStatus {
     return switch (builtin.os.tag) {
         .linux => linuxWaitJobEventInterruptible(pid),
         .macos, .freebsd, .openbsd, .netbsd => libcWaitJobEventInterruptible(pid),
@@ -517,7 +522,7 @@ pub fn waitJobEventInterruptible(pid: host.Pid) WaitError!host.WaitStatus {
     };
 }
 
-pub fn waitInterruptible(pid: host.Pid) WaitError!host.WaitStatus {
+pub fn waitInterruptible(_: RealHost, pid: host.Pid) WaitError!host.WaitStatus {
     return switch (builtin.os.tag) {
         .linux => linuxWaitInterruptible(pid),
         .macos, .freebsd, .openbsd, .netbsd => libcWaitInterruptible(pid),
@@ -720,7 +725,7 @@ fn libcDuplicateAtLeast(fd: host.Fd, min_fd: u31) DuplicateError!host.Fd {
             if (comptime !@hasDecl(std.c.F, "DUPFD_CLOEXEC")) {
                 libcSetCloseOnExec(duplicated, true) catch |err| {
                     // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
-                    close(duplicated) catch {};
+                    real_host.close(duplicated) catch {};
                     return switch (err) {
                         error.BadFd => error.BadFd,
                         error.Unexpected => error.Unexpected,
@@ -779,8 +784,8 @@ fn libcPipe() PipeError!host.Pipe {
         .MFILE, .NFILE, .NOMEM => return error.SystemResources,
         else => return error.Unexpected,
     }
-    errdefer close(@enumFromInt(fds[0])) catch {};
-    errdefer close(@enumFromInt(fds[1])) catch {};
+    errdefer real_host.close(@enumFromInt(fds[0])) catch {};
+    errdefer real_host.close(@enumFromInt(fds[1])) catch {};
     try setCloseOnExecForPipe(@enumFromInt(fds[0]));
     try setCloseOnExecForPipe(@enumFromInt(fds[1]));
     return .{ .read = @enumFromInt(fds[0]), .write = @enumFromInt(fds[1]) };
@@ -1032,7 +1037,7 @@ fn linuxListDir(allocator: std.mem.Allocator, path: []const u8) ListDirError!hos
         else => return error.Unexpected,
     }
     const directory_fd: host.Fd = @enumFromInt(@as(i32, @intCast(fd)));
-    defer close(directory_fd) catch {};
+    defer real_host.close(directory_fd) catch {};
 
     var entries: std.ArrayList(host.DirectoryEntry) = .empty;
     errdefer freeDirectoryEntryList(allocator, &entries);
@@ -1408,7 +1413,7 @@ fn libcWaitInterruptible(pid: host.Pid) WaitError!host.WaitStatus {
 }
 
 fn applyDefaultSignals(signals: []const u8) SignalDispositionError!void {
-    for (signals) |signal| try setSignalDefault(signal);
+    for (signals) |signal| try real_host.setSignalDefault(signal);
 }
 
 fn applyLinuxFdActions(actions: []const host.SpawnFdAction) void {

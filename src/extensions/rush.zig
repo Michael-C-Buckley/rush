@@ -10,6 +10,7 @@ const shell = @import("../shell.zig");
 
 const builtin = shell.builtin;
 const result = shell.result;
+const real_host: host.RealHost = .{};
 
 pub const definitions = [_]builtin.Definition{
     builtin.extensionDefinition("abbr", .abbr),
@@ -293,7 +294,7 @@ pub const State = struct {
         if (entry.read_fd) |read_fd| {
             var buffer: [4096]u8 = undefined;
             while (true) {
-                const read_len = host.platform.read(read_fd, &buffer) catch |err| switch (err) {
+                const read_len = real_host.read(read_fd, &buffer) catch |err| switch (err) {
                     error.WouldBlock => return,
                     else => break,
                 };
@@ -310,7 +311,7 @@ pub const State = struct {
         const read_fd = entry.read_fd.?;
         if (self.prompt_async_registry) |fd_registry| fd_registry.unregister(fd_registry.context, read_fd.raw());
         // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
-        host.platform.close(read_fd) catch {};
+        real_host.close(read_fd) catch {};
         entry.read_fd = null;
 
         if (entry.output.toOwnedSlice(self.allocator) catch null) |stdout| {
@@ -324,7 +325,7 @@ pub const State = struct {
         if (self.prompt_async_active_count == 0) self.prompt_async_pending_end_events += 1;
 
         // ziglint-ignore: Z026 best-effort wakeup; the next input event can redraw
-        if (self.prompt_async_redraw_fd) |fd| host.platform.writeAll(fd, "p") catch {};
+        if (self.prompt_async_redraw_fd) |fd| real_host.writeAll(fd, "p") catch {};
     }
 };
 
@@ -342,7 +343,7 @@ fn reapPromptAsyncChild(entry: *PromptAsyncEntry) void {
     std.debug.assert(entry.read_fd == null or entry.pid != null);
     const pid = entry.pid orelse return;
     if (entry.read_fd != null) return;
-    const status = host.platform.waitNonBlocking(pid) catch {
+    const status = real_host.waitNonBlocking(pid) catch {
         entry.pid = null;
         return;
     };
@@ -372,11 +373,11 @@ const PromptAsyncEntry = struct {
             // deinitializes; closing the pipe is enough. The child is
             // reparented and reaped by init after the shell exits.
             // ziglint-ignore: Z026 intentional best-effort cleanup; preserve behavior
-            host.platform.close(read_fd) catch {};
+            real_host.close(read_fd) catch {};
         }
         if (self.pid) |pid| {
             // ziglint-ignore: Z026 best-effort reap; init adopts still-running children
-            _ = host.platform.waitNonBlocking(pid) catch {};
+            _ = real_host.waitNonBlocking(pid) catch {};
         }
         self.output.deinit(allocator);
         allocator.free(self.key);
@@ -824,10 +825,10 @@ test "prompt async pump collects pipe output and completes the entry" {
     try state.prompt_async_entries.append(std.testing.allocator, entry);
     state.prompt_async_active_count = 1;
 
-    const pipe_desc = try host.platform.pipe();
+    const pipe_desc = try real_host.pipe();
     entry.read_fd = pipe_desc.read;
-    try host.platform.writeAll(pipe_desc.write, "main\n");
-    try host.platform.close(pipe_desc.write);
+    try real_host.writeAll(pipe_desc.write, "main\n");
+    try real_host.close(pipe_desc.write);
 
     state.pumpPromptAsync();
 
