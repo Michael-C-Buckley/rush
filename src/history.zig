@@ -104,28 +104,6 @@ pub const History = struct {
         self.* = undefined;
     }
 
-    pub fn copyFrom(self: *History, other: *const History) !void {
-        self.* = .init(self.allocator);
-        self.session_id = other.session_id;
-        self.session_start_id = other.session_start_id;
-        if (other.db) |db| {
-            try self.loadRecentRows(db, 500);
-            return;
-        }
-        for (other.records.items) |record| {
-            try self.addRecord(.{
-                .cmd = record.cmd,
-                .when = record.when,
-                .status = record.status,
-                .exit_signal = record.exit_signal,
-                .cwd = record.cwd,
-                .duration_ms = record.duration_ms,
-                .hostname = record.hostname,
-                .session_id = record.session_id,
-            });
-        }
-    }
-
     pub fn add(self: *History, line: []const u8) !void {
         try self.addRecord(.{ .cmd = line });
     }

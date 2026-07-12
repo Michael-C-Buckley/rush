@@ -86,10 +86,6 @@ pub const Result = union(enum) {
     }
 };
 
-pub fn cloneEntry(allocator: std.mem.Allocator, entry: Entry) !Entry {
-    return .{ .id = entry.id, .text = try allocator.dupe(u8, entry.text), .when = entry.when };
-}
-
 pub fn description(allocator: std.mem.Allocator, now: i64, when: i64) !?[]const u8 {
     if (now <= 0 or when <= 0) return null;
     var age_buffer: [16]u8 = undefined;
