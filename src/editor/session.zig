@@ -148,7 +148,6 @@ const UndoEntry = struct {
 
 pub const HistoryRequest = request_mod.HistoryRequest;
 pub const HistoryResult = request_mod.HistoryResult;
-pub const LineRequest = request_mod.LineRequest;
 const LineRequestOutbox = request_mod.Outbox;
 
 pub const MouseClick = struct {
@@ -262,10 +261,6 @@ pub const LineSession = struct {
         self.allocator.free(self.prompt.bytes);
         if (self.right_prompt.bytes.len != 0) self.allocator.free(self.right_prompt.bytes);
         self.* = undefined;
-    }
-
-    pub fn takeRequest(self: *LineSession) ?LineRequest {
-        return self.requests.takeFirst();
     }
 
     pub fn handleKey(self: *LineSession, event: KeyEvent) !void {
@@ -2948,24 +2943,6 @@ test "line session records clear screen requests" {
     try session.handleKey(.{ .key = .clear_screen });
     try std.testing.expect(session.takeClearScreenRequest());
     try std.testing.expect(!session.takeClearScreenRequest());
-}
-
-test "line session drains shell requests in emission order" {
-    var session = try LineSession.init(std.testing.allocator, "");
-    defer session.deinit();
-
-    try session.handleKey(.{ .key = .clear_screen });
-    session.invalidatePrompt();
-
-    const first = session.takeRequest() orelse return error.MissingLineRequest;
-    defer first.deinit(std.testing.allocator);
-    try std.testing.expectEqual(LineRequest.clear_screen, first);
-
-    const second = session.takeRequest() orelse return error.MissingLineRequest;
-    defer second.deinit(std.testing.allocator);
-    try std.testing.expectEqual(LineRequest.refresh_prompt, second);
-
-    try std.testing.expect(session.takeRequest() == null);
 }
 
 test "editor handles readline movement and deletion keys" {

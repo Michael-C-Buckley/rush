@@ -78,17 +78,6 @@ pub const Outbox = struct {
         return null;
     }
 
-    pub fn takeAny(self: *Outbox) ?LineRequest {
-        if (self.len == 0) return null;
-        const request = self.items[0];
-        self.removeAt(0);
-        return request;
-    }
-
-    pub fn takeFirst(self: *Outbox) ?LineRequest {
-        return self.takeAny();
-    }
-
     pub fn clear(self: *Outbox, allocator: std.mem.Allocator, kind: Kind) void {
         const request = self.take(kind) orelse return;
         request.deinit(allocator);
