@@ -184,7 +184,6 @@ pub const LineSession = struct {
     saved_edit: std.ArrayList(u8) = .empty,
     history_search_query: std.ArrayList(u8) = .empty,
     history_search_original: std.ArrayList(u8) = .empty,
-    history_search_match: ?HistoryView.HistoryEntry = null,
     history_search_matches: std.ArrayList(HistoryView.HistoryEntry) = .empty,
     history_search_selected: usize = 0,
     history_search_filters: HistorySearchFilters = .{},
@@ -241,7 +240,6 @@ pub const LineSession = struct {
         if (self.submitted_line) |line| self.allocator.free(line);
         self.requests.deinit(self.allocator);
         self.clearPendingRemovableSuffix();
-        if (self.history_search_match) |entry| entry.deinit(self.allocator);
         self.clearHistorySearchMatches();
         self.clearAutosuggestion();
         self.history_search_matches.deinit(self.allocator);
@@ -1988,7 +1986,6 @@ pub const LineSession = struct {
                 const menu_start = menuStartRow(click.frame, window, count, click.menu_presentation);
                 if (click.row < menu_start or click.row >= menu_start + (window.end - window.start)) return false;
                 self.history_search_selected = window.start + click.row - menu_start;
-                try self.replaceHistorySearchMatchFromSelection();
                 return true;
             },
             else => return false,
@@ -2207,7 +2204,6 @@ pub const LineSession = struct {
         self.history_search_original.clearRetainingCapacity();
         try self.history_search_original.appendSlice(self.allocator, self.editor.buffer.text());
         try self.history_search_query.appendSlice(self.allocator, self.editor.buffer.text());
-        self.clearHistorySearchMatch();
         self.history_search_filters = .{};
         self.state = .history_search;
         try self.refreshHistorySearch(null);
@@ -2314,7 +2310,6 @@ pub const LineSession = struct {
     }
 
     fn refreshHistorySearch(self: *LineSession, before: ?i64) !void {
-        self.clearHistorySearchMatch();
         self.clearHistorySearchMatches();
         self.history_search_selected = 0;
         self.requests.put(self.allocator, .{ .history = .{ .search = .{
@@ -2325,7 +2320,6 @@ pub const LineSession = struct {
     }
 
     fn refreshHistorySearchNext(self: *LineSession, after: ?i64) !void {
-        self.clearHistorySearchMatch();
         self.clearHistorySearchMatches();
         self.history_search_selected = 0;
         self.requests.put(self.allocator, .{ .history = .{ .search_next = .{
@@ -2346,19 +2340,12 @@ pub const LineSession = struct {
             return;
         }
         const entries = historyResultEntries(result);
-        var transferred = false;
         errdefer {
-            if (!transferred) {
-                for (entries) |entry| entry.deinit(self.allocator);
-                self.allocator.free(entries);
-            }
+            for (entries) |entry| entry.deinit(self.allocator);
+            self.allocator.free(entries);
         }
         try self.history_search_matches.appendSlice(self.allocator, entries);
         self.allocator.free(entries);
-        transferred = true;
-        if (self.history_search_matches.items.len != 0) {
-            self.history_search_match = try cloneHistoryEntry(self.allocator, self.history_search_matches.items[0]);
-        }
     }
 
     fn selectedHistorySearchMatch(self: LineSession) ?HistoryView.HistoryEntry {
@@ -2374,22 +2361,11 @@ pub const LineSession = struct {
             self.history_search_selected + 1,
             self.history_search_matches.items.len - 1,
         );
-        // ziglint-ignore: Z026 best-effort interactive history-search update
-        self.replaceHistorySearchMatchFromSelection() catch {};
     }
 
     fn selectPreviousHistorySearchMatch(self: *LineSession) void {
         if (self.history_search_matches.items.len == 0) return;
         self.history_search_selected = if (self.history_search_selected == 0) 0 else self.history_search_selected - 1;
-        // ziglint-ignore: Z026 best-effort interactive history-search update
-        self.replaceHistorySearchMatchFromSelection() catch {};
-    }
-
-    fn replaceHistorySearchMatchFromSelection(self: *LineSession) !void {
-        self.clearHistorySearchMatch();
-        if (self.selectedHistorySearchMatch()) |entry| {
-            self.history_search_match = try cloneHistoryEntry(self.allocator, entry);
-        }
     }
 
     fn clearHistorySearchMatches(self: *LineSession) void {
@@ -2398,16 +2374,10 @@ pub const LineSession = struct {
     }
 
     fn finishHistorySearch(self: *LineSession) void {
-        self.clearHistorySearchMatch();
         self.clearHistorySearchMatches();
         self.history_search_query.clearRetainingCapacity();
         self.history_search_original.clearRetainingCapacity();
         self.state = .editing;
-    }
-
-    fn clearHistorySearchMatch(self: *LineSession) void {
-        if (self.history_search_match) |entry| entry.deinit(self.allocator);
-        self.history_search_match = null;
     }
 
     pub fn requestAutosuggestion(self: *LineSession) !void {
@@ -2672,7 +2642,6 @@ fn isShellArgumentToken(kind: shell_token.Kind) bool {
     return kind == .word;
 }
 
-const cloneHistoryEntry = history_mod.cloneEntry;
 const historySearchDescription = history_mod.description;
 pub const relativeAge = history_mod.relativeAge;
 
@@ -3304,7 +3273,7 @@ test "mouse click selects history search match without accepting it" {
 
     try std.testing.expectEqual(@as(usize, 1), session.history_search_selected);
     try std.testing.expectEqualStrings("git", session.editor.buffer.text());
-    try std.testing.expectEqualStrings("git diff", session.history_search_match.?.text);
+    try std.testing.expectEqualStrings("git diff", session.selectedHistorySearchMatch().?.text);
 }
 
 test "completion menu acceptance uses insertion text while rendering display text" {
@@ -4864,14 +4833,14 @@ test "history search edits query while staying open" {
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
     try std.testing.expectEqualStrings("git s", session.history_search_query.items);
     try std.testing.expectEqualStrings("git s", session.editor.buffer.text());
-    try std.testing.expect(session.history_search_match != null);
-    try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
+    try std.testing.expect(session.selectedHistorySearchMatch() != null);
+    try std.testing.expectEqualStrings("git show", session.selectedHistorySearchMatch().?.text);
 
     try session.handleKey(.{ .key = .text, .text = "t" });
     try applyTestHistoryRequests(&session);
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
     try std.testing.expectEqualStrings("git st", session.history_search_query.items);
-    try std.testing.expectEqualStrings("git status", session.history_search_match.?.text);
+    try std.testing.expectEqualStrings("git status", session.selectedHistorySearchMatch().?.text);
 }
 
 test "history search deletion edits query while staying open" {
@@ -4892,7 +4861,7 @@ test "history search deletion edits query while staying open" {
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
     try std.testing.expectEqualStrings("git s", session.history_search_query.items);
     try std.testing.expectEqualStrings("git s", session.editor.buffer.text());
-    try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
+    try std.testing.expectEqualStrings("git show", session.selectedHistorySearchMatch().?.text);
 
     session.editor.buffer.moveLeft();
     try session.handleKey(.{ .key = .delete });
@@ -4915,7 +4884,7 @@ test "history search transitions from no match to match as query changes" {
     try session.handleKey(.{ .key = .ctrl_r });
     try applyTestHistoryRequests(&session);
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
-    try std.testing.expect(session.history_search_match == null);
+    try std.testing.expect(session.selectedHistorySearchMatch() == null);
 
     try session.handleKey(.{ .key = .delete_to_start });
     try applyTestHistoryRequests(&session);
@@ -4923,8 +4892,8 @@ test "history search transitions from no match to match as query changes" {
     try applyTestHistoryRequests(&session);
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
     try std.testing.expectEqualStrings("git d", session.history_search_query.items);
-    try std.testing.expect(session.history_search_match != null);
-    try std.testing.expectEqualStrings("git diff", session.history_search_match.?.text);
+    try std.testing.expect(session.selectedHistorySearchMatch() != null);
+    try std.testing.expectEqualStrings("git diff", session.selectedHistorySearchMatch().?.text);
 }
 
 test "history search uses fuzzy query matching" {
@@ -4942,8 +4911,8 @@ test "history search uses fuzzy query matching" {
     try applyTestHistoryRequests(&session);
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
     try std.testing.expectEqualStrings("gco", session.history_search_query.items);
-    try std.testing.expect(session.history_search_match != null);
-    try std.testing.expectEqualStrings("git checkout", session.history_search_match.?.text);
+    try std.testing.expect(session.selectedHistorySearchMatch() != null);
+    try std.testing.expectEqualStrings("git checkout", session.selectedHistorySearchMatch().?.text);
     try std.testing.expectEqual(@as(usize, 1), session.history_search_matches.items.len);
 
     const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
@@ -4956,7 +4925,7 @@ test "history search uses fuzzy query matching" {
     try session.handleKey(.{ .key = .text, .text = "zz" });
     try applyTestHistoryRequests(&session);
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
-    try std.testing.expect(session.history_search_match == null);
+    try std.testing.expect(session.selectedHistorySearchMatch() == null);
     try std.testing.expectEqual(@as(usize, 0), session.history_search_matches.items.len);
 }
 
@@ -4973,7 +4942,7 @@ test "history search first tab advances the already-open menu" {
     try session.handleKey(.{ .key = .text, .text = "git" });
     try session.handleKey(.{ .key = .ctrl_r });
     try applyTestHistoryRequests(&session);
-    try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
+    try std.testing.expectEqualStrings("git show", session.selectedHistorySearchMatch().?.text);
     try std.testing.expectEqual(@as(usize, 3), session.history_search_matches.items.len);
     try std.testing.expectEqual(@as(usize, 0), session.history_search_selected);
 
@@ -4987,14 +4956,13 @@ test "history search first tab advances the already-open menu" {
     try session.handleKey(.{ .key = .tab });
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
     try std.testing.expectEqualStrings("git", session.editor.buffer.text());
-    try std.testing.expectEqualStrings("git diff", session.history_search_match.?.text);
     try std.testing.expectEqualStrings("git diff", session.selectedHistorySearchMatch().?.text);
     try std.testing.expectEqual(@as(usize, 1), session.history_search_selected);
 
     try session.handleKey(.{ .key = keyFromVaxis('n', .{ .ctrl = true }) });
-    try std.testing.expectEqualStrings("git status", session.history_search_match.?.text);
+    try std.testing.expectEqualStrings("git status", session.selectedHistorySearchMatch().?.text);
     try session.handleKey(.{ .key = .tab });
-    try std.testing.expectEqualStrings("git status", session.history_search_match.?.text);
+    try std.testing.expectEqualStrings("git status", session.selectedHistorySearchMatch().?.text);
 
     try session.handleKey(.{ .key = .enter });
     try std.testing.expectEqual(LineSession.State.editing, session.state);
@@ -5154,17 +5122,17 @@ test "history search shift tab clamps at first match" {
     try session.handleKey(.{ .key = .text, .text = "git" });
     try session.handleKey(.{ .key = .ctrl_r });
     try applyTestHistoryRequests(&session);
-    try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
+    try std.testing.expectEqualStrings("git show", session.selectedHistorySearchMatch().?.text);
 
     try session.handleKey(.{ .key = .tab, .modifiers = .{ .shift = true } });
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
-    try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
+    try std.testing.expectEqualStrings("git show", session.selectedHistorySearchMatch().?.text);
 
     try session.handleKey(.{ .key = keyFromVaxis('p', .{ .ctrl = true }) });
-    try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
+    try std.testing.expectEqualStrings("git show", session.selectedHistorySearchMatch().?.text);
 
     try session.handleKey(.{ .key = .tab });
-    try std.testing.expectEqualStrings("git diff", session.history_search_match.?.text);
+    try std.testing.expectEqualStrings("git diff", session.selectedHistorySearchMatch().?.text);
 }
 
 test "history search ctrl n and ctrl p clamp like completion" {
@@ -5180,21 +5148,21 @@ test "history search ctrl n and ctrl p clamp like completion" {
     try session.handleKey(.{ .key = .text, .text = "git" });
     try session.handleKey(.{ .key = .ctrl_r });
     try applyTestHistoryRequests(&session);
-    try std.testing.expectEqualStrings("git show", session.history_search_match.?.text);
+    try std.testing.expectEqualStrings("git show", session.selectedHistorySearchMatch().?.text);
 
     try session.handleKey(.{ .key = keyFromVaxis('n', .{ .ctrl = true }) });
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
-    try std.testing.expectEqualStrings("git diff", session.history_search_match.?.text);
+    try std.testing.expectEqualStrings("git diff", session.selectedHistorySearchMatch().?.text);
 
     try session.handleKey(.{ .key = keyFromVaxis('n', .{ .ctrl = true }) });
-    try std.testing.expectEqualStrings("git status", session.history_search_match.?.text);
+    try std.testing.expectEqualStrings("git status", session.selectedHistorySearchMatch().?.text);
 
     try session.handleKey(.{ .key = keyFromVaxis('n', .{ .ctrl = true }) });
-    try std.testing.expectEqualStrings("git status", session.history_search_match.?.text);
+    try std.testing.expectEqualStrings("git status", session.selectedHistorySearchMatch().?.text);
 
     try session.handleKey(.{ .key = keyFromVaxis('p', .{ .ctrl = true }) });
     try std.testing.expectEqual(LineSession.State.history_search, session.state);
-    try std.testing.expectEqualStrings("git diff", session.history_search_match.?.text);
+    try std.testing.expectEqualStrings("git diff", session.selectedHistorySearchMatch().?.text);
 }
 
 test "line session hides older duplicate history commands" {
