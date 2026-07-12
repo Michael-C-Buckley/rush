@@ -196,13 +196,18 @@ pub fn availableInMode(definition: Definition, mode: state_mod.Mode) bool {
 }
 
 pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !result.EvalResult {
+    return (try tryEval(shell, definition, args)) orelse unreachable;
+}
+
+/// Evaluates builtins owned by this module and returns null for evaluator-owned builtins.
+pub fn tryEval(shell: anytype, definition: Definition, args: []const []const u8) !?result.EvalResult {
     definition.validate();
     std.debug.assert(args.len != 0);
-    if (definition.origin == .extension) return evalExtension(shell, definition, args);
-    return switch (definition.id) {
+    if (definition.origin == .extension) return try evalExtension(shell, definition, args);
+    const evaluated: result.EvalResult = switch (definition.id) {
         .colon, .true_ => .{},
-        .alias => evalAlias(shell, args),
-        .bg => evalBg(shell, args),
+        .alias => try evalAlias(shell, args),
+        .bg => try evalBg(shell, args),
         .break_ => evalBreak(args),
         .bracket,
         .cd,
@@ -214,36 +219,36 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .export_,
         .pwd,
         .read,
+        .source,
         .test_,
         .typeset,
         .type,
         .wait,
-        => unreachable,
+        => return null,
         .continue_ => evalContinue(args),
-        .echo => evalEcho(shell, args),
+        .echo => try evalEcho(shell, args),
         .exit => evalExit(shell, args),
         .false_ => .{ .status = 1 },
-        .fc => evalFc(shell, args),
-        .fg => evalFg(shell, args),
-        .getopts => evalGetopts(shell, args),
-        .hash => evalHash(shell, args),
-        .history => evalHistory(shell, args),
-        .jobs => evalJobs(shell, args),
-        .kill => evalKill(shell, args),
-        .local => evalLocal(shell, args),
-        .printf => evalPrintf(shell, args),
-        .readonly => evalReadonly(shell, args),
+        .fc => try evalFc(shell, args),
+        .fg => try evalFg(shell, args),
+        .getopts => try evalGetopts(shell, args),
+        .hash => try evalHash(shell, args),
+        .history => try evalHistory(shell, args),
+        .jobs => try evalJobs(shell, args),
+        .kill => try evalKill(shell, args),
+        .local => try evalLocal(shell, args),
+        .printf => try evalPrintf(shell, args),
+        .readonly => try evalReadonly(shell, args),
         .return_ => evalReturn(shell, args),
-        .set => evalSet(shell, args),
-        .shift => evalShift(shell, args),
+        .set => try evalSet(shell, args),
+        .shift => try evalShift(shell, args),
         .shopt => evalShopt(shell, args),
-        .source => unreachable,
-        .times => evalTimes(shell, args),
-        .trap => evalTrap(shell, args),
-        .ulimit => evalUlimit(shell, args),
-        .umask => evalUmask(shell, args),
+        .times => try evalTimes(shell, args),
+        .trap => try evalTrap(shell, args),
+        .ulimit => try evalUlimit(shell, args),
+        .umask => try evalUmask(shell, args),
         .unalias => evalUnalias(shell, args),
-        .unset => evalUnset(shell, args),
+        .unset => try evalUnset(shell, args),
         .abbr,
         .color,
         .env,
@@ -254,8 +259,9 @@ pub fn eval(shell: anytype, definition: Definition, args: []const []const u8) !r
         .rush_complete,
         .rush_env,
         .z,
-        => unreachable,
+        => return null,
     };
+    return evaluated;
 }
 
 fn evalExtension(shell: anytype, definition: Definition, args: []const []const u8) !result.EvalResult {

@@ -1724,6 +1724,9 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
         if (shell.state.getFunction(name)) |function| return evalFunction(shell, function, command.assignments, fields[1..]);
     }
     if (builtin_definition) |definition| {
+        if (definition.id == .declare or definition.id == .typeset) {
+            return evalDeclarationBuiltin(shell, definition.id, command.words[1..]);
+        }
         if (definition.id == .cd) return evalCdBuiltin(shell, fields);
         if (definition.id == .z) return evalZBuiltin(shell, fields);
         if (definition.id == .command) {
@@ -1738,45 +1741,7 @@ fn evalSimpleScoped(shell: anytype, command: ast.SimpleCommand) EvalError!result
         }
         if (definition.id == .type) return evalTypeBuiltin(shell, fields);
         if (definition.id == .wait) return evalWaitBuiltin(shell, fields);
-        const args = switch (definition.id) {
-            .abbr,
-            .alias,
-            .bg,
-            .cd,
-            .color,
-            .command,
-            .declare,
-            .echo,
-            .event,
-            .fc,
-            .fg,
-            .getopts,
-            .hash,
-            .history,
-            .jobs,
-            .kill,
-            .local,
-            .prompt,
-            .prompt_duration,
-            .prompt_pwd,
-            .rush_complete,
-            .rush_env,
-            .printf,
-            .pwd,
-            .read,
-            .shopt,
-            .typeset,
-            .type,
-            .ulimit,
-            .umask,
-            .unalias,
-            .wait,
-            .z,
-            => fields,
-            .false_, .true_ => &[_][]const u8{name},
-            else => unreachable,
-        };
-        return builtin.eval(shell, definition, args);
+        return (try builtin.tryEval(shell, definition, fields)) orelse unreachable;
     }
     return evalExternal(shell, fields, command.assignments);
 }
@@ -2294,6 +2259,11 @@ fn evalCommandBuiltin(
 
     const name = args[index];
     if (lookupBuiltin(shell, name)) |definition| {
+        if ((definition.id == .break_ or definition.id == .continue_) and shell.state.loop_depth == 0) {
+            restoreVariables(shell, saved);
+            restored_assignments = true;
+            return .{};
+        }
         switch (definition.id) {
             .cd => {
                 const evaluated = try evalCdBuiltin(shell, args[index..]);
@@ -2374,62 +2344,18 @@ fn evalCommandBuiltin(
                 restored_assignments = true;
                 return evaluated;
             },
-            .abbr,
-            .alias,
-            .bg,
-            .break_,
-            .color,
-            .continue_,
-            .echo,
-            .event,
-            .exit,
-            .fc,
-            .fg,
-            .getopts,
-            .hash,
-            .history,
-            .jobs,
-            .kill,
-            .local,
-            .prompt,
-            .prompt_duration,
-            .prompt_pwd,
-            .rush_complete,
-            .rush_env,
-            .printf,
-            .return_,
-            .set,
-            .shift,
-            .shopt,
-            .times,
-            .trap,
-            .ulimit,
-            .umask,
-            .unalias,
-            .unset,
-            => {
-                if ((definition.id == .break_ or definition.id == .continue_) and shell.state.loop_depth == 0) {
-                    restoreVariables(shell, saved);
-                    restored_assignments = true;
-                    return .{};
-                }
-                const evaluated = try builtin.eval(shell, definition, args[index..]);
-                restoreVariables(shell, saved);
-                restored_assignments = true;
-                return suppressFatalFlow(evaluated);
-            },
-            .colon, .false_, .true_ => {
-                const evaluated = try builtin.eval(shell, definition, &.{name});
-                restoreVariables(shell, saved);
-                restored_assignments = true;
-                return evaluated;
-            },
             .command => {
                 // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
                 const evaluated = try evalCommandBuiltin(shell, args[index..], &.{}, redirections, restore_redirections);
                 restoreVariables(shell, saved);
                 restored_assignments = true;
                 return evaluated;
+            },
+            else => {
+                const evaluated = (try builtin.tryEval(shell, definition, args[index..])) orelse unreachable;
+                restoreVariables(shell, saved);
+                restored_assignments = true;
+                return suppressFatalFlow(evaluated);
             },
         }
     }
