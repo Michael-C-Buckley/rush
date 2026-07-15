@@ -1,0 +1,199 @@
+.TH RUSH 1 "July 2026" "rush" "User Commands"
+.SH NAME
+rush \- POSIX-facing shell with modern interactive features
+.SH SYNOPSIS
+.B rush
+.RB [ --login ]
+.RB [ --posix ]
+.RB [ -i ]
+.RB [ -u ]
+.RB [ -x ]
+.PP
+.B rush
+.RB [ --posix ]
+.RB [ -i ]
+.RB [ -u ]
+.RB [ -x ]
+.BI -c " script"
+.RI [ name
+.RI [ args ...]]
+.PP
+.B rush
+.RB [ --posix ]
+.RB [ -i ]
+.RB [ -u ]
+.RB [ -x ]
+.RB [ -- ]
+.I script-file
+.RI [ args ...]
+.PP
+.B rush --help
+.SH DESCRIPTION
+.B rush
+is an experimental command interpreter for POSIX-like systems.
+It provides a POSIX-facing shell language, selected Bash-compatible features,
+and an interactive editor with history search, autosuggestions, structured
+completion, and asynchronous prompts.
+.PP
+With no script operand,
+.B rush
+starts an interactive shell when standard input is a terminal.  Otherwise it
+reads commands from standard input.  The
+.B -i
+option forces interactive operation when standard input is not a terminal.
+.PP
+The
+.B -c
+form evaluates
+.IR script .
+If
+.I name
+is present, it becomes
+.BR $0 ;
+remaining operands become positional parameters.  Without
+.IR name ,
+.B rush
+is used as
+.BR $0 .
+.PP
+When a script file is supplied, its path becomes
+.B $0
+and subsequent operands become positional parameters.
+.SH OPTIONS
+.TP
+.B --help
+Write a short usage summary and exit.
+.TP
+.B --login
+Start an interactive login shell.  A leading hyphen in the invocation name
+also selects login-shell behavior.
+.TP
+.B --posix
+Select POSIX mode.  Rush targets POSIX.1-2024 (Issue 8) in this mode and
+diagnoses unsupported compatibility syntax more strictly.
+.TP
+.B -i
+Force interactive operation.
+.TP
+.B -u
+Treat expansion of an unset parameter as an error.
+.TP
+.B -x
+Write command traces to standard error before executing commands.
+.TP
+.BI -c " script"
+Read commands from
+.I script
+instead of a file or standard input.
+.TP
+.B --
+End option processing.  This is required when a script file name begins with
+a hyphen.
+.SH INTERACTIVE FEATURES
+Interactive Rush provides Emacs and vi editing modes, persistent searchable
+history, context-aware autosuggestions, JSON completion manifests, dynamic
+completion providers, styled diagnostics, abbreviations, job control, and
+asynchronous prompt segments.
+.PP
+The embedded default configuration defines a responsive prompt, terminal-aware
+styles, and common abbreviations.  Later startup files can override or remove
+those defaults.
+.SH STARTUP FILES
+Interactive startup files are read in the following order.  Missing files are
+ignored.
+.IP 1. 3
+Embedded default configuration.
+.IP 2. 3
+The file named by
+.BR ENV ,
+if set.
+.IP 3. 3
+.I /etc/rush/profile.rush
+for login shells.
+.IP 4. 3
+.I $XDG_CONFIG_HOME/rush/profile.rush
+for login shells.
+.IP 5. 3
+.IR /etc/rush/config.rush .
+.IP 6. 3
+.IR $XDG_CONFIG_HOME/rush/config.rush .
+.PP
+If
+.B XDG_CONFIG_HOME
+is unset, user configuration is read below
+.IR $HOME/.config/rush .
+The system directory can be changed when Rush is built.
+See
+.BR rush (5)
+for prompt functions, async segments, editor styles, and event configuration.
+.SH ENVIRONMENT
+.TP
+.B ENV
+Names an additional interactive startup file.  Parameter expansions in the
+value are evaluated before the file is read.
+.TP
+.B HOME
+Provides fallbacks for user configuration, data, and state paths.
+.TP
+.B PATH
+Controls command lookup.
+.TP
+.BR PS1 , " PS2"
+Set the primary and continuation prompts.
+.TP
+.BR XDG_CONFIG_HOME ,
+.BR XDG_DATA_HOME ,
+.B XDG_DATA_DIRS
+and
+.B XDG_STATE_HOME
+Control user configuration, autoloaded function, completion, and history
+locations.
+.SH FILES
+The system paths below are for a typical installation under
+.IR /usr ;
+the installation prefix and system configuration directory can be changed at
+build time.
+.TP
+.I /etc/rush/profile.rush
+System login profile.
+.TP
+.I /etc/rush/config.rush
+System interactive configuration.
+.TP
+.I ~/.config/rush/profile.rush
+User login profile when
+.B XDG_CONFIG_HOME
+is unset.
+.TP
+.I ~/.config/rush/config.rush
+User interactive configuration when
+.B XDG_CONFIG_HOME
+is unset.
+.TP
+.I ~/.local/state/rush/history.sqlite
+Persistent history database when
+.B XDG_STATE_HOME
+is unset.
+.TP
+.I /usr/share/rush/completions
+Installed completion manifests and providers.
+.TP
+.I /usr/share/rush/functions
+Installed autoloadable functions.
+.SH EXIT STATUS
+The exit status is the status of the last command executed.  Invocation and
+shell errors use status 2.  If a command cannot be found, Rush uses status 127;
+if it is found but cannot be executed, Rush uses status 126.
+.SH STANDARDS
+.B rush --posix
+targets the Shell and Utilities volume of POSIX.1-2024 (Issue 8).  Rush is under
+active development and does not claim complete conformance.
+.SH BUGS
+Report bugs at
+.UR https://github.com/rockorager/rush/issues
+.UE .
+.SH SEE ALSO
+.BR rush (5),
+.BR sh (1),
+.BR bash (1),
+.BR chsh (1)

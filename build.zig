@@ -103,6 +103,8 @@ pub fn build(b: *std.Build) void {
     });
     b.installFile("share/vim/vimfiles/ftdetect/rush.vim", "share/vim/vimfiles/ftdetect/rush.vim");
     b.installFile("share/nvim/site/ftdetect/rush.lua", "share/nvim/site/ftdetect/rush.lua");
+    b.installFile("share/man/man1/rush.1", "share/man/man1/rush.1");
+    b.installFile("share/man/man5/rush.5", "share/man/man5/rush.5");
     b.installFile(default_config_path, default_config_path);
 
     const run_cmd = b.addRunArtifact(exe);

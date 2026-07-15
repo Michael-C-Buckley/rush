@@ -37,6 +37,9 @@ Common build options:
   amalgamation.
 - `-Dtarget=...` cross-compiles.
 
+The install includes `rush(1)` for command usage and `rush(5)` for interactive
+configuration and prompts. Run `man rush` or `man 5 rush` after installation.
+
 ## Run
 
 ```sh

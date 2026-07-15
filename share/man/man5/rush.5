@@ -1,0 +1,387 @@
+.TH RUSH 5 "July 2026" "rush" "File Formats"
+.SH NAME
+rush \- interactive configuration and prompt customization
+.SH DESCRIPTION
+Rush configuration files are Rush shell scripts.
+They can define shell variables, functions, abbreviations, editor styles,
+event handlers, and prompts.
+.PP
+The embedded defaults provide a prompt, editor theme, and common
+abbreviations.  Files read later during startup can replace or remove any of
+these defaults.
+.SH CONFIGURATION FILES
+Interactive startup files are read in the following order.  Missing files are
+ignored.
+.IP 1. 3
+Embedded default configuration.
+.IP 2. 3
+The file named by
+.BR ENV ,
+if set.
+.IP 3. 3
+.I /etc/rush/profile.rush
+for login shells.
+.IP 4. 3
+.I $XDG_CONFIG_HOME/rush/profile.rush
+for login shells.
+.IP 5. 3
+.IR /etc/rush/config.rush .
+.IP 6. 3
+.IR $XDG_CONFIG_HOME/rush/config.rush .
+.PP
+If
+.B XDG_CONFIG_HOME
+is unset, user files are read below
+.IR $HOME/.config/rush .
+The system configuration directory can be changed when Rush is built.
+.PP
+The value of
+.B ENV
+undergoes shell parameter expansion before it is used.  Field splitting and
+pathname expansion are not applied.  Relative paths are resolved from the
+current directory.  Point
+.B ENV
+only at trusted files.
+.SH PROMPT FUNCTIONS
+Define
+.B rush_prompt
+to render the editable prompt.  Prompt functions build their output with the
+.B prompt
+builtin rather than writing ordinary output.
+.PP
+On entry to a prompt function,
+.B $?
+is the status of the previous command.  Save it before running another command
+if the prompt needs to display it.
+.EX
+  rush_prompt() {
+    rush_prompt_status=$?
+    prompt segment --fg bright-blue "$(prompt_pwd)"
+    if test "$rush_prompt_status" != 0; then
+      prompt segment --fg red " status $rush_prompt_status"
+    fi
+    prompt text ' > '
+  }
+.EE
+.SS Transient prompt
+If
+.B rush_prompt_transient
+is defined, Rush uses it to redraw an accepted command line after Enter is
+pressed.  The next editable line still uses
+.BR rush_prompt .
+This can keep scrollback compact while retaining a detailed editing prompt.
+.EX
+  rush_prompt_transient() {
+    if test "$?" = 0; then
+      prompt text '> '
+    else
+      prompt segment --fg red '> '
+    fi
+  }
+.EE
+Unset the function to leave accepted prompts unchanged.
+.EX
+  unset -f rush_prompt_transient
+.EE
+.SS Right prompt
+If
+.B rush_prompt_right
+is defined, Rush renders its result flush-right on the editable input line.
+The right prompt is hidden when it would collide with the input and is not
+retained on an accepted command line.
+.EX
+  rush_prompt_right() {
+    duration="$(prompt_duration)" || return 0
+    prompt segment --dim "$duration"
+  }
+.EE
+.SS PS1 fallback
+If
+.B rush_prompt
+is not defined or cannot produce a prompt, Rush uses
+.BR PS1 .
+If
+.B PS1
+is also unset, the fallback is
+.BR "rush> " .
+.B PS2
+is used for continuation input.
+.EX
+  unset -f rush_prompt
+  PS1='rush> '
+  PS2='> '
+.EE
+.SH PROMPT BUILTIN
+The prompt-building forms are:
+.EX
+  prompt text TEXT...
+  prompt segment [STYLE...] TEXT...
+  prompt async KEY --ttl MS [STYLE...] [--prefix TEXT] -- COMMAND...
+  prompt newline
+  prompt async-pending
+.EE
+.TP
+.BI "prompt text " "TEXT..."
+Append plain text.  Multiple operands are separated by spaces.
+.TP
+.BI "prompt segment " "[STYLE...] TEXT..."
+Append styled text.  Multiple text operands are separated by spaces.
+.TP
+.B prompt newline
+Append a newline to make a multi-line prompt.
+.TP
+.B prompt async-pending
+Return status 0 while asynchronous prompt work is active and status 1
+otherwise.  This is useful for activity indicators.
+.PP
+The text, segment, newline, and async forms contribute output only while Rush
+is rendering a prompt function.
+.SH SEGMENT STYLES
+.B prompt segment
+and
+.B prompt async
+accept these style options:
+.TP
+.BI "--fg " COLOR
+Set the foreground color.
+.TP
+.BI "--bg " COLOR
+Set the background color.
+.TP
+.B --bold
+Use bold text.
+.TP
+.B --dim
+Use dim text.
+.TP
+.B --italic
+Use italic text.
+.TP
+.B --underline
+Use single underlining.
+.TP
+.B --reverse
+Reverse foreground and background.
+.TP
+.B --strikethrough
+Use struck-through text.
+.PP
+Colors can be
+.BR default ;
+the names
+.BR black ,
+.BR red ,
+.BR green ,
+.BR yellow ,
+.BR blue ,
+.BR magenta ,
+.BR cyan ,
+and
+.BR white ;
+their
+.B bright-
+variants; a 256-color palette index written as
+.B index:N
+or
+.BR N ;
+or a truecolor value written as
+.BR #rrggbb .
+.SH ASYNCHRONOUS SEGMENTS
+Use
+.B prompt async
+for information that may be slow to compute, such as repository state.
+.EX
+  rush_prompt() {
+    prompt segment --fg bright-blue "$(prompt_pwd)"
+    prompt async git-branch --ttl 5000 --prefix ' ' --fg green -- \e
+      git branch --show-current
+    prompt text ' > '
+  }
+.EE
+.PP
+The
+.I KEY
+and current directory identify a cached value.  The
+.B --ttl
+value is its lifetime in milliseconds.  Rush immediately renders cached
+standard output, with trailing newlines removed.  If the value is missing or
+stale, Rush runs
+.I COMMAND
+in a background child with standard error hidden.  The old value, or no value,
+remains visible until the command finishes; Rush then redraws the prompt.
+.PP
+.BI "--prefix " TEXT
+is emitted only when the cached command output is nonempty.  Async segments
+accept the same style options as
+.BR "prompt segment" .
+.PP
+Keep ordinary prompt functions fast.  Prefer async segments or event handlers
+to slow command substitutions in
+.BR rush_prompt .
+.SH PROMPT HELPERS
+.TP
+.B prompt_pwd
+Write the current directory, replacing the leading home directory with
+.BR ~ .
+.TP
+.BI "prompt_pwd -d " N
+.TQ
+.BI "prompt_pwd --dir-length " N
+Shorten all but the final path components to at most
+.I N
+characters.
+.TP
+.BI "prompt_pwd -D " N
+.TQ
+.BI "prompt_pwd --full-length-dirs " N
+Keep the last
+.I N
+components at full length when shortening a path.  The default is 1.
+.TP
+.B prompt_duration
+Write the duration of the previous command in milliseconds.  Return status 1
+when no duration is available.
+.PP
+For example, in
+.IR ~/repos/rush :
+.EX
+  prompt_pwd             # ~/repos/rush
+  prompt_pwd -d 1        # ~/r/rush
+  prompt_pwd -d 1 -D 2   # ~/repos/rush
+.EE
+.SH EDITOR STYLES
+The interactive editor reads semantic style variables before each prompt.
+Values are comma-separated fields such as:
+.EX
+  rush_style_directory='fg=blue'
+  rush_style_selection='fg=cyan,bold'
+  rush_style_error='ul=curly,ul_color=red'
+.EE
+.PP
+Supported fields are
+.BR fg=COLOR ,
+.BR bg=COLOR ,
+.BR ul=STYLE ,
+.BR ul_color=COLOR ,
+.BR bold ,
+.BR dim ,
+.BR italic ,
+.BR reverse ,
+and
+.BR strike .
+Underline styles are
+.BR none ,
+.BR single ,
+.BR double ,
+.BR curly ,
+.BR dotted ,
+and
+.BR dashed .
+Invalid style values are ignored.
+.PP
+The available variables are
+.BR rush_style_selection ,
+.BR rush_style_command ,
+.BR rush_style_plain ,
+.BR rush_style_directory ,
+.BR rush_style_option ,
+.BR rush_style_variable ,
+.BR rush_style_function ,
+.BR rush_style_file ,
+.BR rush_style_muted ,
+.BR rush_style_flash ,
+.BR rush_style_match ,
+.BR rush_style_error ,
+.BR rush_style_comment ,
+.BR rush_style_quote ,
+.BR rush_style_pending ,
+.BR rush_style_reserved ,
+and
+.BR rush_style_operator .
+.PP
+Define
+.B rush_style
+to recompute these variables at startup and when terminal color information
+changes.  Before calling it, Rush sets
+.B rush_color_scheme
+to
+.BR dark ,
+.BR light ,
+or
+.BR unknown .
+When reported by the terminal,
+.BR rush_color_foreground ,
+.BR rush_color_background ,
+and the ANSI palette variables from
+.B rush_color_black
+through
+.B rush_color_white
+contain
+.B #rrggbb
+values.
+.PP
+The color helpers can derive truecolor values:
+.EX
+  color dim '#204080' 25
+  color blend '#000000' '#ffffff' 50
+.EE
+.SH PROMPT EVENTS
+Prompt-related event handlers are registered with
+.BR event :
+.EX
+  event add EVENT NAME FUNCTION [--priority N]
+  event add timer.tick NAME FUNCTION --every MS [--priority N]
+  event remove EVENT NAME
+  event list [EVENT]
+.EE
+.TP
+.B prompt.prepare
+Runs before each editable prompt render.  Use it to update inexpensive prompt
+variables.
+.TP
+.B prompt.async.start
+Runs when async prompt activity begins.  The handler receives the activity
+kind in
+.B $1
+and the active count in
+.BR $2 .
+.TP
+.B prompt.async.end
+Runs when all async prompt activity has ended, with the activity kind in
+.B $1
+and zero in
+.BR $2 .
+.TP
+.B timer.tick
+Runs at a registered interval while the editor is idle.  Use it for clocks or
+animations rather than sleeping in a prompt function.  The handler receives
+its registration name in
+.BR $1 .
+.PP
+Event handlers preserve the visible value of
+.BR $? .
+Reusing an event/name pair replaces the existing handler.
+.SH FILES
+.TP
+.I /etc/rush/profile.rush
+System login profile.
+.TP
+.I /etc/rush/config.rush
+System interactive configuration.
+.TP
+.I ~/.config/rush/profile.rush
+User login profile when
+.B XDG_CONFIG_HOME
+is unset.
+.TP
+.I ~/.config/rush/config.rush
+User interactive configuration when
+.B XDG_CONFIG_HOME
+is unset.
+.TP
+.I /usr/share/rush/config.rush
+Installed copy of the embedded default configuration for reference.  The
+installed data directory can be changed at build time.
+.SH SEE ALSO
+.BR rush (1),
+.BR sh (1)
