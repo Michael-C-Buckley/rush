@@ -774,8 +774,12 @@ pub const LineSession = struct {
             'k', '-' => try self.viHistoryPrevious(self.takeViCountOrDefault(1)),
             'j', '+' => try self.viHistoryNext(self.takeViCountOrDefault(1)),
             'G' => try self.viHistoryOldestOrNumber(self.vi_count),
-            '/' => self.beginViHistorySearch(.backward),
-            '?' => self.beginViHistorySearch(.forward),
+            // Open the shared history-search TUI (same menu as emacs Ctrl-R).
+            // The silent POSIX /? prompt path remains available via n/N after a
+            // successful search that stored a last pattern, and for pure unit
+            // tests of the pattern walker.
+            '/' => try self.beginViHistorySearchUi(.backward),
+            '?' => try self.beginViHistorySearchUi(.forward),
             'n' => try self.repeatViHistorySearch(false),
             'N' => try self.repeatViHistorySearch(true),
             '@' => self.vi_pending = .alias,
@@ -1509,6 +1513,17 @@ pub const LineSession = struct {
         self.vi_history_search_query.clearRetainingCapacity();
         self.vi_pending = .{ .history_search = direction };
         self.completion_menu.clear(self.allocator);
+    }
+
+    /// Interactive vi history search: reuse the emacs-style match menu so the
+    /// user sees candidates while typing instead of a silent pending state.
+    fn beginViHistorySearchUi(self: *LineSession, direction: ViHistoryDirection) !void {
+        self.resetViCommandPrefix();
+        self.vi_last_history_search_direction = direction;
+        try self.beginHistorySearch();
+        // Leave command mode so escape/cancel returns to a normal editing
+        // surface; accept still leaves the matched line ready to edit.
+        self.vi_state = .insert;
     }
 
     fn handleViHistorySearchKey(self: *LineSession, direction: ViHistoryDirection, event: KeyEvent) !void {
@@ -2369,6 +2384,16 @@ pub const LineSession = struct {
     }
 
     fn finishHistorySearch(self: *LineSession) void {
+        // Remember the accepted query so vi n/N can still walk matches after
+        // leaving the shared history-search TUI.
+        if (self.editing_mode == .vi and self.history_search_query.items.len != 0) {
+            self.vi_last_history_search_pattern.clearRetainingCapacity();
+            // ziglint-ignore: Z026 best-effort pattern capture for n/N after TUI accept/cancel
+            self.vi_last_history_search_pattern.appendSlice(self.allocator, self.history_search_query.items) catch {};
+            if (self.vi_last_history_search_direction == null) {
+                self.vi_last_history_search_direction = .backward;
+            }
+        }
         self.clearHistorySearchMatches();
         self.history_search_query.clearRetainingCapacity();
         self.history_search_original.clearRetainingCapacity();
@@ -3992,8 +4017,9 @@ test "vi line session searches history with POSIX patterns and n N" {
     );
     defer session.deinit();
 
+    // Silent POSIX pattern path (still used by n/N and pure unit coverage).
     try session.handleKey(.{ .key = .escape });
-    try session.handleKey(.{ .key = .text, .text = "/" });
+    session.beginViHistorySearch(.backward);
     try session.handleKey(.{ .key = .text, .text = "git *" });
     try session.handleKey(.{ .key = .enter });
     try std.testing.expectEqualStrings("git commit --amend", session.editor.buffer.text());
@@ -4005,7 +4031,7 @@ test "vi line session searches history with POSIX patterns and n N" {
     try session.handleKey(.{ .key = .text, .text = "N" });
     try std.testing.expectEqualStrings("git commit --amend", session.editor.buffer.text());
 
-    try session.handleKey(.{ .key = .text, .text = "/" });
+    session.beginViHistorySearch(.backward);
     try session.handleKey(.{ .key = .text, .text = "^echo" });
     try session.handleKey(.{ .key = .enter });
     try std.testing.expectEqualStrings("echo two", session.editor.buffer.text());
@@ -4025,13 +4051,45 @@ test "vi line session question mark searches history forward" {
     try session.handleKey(.{ .key = .text, .text = "G" });
     try std.testing.expectEqualStrings("echo one", session.editor.buffer.text());
 
-    try session.handleKey(.{ .key = .text, .text = "?" });
+    session.beginViHistorySearch(.forward);
     try session.handleKey(.{ .key = .text, .text = "git*" });
     try session.handleKey(.{ .key = .enter });
     try std.testing.expectEqualStrings("git status", session.editor.buffer.text());
 
     try session.handleKey(.{ .key = .text, .text = "n" });
     try std.testing.expectEqualStrings("git commit --amend", session.editor.buffer.text());
+}
+
+test "vi slash opens shared history search TUI" {
+    const entries = [_][]const u8{ "echo one", "git status", "echo two", "git commit --amend" };
+    var history_search: TestHistorySearch = .{ .entries = &entries };
+    var session = try LineSession.initWithEditingMode(
+        std.testing.allocator,
+        .{ .bytes = "$ " },
+        .{
+            .entries = &entries,
+            .context = &history_search,
+            .search = testSearchHistoryEntry,
+            .search_next = testSearchNextHistoryEntry,
+        },
+        .vi,
+    );
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .escape });
+    try session.handleKey(.{ .key = .text, .text = "/" });
+    try std.testing.expectEqual(LineSession.State.history_search, session.state);
+    try std.testing.expectEqual(ViState.insert, session.vi_state);
+    try applyTestHistoryRequests(&session);
+
+    try session.handleKey(.{ .key = .text, .text = "git" });
+    try applyTestHistoryRequests(&session);
+    try std.testing.expect(session.history_search_matches.items.len != 0);
+
+    try session.handleKey(.{ .key = .enter });
+    try std.testing.expectEqual(LineSession.State.editing, session.state);
+    try std.testing.expectEqualStrings("git commit --amend", session.editor.buffer.text());
+    try std.testing.expectEqualStrings("git", session.vi_last_history_search_pattern.items);
 }
 
 const TestViAliasSet = struct {
