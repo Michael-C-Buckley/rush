@@ -2,6 +2,7 @@
 
 const std = @import("std");
 
+const build_config = @import("build_config");
 const extensions = @import("extensions.zig");
 const file_util = @import("file_util.zig");
 const function_autoload = @import("function_autoload.zig");
@@ -16,6 +17,7 @@ const usage =
     \\       rush [--posix] [-i] [-u] [-x] -c SCRIPT [NAME [ARGS...]]
     \\       rush [--posix] [-i] [-u] [-x] [--] SCRIPT [ARGS...]
     \\       rush --help
+    \\       rush --version
     \\
 ;
 
@@ -41,6 +43,10 @@ pub fn run(
     switch (invocation) {
         .help => {
             try real_host.writeAll(.stdout, usage);
+            return 0;
+        },
+        .version => {
+            try real_host.writeAll(.stdout, "rush " ++ build_config.version ++ "\n");
             return 0;
         },
         .interactive => |interactive_invocation| {

@@ -71,6 +71,7 @@ rush [--login] [--posix] [-i] [-u] [-x]
 rush [--posix] [-i] [-u] [-x] -c SCRIPT [NAME [ARGS...]]
 rush [--posix] [-i] [-u] [-x] [--] SCRIPT_FILE [ARGS...]
 rush --help
+rush --version
 ```
 
 `--posix` selects POSIX mode with stricter syntax diagnostics for
