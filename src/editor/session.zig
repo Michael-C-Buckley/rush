@@ -186,6 +186,7 @@ pub const LineSession = struct {
     history_search_matches: std.ArrayList(HistoryView.HistoryEntry) = .empty,
     history_search_selected: usize = 0,
     history_search_filters: HistorySearchFilters = .{},
+    history_search_direction: ViHistoryDirection = .backward,
     autosuggestion: ?HistoryView.HistoryEntry = null,
     vi_history_search_query: std.ArrayList(u8) = .empty,
     vi_last_history_search_pattern: std.ArrayList(u8) = .empty,
@@ -379,7 +380,7 @@ pub const LineSession = struct {
                     self.editor.buffer.deleteNext();
                 }
             },
-            .ctrl_r => try self.beginHistorySearch(),
+            .ctrl_r => try self.beginHistorySearch(.backward),
             .undo => try self.undoEdit(),
             .redo => try self.redoEdit(),
             .clear_screen => {
@@ -1519,8 +1520,7 @@ pub const LineSession = struct {
     /// user sees candidates while typing instead of a silent pending state.
     fn beginViHistorySearchUi(self: *LineSession, direction: ViHistoryDirection) !void {
         self.resetViCommandPrefix();
-        self.vi_last_history_search_direction = direction;
-        try self.beginHistorySearch();
+        try self.beginHistorySearch(direction);
         // Leave command mode so escape/cancel returns to a normal editing
         // surface; accept still leaves the matched line ready to edit.
         self.vi_state = .insert;
@@ -1948,7 +1948,7 @@ pub const LineSession = struct {
         try self.editor.buffer.insertText(pasted);
         self.completion_menu.clear(self.allocator);
         if (self.state == .history_search) {
-            if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
+            if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshCurrentHistorySearch(null);
         }
     }
 
@@ -2209,14 +2209,15 @@ pub const LineSession = struct {
         return null;
     }
 
-    fn beginHistorySearch(self: *LineSession) !void {
+    fn beginHistorySearch(self: *LineSession, direction: ViHistoryDirection) !void {
         self.history_search_query.clearRetainingCapacity();
         self.history_search_original.clearRetainingCapacity();
         try self.history_search_original.appendSlice(self.allocator, self.editor.buffer.text());
         try self.history_search_query.appendSlice(self.allocator, self.editor.buffer.text());
         self.history_search_filters = .{};
+        self.history_search_direction = direction;
         self.state = .history_search;
-        try self.refreshHistorySearch(null);
+        try self.refreshCurrentHistorySearch(null);
         self.completion_menu.clear(self.allocator);
     }
 
@@ -2224,7 +2225,10 @@ pub const LineSession = struct {
         if (try self.handleHistorySearchFilterKey(event)) return;
         switch (event.key) {
             .enter => {
-                if (self.selectedHistorySearchMatch()) |entry| try self.editor.buffer.replace(entry.text);
+                if (self.selectedHistorySearchMatch()) |entry| {
+                    try self.editor.buffer.replace(entry.text);
+                    try self.rememberAcceptedViHistorySearch();
+                }
                 self.finishHistorySearch();
             },
             .tab => if (event.modifiers.shift)
@@ -2239,16 +2243,16 @@ pub const LineSession = struct {
             .up => self.selectPreviousHistorySearchMatch(),
             .backspace => {
                 self.editor.buffer.deletePrevious();
-                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
+                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshCurrentHistorySearch(null);
             },
             .delete => {
                 self.editor.buffer.deleteNext();
-                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
+                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshCurrentHistorySearch(null);
             },
             .text => {
                 if (event.text.len == 0) return;
                 try self.editor.handleKey(event);
-                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
+                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshCurrentHistorySearch(null);
             },
             .left, .right, .home, .end, .word_left, .word_right => try self.editor.handleKey(event),
             .argument_left => self.editor.buffer.cursor_byte = try previousShellArgumentStart(
@@ -2263,19 +2267,19 @@ pub const LineSession = struct {
             ),
             .delete_to_start => {
                 self.editor.buffer.deleteToStart();
-                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
+                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshCurrentHistorySearch(null);
             },
             .delete_to_end => {
                 self.editor.buffer.deleteToEnd();
-                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
+                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshCurrentHistorySearch(null);
             },
             .delete_previous_word => {
                 self.editor.buffer.deletePreviousWord();
-                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
+                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshCurrentHistorySearch(null);
             },
             .delete_next_word => {
                 self.editor.buffer.deleteNextWord();
-                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
+                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshCurrentHistorySearch(null);
             },
             .delete_previous_argument => {
                 const start = try previousShellArgumentStart(
@@ -2284,7 +2288,7 @@ pub const LineSession = struct {
                     self.editor.buffer.cursor_byte,
                 );
                 try self.editor.buffer.replaceRange(start, self.editor.buffer.cursor_byte, "");
-                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
+                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshCurrentHistorySearch(null);
             },
             .delete_next_argument => {
                 const end = try nextShellArgumentEnd(
@@ -2293,7 +2297,7 @@ pub const LineSession = struct {
                     self.editor.buffer.cursor_byte,
                 );
                 try self.editor.buffer.replaceRange(self.editor.buffer.cursor_byte, end, "");
-                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshHistorySearch(null);
+                if (try self.syncHistorySearchQueryFromBuffer()) try self.refreshCurrentHistorySearch(null);
             },
             else => {},
         }
@@ -2308,7 +2312,7 @@ pub const LineSession = struct {
             't', 'T' => self.history_search_filters.session = !self.history_search_filters.session,
             else => return false,
         }
-        try self.refreshHistorySearch(null);
+        try self.refreshCurrentHistorySearch(null);
         return true;
     }
 
@@ -2317,6 +2321,13 @@ pub const LineSession = struct {
         self.history_search_query.clearRetainingCapacity();
         try self.history_search_query.appendSlice(self.allocator, self.editor.buffer.text());
         return true;
+    }
+
+    fn refreshCurrentHistorySearch(self: *LineSession, cursor: ?i64) !void {
+        return switch (self.history_search_direction) {
+            .backward => self.refreshHistorySearch(cursor),
+            .forward => self.refreshHistorySearchNext(cursor),
+        };
     }
 
     fn refreshHistorySearch(self: *LineSession, before: ?i64) !void {
@@ -2383,17 +2394,14 @@ pub const LineSession = struct {
         self.history_search_matches.clearRetainingCapacity();
     }
 
+    fn rememberAcceptedViHistorySearch(self: *LineSession) !void {
+        if (self.editing_mode != .vi or self.history_search_query.items.len == 0) return;
+        self.vi_last_history_search_pattern.clearRetainingCapacity();
+        try self.vi_last_history_search_pattern.appendSlice(self.allocator, self.history_search_query.items);
+        self.vi_last_history_search_direction = self.history_search_direction;
+    }
+
     fn finishHistorySearch(self: *LineSession) void {
-        // Remember the accepted query so vi n/N can still walk matches after
-        // leaving the shared history-search TUI.
-        if (self.editing_mode == .vi and self.history_search_query.items.len != 0) {
-            self.vi_last_history_search_pattern.clearRetainingCapacity();
-            // ziglint-ignore: Z026 best-effort pattern capture for n/N after TUI accept/cancel
-            self.vi_last_history_search_pattern.appendSlice(self.allocator, self.history_search_query.items) catch {};
-            if (self.vi_last_history_search_direction == null) {
-                self.vi_last_history_search_direction = .backward;
-            }
-        }
         self.clearHistorySearchMatches();
         self.history_search_query.clearRetainingCapacity();
         self.history_search_original.clearRetainingCapacity();
@@ -4090,6 +4098,70 @@ test "vi slash opens shared history search TUI" {
     try std.testing.expectEqual(LineSession.State.editing, session.state);
     try std.testing.expectEqualStrings("git commit --amend", session.editor.buffer.text());
     try std.testing.expectEqualStrings("git", session.vi_last_history_search_pattern.items);
+}
+
+test "vi question mark opens forward shared history search TUI" {
+    const entries = [_][]const u8{ "echo one", "git status", "echo two", "git commit --amend" };
+    var history_search: TestHistorySearch = .{ .entries = &entries };
+    var session = try LineSession.initWithEditingMode(
+        std.testing.allocator,
+        .{ .bytes = "$ " },
+        .{
+            .entries = &entries,
+            .context = &history_search,
+            .search = testSearchHistoryEntry,
+            .search_next = testSearchNextHistoryEntry,
+        },
+        .vi,
+    );
+    defer session.deinit();
+
+    try session.handleKey(.{ .key = .escape });
+    try session.handleKey(.{ .key = .text, .text = "?" });
+    try applyTestHistoryRequests(&session);
+
+    try session.handleKey(.{ .key = .text, .text = "git" });
+    try applyTestHistoryRequests(&session);
+    try std.testing.expect(session.history_search_matches.items.len != 0);
+
+    try session.handleKey(.{ .key = .enter });
+    try std.testing.expectEqual(LineSession.State.editing, session.state);
+    try std.testing.expectEqualStrings("git status", session.editor.buffer.text());
+    try std.testing.expectEqualStrings("git", session.vi_last_history_search_pattern.items);
+    try std.testing.expectEqual(ViHistoryDirection.forward, session.vi_last_history_search_direction.?);
+}
+
+test "canceling vi shared history search preserves previous repeat pattern" {
+    const entries = [_][]const u8{ "echo one", "git status", "echo two", "git commit --amend" };
+    var history_search: TestHistorySearch = .{ .entries = &entries };
+    var session = try LineSession.initWithEditingMode(
+        std.testing.allocator,
+        .{ .bytes = "$ " },
+        .{
+            .entries = &entries,
+            .context = &history_search,
+            .search = testSearchHistoryEntry,
+            .search_next = testSearchNextHistoryEntry,
+        },
+        .vi,
+    );
+    defer session.deinit();
+
+    try session.vi_last_history_search_pattern.appendSlice(std.testing.allocator, "git");
+    session.vi_last_history_search_direction = .forward;
+    try session.editor.buffer.replace("draft command");
+
+    try session.handleKey(.{ .key = .escape });
+    try session.handleKey(.{ .key = .text, .text = "/" });
+    try applyTestHistoryRequests(&session);
+    try session.handleKey(.{ .key = .text, .text = "echo" });
+    try applyTestHistoryRequests(&session);
+    try session.handleKey(.{ .key = .escape });
+
+    try std.testing.expectEqual(LineSession.State.editing, session.state);
+    try std.testing.expectEqualStrings("draft command", session.editor.buffer.text());
+    try std.testing.expectEqualStrings("git", session.vi_last_history_search_pattern.items);
+    try std.testing.expectEqual(ViHistoryDirection.forward, session.vi_last_history_search_direction.?);
 }
 
 const TestViAliasSet = struct {
