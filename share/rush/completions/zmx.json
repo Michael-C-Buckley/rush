@@ -1,0 +1,257 @@
+{
+  "$schema": "https://rush.horse/completion/schema/v1.schema.json",
+  "manifestVersion": 1,
+  "command": {
+    "name": "zmx",
+    "description": "persist terminal processes in named sessions",
+    "providers": {
+      "zmx.sessions": { "function": "__rush_complete_zmx_sessions" },
+      "zmx.shells": {
+        "values": [
+          { "value": "bash", "description": "generate Bash completions" },
+          { "value": "zsh", "description": "generate Zsh completions" },
+          { "value": "fish", "description": "generate fish completions" },
+          { "value": "nu", "description": "generate Nushell completions" }
+        ]
+      }
+    },
+    "options": [
+      { "short": "h", "long": "help", "description": "show help" },
+      { "short": "v", "long": "version", "inherit": false, "description": "show version" }
+    ],
+    "subcommands": [
+      {
+        "name": "attach",
+        "aliases": ["a"],
+        "priority": 40,
+        "description": "attach to a session, creating it if needed",
+        "arguments": {
+          "states": [
+            {
+              "name": "session",
+              "index": 0,
+              "provider": "zmx.sessions",
+              "description": "session to attach to or create"
+            },
+            {
+              "name": "command",
+              "index": 1,
+              "rest": "command-line",
+              "description": "command line for a new session"
+            }
+          ]
+        }
+      },
+      {
+        "name": "run",
+        "aliases": ["r"],
+        "priority": 40,
+        "description": "send a command without attaching",
+        "options": [
+          { "short": "d", "description": "detach and track the task with wait" }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "session",
+              "index": 0,
+              "provider": "zmx.sessions",
+              "description": "session in which to run the command"
+            },
+            {
+              "name": "command",
+              "index": 1,
+              "rest": "command-line",
+              "description": "command line to run"
+            }
+          ]
+        }
+      },
+      {
+        "name": "send",
+        "aliases": ["s"],
+        "priority": 30,
+        "description": "send raw input to a session PTY",
+        "arguments": {
+          "states": [
+            {
+              "name": "session",
+              "index": 0,
+              "provider": "zmx.sessions",
+              "description": "session to receive input"
+            },
+            {
+              "name": "text",
+              "index": 1,
+              "repeatable": true,
+              "description": "raw text to send"
+            }
+          ]
+        }
+      },
+      {
+        "name": "print",
+        "aliases": ["p"],
+        "description": "inject text into a session display",
+        "arguments": {
+          "states": [
+            {
+              "name": "session",
+              "index": 0,
+              "provider": "zmx.sessions",
+              "description": "session display to update"
+            },
+            {
+              "name": "text",
+              "index": 1,
+              "repeatable": true,
+              "description": "text to inject"
+            }
+          ]
+        }
+      },
+      {
+        "name": "write",
+        "aliases": ["wr"],
+        "description": "write stdin to a file through a session",
+        "arguments": {
+          "states": [
+            {
+              "name": "session",
+              "index": 0,
+              "provider": "zmx.sessions",
+              "description": "session through which to write"
+            },
+            {
+              "name": "file-path",
+              "index": 1,
+              "description": "path in the session environment"
+            }
+          ]
+        }
+      },
+      {
+        "name": "detach",
+        "aliases": ["d"],
+        "description": "detach all clients from the current session"
+      },
+      {
+        "name": "list",
+        "aliases": ["l", "ls"],
+        "priority": 40,
+        "description": "list active sessions",
+        "options": [
+          { "long": "short", "description": "show only session names" }
+        ]
+      },
+      {
+        "name": "kill",
+        "aliases": ["k"],
+        "priority": 30,
+        "description": "kill sessions and their attached clients",
+        "options": [
+          { "long": "force", "priority": -5, "description": "force processes to exit" }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "session",
+              "index": 0,
+              "repeatable": true,
+              "provider": "zmx.sessions",
+              "description": "session name or prefix ending in *"
+            }
+          ]
+        }
+      },
+      {
+        "name": "history",
+        "aliases": ["hi"],
+        "priority": 30,
+        "description": "output session scrollback",
+        "optionGroups": [
+          { "name": "history-format", "exclusive": true }
+        ],
+        "options": [
+          {
+            "long": "vt",
+            "exclusiveGroup": "history-format",
+            "description": "preserve virtual terminal escape sequences"
+          },
+          {
+            "long": "html",
+            "exclusiveGroup": "history-format",
+            "description": "render scrollback as HTML"
+          }
+        ],
+        "arguments": {
+          "states": [
+            {
+              "name": "session",
+              "index": 0,
+              "provider": "zmx.sessions",
+              "description": "session whose scrollback to output"
+            }
+          ]
+        }
+      },
+      {
+        "name": "wait",
+        "aliases": ["w"],
+        "description": "wait for session tasks to complete",
+        "arguments": {
+          "states": [
+            {
+              "name": "session",
+              "index": 0,
+              "repeatable": true,
+              "provider": "zmx.sessions",
+              "description": "session name or prefix ending in *"
+            }
+          ]
+        }
+      },
+      {
+        "name": "tail",
+        "aliases": ["t"],
+        "description": "follow session output",
+        "arguments": {
+          "states": [
+            {
+              "name": "session",
+              "index": 0,
+              "repeatable": true,
+              "provider": "zmx.sessions",
+              "description": "session name or prefix ending in *"
+            }
+          ]
+        }
+      },
+      {
+        "name": "completions",
+        "aliases": ["c"],
+        "description": "generate shell completions",
+        "arguments": {
+          "states": [
+            {
+              "name": "shell",
+              "index": 0,
+              "provider": "zmx.shells",
+              "description": "shell completion format"
+            }
+          ]
+        }
+      },
+      {
+        "name": "version",
+        "aliases": ["v"],
+        "description": "show version"
+      },
+      {
+        "name": "help",
+        "aliases": ["h"],
+        "description": "show help"
+      }
+    ]
+  }
+}

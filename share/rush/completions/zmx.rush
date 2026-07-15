@@ -1,0 +1,81 @@
+__rush_complete_zmx_session_selected() {
+  candidate=$1
+  index=0
+  while test "$index" -lt "$rush_completion_argument_index"; do
+    selected=$(rush_complete operand "$index" 2>/dev/null)
+    test "$selected" = "$candidate" && return 0
+    index=$((index + 1))
+  done
+  return 1
+}
+
+__rush_complete_zmx_sessions() {
+  command -v zmx >/dev/null 2>&1 || return 0
+
+  tab=$(printf '\t')
+  zmx list 2>/dev/null | while IFS= read -r line; do
+    current=false
+    case "$line" in
+      '→ '*) current=true; line=${line#'→ '} ;;
+      '  '*) line=${line#'  '} ;;
+    esac
+
+    name_field=${line%%"$tab"*}
+    case "$name_field" in name=*) ;; *) continue ;; esac
+    name=${name_field#name=}
+    test -n "$name" || continue
+
+    prefix=${ZMX_SESSION_PREFIX-}
+    if test -n "$prefix"; then
+      case "$name" in
+        "$prefix"*) value=${name#"$prefix"} ;;
+        *) continue ;;
+      esac
+    else
+      value=$name
+    fi
+    test -n "$value" || continue
+    __rush_complete_zmx_session_selected "$value" && continue
+
+    clients=
+    start_dir=
+    ended=
+    exit_code=
+    unreachable=
+    rest=${line#*"$tab"}
+    while test "$rest" != "$line"; do
+      field=${rest%%"$tab"*}
+      case "$field" in
+        clients=*) clients=${field#clients=} ;;
+        start_dir=*) start_dir=${field#start_dir=} ;;
+        ended=*) ended=${field#ended=} ;;
+        exit_code=*) exit_code=${field#exit_code=} ;;
+        err=*) unreachable=${field#err=} ;;
+      esac
+      next=${rest#*"$tab"}
+      test "$next" = "$rest" && break
+      rest=$next
+    done
+    test -n "$unreachable" && continue
+
+    if test "$current" = true; then
+      description='current session'
+      priority=60
+    elif test -n "$ended"; then
+      description="last task exited ${exit_code:-unknown}"
+      priority=10
+    else
+      description='active session'
+      priority=20
+    fi
+    case "$clients" in
+      1) description="$description, 1 client"; priority=30 ;;
+      ''|0) ;;
+      *) description="$description, $clients clients"; priority=30 ;;
+    esac
+    test "$current" = true && priority=60
+    test -n "$start_dir" && description="$description, $start_dir"
+
+    rush_complete candidate "$value" --kind plain --description "$description" --priority "$priority"
+  done
+}
