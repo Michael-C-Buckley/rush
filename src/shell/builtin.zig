@@ -2196,6 +2196,7 @@ fn variableLessThan(_: void, lhs: state_mod.Variable, rhs: state_mod.Variable) b
 
 const SetOption = enum {
     allexport,
+    emacs,
     errexit,
     hashall,
     noclobber,
@@ -2204,12 +2205,14 @@ const SetOption = enum {
     notify,
     nounset,
     pipefail,
+    vi,
     verbose,
     xtrace,
 };
 
 const set_option_names = std.StaticStringMap(SetOption).initComptime(.{
     .{ "allexport", .allexport },
+    .{ "emacs", .emacs },
     .{ "errexit", .errexit },
     .{ "hashall", .hashall },
     .{ "noclobber", .noclobber },
@@ -2218,12 +2221,14 @@ const set_option_names = std.StaticStringMap(SetOption).initComptime(.{
     .{ "notify", .notify },
     .{ "nounset", .nounset },
     .{ "pipefail", .pipefail },
+    .{ "vi", .vi },
     .{ "verbose", .verbose },
     .{ "xtrace", .xtrace },
 });
 
 const set_option_order = [_]SetOption{
     .allexport,
+    .emacs,
     .errexit,
     .hashall,
     .noclobber,
@@ -2232,6 +2237,7 @@ const set_option_order = [_]SetOption{
     .notify,
     .nounset,
     .pipefail,
+    .vi,
     .verbose,
     .xtrace,
 };
@@ -2239,6 +2245,7 @@ const set_option_order = [_]SetOption{
 fn setOptionName(option: SetOption) []const u8 {
     return switch (option) {
         .allexport => "allexport",
+        .emacs => "emacs",
         .errexit => "errexit",
         .hashall => "hashall",
         .noclobber => "noclobber",
@@ -2247,6 +2254,7 @@ fn setOptionName(option: SetOption) []const u8 {
         .notify => "notify",
         .nounset => "nounset",
         .pipefail => "pipefail",
+        .vi => "vi",
         .verbose => "verbose",
         .xtrace => "xtrace",
     };
@@ -2255,6 +2263,7 @@ fn setOptionName(option: SetOption) []const u8 {
 fn setOptionEnabled(shell: anytype, option: SetOption) bool {
     return switch (option) {
         .allexport => shell.state.options.allexport,
+        .emacs => shell.state.options.emacs,
         .errexit => shell.state.options.errexit,
         .hashall => shell.state.options.hashall,
         .noclobber => shell.state.options.noclobber,
@@ -2263,6 +2272,7 @@ fn setOptionEnabled(shell: anytype, option: SetOption) bool {
         .notify => shell.state.options.notify,
         .nounset => shell.state.options.nounset,
         .pipefail => shell.state.options.pipefail,
+        .vi => shell.state.options.vi,
         .verbose => shell.state.options.verbose,
         .xtrace => shell.state.options.xtrace,
     };
@@ -2293,6 +2303,13 @@ fn setNamedOption(shell: anytype, name: []const u8, enabled: bool) bool {
     const option = set_option_names.get(name) orelse return false;
     switch (option) {
         .allexport => shell.state.options.allexport = enabled,
+        .emacs => {
+            // Emacs-style editing is Rush's default interactive mode. Enabling
+            // it clears vi; disabling it only clears the explicit option bit
+            // and does not enable vi.
+            shell.state.options.emacs = enabled;
+            if (enabled) shell.state.options.vi = false;
+        },
         .errexit => shell.state.options.errexit = enabled,
         .hashall => shell.state.options.hashall = enabled,
         .noclobber => shell.state.options.noclobber = enabled,
@@ -2301,6 +2318,12 @@ fn setNamedOption(shell: anytype, name: []const u8, enabled: bool) bool {
         .notify => shell.state.options.notify = enabled,
         .nounset => shell.state.options.nounset = enabled,
         .pipefail => shell.state.options.pipefail = enabled,
+        .vi => {
+            // POSIX vi editing mode. Enabling it turns off emacs; disabling it
+            // restores Rush's default emacs-style editing option.
+            shell.state.options.vi = enabled;
+            shell.state.options.emacs = !enabled;
+        },
         .verbose => shell.state.options.verbose = enabled,
         .xtrace => shell.state.options.xtrace = enabled,
     }
@@ -3105,6 +3128,83 @@ test "set -o notify toggles notify option" {
         (try eval(&shell, set_definition, &.{ "set", "+o", "notify" })).status,
     );
     try std.testing.expect(!shell.state.options.notify);
+}
+
+test "set -o vi and emacs are mutually exclusive editing options" {
+    const TestHost = struct {
+        // ziglint-ignore: Z020 test-local helper uses @This(); avoid non-semantic refactor
+        pub fn writeAll(_: *@This(), _: host.Fd, _: []const u8) !void {}
+
+        // ziglint-ignore: Z020 test-local helper uses @This(); avoid non-semantic refactor
+        pub fn setFileCreationMask(_: *@This(), mask: u32) u32 {
+            return mask;
+        }
+
+        // ziglint-ignore: Z020 test-local helper uses @This(); avoid non-semantic refactor
+        pub fn currentProcessId(_: *@This()) host.Pid {
+            return 1;
+        }
+
+        // ziglint-ignore: Z020 test-local helper uses @This(); avoid non-semantic refactor
+        pub fn sendSignal(_: *@This(), _: host.Pid, _: u8) !void {}
+
+        // ziglint-ignore: Z020 test-local helper uses @This(); avoid non-semantic refactor
+        pub fn setSignalDefault(_: *@This(), _: u8) !void {}
+
+        // ziglint-ignore: Z020 test-local helper uses @This(); avoid non-semantic refactor
+        pub fn setSignalIgnored(_: *@This(), _: u8) !void {}
+
+        // ziglint-ignore: Z020 test-local helper uses @This(); avoid non-semantic refactor
+        pub fn installSignalTrap(_: *@This(), _: u8) !void {}
+    };
+    const TestShell = struct {
+        host: TestHost = .{},
+        state: state_mod.State,
+
+        // ziglint-ignore: Z020 test-local helper uses @This(); avoid non-semantic refactor
+        fn scratchAllocator(_: *@This()) std.mem.Allocator {
+            return std.testing.allocator;
+        }
+    };
+
+    var shell: TestShell = .{ .state = state_mod.State.init(std.testing.allocator, .{}) };
+    defer shell.state.deinit();
+    const set_definition = lookup("set").?;
+
+    try std.testing.expect(shell.state.options.emacs);
+    try std.testing.expect(!shell.state.options.vi);
+
+    try std.testing.expectEqual(
+        @as(result.ExitStatus, 0),
+        (try eval(&shell, set_definition, &.{ "set", "-o", "vi" })).status,
+    );
+    try std.testing.expect(shell.state.options.vi);
+    try std.testing.expect(!shell.state.options.emacs);
+
+    try std.testing.expectEqual(
+        @as(result.ExitStatus, 0),
+        (try eval(&shell, set_definition, &.{ "set", "+o", "vi" })).status,
+    );
+    try std.testing.expect(!shell.state.options.vi);
+    try std.testing.expect(shell.state.options.emacs);
+
+    try std.testing.expectEqual(
+        @as(result.ExitStatus, 0),
+        (try eval(&shell, set_definition, &.{ "set", "-o", "vi" })).status,
+    );
+    try std.testing.expectEqual(
+        @as(result.ExitStatus, 0),
+        (try eval(&shell, set_definition, &.{ "set", "-o", "emacs" })).status,
+    );
+    try std.testing.expect(shell.state.options.emacs);
+    try std.testing.expect(!shell.state.options.vi);
+
+    try std.testing.expectEqual(
+        @as(result.ExitStatus, 0),
+        (try eval(&shell, set_definition, &.{ "set", "+o", "emacs" })).status,
+    );
+    try std.testing.expect(!shell.state.options.emacs);
+    try std.testing.expect(!shell.state.options.vi);
 }
 
 test "jobs builtin filters jobs and prints pids" {

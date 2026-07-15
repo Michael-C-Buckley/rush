@@ -230,6 +230,9 @@ const InteractiveSession = struct {
         return terminal.readLine(.{
             .prompt = prompt_text,
             .right_prompt = right_prompt_text,
+            // Read shell option state each prompt so `set -o vi` / `set -o emacs`
+            // take effect on the next line without restarting the session.
+            .editing_mode = if (self.sh.state.options.vi) .vi else .emacs,
             .history = self.history_service.lineEditorView(self.io),
             .prompt_async_context = self,
             .pump_prompt_async = pumpPromptAsync,

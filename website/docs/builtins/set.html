@@ -44,6 +44,7 @@
       <tr><td><code>-a</code></td><td><code>allexport</code></td><td>Export variables assigned afterward.</td></tr>
       <tr><td><code>-b</code></td><td><code>notify</code></td><td>Report completed background jobs without waiting for the next prompt.</td></tr>
       <tr><td><code>-C</code></td><td><code>noclobber</code></td><td>Prevent ordinary output redirections from replacing existing regular files.</td></tr>
+      <tr><td>-</td><td><code>emacs</code></td><td>Use Emacs-style interactive line editing. On by default; mutually exclusive with <code>vi</code>.</td></tr>
       <tr><td><code>-e</code></td><td><code>errexit</code></td><td>Exit after an untested command failure.</td></tr>
       <tr><td><code>-f</code></td><td><code>noglob</code></td><td>Disable pathname expansion.</td></tr>
       <tr><td><code>-h</code></td><td><code>hashall</code></td><td>Remember command paths as commands are found.</td></tr>
@@ -52,11 +53,13 @@
       <tr><td>-</td><td><code>pipefail</code></td><td>Use the rightmost non-zero pipeline status, or zero if all commands succeed.</td></tr>
       <tr><td><code>-u</code></td><td><code>nounset</code></td><td>Treat expansion of unset parameters as an error where required by the shell language.</td></tr>
       <tr><td><code>-v</code></td><td><code>verbose</code></td><td>Write shell input as it is read.</td></tr>
+      <tr><td>-</td><td><code>vi</code></td><td>Use POSIX vi interactive line editing. Mutually exclusive with <code>emacs</code>.</td></tr>
       <tr><td><code>-x</code></td><td><code>xtrace</code></td><td>Trace expanded commands before execution.</td></tr>
     </tbody>
   </table>
 
   <p>Use <code>set -o name</code> or <code>set +o name</code> to enable or disable a named option. Short options may be combined.</p>
+  <p><code>emacs</code> is Rush's default interactive editing mode and an implementation extension: POSIX.1-2024 does not standardize shell Emacs bindings. <code>set -o vi</code> enables vi mode and disables <code>emacs</code>; <code>set +o vi</code> restores the default Emacs-style option. <code>set +o emacs</code> clears the explicit Emacs option without enabling <code>vi</code>.</p>
 
   <h2 id="exit-status"><a href="#exit-status">EXIT STATUS</a></h2>
 

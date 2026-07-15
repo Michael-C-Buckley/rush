@@ -16,6 +16,9 @@ pub const Mode = enum {
 pub const Options = struct {
     mode: Mode = .bash,
     allexport: bool = false,
+    /// Implementation-extension Emacs-style line editing. On by default and
+    /// mutually exclusive with `vi` when either option is enabled.
+    emacs: bool = true,
     errexit: bool = false,
     hashall: bool = false,
     nounset: bool = false,
@@ -25,6 +28,9 @@ pub const Options = struct {
     pipefail: bool = false,
     notify: bool = false,
     verbose: bool = false,
+    /// POSIX vi command-line editing for the interactive line editor.
+    /// Mutually exclusive with `emacs` when either option is enabled.
+    vi: bool = false,
     expand_aliases: bool = false,
     xtrace: bool = false,
     monitor: bool = false,
