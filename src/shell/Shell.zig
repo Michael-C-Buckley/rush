@@ -19,6 +19,7 @@ pub const InitOptions = struct {
     env: []const [*:0]const u8 = &.{},
     arg_zero: []const u8 = "rush",
     positionals: []const []const u8 = &.{},
+    initial_pwd: ?[]const u8 = null,
 };
 
 pub fn Shell(comptime Host: type) type {
@@ -53,6 +54,10 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
             };
             shell.state.putVariable(.{ .name = "PS4", .value = "+ " }) catch unreachable;
             shell.state.putVariable(.{ .name = "IFS", .value = " \t\n" }) catch unreachable;
+            if (options.initial_pwd) |pwd| {
+                std.debug.assert(pwd.len != 0 and pwd[0] == '/');
+                shell.state.putVariable(.{ .name = "PWD", .value = pwd, .exported = true }) catch unreachable;
+            }
             if (comptime @hasDecl(Host, "wallTimeNs")) shell.state.resetStartTime(shell.host.wallTimeNs());
             shell.state.arg_zero = options.arg_zero;
             shell.state.positionals = options.positionals;
@@ -384,6 +389,21 @@ test "Shell initializes IFS from the shell default instead of the environment" {
     defer shell.deinit();
 
     try std.testing.expectEqualStrings(" \t\n", shell.state.getVariable("IFS").?.value);
+}
+
+test "Shell initializes exported PWD instead of preserving a stale environment value" {
+    const TestHost = struct {};
+    const env = [_][*:0]const u8{"PWD=/home/tim"};
+
+    var shell = Shell(TestHost).init(std.testing.allocator, .{}, .{
+        .env = &env,
+        .initial_pwd = "/home/tim/repos",
+    });
+    defer shell.deinit();
+
+    const pwd = shell.state.getVariable("PWD").?;
+    try std.testing.expectEqualStrings("/home/tim/repos", pwd.value);
+    try std.testing.expect(pwd.exported);
 }
 
 test "Shell parameter-only expansion preserves non-parameter substitutions" {

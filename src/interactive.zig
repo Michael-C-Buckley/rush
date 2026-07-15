@@ -39,11 +39,13 @@ pub fn run(
     var state_options = options.state_options;
     if (!interactive) state_options.interactive = false;
 
+    const initial_pwd = try real_host.currentDir(allocator);
     var sh = RushShell.init(allocator, real_host, .{
         .state = state_options,
         .env = env,
         .arg_zero = options.arg_zero,
         .positionals = options.positionals,
+        .initial_pwd = initial_pwd,
     });
     defer sh.deinit();
     sh.setFunctionAutoload(autoloadRushFunction);

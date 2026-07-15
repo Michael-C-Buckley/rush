@@ -840,8 +840,7 @@ test "prompt async pump collects pipe output and completes the entry" {
 }
 
 fn promptAsyncEntry(state: *State, sh: anytype, key: []const u8) !*PromptAsyncEntry {
-    const cwd = if (sh.state.getVariable("PWD")) |variable| variable.value else shellEnvValue(sh, "PWD") orelse
-        try sh.host.currentDir(sh.scratchAllocator());
+    const cwd = try promptDirectory(sh);
     for (state.prompt_async_entries.items) |entry| {
         if (std.mem.eql(u8, entry.key, key) and std.mem.eql(u8, entry.cwd, cwd)) return entry;
     }
@@ -945,13 +944,19 @@ fn evalPromptPwd(sh: anytype, args: []const []const u8) !result.EvalResult {
         else => @TypeOf(sh.host),
     };
     if (!@hasDecl(HostType, "currentDir")) return .{ .status = 1 };
-    // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-    const cwd = if (sh.state.getVariable("PWD")) |variable| variable.value else shellEnvValue(sh, "PWD") orelse try sh.host.currentDir(sh.scratchAllocator());
+    const cwd = try promptDirectory(sh);
     // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
     const display = try formatPromptPwd(sh.scratchAllocator(), cwd, if (sh.state.getVariable("HOME")) |home| home.value else shellEnvValue(sh, "HOME"), options);
     try sh.host.writeAll(.stdout, display);
     try sh.host.writeAll(.stdout, "\n");
     return .{};
+}
+
+fn promptDirectory(sh: anytype) ![]const u8 {
+    if (sh.state.getVariable("PWD")) |variable| return variable.value;
+    return sh.host.currentDir(sh.scratchAllocator()) catch |err| {
+        return shellEnvValue(sh, "PWD") orelse return err;
+    };
 }
 
 const PromptPwdOptions = struct {

@@ -103,11 +103,13 @@ fn evalSource(
     options: EvalSourceOptions,
     src: shell.source.Source,
 ) !u8 {
+    const initial_pwd = try real_host.currentDir(allocator);
     var sh = RushShell.init(allocator, real_host, .{
         .state = options.state_options,
         .env = env,
         .arg_zero = options.arg_zero,
         .positionals = options.positionals,
+        .initial_pwd = initial_pwd,
     });
     defer sh.deinit();
     sh.setFunctionAutoload(autoloadRushFunction);
