@@ -44,5 +44,9 @@ jobs:
           version: 0.16.0
           cache-key: ${{ matrix.name }}
 
+      # Zig 0.16.0 cannot fetch ZIP dependencies when a fresh cache lacks tmp/.
+      - name: Prepare Zig package cache
+        run: mkdir -p "$ZIG_GLOBAL_CACHE_DIR/tmp"
+
       - name: Run ${{ matrix.name }}
         run: ${{ matrix.command }}
