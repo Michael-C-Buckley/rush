@@ -606,6 +606,33 @@
             .status = 0,
         },
         .{
+            .name = "set -o vi and emacs toggle editing options",
+            .script =
+            \\set -o | grep '^emacs[[:space:]]*on' >/dev/null && set -o | grep '^vi[[:space:]]*off' >/dev/null && printf 'defaults\n'
+            \\set -o vi
+            \\set -o | grep '^vi[[:space:]]*on' >/dev/null && set -o | grep '^emacs[[:space:]]*off' >/dev/null && printf 'vi-on\n'
+            \\set +o | grep '^set -o vi$' >/dev/null && set +o | grep '^set +o emacs$' >/dev/null && printf 'vi-reusable\n'
+            \\set +o vi
+            \\set -o | grep '^vi[[:space:]]*off' >/dev/null && set -o | grep '^emacs[[:space:]]*on' >/dev/null && printf 'vi-off\n'
+            \\set -o vi
+            \\set -o emacs
+            \\set -o | grep '^emacs[[:space:]]*on' >/dev/null && set -o | grep '^vi[[:space:]]*off' >/dev/null && printf 'emacs-on\n'
+            \\set +o emacs
+            \\set -o | grep '^emacs[[:space:]]*off' >/dev/null && set -o | grep '^vi[[:space:]]*off' >/dev/null && printf 'emacs-off\n'
+            ,
+            .stdout =
+            \\defaults
+            \\vi-on
+            \\vi-reusable
+            \\vi-off
+            \\emacs-on
+            \\emacs-off
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "set without operands lists shell variables",
             .script =
             \\zeta=last
