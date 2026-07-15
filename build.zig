@@ -24,6 +24,11 @@ pub fn build(b: *std.Build) void {
         .optimize = optimize,
     }).module("zeit");
     const use_system_sqlite = b.systemIntegrationOption("sqlite3", .{ .default = false });
+    const register_as_login_shell = b.option(
+        bool,
+        "register-shell",
+        "Register the installed executable in /etc/shells (default: true)",
+    ) orelse true;
 
     // System config dir, GNU sysconfdir convention: defaults to <prefix>/etc
     // so non-root installs stay self-contained; packagers pass -Dsysconfdir=/etc.
@@ -61,6 +66,7 @@ pub fn build(b: *std.Build) void {
     exe.stack_size = rush_stack_size;
 
     const install_exe = b.addInstallArtifact(exe, .{});
+    b.getInstallStep().dependOn(&install_exe.step);
     const register_shell = b.addSystemCommand(&.{
         "sh",
         "-c",
@@ -84,7 +90,7 @@ pub fn build(b: *std.Build) void {
     });
     register_shell.setName("register rush in /etc/shells");
     register_shell.step.dependOn(&install_exe.step);
-    b.getInstallStep().dependOn(&register_shell.step);
+    if (register_as_login_shell) b.getInstallStep().dependOn(&register_shell.step);
     b.installDirectory(.{
         .source_dir = b.path("share/rush/completions"),
         .install_dir = .{ .custom = "share/rush/completions" },

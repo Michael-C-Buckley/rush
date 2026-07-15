@@ -1,5 +1,7 @@
 # rush
 
+[![CI](https://github.com/rockorager/rush/actions/workflows/ci.yml/badge.svg)](https://github.com/rockorager/rush/actions/workflows/ci.yml)
+
 Rush is an experimental, POSIX-facing shell with Bash compatibility and
 interactive UX improvements under active development. It is early software: the
 implementation moves quickly, APIs may change, and POSIX compatibility is a
@@ -29,10 +31,24 @@ zig build
 zig build install --prefix "$HOME/.local" -Doptimize=ReleaseSafe
 ```
 
+Arch Linux users can install the latest development revision from the AUR:
+
+```sh
+git clone https://aur.archlinux.org/rush-shell-git.git
+cd rush-shell-git
+makepkg -si
+```
+
+The package is named `rush-shell-git` to distinguish it from the existing GNU
+Restricted User Shell package, which also installs `/usr/bin/rush`. A future
+tagged-release package can use the corresponding `rush-shell` name.
+
 Common build options:
 
 - `-Dsysconfdir=/etc` sets the system configuration directory. The default is
   `<prefix>/etc`.
+- `-Dregister-shell=false` skips adding the installed executable to
+  `/etc/shells`; package builds should use this option.
 - `-fsys=sqlite3` links against system SQLite instead of the bundled
   amalgamation.
 - `-Dtarget=...` cross-compiles.
@@ -51,10 +67,9 @@ zig build run -- -c 'echo hello'
 CLI forms currently supported:
 
 ```text
-rush [--login]
-rush [-i] [--posix] [set-options] -c SCRIPT [NAME [ARGS...]]
-rush [-i] [--posix] [set-options] -s [ARGS...]
-rush [-i] [--posix] [set-options] SCRIPT_FILE [ARGS...]
+rush [--login] [--posix] [-i] [-u] [-x]
+rush [--posix] [-i] [-u] [-x] -c SCRIPT [NAME [ARGS...]]
+rush [--posix] [-i] [-u] [-x] [--] SCRIPT_FILE [ARGS...]
 rush --help
 ```
 
@@ -66,11 +81,14 @@ compatibility feature plumbing and tests.
 ## Test and validation
 
 ```sh
-zig build test                         # unit tests
-zig build check                        # unit tests plus repo validation checks
-zig build fmt                          # Zig formatting check
-zig build cross-check                  # native tests plus compile-only targets
+zig fmt --check build.zig build.zig.zon src tests fuzz
+zig build compile-check
+zig build lint
+zig build test
+zig build conformance
 ```
+
+GitHub Actions runs these checks for every pull request and push to `main`.
 
 ## Configuration
 
