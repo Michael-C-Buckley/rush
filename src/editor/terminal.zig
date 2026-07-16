@@ -8,8 +8,7 @@ const line_editor = @import("session.zig");
 const kitty_keyboard_set = "\x1b[={d}u";
 const default_kitty_keyboard_flags: u5 = 0;
 const editor_kitty_keyboard_flags: u5 = @bitCast(vaxis.Key.KittyFlags{});
-const terminal_presentation_reset = vaxis.ctlseqs.rmcup ++
-    vaxis.ctlseqs.sgr_reset ++
+const terminal_presentation_reset = vaxis.ctlseqs.sgr_reset ++
     vaxis.ctlseqs.show_cursor ++
     "\x1b[0 q";
 
@@ -528,7 +527,7 @@ test "terminal capability resume restores terminal presentation" {
 
     try capabilities.appendResumeSequences(std.testing.allocator, &output);
 
-    try std.testing.expectEqualStrings("\x1b[?1049l\x1b[m\x1b[?25h\x1b[0 q", output.items);
+    try std.testing.expectEqualStrings("\x1b[m\x1b[?25h\x1b[0 q", output.items);
 }
 
 test "terminal capability suspend restores default keyboard during command handoff" {
