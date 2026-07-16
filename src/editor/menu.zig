@@ -412,12 +412,27 @@ fn appendAnsiColor(
             .ul => try out.appendSlice(allocator, "\x1b[59m"),
         },
         .index => |index| {
+            if (kind != .ul and index < 16) {
+                const base: u8 = switch (kind) {
+                    .fg => if (index < 8) 30 else 90,
+                    .bg => if (index < 8) 40 else 100,
+                    .ul => unreachable,
+                };
+                const sequence = try std.fmt.allocPrint(allocator, "\x1b[{d}m", .{base + index % 8});
+                defer allocator.free(sequence);
+                try out.appendSlice(allocator, sequence);
+                return;
+            }
             const prefix = switch (kind) {
                 .fg => "38",
                 .bg => "48",
                 .ul => "58",
             };
-            const sequence = try std.fmt.allocPrint(allocator, "\x1b[{s};5;{d}m", .{ prefix, index });
+            const sequence = try std.fmt.allocPrint(
+                allocator,
+                "\x1b[{s}:5:{d}m",
+                .{ prefix, index },
+            );
             defer allocator.free(sequence);
             try out.appendSlice(allocator, sequence);
         },
@@ -429,7 +444,7 @@ fn appendAnsiColor(
             };
             const sequence = try std.fmt.allocPrint(
                 allocator,
-                "\x1b[{s};2;{d};{d};{d}m",
+                "\x1b[{s}:2:{d}:{d}:{d}m",
                 .{ prefix, rgb[0], rgb[1], rgb[2] },
             );
             defer allocator.free(sequence);
@@ -549,7 +564,30 @@ test "menu append lines renders selected row and scroll summary" {
     try std.testing.expectEqual(@as(usize, 2), lines.items.len);
     try std.testing.expect(std.mem.indexOf(u8, lines.items[0], "two") != null);
     try std.testing.expect(std.mem.indexOf(u8, lines.items[0], "\x1b[1m") != null);
-    try std.testing.expectEqualStrings("  \x1b[38;5;8mshowing 2-2 of 3\x1b[39m", lines.items[1]);
+    try std.testing.expectEqualStrings("  \x1b[90mshowing 2-2 of 3\x1b[39m", lines.items[1]);
+}
+
+test "basic colors use simple SGR and extended colors use subparameters" {
+    var output: std.ArrayList(u8) = .empty;
+    defer output.deinit(std.testing.allocator);
+
+    try appendAnsiColor(std.testing.allocator, &output, .fg, .{ .index = 1 });
+    try appendAnsiColor(std.testing.allocator, &output, .bg, .{ .index = 2 });
+    try appendAnsiColor(std.testing.allocator, &output, .fg, .{ .index = 9 });
+    try appendAnsiColor(std.testing.allocator, &output, .bg, .{ .index = 10 });
+    try appendAnsiColor(std.testing.allocator, &output, .fg, .{ .index = 16 });
+    try appendAnsiColor(std.testing.allocator, &output, .bg, .{ .index = 17 });
+    try appendAnsiColor(std.testing.allocator, &output, .ul, .{ .index = 3 });
+    try appendAnsiColor(std.testing.allocator, &output, .fg, .{ .rgb = .{ 1, 2, 3 } });
+    try appendAnsiColor(std.testing.allocator, &output, .bg, .{ .rgb = .{ 4, 5, 6 } });
+    try appendAnsiColor(std.testing.allocator, &output, .ul, .{ .rgb = .{ 7, 8, 9 } });
+
+    try std.testing.expectEqualStrings(
+        "\x1b[31m\x1b[42m\x1b[91m\x1b[102m" ++
+            "\x1b[38:5:16m\x1b[48:5:17m\x1b[58:5:3m" ++
+            "\x1b[38:2:1:2:3m\x1b[48:2:4:5:6m\x1b[58:2:7:8:9m",
+        output.items,
+    );
 }
 
 test "menu presentation customizes spacing summary and option labels" {
@@ -598,7 +636,7 @@ test "menu presentation customizes spacing summary and option labels" {
     try std.testing.expect(std.mem.indexOf(u8, lines.items[0], "+verbos~") != null);
     try std.testing.expect(std.mem.indexOf(u8, lines.items[0], " :: ") != null);
     try std.testing.expect(std.mem.indexOf(u8, lines.items[0], " <") != null);
-    try std.testing.expectEqualStrings("> \x1b[38;5;8mrows 1..1/2\x1b[39m", lines.items[1]);
+    try std.testing.expectEqualStrings("> \x1b[90mrows 1..1/2\x1b[39m", lines.items[1]);
 }
 
 test "menu presentation can hide scroll summary and cap rows" {

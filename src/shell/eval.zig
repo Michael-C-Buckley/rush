@@ -9063,7 +9063,7 @@ test "cd suggestion diagnostic styles the suggested directory" {
     try writeCdFailureDiagnostic(&sh, "cd", "repos/ruxh", error.FileNotFound, "repos/rush", .line);
 
     try std.testing.expectEqualStrings(
-        "cd: repos/ruxh: no such directory; did you mean: \x1b[1m\x1b[38;5;1mrepos/rush\x1b[22m\x1b[39m?\n",
+        "cd: repos/ruxh: no such directory; did you mean: \x1b[1m\x1b[31mrepos/rush\x1b[22m\x1b[39m?\n",
         host.stderr.items,
     );
 }
@@ -9203,7 +9203,7 @@ test "cd suggestion prompt accepts y and times out to no" {
     try std.testing.expectEqualStrings("repos/rush", accepted);
     try std.testing.expectEqual(@as(?u64, cd_suggestion_confirm_timeout_ms), host.interactive_key_timeout_ms);
     try std.testing.expectEqualStrings(
-        "did you mean: \x1b[1m\x1b[38;5;4mrepos/rush\x1b[22m\x1b[39m? [y,N] \n",
+        "did you mean: \x1b[1m\x1b[34mrepos/rush\x1b[22m\x1b[39m? [y,N] \n",
         host.stderr.items,
     );
 
@@ -9214,7 +9214,7 @@ test "cd suggestion prompt accepts y and times out to no" {
     try std.testing.expect(try cdSuggestionRecoveryTarget(&sh, "cd", "repos/ruxh", error.FileNotFound) == null);
     try std.testing.expectEqual(@as(?u64, cd_suggestion_confirm_timeout_ms), host.interactive_key_timeout_ms);
     try std.testing.expectEqualStrings(
-        "did you mean: \x1b[1m\x1b[38;5;4mrepos/rush\x1b[22m\x1b[39m? [y,N] \n" ++
+        "did you mean: \x1b[1m\x1b[34mrepos/rush\x1b[22m\x1b[39m? [y,N] \n" ++
             "cd: repos/ruxh: no such directory\n",
         host.stderr.items,
     );

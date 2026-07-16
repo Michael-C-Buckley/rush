@@ -3066,7 +3066,7 @@ test "line session flashes current word when completion has empty handled candid
     try session.applyCompletion(.{ .ambiguous = &.{} });
     const flashed = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(flashed);
-    try std.testing.expect(std.mem.indexOf(u8, flashed, "git \x1b[38;5;0m\x1b[48;5;7madd\x1b[49m\x1b[39m ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, flashed, "git \x1b[30m\x1b[47madd\x1b[49m\x1b[39m ") != null);
 }
 
 test "line session flashes current word when completion has no candidates" {
@@ -3077,11 +3077,11 @@ test "line session flashes current word when completion has no candidates" {
     try session.applyCompletion(.none);
     const flashed = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(flashed);
-    try std.testing.expect(std.mem.indexOf(u8, flashed, "git \x1b[38;5;0m\x1b[48;5;7mzzz\x1b[49m\x1b[39m") != null);
+    try std.testing.expect(std.mem.indexOf(u8, flashed, "git \x1b[30m\x1b[47mzzz\x1b[49m\x1b[39m") != null);
 
     const normal = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(normal);
-    try std.testing.expect(std.mem.indexOf(u8, normal, "\x1b[38;5;0m\x1b[48;5;7mzzz") == null);
+    try std.testing.expect(std.mem.indexOf(u8, normal, "\x1b[30m\x1b[47mzzz") == null);
 }
 
 test "line session renders ambiguous completion menu" {
@@ -3113,8 +3113,8 @@ test "line session renders ambiguous completion menu" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "cherry") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "switch branches") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "apply commits") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1m\x1b[38;5;6m❯") == null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;8mswitch branches") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1m\x1b[36m❯") == null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[90mswitch branches") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "git che") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[J") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[2A") != null);
@@ -3138,9 +3138,9 @@ test "completion menu styles candidates by kind" {
 
     const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(rendered);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;6m--help") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;5m$HOME") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;4msrc/") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[36m--help") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[35m$HOME") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[34msrc/") != null);
 }
 
 test "ui style parser supports colors and attributes" {
@@ -3643,7 +3643,7 @@ test "completion menu visible window follows selection" {
     defer std.testing.allocator.free(rendered);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "one") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "three") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1m\x1b[38;5;6m  three") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1m\x1b[36m  three") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "showing 3-3 of 3") != null);
 }
 
@@ -3665,14 +3665,14 @@ test "completion menu only pins selection to bottom while scrolling down" {
     defer std.testing.allocator.free(scrolled_down);
     try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "one") == null);
     try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "two") != null);
-    try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "\x1b[1m\x1b[38;5;6m  three") != null);
+    try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "\x1b[1m\x1b[36m  three") != null);
     try std.testing.expect(std.mem.indexOf(u8, scrolled_down, "showing 2-3 of 4") != null);
 
     try session.handleKey(.{ .key = .up });
     const moved_up = try session.render(std.testing.allocator, .{ .synchronized_output = false, .height = 4 });
     defer std.testing.allocator.free(moved_up);
     try std.testing.expect(std.mem.indexOf(u8, moved_up, "one") == null);
-    try std.testing.expect(std.mem.indexOf(u8, moved_up, "\x1b[1m\x1b[38;5;6m  two") != null);
+    try std.testing.expect(std.mem.indexOf(u8, moved_up, "\x1b[1m\x1b[36m  two") != null);
     try std.testing.expect(std.mem.indexOf(u8, moved_up, "three") != null);
     try std.testing.expect(std.mem.indexOf(u8, moved_up, "showing 2-3 of 4") != null);
 }
@@ -4627,7 +4627,7 @@ test "render line styles diagnostic spans without moving cursor" {
     });
     defer std.testing.allocator.free(rendered);
 
-    try std.testing.expectEqualStrings("\r\x1b[2K$ git \x1b[4:3m\x1b[58;5;1mcomit\x1b[24;59m\r\x1b[11C", rendered);
+    try std.testing.expectEqualStrings("\r\x1b[2K$ git \x1b[4:3m\x1b[58:5:1mcomit\x1b[24;59m\r\x1b[11C", rendered);
 }
 
 test "render line wraps styled diagnostic spans" {
@@ -4644,7 +4644,7 @@ test "render line wraps styled diagnostic spans" {
     });
     defer std.testing.allocator.free(rendered);
 
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[4:3m\x1b[58;5;1m--amend\x1b[24;59m") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[4:3m\x1b[58:5:1m--amend\x1b[24;59m") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "\r\n") != null);
     try std.testing.expect(std.mem.endsWith(u8, rendered, "\r\x1b[8C"));
 }
@@ -4693,7 +4693,7 @@ test "frame renderer diffs wrapped styled continuation with style prefix" {
     defer std.testing.allocator.free(second_output);
 
     try std.testing.expect(std.mem.indexOf(u8, second_output, "$ foo") == null);
-    try std.testing.expect(std.mem.indexOf(u8, second_output, "\x1b[38;5;2m was wrapped") != null);
+    try std.testing.expect(std.mem.indexOf(u8, second_output, "\x1b[32m was wrapped") != null);
 }
 
 test "relative age formats compact units" {
@@ -4923,10 +4923,10 @@ test "history search seeds query from current buffer and renders menu-style matc
 
     const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(rendered);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1m\x1b[38;5;6m  ") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[1m\x1b[36m  ") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "diff") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "status") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;3mg\x1b[39m") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[33mg\x1b[39m") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "30s") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "history") == null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "history `") == null);
@@ -5128,8 +5128,8 @@ test "history search uses fuzzy query matching" {
 
     const rendered = try session.render(std.testing.allocator, .{ .synchronized_output = false });
     defer std.testing.allocator.free(rendered);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;3mg\x1b[39m") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;3mc\x1b[39m") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[33mg\x1b[39m") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[33mc\x1b[39m") != null);
 
     try session.handleKey(.{ .key = .delete_to_start });
     try applyTestHistoryRequests(&session);
@@ -5162,7 +5162,7 @@ test "history search first tab advances the already-open menu" {
     try std.testing.expect(std.mem.indexOf(u8, rendered, "show") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "diff") != null);
     try std.testing.expect(std.mem.indexOf(u8, rendered, "status") != null);
-    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[38;5;3mg\x1b[39m") != null);
+    try std.testing.expect(std.mem.indexOf(u8, rendered, "\x1b[33mg\x1b[39m") != null);
 
     try session.handleKey(.{ .key = .tab });
     try std.testing.expectEqual(LineSession.State.history_search, session.state);

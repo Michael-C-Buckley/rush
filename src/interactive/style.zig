@@ -30,7 +30,7 @@ pub fn refreshStyle(
         try runStyleFunction(sh);
         sh.extensions.style_dirty = false;
     }
-    return theme(sh.state);
+    return themeForEnvironment(sh.state, sh.env);
 }
 
 pub fn refreshColorReport(
@@ -44,7 +44,7 @@ pub fn refreshColorReport(
     _ = allocator;
     _ = io;
     const sh: *RushShell = @ptrCast(@alignCast(context));
-    const variable = colorReportVariable(report) orelse return theme(sh.state);
+    const variable = colorReportVariable(report) orelse return themeForEnvironment(sh.state, sh.env);
     var value_buffer: [8]u8 = undefined;
     const value = try std.fmt.bufPrint(
         &value_buffer,
@@ -59,7 +59,7 @@ pub fn refreshColorReport(
         try sh.state.putVariable(.{ .name = variable, .value = value });
         sh.extensions.style_dirty = true;
     }
-    return theme(sh.state);
+    return themeForEnvironment(sh.state, sh.env);
 }
 
 fn variableChanged(sh: *RushShell, name: []const u8, value: []const u8) bool {
@@ -123,6 +123,39 @@ pub fn theme(state: shell.state.State) editor_render.UiTheme {
     applyUiStyleVariable(state, &ui_theme.reserved, "rush_style_reserved");
     applyUiStyleVariable(state, &ui_theme.operator, "rush_style_operator");
     return ui_theme;
+}
+
+pub fn themeForEnvironment(
+    state: shell.state.State,
+    env: []const [*:0]const u8,
+) editor_render.UiTheme {
+    var ui_theme = theme(state);
+    const terminal_name = if (state.getVariable("TERM")) |variable|
+        variable.value
+    else
+        environmentValue(env, "TERM") orelse "";
+    if (!std.mem.eql(u8, terminal_name, "linux")) return ui_theme;
+
+    // Linux virtual consoles do not render underlines reliably and can treat
+    // unsupported SGR 58 payloads as independent, stateful SGR attributes.
+    inline for (std.meta.fields(editor_render.UiTheme)) |field| {
+        const style = &@field(ui_theme, field.name);
+        if (style.ul_color) |color| {
+            if (style.fg == null) style.fg = color;
+            style.ul_color = null;
+        }
+        style.ul = .none;
+    }
+    return ui_theme;
+}
+
+fn environmentValue(env: []const [*:0]const u8, name: []const u8) ?[]const u8 {
+    for (env) |entry_ptr| {
+        const entry = std.mem.span(entry_ptr);
+        if (entry.len <= name.len or entry[name.len] != '=') continue;
+        if (std.mem.eql(u8, entry[0..name.len], name)) return entry[name.len + 1 ..];
+    }
+    return null;
 }
 
 fn applyUiStyleVariable(state: shell.state.State, ui_style: *editor_render.UiStyle, name: []const u8) void {
@@ -219,6 +252,23 @@ test "interactive color reports update rush color variables without running rush
     // A scheme change alone also reruns rush_style.
     _ = try refreshStyle(&sh, std.testing.allocator, std.testing.io, .light);
     try std.testing.expectEqualStrings("3", sh.state.getVariable("rush_style_runs").?.value);
+}
+
+test "Linux console theme replaces underline colors with foreground colors" {
+    const env = [_][*:0]const u8{"TERM=linux"};
+    // ziglint-ignore: Z010 explicit type retained for readability/type inference
+    var sh = RushShell.init(std.testing.allocator, host.RealHost{}, .{ .env = &env });
+    defer sh.deinit();
+    try sh.state.putVariable(.{ .name = "rush_style_error", .value = "ul=curly,ul_color=red" });
+
+    const modern_theme = theme(sh.state);
+    try std.testing.expectEqual(editor_render.UnderlineStyle.curly, modern_theme.err.ul);
+    try std.testing.expectEqual(editor_render.parseUiColor("red").?, modern_theme.err.ul_color.?);
+
+    const linux_theme = themeForEnvironment(sh.state, sh.env);
+    try std.testing.expectEqual(editor_render.UnderlineStyle.none, linux_theme.err.ul);
+    try std.testing.expectEqual(null, linux_theme.err.ul_color);
+    try std.testing.expectEqual(editor_render.parseUiColor("red").?, linux_theme.err.fg.?);
 }
 
 test {
