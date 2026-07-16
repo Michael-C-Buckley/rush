@@ -8,6 +8,10 @@ const line_editor = @import("session.zig");
 const kitty_keyboard_set = "\x1b[={d}u";
 const default_kitty_keyboard_flags: u5 = 0;
 const editor_kitty_keyboard_flags: u5 = @bitCast(vaxis.Key.KittyFlags{});
+const terminal_presentation_reset = vaxis.ctlseqs.rmcup ++
+    vaxis.ctlseqs.sgr_reset ++
+    vaxis.ctlseqs.show_cursor ++
+    "\x1b[0 q";
 
 pub const Event = union(enum) {
     key_press: line_editor.KeyEvent,
@@ -168,6 +172,9 @@ pub const Capabilities = struct {
         allocator: std.mem.Allocator,
         output: *std.ArrayList(u8),
     ) !void {
+        // A signal-terminated child cannot run its terminal cleanup. Restore
+        // presentation before the editor paints the next prompt.
+        try output.appendSlice(allocator, terminal_presentation_reset);
         if (!self.kitty_keyboard_handoff) return;
         try appendKittyKeyboardSetSequence(allocator, output, editor_kitty_keyboard_flags);
         self.kitty_keyboard_handoff = false;
@@ -178,6 +185,7 @@ pub const Capabilities = struct {
         allocator: std.mem.Allocator,
         output: *std.ArrayList(u8),
     ) !void {
+        try output.appendSlice(allocator, terminal_presentation_reset);
         if (self.kitty_keyboard or self.kitty_keyboard_handoff) {
             try appendKittyKeyboardSetSequence(allocator, output, default_kitty_keyboard_flags);
         }
@@ -506,10 +514,21 @@ test "terminal capability reset plans active-mode cleanup" {
     try std.testing.expect(!capabilities.unicode);
     try std.testing.expect(!capabilities.color_scheme_updates);
     try std.testing.expect(!capabilities.bracketed_paste);
+    try std.testing.expect(std.mem.startsWith(u8, output.items, terminal_presentation_reset));
     try std.testing.expect(std.mem.indexOf(u8, output.items, "\x1b[=0u") != null);
     try std.testing.expect(std.mem.indexOf(u8, output.items, vaxis.ctlseqs.unicode_reset) != null);
     try std.testing.expect(std.mem.indexOf(u8, output.items, vaxis.ctlseqs.color_scheme_reset) != null);
     try std.testing.expect(std.mem.indexOf(u8, output.items, vaxis.ctlseqs.bp_reset) != null);
+}
+
+test "terminal capability resume restores terminal presentation" {
+    var capabilities: Capabilities = .{};
+    var output: std.ArrayList(u8) = .empty;
+    defer output.deinit(std.testing.allocator);
+
+    try capabilities.appendResumeSequences(std.testing.allocator, &output);
+
+    try std.testing.expectEqualStrings("\x1b[?1049l\x1b[m\x1b[?25h\x1b[0 q", output.items);
 }
 
 test "terminal capability suspend restores default keyboard during command handoff" {
@@ -542,7 +561,8 @@ test "terminal capability suspend restores default keyboard during command hando
 
     try std.testing.expect(capabilities.kitty_keyboard);
     try std.testing.expect(!capabilities.kitty_keyboard_handoff);
-    try std.testing.expectEqualStrings(editor_sequence, output.items);
+    try std.testing.expect(std.mem.startsWith(u8, output.items, terminal_presentation_reset));
+    try std.testing.expectEqualStrings(editor_sequence, output.items[terminal_presentation_reset.len..]);
 }
 
 test "terminal parser emits modified modern keyboard keys" {
