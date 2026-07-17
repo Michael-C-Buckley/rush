@@ -2,27 +2,37 @@
 
 [![CI](https://github.com/rockorager/rush/actions/workflows/ci.yml/badge.svg)](https://github.com/rockorager/rush/actions/workflows/ci.yml)
 
-Rush is an experimental, POSIX-facing shell with Bash compatibility and
-interactive UX improvements under active development. It is early software: the
-implementation moves quickly, APIs may change, and POSIX compatibility is a
-work in progress rather than a certification claim.
+Rush is a POSIX shell with dash-class speed, Bash-shaped conveniences, async
+prompts, autosuggestions, and a modern interactive editor.
 
-## Current focus
+Keep portable scripts boring. Make daily command lines pleasant with
+Unicode-aware editing, fast searchable history, structured completions,
+non-blocking prompt data, and terminal-native rendering.
 
-- POSIX shell execution, expansion, redirection, job-control, and builtins.
-- Incremental Bash-compatible features; Rush defaults to POSIX-facing behavior.
-- A terminal line editor with history search, emacs/vi editing modes, styled
-  diagnostics, and a rebuilt interactive shell on top of `shell/` and
-  `runtime/`.
+## Highlights
+
+- `rush --posix` targets POSIX.1-2024 / Issue 8 shell semantics, including the
+  shell language, expansion, redirection, job control, and builtins.
+- Default Rush keeps valid POSIX scripts meaningful while accepting selected
+  Bash-shaped extensions for migration and interactive use.
+- Emacs and vi editing modes, styled diagnostics, fish-style abbreviations,
+  structured completions, and history-backed autosuggestions are built in.
+- Prompt segments can fetch Git state, tool versions, or project metadata in
+  the background while the editor remains responsive.
+- Command history is stored in SQLite with full-text search, timestamps,
+  status, duration, hostname, session, and current-directory context.
+- Rush probes terminal capabilities and uses synchronized output, Unicode
+  grapheme widths, bracketed paste, modern keys, and color-scheme reports when
+  available.
 
 Rush targets POSIX-like systems first: Linux, macOS, and BSDs.
 
 ## Build and install
 
-Rush currently requires Zig 0.16. The repository includes `mise.toml` for
-`mise` users, and Zig fetches the declared dependencies from `build.zig.zon`.
-SQLite is built from the bundled amalgamation by default; packagers can opt into
-system SQLite with `-fsys=sqlite3`.
+Rush requires Zig 0.16. The repository includes `mise.toml` for `mise` users,
+and Zig fetches the declared dependencies from `build.zig.zon`. SQLite is built
+from the bundled amalgamation by default; packagers can opt into system SQLite
+with `-fsys=sqlite3`.
 
 ```sh
 git clone https://github.com/rockorager/rush
@@ -64,7 +74,7 @@ zig build run -- -c 'echo hello'
 ./zig-out/bin/rush --help
 ```
 
-CLI forms currently supported:
+Supported CLI forms:
 
 ```text
 rush [--login] [--posix] [-i] [-u] [-x]
@@ -74,10 +84,8 @@ rush --help
 rush --version
 ```
 
-`--posix` selects POSIX mode with stricter syntax diagnostics for
-non-interactive execution. There is not currently a user-facing Bash-mode CLI
-flag; Bash-mode compatibility is exercised through the implementation's
-compatibility feature plumbing and tests.
+`--posix` selects strict POSIX mode. Default Rush starts from the same POSIX
+core and enables selected compatibility and interactive features.
 
 ## Test and validation
 
