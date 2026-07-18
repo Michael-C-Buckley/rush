@@ -18,7 +18,7 @@ body {
     radial-gradient(circle at top left, light-dark(#dff0ff, #13233d), transparent 34rem),
     radial-gradient(circle at top right, light-dark(#fff0cf, #302113), transparent 32rem),
     var(--bg);
-  max-width: 100ch;
+  max-width: 128ch;
   margin: 4ch auto;
   padding: 0 2ch;
   line-height: 1.55;
