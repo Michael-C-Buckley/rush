@@ -232,12 +232,13 @@
         .{
             .name = "read -t zero probes readiness without consuming input",
             .script =
-            \\printf x | {
+            \\printf 'x\n' >read-timeout-input
+            \\{
             \\    read -r -t 0 -n 1 value
             \\    printf 'probe=<%s> value=<%s>\n' "$?" "$value"
             \\    read -r rest
             \\    printf 'rest=<%s>\n' "$rest"
-            \\}
+            \\} <read-timeout-input
             \\{ sleep 0.1; printf x; } | {
             \\    read -r -t 0 value
             \\    printf 'not-ready=<%s> value=<%s>\n' "$?" "$value"
