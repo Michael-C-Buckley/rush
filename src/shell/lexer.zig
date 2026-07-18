@@ -59,6 +59,20 @@ pub const AliasLexResult = struct {
     tokens: []const token.Token,
 };
 
+/// Text introduced by an alias remains marked until recursive alias
+/// substitution finishes, so that alias cannot expand itself again while
+/// independent occurrences of the same name remain eligible.
+const ActiveAliasSpan = struct {
+    start: usize,
+    end: usize,
+    name: []const u8,
+};
+
+const AliasExpansion = struct {
+    text: []const u8,
+    active_alias_spans: []const ActiveAliasSpan,
+};
+
 pub fn lexWithAliases(
     allocator: std.mem.Allocator,
     src: source_mod.Source,
@@ -73,25 +87,21 @@ pub fn lexWithAliasesSource(
     shell_state: state_mod.State,
 ) std.mem.Allocator.Error!AliasLexResult {
     var current_src = src;
-    var seen_sources: std.ArrayList([]const u8) = .empty;
+    var active_alias_spans: []const ActiveAliasSpan = &.{};
     while (true) {
         const tokens = try lex(allocator, current_src);
-        const expanded = try aliasExpandedSource(allocator, current_src, tokens, shell_state) orelse return .{
+        const expanded = try aliasExpandedSource(
+            allocator,
+            current_src,
+            tokens,
+            shell_state,
+            active_alias_spans,
+        ) orelse return .{
             .source = current_src,
             .tokens = tokens,
         };
-        if (std.mem.eql(u8, expanded, current_src.text)) return .{
-            .source = current_src,
-            .tokens = try lex(allocator, current_src),
-        };
-        for (seen_sources.items) |seen| {
-            if (std.mem.eql(u8, expanded, seen)) return .{
-                .source = current_src,
-                .tokens = try lex(allocator, current_src),
-            };
-        }
-        try seen_sources.append(allocator, current_src.text);
-        current_src = .{ .id = src.id, .kind = src.kind, .name = src.name, .text = expanded };
+        current_src = .{ .id = src.id, .kind = src.kind, .name = src.name, .text = expanded.text };
+        active_alias_spans = expanded.active_alias_spans;
     }
 }
 
@@ -100,11 +110,15 @@ fn aliasExpandedSource(
     src: source_mod.Source,
     tokens: []const token.Token,
     shell_state: state_mod.State,
-) std.mem.Allocator.Error!?[]const u8 {
+    active_alias_spans: []const ActiveAliasSpan,
+) std.mem.Allocator.Error!?AliasExpansion {
     if (shell_state.aliases.count() == 0) return null;
     if (!aliasesEnabled(shell_state)) return null;
 
     var output: std.ArrayList(u8) = .empty;
+    errdefer output.deinit(allocator);
+    var rewritten_active_spans: std.ArrayList(ActiveAliasSpan) = .empty;
+    errdefer rewritten_active_spans.deinit(allocator);
     var changed = false;
     var cursor: usize = 0;
     var command_position = true;
@@ -112,27 +126,68 @@ fn aliasExpandedSource(
 
     for (tokens) |tok| {
         if (tok.kind == .eof) break;
-        try output.appendSlice(allocator, src.text[cursor..tok.span.start]);
+        try appendAliasSourceSlice(
+            allocator,
+            &output,
+            &rewritten_active_spans,
+            src,
+            active_alias_spans,
+            cursor,
+            tok.span.start,
+        );
         cursor = tok.span.end;
 
         if (skip_redirection_target and tok.kind == .word) {
             skip_redirection_target = false;
-            try output.appendSlice(allocator, src.text[tok.span.start..tok.span.end]);
+            try appendAliasSourceSlice(
+                allocator,
+                &output,
+                &rewritten_active_spans,
+                src,
+                active_alias_spans,
+                tok.span.start,
+                tok.span.end,
+            );
             continue;
         }
 
         if (tok.kind == .word) {
             if (tok.reserved) |reserved| {
                 command_position = token.reservedWordStartsCommandList(reserved);
-                try output.appendSlice(allocator, src.text[tok.span.start..tok.span.end]);
+                try appendAliasSourceSlice(
+                    allocator,
+                    &output,
+                    &rewritten_active_spans,
+                    src,
+                    active_alias_spans,
+                    tok.span.start,
+                    tok.span.end,
+                );
                 continue;
             }
             if (command_position and !tok.quoted and !token.isAssignmentWord(tok.text)) {
                 if (shell_state.getAlias(tok.text)) |alias| {
-                    try output.appendSlice(allocator, alias.value);
-                    command_position = aliasEndsWithBlank(alias.value);
-                    changed = true;
-                    continue;
+                    if (!aliasIsActive(active_alias_spans, tok.span.start, tok.span.end, alias.name)) {
+                        const replacement_start = output.items.len;
+                        try output.appendSlice(allocator, alias.value);
+                        try appendReplacementActiveAliases(
+                            allocator,
+                            &rewritten_active_spans,
+                            active_alias_spans,
+                            tok.span.start,
+                            tok.span.end,
+                            replacement_start,
+                            output.items.len,
+                        );
+                        if (alias.value.len != 0) try rewritten_active_spans.append(allocator, .{
+                            .start = replacement_start,
+                            .end = output.items.len,
+                            .name = alias.name,
+                        });
+                        command_position = aliasEndsWithBlank(alias.value);
+                        changed = true;
+                        continue;
+                    }
                 }
             }
             if (command_position and token.isAssignmentWord(tok.text)) {
@@ -140,24 +195,134 @@ fn aliasExpandedSource(
             } else {
                 command_position = false;
             }
-            try output.appendSlice(allocator, src.text[tok.span.start..tok.span.end]);
+            try appendAliasSourceSlice(
+                allocator,
+                &output,
+                &rewritten_active_spans,
+                src,
+                active_alias_spans,
+                tok.span.start,
+                tok.span.end,
+            );
             continue;
         }
 
         if (token.isRedirectionOperator(tok.kind)) {
             skip_redirection_target = true;
-            try output.appendSlice(allocator, src.text[tok.span.start..tok.span.end]);
+            try appendAliasSourceSlice(
+                allocator,
+                &output,
+                &rewritten_active_spans,
+                src,
+                active_alias_spans,
+                tok.span.start,
+                tok.span.end,
+            );
             continue;
         }
 
         command_position = token.startsCommandPosition(tok.kind);
-        try output.appendSlice(allocator, src.text[tok.span.start..tok.span.end]);
+        try appendAliasSourceSlice(
+            allocator,
+            &output,
+            &rewritten_active_spans,
+            src,
+            active_alias_spans,
+            tok.span.start,
+            tok.span.end,
+        );
     }
 
-    if (!changed) return null;
-    try output.appendSlice(allocator, src.text[cursor..]);
-    const expanded: []const u8 = try output.toOwnedSlice(allocator);
-    return expanded;
+    if (!changed) {
+        output.deinit(allocator);
+        rewritten_active_spans.deinit(allocator);
+        return null;
+    }
+    try appendAliasSourceSlice(
+        allocator,
+        &output,
+        &rewritten_active_spans,
+        src,
+        active_alias_spans,
+        cursor,
+        src.text.len,
+    );
+    const expanded = try output.toOwnedSlice(allocator);
+    errdefer allocator.free(expanded);
+    return .{
+        .text = expanded,
+        .active_alias_spans = try rewritten_active_spans.toOwnedSlice(allocator),
+    };
+}
+
+fn appendAliasSourceSlice(
+    allocator: std.mem.Allocator,
+    output: *std.ArrayList(u8),
+    rewritten_active_spans: *std.ArrayList(ActiveAliasSpan),
+    src: source_mod.Source,
+    active_alias_spans: []const ActiveAliasSpan,
+    start: usize,
+    end: usize,
+) std.mem.Allocator.Error!void {
+    std.debug.assert(start <= end);
+    std.debug.assert(end <= src.text.len);
+
+    const output_start = output.items.len;
+    try output.appendSlice(allocator, src.text[start..end]);
+    for (active_alias_spans) |span| {
+        const overlap_start = @max(start, span.start);
+        const overlap_end = @min(end, span.end);
+        if (overlap_start >= overlap_end) continue;
+        try rewritten_active_spans.append(allocator, .{
+            .start = output_start + overlap_start - start,
+            .end = output_start + overlap_end - start,
+            .name = span.name,
+        });
+    }
+}
+
+fn appendReplacementActiveAliases(
+    allocator: std.mem.Allocator,
+    rewritten_active_spans: *std.ArrayList(ActiveAliasSpan),
+    active_alias_spans: []const ActiveAliasSpan,
+    token_start: usize,
+    token_end: usize,
+    replacement_start: usize,
+    replacement_end: usize,
+) std.mem.Allocator.Error!void {
+    if (replacement_start == replacement_end) return;
+    for (active_alias_spans) |span| {
+        if (span.start >= token_end or span.end <= token_start) continue;
+        var already_active = false;
+        for (rewritten_active_spans.items) |rewritten| {
+            if (rewritten.start == replacement_start and
+                rewritten.end == replacement_end and
+                std.mem.eql(u8, rewritten.name, span.name))
+            {
+                already_active = true;
+                break;
+            }
+        }
+        if (!already_active) try rewritten_active_spans.append(allocator, .{
+            .start = replacement_start,
+            .end = replacement_end,
+            .name = span.name,
+        });
+    }
+}
+
+fn aliasIsActive(
+    active_alias_spans: []const ActiveAliasSpan,
+    token_start: usize,
+    token_end: usize,
+    name: []const u8,
+) bool {
+    for (active_alias_spans) |span| {
+        if (span.start < token_end and
+            span.end > token_start and
+            std.mem.eql(u8, span.name, name)) return true;
+    }
+    return false;
 }
 
 pub fn aliasesEnabled(shell_state: state_mod.State) bool {

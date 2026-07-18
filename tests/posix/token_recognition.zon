@@ -319,6 +319,35 @@
             .status = 0,
         },
         .{
+            .name = "active self-referential aliases add arguments to independent occurrences",
+            .script =
+            \\alias echo='echo prefixed'
+            \\echo one; echo two
+            ,
+            .stdout =
+            \\prefixed one
+            \\prefixed two
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "active aliases terminate indirect cycles at the original command",
+            .script =
+            \\first() { printf '%s\n' function; }
+            \\alias first=second
+            \\alias second=first
+            \\first
+            ,
+            .stdout =
+            \\function
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "function bodies capture aliases at definition time",
             .script =
             \\alias hit='printf "%s\n" alias'
