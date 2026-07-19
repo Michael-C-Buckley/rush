@@ -8,6 +8,7 @@ const std = @import("std");
 const ast = @import("ast.zig");
 const builtin = @import("builtin.zig");
 const lexer = @import("lexer.zig");
+const parse_scan = @import("parse_scan.zig");
 const source_mod = @import("source.zig");
 const state_mod = @import("state.zig");
 const token = @import("token.zig");
@@ -100,7 +101,7 @@ pub fn parseParameterExpansionText(
     var index: usize = 0;
     while (index < text.len) {
         if (text[index] == '`') {
-            index = try scanBackquoteSubstitution(text, index, text.len) + 1;
+            index = try parse_scan.scanBackquoteSubstitution(text, index, text.len) + 1;
             continue;
         }
         if (text[index] != '$') {
@@ -111,19 +112,19 @@ pub fn parseParameterExpansionText(
         const name_start = index + 1;
         if (name_start >= text.len) break;
         if (text[name_start] == '\'') {
-            index = try scanDollarSingleQuoteEnd(text, name_start + 1, text.len) + 1;
+            index = try parse_scan.scanDollarSingleQuoteEnd(text, name_start + 1, text.len) + 1;
             continue;
         }
         if (name_start + 1 < text.len and text[name_start] == '(' and text[name_start + 1] == '(') {
-            index = try scanArithmeticExpansion(text, index, text.len) + 2;
+            index = try parse_scan.scanArithmeticExpansion(text, index, text.len) + 2;
             continue;
         }
         if (text[name_start] == '(') {
-            index = try scanCommandSubstitution(text, name_start, text.len) + 1;
+            index = try parse_scan.scanCommandSubstitution(text, name_start, text.len) + 1;
             continue;
         }
         if (text[name_start] == '{') {
-            const expansion_end = scanBracedParameterEnd(text, name_start, text.len) orelse {
+            const expansion_end = parse_scan.scanBracedParameterEnd(text, name_start, text.len) orelse {
                 index += 1;
                 continue;
             };
@@ -1155,7 +1156,7 @@ const Parser = struct {
                     // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
                     if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
                     const quote_start = index + 1;
-                    index = try scanDoubleQuoteEnd(text, quote_start, end);
+                    index = try parse_scan.scanDoubleQuoteEnd(text, quote_start, end);
 
                     var quoted_parts: std.ArrayList(ast.WordPart) = .empty;
                     errdefer quoted_parts.deinit(self.allocator);
@@ -1195,7 +1196,7 @@ const Parser = struct {
                 '`' => {
                     // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
                     if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
-                    const substitution_end = try scanBackquoteSubstitution(text, index, end);
+                    const substitution_end = try parse_scan.scanBackquoteSubstitution(text, index, end);
                     const source_text = try self.backquoteSourceText(text[index + 1 .. substitution_end]);
                     const line_offset = self.commandSubstitutionLineOffset(span, text, index + 1);
                     const parsed = try self.parseCommandSubstitution(source_text, line_offset);
@@ -1211,7 +1212,7 @@ const Parser = struct {
                     if (self.mode() == .posix) return error.UnexpectedToken;
                     // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
                     if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
-                    const substitution_end = try scanCommandSubstitution(text, index + 1, end);
+                    const substitution_end = try parse_scan.scanCommandSubstitution(text, index + 1, end);
                     const source_text = text[index + 2 .. substitution_end];
                     const line_offset = self.commandSubstitutionLineOffset(span, text, index + 2);
                     const parsed = try self.parseCommandSubstitution(source_text, line_offset);
@@ -1233,7 +1234,7 @@ const Parser = struct {
                         // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
                         if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
                         const quote_start = name_start + 1;
-                        const quote_end = try scanDollarSingleQuoteEnd(text, quote_start, end);
+                        const quote_end = try parse_scan.scanDollarSingleQuoteEnd(text, quote_start, end);
                         try parts.append(self.allocator, .{
                             .single_quoted = try self.dollarSingleQuotedText(text[quote_start..quote_end]),
                         });
@@ -1244,7 +1245,7 @@ const Parser = struct {
                     if (name_start + 1 < end and text[name_start] == '(' and text[name_start + 1] == '(') {
                         // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
                         if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
-                        const arithmetic_end = try scanArithmeticExpansion(text, index, end);
+                        const arithmetic_end = try parse_scan.scanArithmeticExpansion(text, index, end);
                         try parts.append(self.allocator, .{ .arithmetic = text[name_start + 2 .. arithmetic_end] });
                         index = arithmetic_end + 2;
                         literal_start = index;
@@ -1253,7 +1254,7 @@ const Parser = struct {
                     if (name_start < end and text[name_start] == '(') {
                         // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
                         if (literal_start < index) try parts.append(self.allocator, .{ .literal = text[literal_start..index] });
-                        const substitution_end = try scanCommandSubstitution(text, name_start, end);
+                        const substitution_end = try parse_scan.scanCommandSubstitution(text, name_start, end);
                         const source_text = text[name_start + 1 .. substitution_end];
                         const line_offset = self.commandSubstitutionLineOffset(span, text, name_start + 1);
                         const parsed = try self.parseCommandSubstitution(source_text, line_offset);
@@ -1266,7 +1267,7 @@ const Parser = struct {
                         continue;
                     }
                     if (name_start < end and text[name_start] == '{') {
-                        const expansion_end = scanBracedParameterEnd(text, name_start, end) orelse {
+                        const expansion_end = parse_scan.scanBracedParameterEnd(text, name_start, end) orelse {
                             index += 1;
                             continue;
                         };
@@ -1477,7 +1478,7 @@ const Parser = struct {
         if (rest.len >= 2 and isParameterOperator(rest[1])) return null;
 
         const offset_text = rest[1..];
-        const length_start = topLevelParameterColon(offset_text) orelse {
+        const length_start = parse_scan.topLevelParameterColon(offset_text) orelse {
             return .{
                 .parameter = parameter,
                 .op = .substring,
@@ -1520,7 +1521,7 @@ const Parser = struct {
             else => {},
         };
 
-        const replacement_start = topLevelParameterSlash(rest, pattern_start);
+        const replacement_start = parse_scan.topLevelParameterSlash(rest, pattern_start);
         const pattern_text = if (replacement_start) |index| rest[pattern_start..index] else rest[pattern_start..];
         const replacement_text = if (replacement_start) |index| rest[index + 1 ..] else "";
         return .{
@@ -1887,9 +1888,9 @@ const CForSections = struct {
 };
 
 fn cForSections(text: []const u8) ParseError!CForSections {
-    const first = topLevelArithmeticSemicolon(text, 0) orelse return error.UnexpectedToken;
-    const second = topLevelArithmeticSemicolon(text, first + 1) orelse return error.UnexpectedToken;
-    if (topLevelArithmeticSemicolon(text, second + 1) != null) return error.UnexpectedToken;
+    const first = parse_scan.topLevelArithmeticSemicolon(text, 0) orelse return error.UnexpectedToken;
+    const second = parse_scan.topLevelArithmeticSemicolon(text, first + 1) orelse return error.UnexpectedToken;
+    if (parse_scan.topLevelArithmeticSemicolon(text, second + 1) != null) return error.UnexpectedToken;
     return .{
         .init = text[0..first],
         .condition = text[first + 1 .. second],
@@ -1900,43 +1901,6 @@ fn cForSections(text: []const u8) ParseError!CForSections {
 fn emptyArithmeticSectionAsNull(text: []const u8) ?[]const u8 {
     const trimmed = std.mem.trim(u8, text, " \t\r\n");
     return if (trimmed.len == 0) null else text;
-}
-
-fn topLevelArithmeticSemicolon(text: []const u8, start: usize) ?usize {
-    var index = start;
-    var paren_depth: usize = 0;
-    while (index < text.len) {
-        switch (text[index]) {
-            '\'', '"' => |quote| {
-                index += 1;
-                while (index < text.len) : (index += 1) {
-                    if (text[index] == '\\' and index + 1 < text.len) {
-                        index += 2;
-                        continue;
-                    }
-                    if (text[index] == quote) {
-                        index += 1;
-                        break;
-                    }
-                }
-            },
-            '\\' => index += if (index + 1 < text.len) 2 else 1,
-            '(' => {
-                paren_depth += 1;
-                index += 1;
-            },
-            ')' => {
-                if (paren_depth != 0) paren_depth -= 1;
-                index += 1;
-            },
-            ';' => {
-                if (paren_depth == 0) return index;
-                index += 1;
-            },
-            else => index += 1,
-        }
-    }
-    return null;
 }
 
 fn redirectionOperator(kind: token.Kind) ast.RedirectionOperator {
@@ -2100,88 +2064,6 @@ fn parseSpecialParameter(byte: u8) ?ast.SpecialParameter {
     };
 }
 
-fn topLevelParameterColon(text: []const u8) ?usize {
-    return topLevelParameterByte(text, 0, ':');
-}
-
-fn topLevelParameterSlash(text: []const u8, start: usize) ?usize {
-    return topLevelParameterByte(text, start, '/');
-}
-
-fn topLevelParameterByte(text: []const u8, start: usize, delimiter: u8) ?usize {
-    var index = start;
-    var paren_depth: usize = 0;
-    while (index < text.len) {
-        switch (text[index]) {
-            '\'', '"' => |quote| {
-                index += 1;
-                while (index < text.len and text[index] != quote) {
-                    index += if (text[index] == '\\' and index + 1 < text.len) 2 else 1;
-                }
-                if (index < text.len) index += 1;
-            },
-            '\\' => index += if (index + 1 < text.len) 2 else 1,
-            '$' => if (index + 1 < text.len and text[index + 1] == '{') {
-                index = (scanBracedParameterEnd(text, index + 1, text.len) orelse return null) + 1;
-            } else if (index + 1 < text.len and text[index + 1] == '(') {
-                index = (scanCommandSubstitution(text, index + 1, text.len) catch return null) + 1;
-            } else {
-                index += 1;
-            },
-            '(' => {
-                paren_depth += 1;
-                index += 1;
-            },
-            ')' => {
-                if (paren_depth != 0) paren_depth -= 1;
-                index += 1;
-            },
-            else => |byte| {
-                if (paren_depth == 0 and byte == delimiter) return index;
-                index += 1;
-            },
-        }
-    }
-    return null;
-}
-
-fn scanDoubleQuoteEnd(text: []const u8, start: usize, end: usize) ParseError!usize {
-    var index = start;
-    while (index < end) {
-        if (text[index] == '"') return index;
-        if (text[index] == '\\') {
-            index += if (index + 1 < end) 2 else 1;
-            continue;
-        }
-        if (text[index] == '$' and index + 1 < end and text[index + 1] == '(') {
-            index = try scanCommandSubstitution(text, index + 1, end);
-        } else if (text[index] == '$' and index + 1 < end and text[index + 1] == '{') {
-            index = scanBracedParameterEnd(text, index + 1, end) orelse return error.UnclosedQuote;
-        } else if (text[index] == '`') {
-            index = try scanBackquoteSubstitution(text, index, end);
-        }
-        index += 1;
-    }
-    return error.UnclosedQuote;
-}
-
-fn scanSingleQuoteEnd(text: []const u8, start: usize, end: usize) ParseError!usize {
-    var index = start;
-    while (index < end) : (index += 1) {
-        if (text[index] == '\'') return index;
-    }
-    return error.UnclosedQuote;
-}
-
-fn scanDollarSingleQuoteEnd(text: []const u8, start: usize, end: usize) ParseError!usize {
-    var index = start;
-    while (index < end) : (index += 1) {
-        if (text[index] == '\'') return index;
-        if (text[index] == '\\' and index + 1 < end) index += 1;
-    }
-    return error.UnclosedQuote;
-}
-
 fn appendHexEscape(allocator: std.mem.Allocator, output: *std.ArrayList(u8), text: []const u8) !usize {
     var value: u16 = 0;
     var consumed: usize = 0;
@@ -2218,193 +2100,6 @@ fn hereDocEscapes(byte: u8) bool {
         '$', '`', '\\', '\n' => true,
         else => false,
     };
-}
-
-fn scanBracedParameterEnd(text: []const u8, open_index: usize, end: usize) ?usize {
-    std.debug.assert(open_index > 0);
-    std.debug.assert(text[open_index] == '{');
-
-    var index = open_index + 1;
-    var depth: usize = 1;
-    var quote: ?u8 = null;
-    while (index < end) {
-        const byte = text[index];
-        if (quote) |delimiter| {
-            if (byte == delimiter) quote = null;
-            index += 1;
-            continue;
-        }
-        switch (byte) {
-            '\'', '"' => {
-                quote = byte;
-                index += 1;
-            },
-            '\\' => index += if (index + 1 < end) 2 else 1,
-            '$' => if (index + 1 < end and text[index + 1] == '{') {
-                depth += 1;
-                index += 2;
-            } else if (index + 1 < end and text[index + 1] == '(') {
-                index = (scanCommandSubstitution(text, index + 1, end) catch return null) + 1;
-            } else {
-                index += 1;
-            },
-            '}' => {
-                depth -= 1;
-                if (depth == 0) return index;
-                index += 1;
-            },
-            else => index += 1,
-        }
-    }
-    return null;
-}
-
-fn scanBackquoteSubstitution(text: []const u8, open_index: usize, end: usize) ParseError!usize {
-    std.debug.assert(text[open_index] == '`');
-    var index = open_index + 1;
-    while (index < end) {
-        if (text[index] == '\\' and index + 1 < end) {
-            index += 2;
-            continue;
-        }
-        if (text[index] == '`') return index;
-        index += 1;
-    }
-    return error.UnclosedCommandSubstitution;
-}
-
-fn scanArithmeticExpansion(text: []const u8, dollar_index: usize, end: usize) ParseError!usize {
-    std.debug.assert(dollar_index + 2 < end);
-    std.debug.assert(text[dollar_index] == '$');
-    std.debug.assert(text[dollar_index + 1] == '(');
-    std.debug.assert(text[dollar_index + 2] == '(');
-
-    var index = dollar_index + 3;
-    var paren_depth: usize = 0;
-    while (index < end) {
-        switch (text[index]) {
-            '\'', '"' => |quote| {
-                index += 1;
-                while (index < end and text[index] != quote) index += 1;
-                if (index >= end) return error.UnclosedQuote;
-                index += 1;
-            },
-            '\\' => index += if (index + 1 < end) 2 else 1,
-            '(' => {
-                paren_depth += 1;
-                index += 1;
-            },
-            ')' => if (paren_depth != 0) {
-                paren_depth -= 1;
-                index += 1;
-            } else if (index + 1 < end and text[index + 1] == ')') {
-                return index;
-            } else {
-                index += 1;
-            },
-            else => index += 1,
-        }
-    }
-    return error.UnclosedCommandSubstitution;
-}
-
-fn scanCommandSubstitution(text: []const u8, open_index: usize, end: usize) ParseError!usize {
-    std.debug.assert(open_index > 0);
-    std.debug.assert(text[open_index] == '(');
-
-    var index = open_index + 1;
-    var depth: usize = 1;
-    while (index < end) {
-        if (startsReservedWordAt(text, index, "case")) {
-            index = try scanCaseCommandText(text, index, end);
-            continue;
-        }
-        if (text[index] == '#' and commentStartsAt(text, index)) {
-            index = skipCommentText(text, index, end);
-            continue;
-        }
-        switch (text[index]) {
-            '\'', '"' => |quote| {
-                index += 1;
-                while (index < end and text[index] != quote) index += 1;
-                if (index >= end) return error.UnclosedQuote;
-            },
-            '\\' => if (index + 1 < end) {
-                index += 1;
-            },
-            '$' => if (index + 1 < end and text[index + 1] == '(') {
-                depth += 1;
-                index += 1;
-            },
-            '(' => depth += 1,
-            ')' => {
-                depth -= 1;
-                if (depth == 0) return index;
-            },
-            else => {},
-        }
-        index += 1;
-    }
-    return error.UnclosedCommandSubstitution;
-}
-
-fn skipCommentText(text: []const u8, start: usize, end: usize) usize {
-    std.debug.assert(start < end);
-    std.debug.assert(text[start] == '#');
-
-    var index = start;
-    while (index < end and text[index] != '\n') index += 1;
-    return index;
-}
-
-fn commentStartsAt(text: []const u8, index: usize) bool {
-    std.debug.assert(index < text.len);
-    if (index == 0) return true;
-    return switch (text[index - 1]) {
-        ' ', '\t', '\n', '\r', ';', '&', '|', '(', ')' => true,
-        else => false,
-    };
-}
-
-fn scanCaseCommandText(text: []const u8, start: usize, end: usize) ParseError!usize {
-    var index = start + "case".len;
-    while (index < end) {
-        if (text[index] == '#' and commentStartsAt(text, index)) {
-            index = skipCommentText(text, index, end);
-            continue;
-        }
-        if (text[index] == '\\') {
-            index += if (index + 1 < end) 2 else 1;
-            continue;
-        }
-        if (text[index] == '\'' or text[index] == '"') {
-            const quote = text[index];
-            index += 1;
-            while (index < end and text[index] != quote) index += 1;
-            if (index >= end) return error.UnclosedQuote;
-            index += 1;
-            continue;
-        }
-        if (text[index] == '$' and index + 1 < end and text[index + 1] == '(') {
-            index = try scanCommandSubstitution(text, index + 1, end);
-            index += 1;
-            continue;
-        }
-        if (startsReservedWordAt(text, index, "esac")) {
-            index += "esac".len;
-            return index;
-        }
-        index += 1;
-    }
-    return error.UnclosedCommandSubstitution;
-}
-
-fn startsReservedWordAt(text: []const u8, index: usize, word: []const u8) bool {
-    if (index + word.len > text.len) return false;
-    if (!std.mem.eql(u8, text[index..][0..word.len], word)) return false;
-    if (index != 0 and isNameContinue(text[index - 1])) return false;
-    if (index + word.len < text.len and isNameContinue(text[index + word.len])) return false;
-    return true;
 }
 
 fn isNameStart(byte: u8) bool {
@@ -2846,4 +2541,15 @@ test "parameter-only parser skips other substitution forms" {
         text[expansions[1].span.start..expansions[1].span.end],
     );
     try std.testing.expectEqualStrings("MISSING", expansions[1].parameter.variable);
+}
+
+test "parser preserves balanced scanner error tags" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+
+    try std.testing.expectError(
+        error.UnclosedCommandSubstitution,
+        parseWordExpansionText(arena.allocator(), "$(echo", .{}),
+    );
+    try std.testing.expectError(error.UnclosedQuote, parseWordExpansionText(arena.allocator(), "\"value", .{}));
 }
