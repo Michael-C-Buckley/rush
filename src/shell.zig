@@ -1,6 +1,7 @@
 //! Public facade for the rewritten shell core.
 
 const std = @import("std");
+const shell_factory = @import("shell/shell_factory.zig");
 
 pub const ast = @import("shell/ast.zig");
 pub const builtin = @import("shell/builtin.zig");
@@ -16,8 +17,8 @@ pub const source = @import("shell/source.zig");
 pub const state = @import("shell/state.zig");
 pub const token = @import("shell/token.zig");
 
-pub const Shell = @import("shell/Shell.zig").Shell;
-pub const ShellWithBuiltins = @import("shell/Shell.zig").ShellWithBuiltins;
+pub const Shell = shell_factory.Shell;
+pub const ShellWithBuiltins = shell_factory.ShellWithBuiltins;
 
 pub const ExitStatus = result.ExitStatus;
 pub const EvalResult = result.EvalResult;
