@@ -669,7 +669,7 @@ fn diagnoseInteractiveInput(
 fn analyzeInteractiveInput(
     allocator: std.mem.Allocator,
     sh: *RushShell,
-    command_cache: *const PathCommandCache,
+    command_cache: *PathCommandCache,
     text: []const u8,
 ) !?editor.render.DiagnosticRender {
     if (text.len == 0) return null;
@@ -709,14 +709,14 @@ fn appendTokenSpans(
     allocator: std.mem.Allocator,
     spans: *std.ArrayList(editor.render.DiagnosticSpan),
     sh: *RushShell,
-    command_cache: *const PathCommandCache,
+    command_cache: *PathCommandCache,
     tokens: []const shell.Token,
 ) !void {
     var tracker: shell.token.CommandPositionTracker = .{};
     for (tokens) |tok| {
         if (tok.kind == .eof) break;
         const severity: editor.render.DiagnosticSeverity = switch (tracker.classify(tok)) {
-            .command => if (commandResolves(allocator, sh, command_cache, tok.text))
+            .command => if (try commandResolves(allocator, sh, command_cache, tok.text))
                 .command
             else
                 .command_invalid,
@@ -791,9 +791,9 @@ fn appendAssignmentSpans(
 fn commandResolves(
     allocator: std.mem.Allocator,
     sh: *RushShell,
-    command_cache: *const PathCommandCache,
+    command_cache: *PathCommandCache,
     command: []const u8,
-) bool {
+) !bool {
     std.debug.assert(command.len != 0);
     if (std.mem.indexOfScalar(u8, command, '/') != null) return existingCommandPath(allocator, sh, command);
     if (sh.lookupBuiltin(command) != null) return true;
@@ -801,7 +801,7 @@ fn commandResolves(
     if (sh.state.getAlias(command) != null) return true;
     if (sh.extensions.getAbbreviation(command) != null) return true;
     if (sh.state.command_hashes.contains(command)) return true;
-    return command_cache.contains(command);
+    return command_cache.resolves(allocator, sh, command);
 }
 
 fn existingCommandPath(allocator: std.mem.Allocator, sh: *RushShell, command: []const u8) bool {
@@ -810,10 +810,12 @@ fn existingCommandPath(allocator: std.mem.Allocator, sh: *RushShell, command: []
     return sh.host.existsZ(command_z);
 }
 
+/// Caches exact external-command lookups instead of eagerly enumerating PATH,
+/// which can block the first prompt when PATH contains slow mounted filesystems.
 const PathCommandCache = struct {
     path_key: []const u8 = "",
     cwd_key: []const u8 = "",
-    commands: std.StringHashMapUnmanaged(void) = .empty,
+    commands: std.StringHashMapUnmanaged(bool) = .empty,
 
     // ziglint-ignore: Z030 deinit intentionally leaves reusable/test-local state shape
     fn deinit(self: *PathCommandCache, allocator: std.mem.Allocator) void {
@@ -825,30 +827,11 @@ const PathCommandCache = struct {
         self.* = .{};
     }
 
-    fn refresh(self: *PathCommandCache, allocator: std.mem.Allocator, sh: *RushShell) !void {
+    fn refresh(self: *PathCommandCache, allocator: std.mem.Allocator, sh: anytype) !void {
         const path = interactivePathValue(sh) orelse "";
         const cwd = sh.host.currentDir(allocator) catch try allocator.dupe(u8, "");
         defer allocator.free(cwd);
         if (std.mem.eql(u8, self.path_key, path) and std.mem.eql(u8, self.cwd_key, cwd)) return;
-
-        var next: std.StringHashMapUnmanaged(void) = .empty;
-        errdefer deinitCommandMap(allocator, &next);
-        var dirs = std.mem.splitScalar(u8, path, ':');
-        while (dirs.next()) |raw_dir| {
-            const dir = if (raw_dir.len == 0) "." else raw_dir;
-            var entries = sh.host.listDir(allocator, dir) catch continue;
-            defer entries.deinit();
-            for (entries.entries) |entry| {
-                if (entry.name.len == 0 or entry.name[0] == '.') continue;
-                if (entry.kind == .directory) continue;
-                const full_path = try std.fs.path.join(allocator, &.{ dir, entry.name });
-                defer allocator.free(full_path);
-                const full_path_z = try allocator.dupeZ(u8, full_path);
-                defer allocator.free(full_path_z);
-                if (!sh.host.fileAccessZ(full_path_z, .execute)) continue;
-                try putCommandName(allocator, &next, entry.name);
-            }
-        }
 
         const path_key = try allocator.dupe(u8, path);
         errdefer allocator.free(path_key);
@@ -858,32 +841,52 @@ const PathCommandCache = struct {
         self.deinit(allocator);
         self.path_key = path_key;
         self.cwd_key = cwd_key;
-        self.commands = next;
     }
 
-    fn contains(self: PathCommandCache, name: []const u8) bool {
-        return self.commands.contains(name);
+    fn resolves(self: *PathCommandCache, allocator: std.mem.Allocator, sh: anytype, name: []const u8) !bool {
+        if (self.commands.get(name)) |resolved| return resolved;
+        const resolved = try pathCommandResolves(allocator, sh, name);
+        try putCommandResolution(allocator, &self.commands, name, resolved);
+        return resolved;
     }
 };
 
-fn deinitCommandMap(allocator: std.mem.Allocator, commands: *std.StringHashMapUnmanaged(void)) void {
-    var iterator = commands.iterator();
-    while (iterator.next()) |entry| allocator.free(entry.key_ptr.*);
-    commands.deinit(allocator);
-}
-
-fn putCommandName(
+fn putCommandResolution(
     allocator: std.mem.Allocator,
-    commands: *std.StringHashMapUnmanaged(void),
+    commands: *std.StringHashMapUnmanaged(bool),
     name: []const u8,
+    resolved: bool,
 ) !void {
-    if (commands.contains(name)) return;
+    if (commands.getPtr(name)) |existing| {
+        existing.* = resolved;
+        return;
+    }
     const owned = try allocator.dupe(u8, name);
     errdefer allocator.free(owned);
-    try commands.put(allocator, owned, {});
+    try commands.put(allocator, owned, resolved);
 }
 
-fn interactivePathValue(sh: *RushShell) ?[]const u8 {
+fn pathCommandResolves(allocator: std.mem.Allocator, sh: anytype, command: []const u8) !bool {
+    const path = interactivePathValue(sh) orelse return false;
+    var candidate_buffer: std.ArrayList(u8) = .empty;
+    defer candidate_buffer.deinit(allocator);
+    var dirs = std.mem.splitScalar(u8, path, ':');
+    while (dirs.next()) |raw_dir| {
+        const dir = if (raw_dir.len == 0) "." else raw_dir;
+        candidate_buffer.clearRetainingCapacity();
+        try candidate_buffer.appendSlice(allocator, dir);
+        if (!std.mem.endsWith(u8, dir, "/")) try candidate_buffer.append(allocator, '/');
+        try candidate_buffer.appendSlice(allocator, command);
+        try candidate_buffer.append(allocator, 0);
+        const candidate = candidate_buffer.items[0 .. candidate_buffer.items.len - 1 :0];
+        if (!sh.host.fileAccessZ(candidate, .execute)) continue;
+        const status = sh.host.fileTestStatusZ(candidate, true) orelse continue;
+        if (status.kind != .directory) return true;
+    }
+    return false;
+}
+
+fn interactivePathValue(sh: anytype) ?[]const u8 {
     if (sh.state.getVariable("PATH")) |variable| return variable.value;
     for (sh.env) |entry_ptr| {
         const entry = std.mem.span(entry_ptr);
@@ -1392,6 +1395,64 @@ test "interactive right prompt uses prompt helpers and last command status" {
     try std.testing.expectEqual(@as(shell.result.ExitStatus, 1), sh.state.last_status);
 }
 
+test "interactive path command cache resolves exact names lazily" {
+    const TestHost = struct {
+        const Self = @This();
+
+        file_access_calls: usize = 0,
+        list_dir_calls: usize = 0,
+
+        fn currentDir(_: *Self, allocator: std.mem.Allocator) ![]const u8 {
+            return allocator.dupe(u8, "/work");
+        }
+
+        fn fileAccessZ(self: *Self, path: [:0]const u8, _: host.FileAccess) bool {
+            self.file_access_calls += 1;
+            return std.mem.eql(u8, path, "/commands/tool");
+        }
+
+        fn fileTestStatusZ(_: *Self, _: [:0]const u8, _: bool) ?host.FileStatus {
+            return .{ .kind = .file };
+        }
+
+        fn listDir(self: *Self, _: std.mem.Allocator, _: []const u8) !host.ListDirResult {
+            self.list_dir_calls += 1;
+            return error.FileNotFound;
+        }
+    };
+    const TestShell = struct {
+        host: *TestHost,
+        state: shell.state.State,
+        env: []const [*:0]const u8 = &.{},
+    };
+
+    var test_host: TestHost = .{};
+    var test_shell: TestShell = .{
+        .host = &test_host,
+        .state = .init(std.testing.allocator, .{}),
+    };
+    defer test_shell.state.deinit();
+    try test_shell.state.putVariable(.{ .name = "PATH", .value = "/commands:/mnt/c/Windows/System32" });
+
+    var command_cache: PathCommandCache = .{};
+    defer command_cache.deinit(std.testing.allocator);
+    try command_cache.refresh(std.testing.allocator, &test_shell);
+
+    try std.testing.expectEqual(@as(usize, 0), test_host.list_dir_calls);
+    try std.testing.expectEqual(@as(usize, 0), command_cache.commands.count());
+    try std.testing.expect(try command_cache.resolves(std.testing.allocator, &test_shell, "tool"));
+    try std.testing.expectEqual(@as(usize, 1), test_host.file_access_calls);
+    try std.testing.expect(try command_cache.resolves(std.testing.allocator, &test_shell, "tool"));
+    try std.testing.expectEqual(@as(usize, 1), test_host.file_access_calls);
+    try std.testing.expect(!try command_cache.resolves(std.testing.allocator, &test_shell, "missing"));
+    try std.testing.expectEqual(@as(usize, 3), test_host.file_access_calls);
+    try std.testing.expectEqual(@as(usize, 0), test_host.list_dir_calls);
+
+    try test_shell.state.putVariable(.{ .name = "PATH", .value = "/other" });
+    try command_cache.refresh(std.testing.allocator, &test_shell);
+    try std.testing.expectEqual(@as(usize, 0), command_cache.commands.count());
+}
+
 test "interactive input analysis marks unresolved command tokens only" {
     var sh = RushShell.init(std.testing.allocator, .{}, .{});
     defer sh.deinit();
@@ -1399,7 +1460,7 @@ test "interactive input analysis marks unresolved command tokens only" {
 
     var command_cache: PathCommandCache = .{};
     defer command_cache.deinit(std.testing.allocator);
-    try putCommandName(std.testing.allocator, &command_cache.commands, "cached");
+    try putCommandResolution(std.testing.allocator, &command_cache.commands, "cached", true);
 
     const text = "echo ok\nll\nnope arg\nFOO=bar cached < nope\n";
     const analyzed = (try analyzeInteractiveInput(std.testing.allocator, &sh, &command_cache, text)).?;
@@ -1498,7 +1559,7 @@ test "interactive input analysis styles reserved words operators options and exp
     defer sh.deinit();
     var command_cache: PathCommandCache = .{};
     defer command_cache.deinit(std.testing.allocator);
-    try putCommandName(std.testing.allocator, &command_cache.commands, "grep");
+    try putCommandResolution(std.testing.allocator, &command_cache.commands, "grep", true);
 
     const text = "if grep -q $HOME f; then echo $(id); fi";
     const analyzed = (try analyzeInteractiveInput(std.testing.allocator, &sh, &command_cache, text)).?;
