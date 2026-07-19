@@ -1,3 +1,8 @@
+//! Implements the `fc` and `history` builtin family.
+//!
+//! History mutation, editor handoff, and command re-execution operate through
+//! the caller's concrete shell and Host so current-shell effects remain explicit.
+
 const std = @import("std");
 
 const host = @import("../host.zig");
