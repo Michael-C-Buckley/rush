@@ -8493,7 +8493,12 @@ fn externalCommandText(shell: anytype, fields: []const []const u8) ![]const u8 {
 fn writeCommandNotFoundDiagnostic(shell: anytype, command: []const u8, search_path: ?[]const u8) !void {
     var suggestions: CommandSuggestions = .{};
     defer suggestions.deinit(shell.scratchAllocator());
-    try collectCommandSuggestions(shell, command, search_path, &suggestions);
+    // Startup files commonly contain commands for another shell or an
+    // optional tool. Do not walk and stat every executable in PATH before
+    // the first prompt merely to improve their diagnostics.
+    const interactive_startup = shell.state.options.interactive and
+        shell.state.root_source_kind == .sourced_file;
+    if (!interactive_startup) try collectCommandSuggestions(shell, command, search_path, &suggestions);
     if (suggestions.count == 0) {
         const message = try std.fmt.allocPrint(shell.scratchAllocator(), "{s}: not found\n", .{command});
         try shell.host.writeAll(.stderr, message);
@@ -8985,6 +8990,58 @@ fn envValue(env: []const [*:0]const u8, name: []const u8) ?[]const u8 {
         if (std.mem.eql(u8, text[0..equals], name)) return text[equals + 1 ..];
     }
     return null;
+}
+
+test "missing commands in interactive startup files do not scan PATH for suggestions" {
+    const TestHost = struct {
+        const Self = @This();
+
+        stderr: std.ArrayList(u8) = .empty,
+        list_dir_calls: usize = 0,
+
+        fn writeAll(self: *Self, fd: host_mod.Fd, bytes: []const u8) !void {
+            if (fd == .stderr) try self.stderr.appendSlice(std.testing.allocator, bytes);
+        }
+
+        fn listDir(self: *Self, _: std.mem.Allocator, _: []const u8) !host_mod.ListDirResult {
+            self.list_dir_calls += 1;
+            return error.FileNotFound;
+        }
+
+        fn fileAccessZ(_: *Self, _: [:0]const u8, _: host_mod.FileAccess) bool {
+            return true;
+        }
+    };
+    const TestShell = struct {
+        const Self = @This();
+
+        scratch: *std.heap.ArenaAllocator,
+        host: *TestHost,
+        env: []const [*:0]const u8 = &.{},
+        state: state_mod.State,
+        extensions: struct {} = .{},
+
+        fn scratchAllocator(self: *Self) std.mem.Allocator {
+            return self.scratch.allocator();
+        }
+    };
+
+    var test_host: TestHost = .{};
+    defer test_host.stderr.deinit(std.testing.allocator);
+    var scratch = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer scratch.deinit();
+    var shell: TestShell = .{
+        .scratch = &scratch,
+        .host = &test_host,
+        .state = .init(std.testing.allocator, .{ .interactive = true }),
+    };
+    defer shell.state.deinit();
+    shell.state.root_source_kind = .sourced_file;
+
+    try writeCommandNotFoundDiagnostic(&shell, "bindkey", "/commands");
+
+    try std.testing.expectEqual(@as(usize, 0), test_host.list_dir_calls);
+    try std.testing.expectEqualStrings("bindkey: not found\n", test_host.stderr.items);
 }
 
 test "bounded edit distance returns distances within cutoff" {
