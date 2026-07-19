@@ -3,6 +3,7 @@
 const std = @import("std");
 const build_config = @import("build_config");
 
+const manifest = @import("completion/manifest.zig");
 const completion_path = @import("completion_path.zig");
 const editor_completion = @import("editor/completion.zig");
 const extensions = @import("extensions.zig");
@@ -67,11 +68,7 @@ const CompletionKind = enum {
     parameter,
 };
 
-const Word = struct {
-    text: []const u8,
-    start: usize,
-    end: usize,
-};
+const Word = manifest.Word;
 
 const AnalyzedLine = struct {
     words: []Word,
@@ -304,8 +301,19 @@ fn completeFromManifest(
     else
         null;
     // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-    const current = selectedCommand(command, analyzed.words[command_word_index + 1 ..], current_relative_word_index, providers) orelse command;
-    const semantic = semanticContext(analyzed, command_word_index, command);
+    const current = manifest.selectedCommand(
+        command,
+        analyzed.words[command_word_index + 1 ..],
+        current_relative_word_index,
+        providers,
+    ) orelse command;
+    const semantic = manifest.semanticContext(
+        analyzed.words,
+        analyzed.current_word_index,
+        analyzed.prefix,
+        command_word_index,
+        command,
+    );
 
     if (semantic.complete_options) {
         try appendOptionCandidates(allocator, builder, current, analyzed.replace_start, analyzed.replace_end);
@@ -348,7 +356,7 @@ fn completeFromManifest(
         return true;
     }
 
-    if (argumentProvider(current, semantic.operand_index)) |provider| {
+    if (manifest.argumentProvider(current, semantic.operand_index)) |provider| {
         // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
         try appendProviderCandidates(
             allocator,
@@ -368,122 +376,6 @@ fn completeFromManifest(
     return false;
 }
 
-const Semantic = struct {
-    operand_index: usize,
-    options_terminated: bool,
-    complete_options: bool = false,
-    complete_subcommands: bool = false,
-    option_value_provider: ?std.json.Value = null,
-};
-
-fn semanticContext(analyzed: AnalyzedLine, command_word_index: usize, root_command: std.json.Value) Semantic {
-    var operand_index: usize = 0;
-    var options_terminated = false;
-    var pending_option_value: ?std.json.Value = null;
-    var pending_option_word_index: ?usize = null;
-    var command = root_command;
-    var command_path: [16]std.json.Value = undefined;
-    command_path[0] = command;
-    var command_path_len: usize = 1;
-    const current_word_index = analyzed.current_word_index orelse analyzed.words.len;
-    for (analyzed.words[command_word_index + 1 ..], command_word_index + 1..) |word, absolute_index| {
-        if (absolute_index >= current_word_index) break;
-        if (pending_option_value != null) {
-            pending_option_value = null;
-            pending_option_word_index = null;
-            continue;
-        }
-        if (std.mem.eql(u8, word.text, "--")) {
-            options_terminated = true;
-            continue;
-        }
-        if (!options_terminated and std.mem.startsWith(u8, word.text, "-")) {
-            if (optionTokenForContext(command_path[0..command_path_len], word.text)) |parsed| {
-                if (jsonObjectField(parsed.option, "value")) |value| {
-                    if (parsed.value != null) continue;
-                    pending_option_value = value;
-                    pending_option_word_index = absolute_index;
-                }
-            }
-            continue;
-        }
-        if (!options_terminated) {
-            if (subcommandForName(command, null, word.text)) |subcommand| {
-                command = subcommand;
-                if (command_path_len == command_path.len) return .{
-                    .operand_index = operand_index,
-                    .options_terminated = options_terminated,
-                };
-                command_path[command_path_len] = command;
-                command_path_len += 1;
-                operand_index = 0;
-                continue;
-            }
-        }
-        operand_index += 1;
-    }
-
-    if (pending_option_value) |value| {
-        if (pending_option_word_index != null) {
-            return .{
-                .operand_index = operand_index,
-                .options_terminated = options_terminated,
-                .option_value_provider = jsonField(value, "provider"),
-            };
-        }
-    }
-
-    const prefix_is_option = analyzed.prefix.len != 0 and analyzed.prefix[0] == '-' and !options_terminated;
-    return .{
-        .operand_index = operand_index,
-        .options_terminated = options_terminated,
-        .complete_options = prefix_is_option,
-        .complete_subcommands = operand_index == 0 and commandHasSubcommands(command),
-    };
-}
-
-fn selectedCommand(
-    root: std.json.Value,
-    words: []const Word,
-    current_word_index: ?usize,
-    providers: ?std.json.Value,
-) ?std.json.Value {
-    var command = root;
-    var command_path: [16]std.json.Value = undefined;
-    command_path[0] = command;
-    var command_path_len: usize = 1;
-    var pending_option_value = false;
-    var options_terminated = false;
-    const limit = if (current_word_index) |index| @min(index, words.len) else words.len;
-    for (words, 0..) |word, relative_index| {
-        if (relative_index >= limit) break;
-        if (pending_option_value) {
-            pending_option_value = false;
-            continue;
-        }
-        if (std.mem.eql(u8, word.text, "--")) {
-            options_terminated = true;
-            continue;
-        }
-        if (!options_terminated and std.mem.startsWith(u8, word.text, "-")) {
-            if (optionTokenForContext(command_path[0..command_path_len], word.text)) |parsed| {
-                pending_option_value = parsed.value == null and jsonObjectField(parsed.option, "value") != null;
-            }
-            continue;
-        }
-        if (options_terminated) break;
-        if (subcommandForName(command, providers, word.text)) |subcommand| {
-            command = subcommand;
-            if (command_path_len == command_path.len) return command;
-            command_path[command_path_len] = command;
-            command_path_len += 1;
-            continue;
-        }
-        break;
-    }
-    return command;
-}
-
 fn appendOptionCandidates(
     allocator: std.mem.Allocator,
     builder: *Builder,
@@ -501,7 +393,7 @@ fn appendOptionProviderCandidates(
     sh: anytype,
     builder: *Builder,
     analyzed: AnalyzedLine,
-    semantic: Semantic,
+    semantic: manifest.Semantic,
     root_command: std.json.Value,
     command: std.json.Value,
     providers: ?std.json.Value,
@@ -573,7 +465,7 @@ fn appendSubcommandCandidates(
             _ = providers;
             continue;
         }
-        const name = commandName(subcommand) orelse continue;
+        const name = manifest.commandName(subcommand) orelse continue;
         try builder.append(allocator, .{
             .value = name,
             .description = jsonStringField(subcommand, "description"),
@@ -591,7 +483,7 @@ fn appendProviderCandidates(
     sh: anytype,
     builder: *Builder,
     analyzed: AnalyzedLine,
-    semantic: Semantic,
+    semantic: manifest.Semantic,
     root_command: std.json.Value,
     command: std.json.Value,
     providers: ?std.json.Value,
@@ -690,7 +582,7 @@ fn appendFunctionProvider(
     sh: anytype,
     builder: *Builder,
     analyzed: AnalyzedLine,
-    semantic: Semantic,
+    semantic: manifest.Semantic,
     root_command: std.json.Value,
     function_name: []const u8,
     companion_path: ?[]const u8,
@@ -765,7 +657,7 @@ fn parsedOptionsForProvider(
             continue;
         }
         if (!options_terminated and std.mem.startsWith(u8, word.text, "-")) {
-            const parsed = optionTokenForContext(command_path[0..command_path_len], word.text) orelse continue;
+            const parsed = manifest.optionTokenForContext(command_path[0..command_path_len], word.text) orelse continue;
             const name = optionName(parsed.option, word.text);
             try options.append(allocator, .{
                 .spelling = word.text,
@@ -779,7 +671,7 @@ fn parsedOptionsForProvider(
             continue;
         }
         if (!options_terminated) {
-            if (subcommandForName(command, null, word.text)) |subcommand| {
+            if (manifest.subcommandForName(command, null, word.text)) |subcommand| {
                 command = subcommand;
                 if (command_path_len == command_path.len) break;
                 command_path[command_path_len] = command;
@@ -818,13 +710,13 @@ fn operandsForProvider(
             continue;
         }
         if (!options_terminated and std.mem.startsWith(u8, word.text, "-")) {
-            if (optionTokenForContext(command_path[0..command_path_len], word.text)) |parsed| {
+            if (manifest.optionTokenForContext(command_path[0..command_path_len], word.text)) |parsed| {
                 pending_option_value = parsed.value == null and jsonObjectField(parsed.option, "value") != null;
             }
             continue;
         }
         if (!options_terminated) {
-            if (subcommandForName(command, null, word.text)) |subcommand| {
+            if (manifest.subcommandForName(command, null, word.text)) |subcommand| {
                 command = subcommand;
                 if (command_path_len == command_path.len) break;
                 command_path[command_path_len] = command;
@@ -851,114 +743,6 @@ fn sourceCompanionIfNeeded(allocator: std.mem.Allocator, io: std.Io, sh: anytype
     defer allocator.free(text);
     const src: shell.source.Source = .{ .id = 0, .kind = .sourced_file, .name = path, .text = text };
     _ = sh.evalSourceNested(src) catch return;
-}
-
-fn argumentProvider(command: std.json.Value, operand_index: usize) ?std.json.Value {
-    const arguments = jsonObjectField(command, "arguments") orelse return null;
-    const states = jsonArrayField(arguments, "states") orelse return null;
-    var repeatable_provider: ?std.json.Value = null;
-    for (states.items) |state| {
-        const provider = jsonObjectField(state, "provider") orelse jsonField(state, "provider") orelse continue;
-        const index = jsonUsizeField(state, "index");
-        if (index != null and index.? == operand_index) return provider;
-        if (jsonBoolField(state, "repeatable") orelse false) repeatable_provider = provider;
-    }
-    return repeatable_provider;
-}
-
-fn optionForSpelling(command: std.json.Value, spelling: []const u8) ?std.json.Value {
-    const options = jsonArrayField(command, "options") orelse return null;
-    for (options.items) |option| {
-        if (optionMatchesSpelling(option, spelling)) return option;
-    }
-    return null;
-}
-
-const ParsedOptionToken = struct {
-    option: std.json.Value,
-    value: ?[]const u8 = null,
-};
-
-fn optionTokenForContext(command_path: []const std.json.Value, token: []const u8) ?ParsedOptionToken {
-    var index = command_path.len;
-    while (index > 0) {
-        index -= 1;
-        const options = jsonArrayField(command_path[index], "options") orelse continue;
-        for (options.items) |option| {
-            if (index + 1 != command_path.len and !(jsonBoolField(option, "inherit") orelse true)) continue;
-            if (optionToken(option, token)) |parsed| return parsed;
-        }
-    }
-    return null;
-}
-
-fn optionToken(option: std.json.Value, token: []const u8) ?ParsedOptionToken {
-    if (optionMatchesSpelling(option, token)) return .{ .option = option };
-    if (jsonObjectField(option, "value") == null) return null;
-
-    if (jsonStringField(option, "long")) |long| {
-        if (token.len >= long.len + 3 and
-            std.mem.eql(u8, token[0..2], "--") and
-            std.mem.eql(u8, token[2 .. long.len + 2], long) and
-            token[long.len + 2] == '=')
-        {
-            return .{ .option = option, .value = token[long.len + 3 ..] };
-        }
-    }
-    if (jsonStringField(option, "short")) |short| {
-        if (short.len == 1 and token.len > 2 and token[0] == '-' and token[1] == short[0]) {
-            const value = if (token[2] == '=') token[3..] else token[2..];
-            return .{ .option = option, .value = value };
-        }
-    }
-    return null;
-}
-
-fn optionMatchesSpelling(option: std.json.Value, spelling: []const u8) bool {
-    if (jsonStringField(option, "long")) |long| {
-        // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-        if (spelling.len == long.len + 2 and std.mem.eql(u8, spelling[0..2], "--") and std.mem.eql(u8, spelling[2..], long)) return true;
-    }
-    if (jsonStringField(option, "short")) |short| {
-        if (spelling.len == short.len + 1 and spelling[0] == '-' and std.mem.eql(u8, spelling[1..], short)) return true;
-    }
-    if (jsonArrayField(option, "spellings")) |spellings| {
-        for (spellings.items) |item| if (jsonString(item)) |value| if (std.mem.eql(u8, spelling, value)) return true;
-    }
-    return false;
-}
-
-fn subcommandForName(command: std.json.Value, providers: ?std.json.Value, name: []const u8) ?std.json.Value {
-    _ = providers;
-    const subcommands = jsonArrayField(command, "subcommands") orelse return null;
-    for (subcommands.items) |subcommand| {
-        if (commandNameMatches(subcommand, name)) return subcommand;
-    }
-    return null;
-}
-
-fn commandHasSubcommands(command: std.json.Value) bool {
-    const subcommands = jsonArrayField(command, "subcommands") orelse return false;
-    return subcommands.items.len != 0;
-}
-
-fn commandName(command: std.json.Value) ?[]const u8 {
-    if (jsonStringField(command, "name")) |name| return name;
-    const names = jsonArrayField(command, "name") orelse return null;
-    if (names.items.len == 0) return null;
-    return jsonString(names.items[0]);
-}
-
-fn commandNameMatches(command: std.json.Value, name: []const u8) bool {
-    return wordMatchesCommandName(command, name);
-}
-
-fn wordMatchesCommandName(command: std.json.Value, name: []const u8) bool {
-    if (commandName(command)) |primary| if (std.mem.eql(u8, primary, name)) return true;
-    if (jsonArrayField(command, "aliases")) |aliases| {
-        for (aliases.items) |alias| if (jsonString(alias)) |value| if (std.mem.eql(u8, value, name)) return true;
-    }
-    return false;
 }
 
 fn providerValue(providers: ?std.json.Value, ref: std.json.Value) ?std.json.Value {
@@ -1213,13 +997,6 @@ fn jsonI8Field(value: std.json.Value, name: []const u8) ?i8 {
     };
 }
 
-fn jsonUsizeField(value: std.json.Value, name: []const u8) ?usize {
-    return switch (jsonField(value, name) orelse return null) {
-        .integer => |integer| std.math.cast(usize, integer),
-        else => null,
-    };
-}
-
 fn jsonObject(value: std.json.Value) ?std.json.ObjectMap {
     return switch (value) {
         .object => |object| object,
@@ -1400,7 +1177,7 @@ test "completion includes dynamic option provider candidates" {
 }
 
 test "provider context preserves root options before a subcommand" {
-    const manifest =
+    const manifest_text =
         \\{
         \\  "name": "tool",
         \\  "options": [
@@ -1414,14 +1191,20 @@ test "provider context preserves root options before a subcommand" {
         \\  ]
         \\}
     ;
-    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, manifest, .{});
+    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, manifest_text, .{});
     defer parsed.deinit();
 
     const source = "tool --user --host example stop alpha ";
     const analyzed = try analyzeLine(std.testing.allocator, source, source.len);
     defer analyzed.deinit(std.testing.allocator);
 
-    const semantic = semanticContext(analyzed, analyzed.command_word_index.?, parsed.value);
+    const semantic = manifest.semanticContext(
+        analyzed.words,
+        analyzed.current_word_index,
+        analyzed.prefix,
+        analyzed.command_word_index.?,
+        parsed.value,
+    );
     try std.testing.expectEqual(@as(usize, 1), semantic.operand_index);
 
     const options = try parsedOptionsForProvider(std.testing.allocator, analyzed, parsed.value);
@@ -1439,7 +1222,7 @@ test "provider context preserves root options before a subcommand" {
 }
 
 test "manifest selection accepts attached root option values before a subcommand" {
-    const manifest =
+    const manifest_text =
         \\{
         \\  "name": "tool",
         \\  "options": [
@@ -1448,15 +1231,15 @@ test "manifest selection accepts attached root option values before a subcommand
         \\  "subcommands": [ { "name": "stop" } ]
         \\}
     ;
-    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, manifest, .{});
+    var parsed = try std.json.parseFromSlice(std.json.Value, std.testing.allocator, manifest_text, .{});
     defer parsed.deinit();
 
     const source = "tool --host=example stop ";
     const analyzed = try analyzeLine(std.testing.allocator, source, source.len);
     defer analyzed.deinit(std.testing.allocator);
     const words = analyzed.words[analyzed.command_word_index.? + 1 ..];
-    const current = selectedCommand(parsed.value, words, null, null).?;
-    try std.testing.expectEqualStrings("stop", commandName(current).?);
+    const current = manifest.selectedCommand(parsed.value, words, null, null).?;
+    try std.testing.expectEqualStrings("stop", manifest.commandName(current).?);
 
     const options = try parsedOptionsForProvider(std.testing.allocator, analyzed, parsed.value);
     defer std.testing.allocator.free(options);
