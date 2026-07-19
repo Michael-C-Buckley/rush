@@ -709,6 +709,7 @@ pub const State = struct {
         removed.value.deinit(self.allocator);
     }
 
+    /// Pushes a frame that owns copies of its assignment-prefix names.
     pub fn pushLocalFrame(self: *State, assignment_prefixes: []const []const u8) !void {
         var frame: LocalFrame = .{};
         errdefer frame.deinit(self.allocator);
@@ -728,7 +729,7 @@ pub const State = struct {
     /// Map capacity is reserved before any binding is touched, so the
     /// restore itself transfers ownership of the saved strings without
     /// allocating. On OutOfMemory nothing has been mutated and the frame
-    /// remains pushed.
+    /// remains pushed. Requires a matching `pushLocalFrame`.
     pub fn popLocalFrame(self: *State) !void {
         std.debug.assert(self.local_frames.items.len != 0);
         const saved_count = self.local_frames.items[self.local_frames.items.len - 1].saved.count();
@@ -753,6 +754,7 @@ pub const State = struct {
         return self.local_frames.items.len != 0;
     }
 
+    /// Requires an active local frame.
     pub fn hasSavedLocalBinding(self: State, name: []const u8) bool {
         std.debug.assert(self.local_frames.items.len != 0);
         return self.local_frames.items[self.local_frames.items.len - 1].saved.contains(name);
@@ -770,6 +772,7 @@ pub const State = struct {
         integer: bool = false,
     };
 
+    /// Declares a local in the innermost frame, which must already be active.
     pub fn declareLocalWithAttributes(self: *State, declaration: LocalDeclaration) !void {
         const name = declaration.name;
         std.debug.assert(name.len != 0);
@@ -810,6 +813,7 @@ pub const State = struct {
         try self.declareLocalArrayWithAttributes(name, values, .{});
     }
 
+    /// Declares a local array in the innermost active frame.
     pub fn declareLocalArrayWithAttributes(
         self: *State,
         name: []const u8,
@@ -843,6 +847,7 @@ pub const State = struct {
         });
     }
 
+    /// Deep-copies a binding for independent ownership by a saved local frame.
     fn dupeBinding(self: *State, binding: Binding) !Binding {
         const name = try self.allocator.dupe(u8, binding.name);
         errdefer self.allocator.free(name);
@@ -860,6 +865,7 @@ pub const State = struct {
         };
     }
 
+    /// Pushes a frame that borrows the function's name and source name.
     pub fn pushFunctionCall(self: *State, function: Function) !void {
         try self.function_call_stack.append(self.allocator, .{
             .name = function.name,
@@ -867,6 +873,7 @@ pub const State = struct {
         });
     }
 
+    /// Pops the innermost function frame; one must be active.
     pub fn popFunctionCall(self: *State) void {
         std.debug.assert(self.function_call_stack.items.len != 0);
         _ = self.function_call_stack.pop();

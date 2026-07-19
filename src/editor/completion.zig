@@ -14,6 +14,9 @@ pub const Kind = enum {
     plain,
 };
 
+/// Completion payloads are borrowed by matching and application helpers.
+/// Candidate slices passed to `freeCandidates` must instead be deeply owned by
+/// that allocator.
 pub const Candidate = struct {
     value: []const u8,
     display: ?[]const u8 = null,
@@ -119,10 +122,8 @@ pub const Edit = struct {
     append_space: bool = false,
 };
 
-/// Completion application data is owned by the allocator used to build it.
-/// Callers that receive an `Application` must deinitialize it after applying or
-/// discarding it; providers must not store borrowed slices in edit/candidate
-/// payloads unless the specific caller documents a shorter lifetime.
+/// Deeply owned completion application data. Applying it only borrows the
+/// payload; the receiver must call `deinit` afterward.
 pub const Application = union(enum) {
     none,
     edit: Edit,
@@ -140,6 +141,7 @@ pub const Application = union(enum) {
     }
 };
 
+/// Frees the candidate slice and every nested payload with `allocator`.
 pub fn freeCandidates(allocator: std.mem.Allocator, candidates: []Candidate) void {
     for (candidates) |candidate| {
         freeCandidateFields(allocator, candidate);
@@ -173,6 +175,7 @@ fn freeOptionExclusions(allocator: std.mem.Allocator, excludes: []const OptionEx
     allocator.free(excludes);
 }
 
+/// Borrows `candidates` and returns a deep-owned application.
 pub fn applyCandidates(allocator: std.mem.Allocator, candidates: []const Candidate) !Application {
     if (candidates.len == 0) return .none;
     for (candidates) |candidate| {
@@ -431,6 +434,7 @@ pub fn matchPositions(
     return try positions.toOwnedSlice(allocator);
 }
 
+/// Deep-copies candidates for later release with `freeCandidates`.
 pub fn cloneCandidates(allocator: std.mem.Allocator, candidates: []const Candidate) ![]Candidate {
     const cloned = try allocator.alloc(Candidate, candidates.len);
     errdefer allocator.free(cloned);

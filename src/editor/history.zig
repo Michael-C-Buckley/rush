@@ -51,6 +51,7 @@ pub const SearchFilters = packed struct(u3) {
     session: bool = false,
 };
 
+/// Deeply owned request payload, normally transferred through the outbox.
 pub const Request = union(enum) {
     previous: struct { prefix: []const u8, before: ?i64 },
     next: struct { prefix: []const u8, after: i64 },
@@ -71,6 +72,8 @@ pub const Request = union(enum) {
     }
 };
 
+/// Deeply owned callback result. Consumers either call `deinit` or explicitly
+/// transfer contained entries into session-owned state.
 pub const Result = union(enum) {
     entry: ?Entry,
     entries: []Entry,

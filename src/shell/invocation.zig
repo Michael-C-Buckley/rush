@@ -1,4 +1,6 @@
-//! Minimal command-line invocation parsing for the rewrite bootstrap.
+//! Classifies process arguments into interactive, command-string, and script
+//! startup modes while applying shell mode and option flags. Parsed string and
+//! positional slices borrow the original argument vector.
 
 const std = @import("std");
 

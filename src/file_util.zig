@@ -4,6 +4,7 @@ const std = @import("std");
 
 const host = @import("host.zig");
 
+/// Returns the complete file contents owned by `allocator`.
 pub fn readFileAlloc(allocator: std.mem.Allocator, real_host: *host.RealHost, path: []const u8) ![]const u8 {
     const path_z = try allocator.dupeZ(u8, path);
     defer allocator.free(path_z);

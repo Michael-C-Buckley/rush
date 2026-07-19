@@ -87,6 +87,7 @@ pub const DirectoryEntry = struct {
     }
 };
 
+/// Deeply owns the entry slice and every entry name through `allocator`.
 pub const ListDirResult = struct {
     allocator: std.mem.Allocator,
     entries: []const DirectoryEntry,

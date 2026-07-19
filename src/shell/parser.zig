@@ -1,4 +1,7 @@
-//! Minimal parser for the rewrite bootstrap.
+//! Builds executable shell ASTs from lexer output, including expansions,
+//! compound commands, redirections, and here-documents. AST structure uses the
+//! caller's allocator and textual leaves may refer to source or token text, so
+//! source text and allocator-backed lexer text must outlive the AST.
 
 const std = @import("std");
 
@@ -21,6 +24,8 @@ pub const ParseError = error{
 
 const ParserError = std.mem.Allocator.Error || ParseError;
 
+/// Parses a complete token stream into allocator-backed AST storage. The AST
+/// borrows source and token text, but does not retain the token slice itself.
 // ziglint-ignore: Z015 existing public API error set exposure; preserve API
 pub fn parse(
     allocator: std.mem.Allocator,
@@ -30,6 +35,8 @@ pub fn parse(
     return parseWithAliasState(allocator, src, tokens, null);
 }
 
+/// Parses a complete token stream with alias-aware nested parsing. Ownership
+/// and input lifetimes match `parse`.
 // ziglint-ignore: Z015 existing public API error set exposure; preserve API
 pub fn parseWithAliases(
     allocator: std.mem.Allocator,
@@ -40,6 +47,7 @@ pub fn parseWithAliases(
     return parseWithAliasState(allocator, src, tokens, shell_state);
 }
 
+/// Matches `parseWithAliases` ownership while rejecting incomplete here-docs.
 // ziglint-ignore: Z015 existing public API error set exposure; preserve API
 pub fn parseWithAliasesRequiringCompleteHereDocs(
     allocator: std.mem.Allocator,
@@ -50,6 +58,8 @@ pub fn parseWithAliasesRequiringCompleteHereDocs(
     return parseWithAliasStateOptions(allocator, src, tokens, shell_state, .{ .require_complete_here_docs = true });
 }
 
+/// Returns an allocator-backed expansion whose textual parts may borrow
+/// `raw_content`.
 // ziglint-ignore: Z015 existing public API error set exposure; preserve API
 pub fn parseBracedParameterExpansion(
     allocator: std.mem.Allocator,
@@ -61,6 +71,7 @@ pub fn parseBracedParameterExpansion(
     return parser_state.parseBracedParameter(raw_content, span);
 }
 
+/// Returns an allocator-backed word whose textual parts may borrow `text`.
 // ziglint-ignore: Z015 existing public API error set exposure; preserve API
 pub fn parseWordExpansionText(
     allocator: std.mem.Allocator,
@@ -74,7 +85,8 @@ pub fn parseWordExpansionText(
 
 /// Parses parameter expansions from raw text without applying shell quote
 /// semantics. Other expansion forms are skipped as complete units so callers
-/// can preserve them literally.
+/// can preserve them literally. The returned slice is allocator-backed and its
+/// expansion text may borrow `text`.
 // ziglint-ignore: Z015 matches the existing public parse API error set exposure
 pub fn parseParameterExpansionText(
     allocator: std.mem.Allocator,
@@ -187,8 +199,8 @@ pub fn isParseError(err: anyerror) bool {
     };
 }
 
-/// Alias-aware whole-program parse that also reports failure locations
-/// through `ParseOptions.failure`.
+/// Alias-aware whole-program parse that also reports failure locations through
+/// `ParseOptions.failure`; output ownership and lifetimes match `parse`.
 // ziglint-ignore: Z015 matches the existing public parse API error set exposure
 pub fn parseWithAliasesAndOptions(
     allocator: std.mem.Allocator,
@@ -222,10 +234,10 @@ fn parseWithAliasStateOptions(
     };
 }
 
-/// Incremental parser that yields one newline-terminated complete command
-/// per call, so callers can evaluate each command before later input is
-/// parsed. Command boundaries include any here-document bodies that follow
-/// the terminating newline.
+/// Incremental parser that borrows its source and token stream while parsing
+/// and yields allocator-backed, newline-terminated complete commands. Source
+/// and allocator-backed token text must remain valid for every returned AST;
+/// command boundaries include here-document bodies following the newline.
 pub const Incremental = struct {
     parser: Parser,
     started: bool = false,
@@ -264,8 +276,8 @@ pub const Incremental = struct {
         return self.parser.at(.eof);
     }
 
-    /// Parses and returns the next complete command, or null when only
-    /// separators remain before end of input.
+    /// Returns the next allocator-backed command, or null when only separators
+    /// remain. Its textual data follows the source/token-text lifetime of `init`.
     // ziglint-ignore: Z015 matches the existing public parse API error set exposure
     pub fn next(self: *Incremental) ParserError!?ast.Program {
         return self.nextCommand() catch |err| {

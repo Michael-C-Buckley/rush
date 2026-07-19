@@ -1,4 +1,7 @@
-//! Minimal lexer for the rewrite bootstrap.
+//! Tokenizes shell source, records display trivia, and expands command-position
+//! aliases. Token storage uses the caller's allocator, while token text usually
+//! refers into the source; normalized words and here-document bodies may use
+//! allocator-backed text instead.
 
 const std = @import("std");
 
@@ -8,6 +11,9 @@ const token = @import("token.zig");
 
 pub const LexError = error{};
 
+/// Returns allocator-backed token storage. `src.text` must remain valid while
+/// the tokens are used; use an arena when normalized token text also needs to
+/// be reclaimed with the token stream.
 pub fn lex(allocator: std.mem.Allocator, src: source_mod.Source) std.mem.Allocator.Error![]const token.Token {
     src.validate();
     var lexer: Lexer = .{ .allocator = allocator, .source = src, .position = .{ .source_id = src.id } };
@@ -37,8 +43,8 @@ pub const Trivia = struct {
     end: usize,
 };
 
-/// Lexes like `lex` while also collecting display trivia into `trivia`,
-/// allocated with `allocator`. Token output is identical to `lex`.
+/// Lexes like `lex` while also appending allocator-backed display trivia to
+/// `trivia`. Token output has the same ownership and source lifetime as `lex`.
 pub fn lexWithTrivia(
     allocator: std.mem.Allocator,
     src: source_mod.Source,
@@ -54,6 +60,9 @@ pub fn lexWithTrivia(
     return lexer.lex();
 }
 
+/// Alias-expanded source and its token stream. The returned values may borrow
+/// `src`; replacement text and token storage use the supplied allocator and
+/// must remain alive together.
 pub const AliasLexResult = struct {
     source: source_mod.Source,
     tokens: []const token.Token,
@@ -73,6 +82,8 @@ const AliasExpansion = struct {
     active_alias_spans: []const ActiveAliasSpan,
 };
 
+/// Returns allocator-backed tokens for the effective alias-expanded source.
+/// Token text may borrow `src` or allocator-backed replacement text.
 pub fn lexWithAliases(
     allocator: std.mem.Allocator,
     src: source_mod.Source,
@@ -81,6 +92,9 @@ pub fn lexWithAliases(
     return (try lexWithAliasesSource(allocator, src, shell_state)).tokens;
 }
 
+/// Returns the effective source together with tokens whose text refers to it.
+/// Keep both values, the input source, and allocator-backed alias replacements
+/// alive until parsing and AST use are complete.
 pub fn lexWithAliasesSource(
     allocator: std.mem.Allocator,
     src: source_mod.Source,

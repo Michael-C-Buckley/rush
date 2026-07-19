@@ -1,4 +1,6 @@
-//! Cooperative driver pieces for the future terminal line editor.
+//! Drives production interactive line editing: terminal setup and restoration,
+//! event-loop dispatch, signal and child handling, prompt refresh, completion,
+//! history, external-editor requests, and incremental frame rendering.
 
 const Self = @This();
 

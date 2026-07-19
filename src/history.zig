@@ -11,6 +11,8 @@ const shell_source = @import("shell/source.zig");
 
 const ExitStatus = u8;
 
+/// Query result whose command text is owned by the allocator supplied to the
+/// query or callback. Returned entry slices are separately owned by it.
 pub const HistoryEntry = struct {
     number: i64,
     command: []const u8,
@@ -30,6 +32,9 @@ pub const DirectoryHistory = struct {
     }
 };
 
+/// Shell history callback interface. `list` and `search` return deeply owned
+/// entry slices; `jump` returns an owned path; `directories` returns a deeply
+/// owned result. Each uses the allocator passed to that callback.
 pub const CommandHistory = struct {
     context: *anyopaque,
     io: std.Io,
@@ -265,6 +270,7 @@ pub const History = struct {
         return queryHistoryEntryByNumber(allocator, self.db, number);
     }
 
+    /// Returns a deeply owned entry slice allocated by `allocator`.
     pub fn fcEntries(self: *History, allocator: std.mem.Allocator) ![]HistoryEntry {
         return queryFcHistoryEntries(
             allocator,
@@ -274,8 +280,9 @@ pub const History = struct {
         );
     }
 
-    /// Case-insensitive substring search over stored commands, newest-bounded,
-    /// without duplicate hiding: deletion needs every matching row visible.
+    /// Returns a deeply owned entry slice for a case-insensitive substring
+    /// search. Results are newest-bounded without duplicate hiding because
+    /// deletion needs every matching row visible.
     pub fn searchEntries(self: *History, allocator: std.mem.Allocator, text: []const u8) ![]HistoryEntry {
         return queryHistoryEntriesContaining(
             allocator,
@@ -329,6 +336,7 @@ pub const History = struct {
         return queryHistorySuggestion(allocator, self.db, prefix, cwd, session_id, previous_command);
     }
 
+    /// Returns command text owned by `allocator`.
     pub fn latestCommand(
         self: *History,
         allocator: std.mem.Allocator,

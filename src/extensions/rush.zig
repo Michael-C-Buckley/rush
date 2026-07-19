@@ -49,6 +49,8 @@ pub const CompletionParsedOperand = struct {
     index: usize,
 };
 
+/// Borrows parsed completion inputs and deeply owns candidates appended by
+/// `rush_complete` until they are taken or the context is deinitialized.
 pub const CompletionContext = struct {
     allocator: std.mem.Allocator,
     prefix: []const u8,
@@ -94,6 +96,8 @@ pub const CompletionContext = struct {
         self.* = undefined;
     }
 
+    /// Transfers the deeply owned candidates to the caller, which must release
+    /// them with `completion.freeCandidates`.
     pub fn takeCandidates(self: *CompletionContext) ![]completion.Candidate {
         const candidates = try self.candidates.toOwnedSlice(self.allocator);
         self.candidates = .empty;

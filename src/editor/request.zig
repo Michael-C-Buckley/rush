@@ -7,6 +7,7 @@ const path = @import("path.zig");
 pub const HistoryRequest = history.Request;
 pub const HistoryResult = history.Result;
 
+/// Owned request payload; ownership follows the containing `LineRequest`.
 pub const ExternalEditorRequest = struct {
     text: []const u8,
     number: ?usize = null,
@@ -25,6 +26,7 @@ pub const Kind = enum {
     history,
 };
 
+/// Request payloads are deeply owned and released by `deinit` unless moved.
 pub const LineRequest = union(Kind) {
     refresh_prompt,
     clear_screen,
@@ -46,6 +48,7 @@ pub const LineRequest = union(Kind) {
     }
 };
 
+/// Owns at most one request of each kind.
 pub const Outbox = struct {
     items: [@typeInfo(Kind).@"enum".fields.len]LineRequest = undefined,
     len: usize = 0,
@@ -55,6 +58,7 @@ pub const Outbox = struct {
         self.* = undefined;
     }
 
+    /// Takes ownership of `request`, replacing and freeing the same kind.
     pub fn put(self: *Outbox, allocator: std.mem.Allocator, request: LineRequest) void {
         const kind = std.meta.activeTag(request);
         for (self.items[0..self.len]) |*existing| {
@@ -68,6 +72,7 @@ pub const Outbox = struct {
         self.len += 1;
     }
 
+    /// Removes a request and transfers its payload ownership to the caller.
     pub fn take(self: *Outbox, kind: Kind) ?LineRequest {
         for (self.items[0..self.len], 0..) |request, index| {
             if (std.meta.activeTag(request) != kind) continue;
@@ -78,6 +83,7 @@ pub const Outbox = struct {
         return null;
     }
 
+    /// Removes and deeply frees a request of `kind`, if present.
     pub fn clear(self: *Outbox, allocator: std.mem.Allocator, kind: Kind) void {
         const request = self.take(kind) orelse return;
         request.deinit(allocator);

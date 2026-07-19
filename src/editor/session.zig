@@ -161,6 +161,10 @@ pub const MouseClick = struct {
     menu_presentation: MenuPresentation = .{},
 };
 
+/// Owns editable state, copied prompts, queued requests, accepted history and
+/// completion data, and any submitted line until `takeSubmittedLine`.
+/// `HistoryView` callback context and static entries remain caller-owned and
+/// must outlive the session.
 pub const LineSession = struct {
     allocator: std.mem.Allocator,
     prompt: Prompt,
@@ -219,6 +223,7 @@ pub const LineSession = struct {
         return initWithEditingMode(allocator, prompt, history, .emacs);
     }
 
+    /// Copies `prompt.bytes`; borrows `history` callback context and entries.
     pub fn initWithEditingMode(
         allocator: std.mem.Allocator,
         prompt: Prompt,
@@ -850,6 +855,7 @@ pub const LineSession = struct {
         self.completion_menu.clear(self.allocator);
     }
 
+    /// Transfers ownership of the queued request to the caller.
     pub fn takePathExpansionRequest(self: *LineSession) ?PathExpansionRequest {
         return switch (self.requests.take(.path_expansion) orelse return null) {
             .path_expansion => |request| request,
@@ -861,6 +867,7 @@ pub const LineSession = struct {
         self.requests.clear(self.allocator, .path_expansion);
     }
 
+    /// Borrows the request and matches for the duration of the call.
     pub fn applyPathExpansion(self: *LineSession, request: PathExpansionRequest, matches: PathExpansionMatches) !bool {
         if (request.command == .list or matches.items.len == 0) return false;
         const replacement = switch (request.command) {
@@ -896,6 +903,7 @@ pub const LineSession = struct {
         return .{ .id = @intCast(index), .text = try self.allocator.dupe(u8, self.history.entries[index]) };
     }
 
+    /// Transfers ownership of the queued request to the caller.
     pub fn takeExternalEditorRequest(self: *LineSession) ?ExternalEditorRequest {
         return switch (self.requests.take(.external_editor) orelse return null) {
             .external_editor => |request| request,
@@ -903,6 +911,7 @@ pub const LineSession = struct {
         };
     }
 
+    /// Copies `text` into the edit buffer and an owned submitted line.
     pub fn acceptExternalEditorResult(self: *LineSession, text: []const u8) !void {
         self.completion_menu.clear(self.allocator);
         try self.editor.buffer.replace(text);
@@ -1290,6 +1299,7 @@ pub const LineSession = struct {
         try self.feedViMacroBytes(bytes);
     }
 
+    /// Transfers ownership of the queued request to the caller.
     pub fn takeHistoryRequest(self: *LineSession) ?HistoryRequest {
         return switch (self.requests.take(.history) orelse return null) {
             .history => |request| request,
@@ -1297,6 +1307,7 @@ pub const LineSession = struct {
         };
     }
 
+    /// Borrows `request` and consumes the deeply owned `result`.
     pub fn applyHistoryResult(self: *LineSession, request: HistoryRequest, result: HistoryResult) !void {
         switch (request) {
             .previous => |previous| try self.applyPreviousHistoryResult(
@@ -1921,6 +1932,7 @@ pub const LineSession = struct {
         return self.requests.take(.refresh_prompt) != null;
     }
 
+    /// Copies the prompt bytes before replacing the session-owned prompt.
     pub fn replacePrompt(self: *LineSession, prompt: Prompt) !void {
         const bytes = try self.allocator.dupe(u8, prompt.bytes);
         self.allocator.free(self.prompt.bytes);
@@ -1931,6 +1943,7 @@ pub const LineSession = struct {
         self.requests.clear(self.allocator, .refresh_prompt);
     }
 
+    /// Copies the prompt bytes before replacing the session-owned prompt.
     pub fn replaceRightPrompt(self: *LineSession, prompt: Prompt) !void {
         const bytes = try self.allocator.dupe(u8, prompt.bytes);
         if (self.right_prompt.bytes.len != 0) self.allocator.free(self.right_prompt.bytes);
@@ -1940,6 +1953,7 @@ pub const LineSession = struct {
         };
     }
 
+    /// Borrows `application`; the caller remains responsible for its `deinit`.
     pub fn applyCompletion(self: *LineSession, application: completion.Application) !void {
         switch (application) {
             .edit => |edit| {
@@ -2051,6 +2065,7 @@ pub const LineSession = struct {
         }
     }
 
+    /// Returns a deeply owned frame that the caller must deinitialize.
     pub fn renderFrame(self: *LineSession, allocator: std.mem.Allocator, options: RenderOptions) !Frame {
         var render_options = options;
         var suggestion_suffix: ?[]const u8 = null;
@@ -2149,12 +2164,14 @@ pub const LineSession = struct {
         };
     }
 
+    /// Returns serialized frame bytes owned by `allocator`.
     pub fn render(self: *LineSession, allocator: std.mem.Allocator, options: RenderOptions) ![]const u8 {
         var frame = try self.renderFrame(allocator, options);
         defer frame.deinit(allocator);
         return serializeFullFrame(allocator, frame, options.synchronized_output);
     }
 
+    /// Transfers ownership of the submitted line to the caller.
     pub fn takeSubmittedLine(self: *LineSession) ?[]const u8 {
         const line = self.submitted_line orelse return null;
         self.submitted_line = null;
