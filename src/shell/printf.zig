@@ -5,6 +5,7 @@
 //! routing the resulting stdout/stderr bytes to the active execution frame.
 
 const std = @import("std");
+const printf_number = @import("printf_number.zig");
 
 pub const ExitStatus = u8;
 const Writer = std.Io.Writer;
@@ -919,49 +920,14 @@ fn lowerHexDigit(value: u8) u8 {
     return if (value < 10) '0' + value else 'a' + (value - 10);
 }
 
-const PrintfIntegerConstant = struct {
-    magnitude: u64,
-    negative: bool = false,
-    complete: bool = true,
-    overflow: bool = false,
-};
-
-const PrintfMagnitude = struct {
-    value: u64,
-    overflow: bool = false,
-};
-
-const PrintfSignedValue = struct {
-    value: i64,
-    overflow: bool = false,
-};
-
-const PrintfUnsignedValue = struct {
-    value: u64,
-    overflow: bool = false,
-};
-
 fn parsePrintfSigned(
     stderr: *Writer,
     status: *ExitStatus,
     arg: []const u8,
 ) !i64 {
-    const parsed = parsePrintfIntegerConstant(arg) catch |err| switch (err) {
-        error.InvalidCharacter => {
-            try printfNumericDiagnostic(stderr, status);
-            return 0;
-        },
-        error.Overflow => {
-            try printfNumericDiagnostic(stderr, status);
-            return 0;
-        },
-    };
-    const converted = printfSignedValue(parsed);
-    if (!parsed.complete or converted.overflow) try printfNumericDiagnostic(
-        stderr,
-        status,
-    );
-    return converted.value;
+    const parsed = printf_number.parseSigned(arg);
+    if (parsed.diagnostic_required) try printfNumericDiagnostic(stderr, status);
+    return parsed.value;
 }
 
 fn parsePrintfUnsigned(
@@ -969,107 +935,9 @@ fn parsePrintfUnsigned(
     status: *ExitStatus,
     arg: []const u8,
 ) !u64 {
-    const parsed = parsePrintfIntegerConstant(arg) catch |err| switch (err) {
-        error.InvalidCharacter => {
-            try printfNumericDiagnostic(stderr, status);
-            return 0;
-        },
-        error.Overflow => {
-            try printfNumericDiagnostic(stderr, status);
-            return 0;
-        },
-    };
-    const converted = printfUnsignedValue(parsed);
-    if (!parsed.complete or converted.overflow) try printfNumericDiagnostic(
-        stderr,
-        status,
-    );
-    return converted.value;
-}
-
-fn printfSignedValue(parsed: PrintfIntegerConstant) PrintfSignedValue {
-    if (!parsed.negative) {
-        if (parsed.magnitude > std.math.maxInt(i64)) return .{ .value = std.math.maxInt(i64), .overflow = true };
-        return .{ .value = @intCast(parsed.magnitude), .overflow = parsed.overflow };
-    }
-    const max_plus_one = @as(u64, @intCast(std.math.maxInt(i64))) + 1;
-    if (parsed.magnitude == max_plus_one) return .{ .value = std.math.minInt(i64), .overflow = parsed.overflow };
-    if (parsed.magnitude > max_plus_one) return .{ .value = std.math.minInt(i64), .overflow = true };
-    return .{ .value = -@as(i64, @intCast(parsed.magnitude)), .overflow = parsed.overflow };
-}
-
-fn printfUnsignedValue(parsed: PrintfIntegerConstant) PrintfUnsignedValue {
-    if (!parsed.negative) return .{ .value = parsed.magnitude, .overflow = parsed.overflow };
-    if (parsed.overflow) return .{ .value = std.math.maxInt(u64), .overflow = true };
-    return .{ .value = (~parsed.magnitude) +% 1 };
-}
-
-fn parsePrintfMagnitude(text: []const u8, base: u8) !PrintfMagnitude {
-    const value = std.fmt.parseInt(u64, text, base) catch |err| switch (err) {
-        error.Overflow => return .{ .value = std.math.maxInt(u64), .overflow = true },
-        else => return err,
-    };
-    return .{ .value = value };
-}
-
-fn skipPrintfIntegerWhitespace(arg: []const u8, cursor: *usize) void {
-    while (cursor.* < arg.len and std.ascii.isWhitespace(arg[cursor.*])) : (cursor.* += 1) {}
-}
-
-fn printfIntegerParseComplete(arg: []const u8, cursor: usize) bool {
-    var trailing = cursor;
-    skipPrintfIntegerWhitespace(arg, &trailing);
-    return trailing == arg.len;
-}
-
-fn parsePrintfIntegerConstant(arg: []const u8) !PrintfIntegerConstant {
-    if (arg.len == 0) return .{ .magnitude = 0 };
-    if (arg[0] == '\'' or arg[0] == '"') return .{
-        .magnitude = if (arg.len > 1) arg[1] else 0,
-        .complete = arg.len <= 2,
-    };
-
-    var cursor: usize = 0;
-    skipPrintfIntegerWhitespace(arg, &cursor);
-    if (cursor >= arg.len) return error.InvalidCharacter;
-
-    var negative = false;
-    if (arg[cursor] == '+' or arg[cursor] == '-') {
-        negative = arg[cursor] == '-';
-        cursor += 1;
-    }
-    if (cursor >= arg.len or !std.ascii.isDigit(arg[cursor])) return error.InvalidCharacter;
-
-    const digits_start: usize = cursor;
-    var base: u8 = 10;
-    if (arg[cursor] == '0') {
-        base = 8;
-        cursor += 1;
-        if (cursor < arg.len and (arg[cursor] == 'x' or arg[cursor] == 'X')) {
-            base = 16;
-            cursor += 1;
-            const hex_start = cursor;
-            while (cursor < arg.len and std.ascii.isHex(arg[cursor])) : (cursor += 1) {}
-            if (cursor == hex_start) return .{ .magnitude = 0, .negative = negative, .complete = false };
-            const magnitude = try parsePrintfMagnitude(arg[hex_start..cursor], base);
-            return .{
-                .magnitude = magnitude.value,
-                .negative = negative,
-                .complete = printfIntegerParseComplete(arg, cursor),
-                .overflow = magnitude.overflow,
-            };
-        }
-        while (cursor < arg.len and arg[cursor] >= '0' and arg[cursor] <= '7') : (cursor += 1) {}
-    } else {
-        while (cursor < arg.len and std.ascii.isDigit(arg[cursor])) : (cursor += 1) {}
-    }
-    const magnitude = try parsePrintfMagnitude(arg[digits_start..cursor], base);
-    return .{
-        .magnitude = magnitude.value,
-        .negative = negative,
-        .complete = printfIntegerParseComplete(arg, cursor),
-        .overflow = magnitude.overflow,
-    };
+    const parsed = printf_number.parseUnsigned(arg);
+    if (parsed.diagnostic_required) try printfNumericDiagnostic(stderr, status);
+    return parsed.value;
 }
 
 fn parsePrintfFloat(
@@ -1077,26 +945,9 @@ fn parsePrintfFloat(
     status: *ExitStatus,
     arg: []const u8,
 ) !f64 {
-    const trimmed = trimPrintfFloatWhitespace(arg);
-    if (trimmed.len == 0) return 0;
-    if (std.fmt.parseFloat(f64, trimmed)) |value| return value else |_| {}
-    var end = trimmed.len;
-    while (end > 0) : (end -= 1) {
-        if (std.fmt.parseFloat(f64, trimmed[0..end])) |value| {
-            try printfDiagnostic(stderr, status, "numeric argument required");
-            return value;
-        } else |_| {}
-    }
-    try printfDiagnostic(stderr, status, "numeric argument required");
-    return 0;
-}
-
-fn trimPrintfFloatWhitespace(arg: []const u8) []const u8 {
-    var start: usize = 0;
-    while (start < arg.len and std.ascii.isWhitespace(arg[start])) : (start += 1) {}
-    var end = arg.len;
-    while (end > start and std.ascii.isWhitespace(arg[end - 1])) : (end -= 1) {}
-    return arg[start..end];
+    const parsed = printf_number.parseFloat(arg);
+    if (parsed.diagnostic_required) try printfNumericDiagnostic(stderr, status);
+    return parsed.value;
 }
 
 fn appendPrintfEscapedString(
