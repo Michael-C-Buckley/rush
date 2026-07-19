@@ -17,4 +17,6 @@ else
 fi
 
 "$mise_bin" install --yes
+zig_global_cache_dir="${ZIG_GLOBAL_CACHE_DIR:-${XDG_CACHE_HOME:-$HOME/.cache}/zig}"
+mkdir -p "$zig_global_cache_dir/tmp"
 "$mise_bin" exec --yes -- zig build --fetch=all
