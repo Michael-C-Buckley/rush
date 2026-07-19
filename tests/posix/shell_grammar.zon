@@ -290,6 +290,15 @@
             .status_match = .nonzero,
         },
         .{
+            .name = "list rejects missing separator before subshell",
+            .script =
+            \\printf 'bad\n' (printf 'also-bad\n')
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status_match = .nonzero,
+        },
+        .{
             .name = "sequential list rejects missing command after separator",
             .script =
             \\printf 'bad\n' ; && printf 'nope\n'

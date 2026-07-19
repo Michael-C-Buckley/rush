@@ -308,6 +308,7 @@ pub const Incremental = struct {
                 // Bodies delimited by end of input arrive without a newline.
                 try p.parsePendingHereDocs();
             }
+            if (terminator == null and !p.at(.eof)) return error.UnexpectedToken;
             try entries.append(p.allocator, .{ .and_or = and_or, .terminator = terminator });
             if (complete) break;
         }
@@ -384,6 +385,7 @@ const Parser = struct {
                 // Bodies delimited by end of input arrive without a newline.
                 try self.parsePendingHereDocs();
             }
+            if (terminator == null and !self.atListEnd(end_kind)) return error.UnexpectedToken;
             try entries.append(self.allocator, .{ .and_or = and_or, .terminator = terminator });
         }
 
@@ -2665,6 +2667,27 @@ test "incremental parser yields one complete command per call" {
     try std.testing.expectEqual(src.text.len, incremental.nextOffset());
 
     try std.testing.expectEqual(@as(?ast.Program, null), try incremental.next());
+}
+
+test "parsers reject adjacent commands without a list separator" {
+    var arena = std.heap.ArenaAllocator.init(std.testing.allocator);
+    defer arena.deinit();
+    const allocator = arena.allocator();
+    var shell_state = state_mod.State.init(std.testing.allocator, .{});
+    defer shell_state.deinit();
+
+    const src: source_mod.Source = .{
+        .id = 1,
+        .kind = .command_string,
+        .name = "-c",
+        .text = "printf bad (printf nope)",
+    };
+    const tokens = try lexer.lex(allocator, src);
+
+    try std.testing.expectError(error.UnexpectedToken, parse(allocator, src, tokens));
+
+    var incremental: Incremental = .init(allocator, src, tokens, shell_state);
+    try std.testing.expectError(error.UnexpectedToken, incremental.next());
 }
 
 test "incremental parser consumes here-document bodies within command boundaries" {
