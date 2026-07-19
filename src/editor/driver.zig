@@ -2,8 +2,6 @@
 //! event-loop dispatch, signal and child handling, prompt refresh, completion,
 //! history, external-editor requests, and incremental frame rendering.
 
-const Self = @This();
-
 const std = @import("std");
 const builtin = @import("builtin");
 const vaxis = @import("vaxis");

@@ -1,7 +1,5 @@
 //! Terminal-independent editor session core.
 
-const Self = @This();
-
 const std = @import("std");
 const edit_buffer = @import("buffer.zig");
 const completion = @import("completion.zig");
