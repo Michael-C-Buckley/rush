@@ -2,7 +2,6 @@
 
 const std = @import("std");
 const zig_builtin = @import("builtin");
-const uucode = @import("uucode");
 
 const ast = @import("ast.zig");
 const ast_copy = @import("ast_copy.zig");
@@ -11,6 +10,7 @@ const editor_render = @import("../editor/render.zig");
 const history_mod = @import("../history.zig");
 const host_mod = @import("../host.zig");
 const lexer = @import("lexer.zig");
+const pattern_mod = @import("pattern.zig");
 const parser = @import("parser.zig");
 const result = @import("result.zig");
 const source_mod = @import("source.zig");
@@ -1028,8 +1028,11 @@ fn evalConditionalComparison(shell: anytype, comparison: ast.ConditionalComparis
     }
 
     const matched = switch (comparison.operator) {
-        .equal => if (comparison.right.quoted) std.mem.eql(u8, left, right) else patternMatches(right, left),
-        .not_equal => if (comparison.right.quoted) !std.mem.eql(u8, left, right) else !patternMatches(right, left),
+        .equal => if (comparison.right.quoted) std.mem.eql(u8, left, right) else pattern_mod.matchesText(right, left),
+        .not_equal => if (comparison.right.quoted)
+            !std.mem.eql(u8, left, right)
+        else
+            !pattern_mod.matchesText(right, left),
         .less => std.mem.order(u8, left, right) == .lt,
         .greater => std.mem.order(u8, left, right) == .gt,
         .integer_equal,
@@ -1577,7 +1580,7 @@ fn evalCase(shell: anytype, command: ast.CaseCommand) EvalError!result.EvalResul
 fn caseArmMatches(shell: anytype, arm: ast.CaseArm, word: []const u8) EvalError!bool {
     for (arm.patterns) |pattern_word| {
         const pattern = try expandPatternWord(shell, pattern_word);
-        if (patternMatches(pattern, word)) return true;
+        if (pattern_mod.matchesText(pattern, word)) return true;
     }
     return false;
 }
@@ -5641,28 +5644,14 @@ fn appendMaybePathnameExpandedField(
     try appendPathnameExpandedField(shell, fields, field);
 }
 
-const PathnamePattern = struct {
-    text: []const u8,
-    special: ?[]const bool = null,
-
-    fn slice(self: PathnamePattern, start: usize, end: usize) PathnamePattern {
-        return .{
-            .text = self.text[start..end],
-            .special = if (self.special) |special| special[start..end] else null,
-        };
-    }
-
-    fn byteIsSpecial(self: PathnamePattern, index: usize) bool {
-        return self.special == null or self.special.?[index];
-    }
-};
+const PathnamePattern = pattern_mod.Pattern;
 
 fn appendPathnameExpandedField(shell: anytype, fields: *std.ArrayList([]const u8), field: []const u8) !void {
     try appendPathnameExpandedPattern(shell, fields, .{ .text = field });
 }
 
 fn appendPathnameExpandedPattern(shell: anytype, fields: *std.ArrayList([]const u8), pattern: PathnamePattern) !void {
-    if (shell.state.options.noglob or !containsPatternMeta(pattern)) {
+    if (shell.state.options.noglob or !pattern_mod.containsMeta(pattern)) {
         try fields.append(shell.scratchAllocator(), pattern.text);
         return;
     }
@@ -5717,7 +5706,7 @@ fn finalPathnamePattern(pattern: PathnamePattern) ?FinalPathnamePattern {
         if (index == pattern.text.len - 1) return null;
         const prefix_end = if (index == 0) 1 else index;
         const prefix = pattern.slice(0, prefix_end);
-        if (containsPatternMeta(prefix)) return null;
+        if (pattern_mod.containsMeta(prefix)) return null;
         const component = pattern.slice(index + 1, pattern.text.len);
         return .{ .prefix = prefix.text, .component = component };
     }
@@ -5750,7 +5739,7 @@ fn expandPathnamePattern(
         return;
     }
 
-    if (!containsPatternMeta(component)) {
+    if (!pattern_mod.containsMeta(component)) {
         const candidate = try joinPathComponent(allocator, prefix, component.text);
         if (trailing_slash) {
             if (try pathIsDirectory(shell, candidate, .other)) {
@@ -5772,7 +5761,7 @@ fn expandPathnamePattern(
         if (std.mem.eql(u8, entry.name, ".")) saw_dot = true;
         if (std.mem.eql(u8, entry.name, "..")) saw_dotdot = true;
         if (entry.name[0] == '.' and component.text[0] != '.') continue;
-        if (!globMatches(component, entry.name)) continue;
+        if (!pattern_mod.matches(component, entry.name)) continue;
 
         const candidate = try joinPathComponent(allocator, prefix, entry.name);
         if (trailing_slash) {
@@ -5825,12 +5814,12 @@ fn appendMatchingEntryNames(
         if (std.mem.eql(u8, entry.name, ".")) saw_dot = true;
         if (std.mem.eql(u8, entry.name, "..")) saw_dotdot = true;
         if (entry.name[0] == '.' and component.text[0] != '.') continue;
-        if (!globMatches(component, entry.name)) continue;
+        if (!pattern_mod.matches(component, entry.name)) continue;
         try names.append(allocator, entry.name);
     }
     if (component.text[0] == '.') {
-        if (!saw_dot and globMatches(component, ".")) try names.append(allocator, ".");
-        if (!saw_dotdot and globMatches(component, "..")) try names.append(allocator, "..");
+        if (!saw_dot and pattern_mod.matches(component, ".")) try names.append(allocator, ".");
+        if (!saw_dotdot and pattern_mod.matches(component, "..")) try names.append(allocator, "..");
     }
 }
 
@@ -5845,7 +5834,7 @@ fn appendSyntheticDotPathnameMatch(
     trailing_slash: bool,
     entry_name: []const u8,
 ) error{OutOfMemory}!void {
-    if (!globMatches(component, entry_name)) return;
+    if (!pattern_mod.matches(component, entry_name)) return;
     const candidate = try joinPathComponent(allocator, prefix, entry_name);
     if (trailing_slash) {
         try matches.append(allocator, try std.fmt.allocPrint(allocator, "{s}/", .{candidate}));
@@ -5882,323 +5871,6 @@ fn pathIsDirectory(shell: anytype, path: []const u8, kind: host_mod.FileKind) !b
 
 fn stringLessThan(_: void, lhs: []const u8, rhs: []const u8) bool {
     return std.mem.lessThan(u8, lhs, rhs);
-}
-
-fn containsPatternMeta(pattern: PathnamePattern) bool {
-    var index: usize = 0;
-    while (index < pattern.text.len) : (index += utf8SequenceLength(pattern.text[index..])) {
-        const byte = pattern.text[index];
-        if (!pattern.byteIsSpecial(index)) continue;
-        if (byte == '*' or byte == '?') return true;
-        if (byte == '[' and bracketExpressionEnd(pattern, index) != null) return true;
-    }
-    return false;
-}
-
-fn globMatches(pattern: PathnamePattern, text: []const u8) bool {
-    if (simpleStarGlobMatches(pattern, text)) |matches| return matches;
-
-    var pattern_index: usize = 0;
-    var text_index: usize = 0;
-    var star_pattern_index: ?usize = null;
-    var star_text_index: ?usize = null;
-
-    while (true) {
-        if (pattern_index < pattern.text.len and pattern.byteIsSpecial(pattern_index) and
-            pattern.text[pattern_index] == '*')
-        {
-            pattern_index = skipConsecutiveStars(pattern, pattern_index);
-            star_pattern_index = pattern_index;
-            star_text_index = text_index;
-            continue;
-        }
-
-        if (pattern_index == pattern.text.len) {
-            if (text_index == text.len) return true;
-            if (backtrackGlobStar(star_pattern_index, &star_text_index, text)) |next_text| {
-                pattern_index = star_pattern_index.?;
-                text_index = next_text;
-                continue;
-            }
-            return false;
-        }
-
-        if (matchGlobAtom(pattern, pattern_index, text, text_index)) |matched| {
-            pattern_index = matched.pattern_index;
-            text_index = matched.text_index;
-            continue;
-        }
-
-        if (backtrackGlobStar(star_pattern_index, &star_text_index, text)) |next_text| {
-            pattern_index = star_pattern_index.?;
-            text_index = next_text;
-            continue;
-        }
-        return false;
-    }
-}
-
-fn simpleStarGlobMatches(pattern: PathnamePattern, text: []const u8) ?bool {
-    var star_start: ?usize = null;
-    var star_end: usize = 0;
-    var index: usize = 0;
-    while (index < pattern.text.len) : (index += 1) {
-        if (!pattern.byteIsSpecial(index)) continue;
-        switch (pattern.text[index]) {
-            '*' => {
-                if (star_start != null and index != star_end) return null;
-                if (star_start == null) star_start = index;
-                star_end = index + 1;
-            },
-            '?', '[', '\\' => return null,
-            else => {},
-        }
-    }
-
-    const star = star_start orelse return std.mem.eql(u8, pattern.text, text);
-    const prefix = pattern.text[0..star];
-    const suffix = pattern.text[star_end..];
-    return text.len >= prefix.len + suffix.len and
-        std.mem.startsWith(u8, text, prefix) and
-        std.mem.endsWith(u8, text, suffix);
-}
-
-fn skipConsecutiveStars(pattern: PathnamePattern, start: usize) usize {
-    // ziglint-ignore: Z016 compound assert documents a single invariant; preserve readability
-    std.debug.assert(pattern.byteIsSpecial(start) and pattern.text[start] == '*');
-    var index = start + 1;
-    while (index < pattern.text.len and pattern.byteIsSpecial(index) and pattern.text[index] == '*') {
-        index += 1;
-    }
-    return index;
-}
-
-fn backtrackGlobStar(star_pattern_index: ?usize, star_text_index: *?usize, text: []const u8) ?usize {
-    _ = star_pattern_index orelse return null;
-    const previous_text = star_text_index.*.?;
-    if (previous_text == text.len) return null;
-    const next_text = previous_text + utf8SequenceLength(text[previous_text..]);
-    star_text_index.* = next_text;
-    return next_text;
-}
-
-const GlobAtomMatch = struct {
-    pattern_index: usize,
-    text_index: usize,
-};
-
-fn matchGlobAtom(pattern: PathnamePattern, pattern_index: usize, text: []const u8, text_index: usize) ?GlobAtomMatch {
-    // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-    if (pattern.byteIsSpecial(pattern_index) and pattern.text[pattern_index] == '\\' and pattern_index + 1 < pattern.text.len) {
-        if (text_index == text.len) return null;
-        const pattern_len = utf8SequenceLength(pattern.text[pattern_index + 1 ..]);
-        if (pattern_index + 1 + pattern_len > pattern.text.len or text_index + pattern_len > text.len) return null;
-        if (!std.mem.eql(u8, pattern.text[pattern_index + 1 ..][0..pattern_len], text[text_index..][0..pattern_len])) {
-            return null;
-        }
-        return .{ .pattern_index = pattern_index + 1 + pattern_len, .text_index = text_index + pattern_len };
-    }
-    if (text_index == text.len) return null;
-    const text_len = utf8SequenceLength(text[text_index..]);
-    if (pattern.byteIsSpecial(pattern_index) and pattern.text[pattern_index] == '?') {
-        return .{ .pattern_index = pattern_index + 1, .text_index = text_index + text_len };
-    }
-    if (pattern.byteIsSpecial(pattern_index) and pattern.text[pattern_index] == '[') {
-        if (bracketExpressionMatches(pattern, pattern_index, text[text_index..][0..text_len])) |matched| {
-            if (!matched.matched) return null;
-            return .{ .pattern_index = matched.end, .text_index = text_index + text_len };
-        }
-    }
-    const pattern_len = utf8SequenceLength(pattern.text[pattern_index..]);
-    if (pattern_index + pattern_len > pattern.text.len or text_index + pattern_len > text.len) return null;
-    if (!std.mem.eql(u8, pattern.text[pattern_index..][0..pattern_len], text[text_index..][0..pattern_len])) {
-        return null;
-    }
-    return .{ .pattern_index = pattern_index + pattern_len, .text_index = text_index + pattern_len };
-}
-
-const BracketMatch = struct {
-    matched: bool,
-    end: usize,
-};
-
-fn bracketExpressionMatches(pattern: PathnamePattern, start: usize, character: []const u8) ?BracketMatch {
-    std.debug.assert(pattern.text[start] == '[');
-    var index = start + 1;
-    var negated = false;
-    if (index < pattern.text.len and (pattern.text[index] == '!' or pattern.text[index] == '^')) {
-        negated = true;
-        index += 1;
-    }
-    var matched = false;
-    var saw_member = false;
-    while (index < pattern.text.len) {
-        if (pattern.byteIsSpecial(index) and pattern.text[index] == '\\' and index + 1 < pattern.text.len) {
-            index += 1;
-            const member_len = utf8SequenceLength(pattern.text[index..]);
-            if (index + member_len > pattern.text.len) return null;
-            const member = pattern.text[index..][0..member_len];
-            index += member_len;
-            saw_member = true;
-            matched = matched or std.mem.eql(u8, member, character);
-            continue;
-        }
-        if (pattern.text[index] == ']' and saw_member) break;
-        if (bracketNamedExpression(pattern.text, &index)) |named| {
-            saw_member = true;
-            matched = matched or bracketNamedExpressionMatches(named, character);
-            continue;
-        }
-        const member_len = utf8SequenceLength(pattern.text[index..]);
-        if (index + member_len > pattern.text.len) return null;
-        const member = pattern.text[index..][0..member_len];
-        index += member_len;
-        saw_member = true;
-        if (index < pattern.text.len and pattern.text[index] == '-' and index + 1 < pattern.text.len and
-            pattern.text[index + 1] != ']')
-        {
-            index += 1;
-            const end_len = utf8SequenceLength(pattern.text[index..]);
-            if (index + end_len > pattern.text.len) return null;
-            const end = pattern.text[index..][0..end_len];
-            index += end_len;
-            matched = matched or bracketRangeMatches(member, end, character);
-        } else {
-            matched = matched or std.mem.eql(u8, member, character);
-        }
-    }
-    if (!saw_member or index >= pattern.text.len or pattern.text[index] != ']') return null;
-    return .{ .matched = if (negated) !matched else matched, .end = index + 1 };
-}
-
-fn bracketExpressionEnd(pattern: PathnamePattern, start: usize) ?usize {
-    std.debug.assert(pattern.text[start] == '[');
-    var index = start + 1;
-    if (index < pattern.text.len and (pattern.text[index] == '!' or pattern.text[index] == '^')) {
-        index += 1;
-    }
-    var saw_member = false;
-    while (index < pattern.text.len) {
-        if (pattern.byteIsSpecial(index) and pattern.text[index] == '\\' and index + 1 < pattern.text.len) {
-            index += 1;
-            const member_len = utf8SequenceLength(pattern.text[index..]);
-            if (index + member_len > pattern.text.len) return null;
-            index += member_len;
-            saw_member = true;
-            continue;
-        }
-        if (pattern.text[index] == ']' and saw_member) break;
-        if (bracketNamedExpression(pattern.text, &index) != null) {
-            saw_member = true;
-            continue;
-        }
-        const member_len = utf8SequenceLength(pattern.text[index..]);
-        if (index + member_len > pattern.text.len) return null;
-        index += member_len;
-        saw_member = true;
-        if (index < pattern.text.len and pattern.text[index] == '-' and index + 1 < pattern.text.len and
-            pattern.text[index + 1] != ']')
-        {
-            index += 1;
-            const end_len = utf8SequenceLength(pattern.text[index..]);
-            if (index + end_len > pattern.text.len) return null;
-            index += end_len;
-        }
-    }
-    if (!saw_member or index >= pattern.text.len or pattern.text[index] != ']') return null;
-    return index + 1;
-}
-
-fn bracketRangeMatches(start: []const u8, end: []const u8, character: []const u8) bool {
-    if (start.len != 1 or end.len != 1 or character.len != 1) return false;
-    return start[0] <= character[0] and character[0] <= end[0];
-}
-
-const BracketNamedExpression = struct {
-    kind: u8,
-    name: []const u8,
-};
-
-fn bracketNamedExpression(text: []const u8, index: *usize) ?BracketNamedExpression {
-    if (index.* + 3 >= text.len or text[index.*] != '[') return null;
-    const kind = text[index.* + 1];
-    const close = switch (kind) {
-        ':', '.', '=' => kind,
-        else => return null,
-    };
-    const name_start = index.* + 2;
-    var cursor = name_start;
-    while (cursor + 1 < text.len) : (cursor += 1) {
-        if (text[cursor] == close and text[cursor + 1] == ']') {
-            const named: BracketNamedExpression = .{ .kind = kind, .name = text[name_start..cursor] };
-            index.* = cursor + 2;
-            return named;
-        }
-    }
-    return null;
-}
-
-fn bracketNamedExpressionMatches(named: BracketNamedExpression, character: []const u8) bool {
-    return switch (named.kind) {
-        ':' => characterClassMatches(named.name, character),
-        '.', '=' => std.mem.eql(u8, named.name, character),
-        else => false,
-    };
-}
-
-fn characterClassMatches(name: []const u8, character: []const u8) bool {
-    const class = std.meta.stringToEnum(PatternCharacterClass, name) orelse return false;
-    // ziglint-ignore: Z011 deprecated API left unchanged to avoid semantic drift in lint-only pass
-    const codepoint = std.unicode.utf8Decode(character) catch return false;
-    const category = uucode.get(.general_category, codepoint);
-    return switch (class) {
-        .digit => category == .number_decimal_digit,
-        .alpha => isCategoryLetter(category),
-        .alnum => isCategoryLetter(category) or category == .number_decimal_digit,
-        .lower => category == .letter_lowercase,
-        .upper => category == .letter_uppercase,
-        .punct => switch (category) {
-            .punctuation_connector,
-            .punctuation_dash,
-            .punctuation_open,
-            .punctuation_close,
-            .punctuation_initial_quote,
-            .punctuation_final_quote,
-            .punctuation_other,
-            => true,
-            else => false,
-        },
-        .space => switch (category) {
-            .separator_space,
-            .separator_line,
-            .separator_paragraph,
-            => true,
-            // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
-            else => codepoint == '\t' or codepoint == '\n' or codepoint == '\r' or codepoint == 0x0b or codepoint == 0x0c,
-        },
-    };
-}
-
-const PatternCharacterClass = enum {
-    alnum,
-    alpha,
-    digit,
-    lower,
-    punct,
-    space,
-    upper,
-};
-
-fn isCategoryLetter(category: uucode.types.GeneralCategory) bool {
-    return switch (category) {
-        .letter_uppercase,
-        .letter_lowercase,
-        .letter_titlecase,
-        .letter_modifier,
-        .letter_other,
-        => true,
-        else => false,
-    };
 }
 
 fn isDefaultIfsWhitespace(byte: u8) bool {
@@ -7721,10 +7393,10 @@ fn expandParameterPatternRemoval(
     const value = (try parameterCurrentValue(shell, parameter.parameter)) orelse "";
     const pattern = try expandPatternWord(shell, parameter.word.?);
     return switch (operator) {
-        .remove_small_prefix => removePrefix(value, pattern, .small),
-        .remove_large_prefix => removePrefix(value, pattern, .large),
-        .remove_small_suffix => removeSuffix(value, pattern, .small),
-        .remove_large_suffix => removeSuffix(value, pattern, .large),
+        .remove_small_prefix => pattern_mod.removePrefix(value, pattern, .small),
+        .remove_large_prefix => pattern_mod.removePrefix(value, pattern, .large),
+        .remove_small_suffix => pattern_mod.removeSuffix(value, pattern, .small),
+        .remove_large_suffix => pattern_mod.removeSuffix(value, pattern, .large),
         else => unreachable,
     };
 }
@@ -7808,11 +7480,6 @@ fn expandParameterSubstitution(
     };
 }
 
-const RemovalSize = enum {
-    small,
-    large,
-};
-
 fn expandPatternWord(shell: anytype, word: ast.Word) ![]const u8 {
     const pattern = switch (word.data) {
         .literal => |literal| literal,
@@ -7849,55 +7516,8 @@ fn appendPatternLiteral(allocator: std.mem.Allocator, output: *std.ArrayList(u8)
     }
 }
 
-fn removePrefix(value: []const u8, pattern: []const u8, size: RemovalSize) []const u8 {
-    switch (size) {
-        .small => {
-            var cut: usize = 0;
-            while (cut <= value.len) : (cut = nextPatternCut(value, cut)) {
-                if (patternMatches(pattern, value[0..cut])) return value[cut..];
-                if (cut == value.len) break;
-            }
-        },
-        .large => {
-            var cut = value.len;
-            while (true) {
-                if (patternMatches(pattern, value[0..cut])) return value[cut..];
-                if (cut == 0) break;
-                cut = previousPatternCut(value, cut);
-            }
-        },
-    }
-    return value;
-}
-
-fn removeSuffix(value: []const u8, pattern: []const u8, size: RemovalSize) []const u8 {
-    switch (size) {
-        .small => {
-            var cut = value.len;
-            while (true) {
-                if (patternMatches(pattern, value[cut..])) return value[0..cut];
-                if (cut == 0) break;
-                cut = previousPatternCut(value, cut);
-            }
-        },
-        .large => {
-            var cut: usize = 0;
-            while (cut <= value.len) : (cut = nextPatternCut(value, cut)) {
-                if (patternMatches(pattern, value[cut..])) return value[0..cut];
-                if (cut == value.len) break;
-            }
-        },
-    }
-    return value;
-}
-
-const PatternMatch = struct {
-    start: usize,
-    end: usize,
-};
-
 fn substituteFirst(shell: anytype, value: []const u8, pattern: []const u8, replacement: []const u8) ![]const u8 {
-    const matched = firstSubstitutionMatch(value, pattern) orelse return value;
+    const matched = pattern_mod.firstMatch(value, pattern) orelse return value;
     return spliceSubstitution(shell, value, matched, replacement);
 }
 
@@ -7906,13 +7526,13 @@ fn substituteAll(shell: anytype, value: []const u8, pattern: []const u8, replace
     const allocator = shell.scratchAllocator();
     var cursor: usize = 0;
     while (cursor <= value.len) {
-        const matched = firstSubstitutionMatchFrom(value, pattern, cursor) orelse break;
+        const matched = pattern_mod.firstMatchFrom(value, pattern, cursor) orelse break;
         try output.appendSlice(allocator, value[cursor..matched.start]);
         try output.appendSlice(allocator, replacement);
         cursor = matched.end;
         if (matched.start == matched.end) {
             if (cursor >= value.len) break;
-            const next = nextPatternCut(value, cursor);
+            const next = pattern_mod.nextCut(value, cursor);
             try output.appendSlice(allocator, value[cursor..next]);
             cursor = next;
         }
@@ -7923,74 +7543,26 @@ fn substituteAll(shell: anytype, value: []const u8, pattern: []const u8, replace
 }
 
 fn substitutePrefix(shell: anytype, value: []const u8, pattern: []const u8, replacement: []const u8) ![]const u8 {
-    const matched = prefixSubstitutionMatch(value, pattern) orelse return value;
+    const matched = pattern_mod.prefixMatch(value, pattern) orelse return value;
     return spliceSubstitution(shell, value, matched, replacement);
 }
 
 fn substituteSuffix(shell: anytype, value: []const u8, pattern: []const u8, replacement: []const u8) ![]const u8 {
-    const matched = suffixSubstitutionMatch(value, pattern) orelse return value;
+    const matched = pattern_mod.suffixMatch(value, pattern) orelse return value;
     return spliceSubstitution(shell, value, matched, replacement);
 }
 
-fn spliceSubstitution(shell: anytype, value: []const u8, matched: PatternMatch, replacement: []const u8) ![]const u8 {
+fn spliceSubstitution(
+    shell: anytype,
+    value: []const u8,
+    matched: pattern_mod.Match,
+    replacement: []const u8,
+) ![]const u8 {
     return std.fmt.allocPrint(
         shell.scratchAllocator(),
         "{s}{s}{s}",
         .{ value[0..matched.start], replacement, value[matched.end..] },
     );
-}
-
-fn firstSubstitutionMatch(value: []const u8, pattern: []const u8) ?PatternMatch {
-    return firstSubstitutionMatchFrom(value, pattern, 0);
-}
-
-fn firstSubstitutionMatchFrom(value: []const u8, pattern: []const u8, start: usize) ?PatternMatch {
-    var cursor = start;
-    while (cursor <= value.len) : (cursor = nextPatternCut(value, cursor)) {
-        if (longestMatchFrom(value, pattern, cursor)) |matched| return matched;
-        if (cursor == value.len) break;
-    }
-    return null;
-}
-
-fn prefixSubstitutionMatch(value: []const u8, pattern: []const u8) ?PatternMatch {
-    return longestMatchFrom(value, pattern, 0);
-}
-
-fn suffixSubstitutionMatch(value: []const u8, pattern: []const u8) ?PatternMatch {
-    var start: usize = 0;
-    while (start <= value.len) : (start = nextPatternCut(value, start)) {
-        if (patternMatches(pattern, value[start..])) return .{ .start = start, .end = value.len };
-        if (start == value.len) break;
-    }
-    return null;
-}
-
-fn longestMatchFrom(value: []const u8, pattern: []const u8, start: usize) ?PatternMatch {
-    var end = value.len;
-    while (true) {
-        if (patternMatches(pattern, value[start..end])) return .{ .start = start, .end = end };
-        if (end == start) break;
-        end = previousPatternCut(value, end);
-    }
-    return null;
-}
-
-fn nextPatternCut(value: []const u8, cut: usize) usize {
-    if (cut >= value.len) return value.len + 1;
-    return cut + utf8SequenceLength(value[cut..]);
-}
-
-fn previousPatternCut(value: []const u8, cut: usize) usize {
-    std.debug.assert(cut <= value.len);
-    if (cut == 0) return 0;
-    var previous = cut - 1;
-    while (previous > 0 and (value[previous] & 0xc0) == 0x80) previous -= 1;
-    return previous;
-}
-
-fn patternMatches(pattern: []const u8, text: []const u8) bool {
-    return globMatches(.{ .text = pattern }, text);
 }
 
 fn isParameterSet(parameter: ast.ParameterExpansion, value: ?[]const u8) bool {
