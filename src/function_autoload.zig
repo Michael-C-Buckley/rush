@@ -213,7 +213,7 @@ fn isFunctionName(name: []const u8) bool {
     if (name.len == 0) return false;
     if (!std.ascii.isAlphabetic(name[0]) and name[0] != '_') return false;
     for (name[1..]) |byte| {
-        if (!std.ascii.isAlphanumeric(byte) and byte != '_') return false;
+        if (!std.ascii.isAlphanumeric(byte) and byte != '_' and byte != '.') return false;
     }
     return true;
 }
@@ -237,7 +237,7 @@ test "function search dirs follow config before data order" {
     try std.testing.expectEqualStrings(build_config.datadir ++ "/rush/functions", dirs.paths[5]);
 }
 
-test "autoload sources function into current shell and hides load output" {
+test "autoload sources dotted function into current shell and hides load output" {
     const allocator = std.testing.allocator;
     const io = std.testing.io;
     const root = try std.fmt.allocPrint(allocator, "rush-test-autoload-{d}", .{std.c.getpid()});
@@ -249,13 +249,13 @@ test "autoload sources function into current shell and hides load output" {
     const functions_dir = try std.fs.path.join(allocator, &.{ root, "rush", "functions" });
     defer allocator.free(functions_dir);
     try std.Io.Dir.cwd().createDirPath(io, functions_dir);
-    const function_path = try std.fs.path.join(allocator, &.{ functions_dir, "hello.rush" });
+    const function_path = try std.fs.path.join(allocator, &.{ functions_dir, "zig_0.16.0.rush" });
     defer allocator.free(function_path);
     try std.Io.Dir.cwd().writeFile(io, .{
         .sub_path = function_path,
         .data =
         \\printf 'autoload noise\n'
-        \\hello(){ printf 'hello:%s\n' "$1"; }
+        \\zig_0.16.0(){ printf 'hello:%s\n' "$1"; }
         \\
         ,
     });
@@ -267,7 +267,7 @@ test "autoload sources function into current shell and hides load output" {
 
     const out_path = try std.fs.path.join(allocator, &.{ root, "out.txt" });
     defer allocator.free(out_path);
-    const command = try std.fmt.allocPrint(allocator, "hello world > {s}", .{out_path});
+    const command = try std.fmt.allocPrint(allocator, "zig_0.16.0 world > {s}", .{out_path});
     defer allocator.free(command);
     const src: shell.source.Source = .{ .id = 1, .kind = .command_string, .name = "test", .text = command };
     const evaluated = try sh.evalSource(src);
@@ -276,13 +276,13 @@ test "autoload sources function into current shell and hides load output" {
     const output = try std.Io.Dir.cwd().readFileAlloc(io, out_path, allocator, .limited(1024));
     defer allocator.free(output);
     try std.testing.expectEqualStrings("hello:world\n", output);
-    try std.testing.expect(sh.state.getFunction("hello") != null);
+    try std.testing.expect(sh.state.getFunction("zig_0.16.0") != null);
 
     const suppressed_path = try std.fs.path.join(allocator, &.{ root, "suppressed.txt" });
     defer allocator.free(suppressed_path);
     const suppressed_command = try std.fmt.allocPrint(
         allocator,
-        "unset -f hello; hello > {s} 2>&1",
+        "unset -f zig_0.16.0; zig_0.16.0 > {s} 2>&1",
         .{suppressed_path},
     );
     defer allocator.free(suppressed_command);
@@ -294,13 +294,13 @@ test "autoload sources function into current shell and hides load output" {
     };
     const suppressed = try sh.evalSource(suppressed_src);
     try std.testing.expectEqual(@as(shell.result.ExitStatus, 127), suppressed.status);
-    try std.testing.expect(sh.state.getFunction("hello") == null);
+    try std.testing.expect(sh.state.getFunction("zig_0.16.0") == null);
 
     const redefined_path = try std.fs.path.join(allocator, &.{ root, "redefined.txt" });
     defer allocator.free(redefined_path);
     const redefined_command = try std.fmt.allocPrint(
         allocator,
-        "hello(){{ printf redefined; }}; hello > {s}",
+        "zig_0.16.0(){{ printf redefined; }}; zig_0.16.0 > {s}",
         .{redefined_path},
     );
     defer allocator.free(redefined_command);

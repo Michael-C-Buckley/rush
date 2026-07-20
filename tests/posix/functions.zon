@@ -29,6 +29,16 @@
             .status = 0,
         },
         .{
+            .name = "function definition rejects periods outside portable NAME tokens",
+            .script =
+            \\zig_0.16.0() { printf 'bad\n'; }
+            \\printf 'after\n'
+            ,
+            .stdout = "",
+            .stderr_match = .nonempty,
+            .status = 2,
+        },
+        .{
             .name = "function definition header removes backslash-newline before parsing",
             .script =
             \\f\

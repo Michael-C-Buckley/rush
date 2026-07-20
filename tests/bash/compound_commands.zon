@@ -65,6 +65,22 @@
             .status = 0,
         },
         .{
+            .name = "function definitions accept periods in names",
+            .script =
+            \\zig_0.16.0() { printf 'traditional:%s\n' "$1"; }
+            \\function tool.1.2 { printf 'keyword:%s\n' "$1"; }
+            \\zig_0.16.0 a
+            \\tool.1.2 b
+            ,
+            .stdout =
+            \\traditional:a
+            \\keyword:b
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "arithmetic command evaluates expression status and mutations",
             .script =
             \\i=0

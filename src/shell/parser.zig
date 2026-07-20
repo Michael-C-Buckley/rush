@@ -475,7 +475,7 @@ const Parser = struct {
 
         if (!self.at(.word)) return null;
         const name_token = self.tokens[self.index];
-        if (name_token.quoted or !isAssignmentName(name_token.text)) return null;
+        if (name_token.quoted or !isFunctionName(name_token.text, self.mode())) return null;
         if (self.index + 2 >= self.tokens.len) return null;
         // ziglint-ignore: Z024 preserve existing readable expression shape; lint-only cleanup
         if (self.tokens[self.index + 1].kind != .left_paren or self.tokens[self.index + 2].kind != .right_paren) return null;
@@ -503,7 +503,7 @@ const Parser = struct {
         try self.skipSeparators();
 
         const name_token = self.eat(.word) orelse return error.UnexpectedToken;
-        if (name_token.quoted or !isAssignmentName(name_token.text)) return error.UnexpectedToken;
+        if (name_token.quoted or !isFunctionName(name_token.text, self.mode())) return error.UnexpectedToken;
 
         if (self.eat(.left_paren) != null) {
             try self.expect(.right_paren);
@@ -1976,6 +1976,13 @@ fn isAssignmentName(name: []const u8) bool {
     if (name.len == 0) return false;
     if (!isNameStart(name[0])) return false;
     for (name[1..]) |byte| if (!isNameContinue(byte)) return false;
+    return true;
+}
+
+fn isFunctionName(name: []const u8, mode: state_mod.Mode) bool {
+    if (isAssignmentName(name)) return true;
+    if (mode == .posix or name.len == 0 or !isNameStart(name[0])) return false;
+    for (name[1..]) |byte| if (!isNameContinue(byte) and byte != '.') return false;
     return true;
 }
 
