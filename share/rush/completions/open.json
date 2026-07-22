@@ -133,7 +133,7 @@
       },
       {
         "long": "env",
-        "description": "Add an enviroment variable to the launched process, where VAR is formatted AAA=foo",
+        "description": "Add an environment variable to the launched process, where VAR is formatted AAA=foo",
         "repeatable": true,
         "inherit": false,
         "value": {
