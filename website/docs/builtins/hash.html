@@ -19,15 +19,20 @@
 
   <h2 id="name"><a href="#name">NAME</a></h2>
 
-  <p>hash - remember or report command path lookups.</p>
+  <p>hash - remember command paths or define named directories.</p>
 
   <h2 id="synopsis"><a href="#synopsis">SYNOPSIS</a></h2>
 
-  <pre><span class="cmd">hash</span> [<span class="opt">-r</span>] [<span class="var">utility</span> ...]</pre>
+  <pre><span class="cmd">hash</span> [<span class="opt">-r</span>] [<span class="var">utility</span> ...]
+<span class="cmd">hash</span> <span class="opt">-d</span> [<span class="opt">-r</span>] [<span class="var">name</span>[=<span class="var">directory</span>] ...]</pre>
 
   <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
 
   <p><code>hash</code> is a POSIX regular builtin provided by Rush. Utility operands search <code>PATH</code> and remember the resulting command paths. Without operands, it prints remembered paths. <code>-r</code> clears all remembered paths before processing any operands.</p>
+
+  <p>In the default Rush mode, <code>-d</code> selects the named-directory table instead. An operand of the form <code>name=/absolute/path</code> defines a named directory, which may then be used as <code>~name</code> or <code>~name/subpath</code>. A name without a value prints that entry, and no operands print all entries. With <code>-d</code>, <code>-r</code> clears the named-directory table.</p>
+
+  <p><code>alias -d</code> accesses the same named-directory table, and <code>unalias -d</code> removes entries. Named directories are a non-POSIX extension and are disabled in POSIX mode.</p>
 
   <p>This page summarizes the builtin in Rush documentation. POSIX is the normative reference for detailed portable behavior.</p>
 
@@ -37,7 +42,7 @@
 
   <h2 id="see-also"><a href="#see-also">SEE ALSO</a></h2>
 
-  <p><a href="index.html">rush-builtins(7)</a>, POSIX Shell Command Language.</p>
+  <p><a href="alias.html">alias(1)</a>, <a href="unalias.html">unalias(1)</a>, <a href="index.html">rush-builtins(7)</a>, POSIX Shell Command Language.</p>
 
 </body>
 </html>

@@ -23,11 +23,16 @@
 
   <h2 id="synopsis"><a href="#synopsis">SYNOPSIS</a></h2>
 
-  <pre><span class="cmd">unalias</span> <span class="opt">-a</span> | <span class="var">name</span> ...</pre>
+  <pre><span class="cmd">unalias</span> <span class="opt">-a</span> | <span class="var">name</span> ...
+<span class="cmd">unalias</span> <span class="opt">-d</span> [<span class="opt">-a</span> | <span class="var">name</span> ...]</pre>
 
   <h2 id="description"><a href="#description">DESCRIPTION</a></h2>
 
   <p><code>unalias</code> is a POSIX regular builtin provided by Rush. Remove command aliases.</p>
+
+  <p>In the default Rush mode, <code>-d</code> removes named directories instead of command aliases. Named directories are shared by <code>alias -d</code> and <code>hash -d</code>. With <code>-d -a</code>, all named directories are removed.</p>
+
+  <p>Named-directory options are a non-POSIX extension and are disabled in POSIX mode.</p>
 
   <p>This page summarizes the builtin in Rush documentation. POSIX is the normative reference for detailed portable behavior.</p>
 
@@ -37,7 +42,7 @@
 
   <h2 id="see-also"><a href="#see-also">SEE ALSO</a></h2>
 
-  <p><a href="index.html">rush-builtins(7)</a>, POSIX Shell Command Language.</p>
+  <p><a href="alias.html">alias(1)</a>, <a href="hash.html">hash(1)</a>, <a href="index.html">rush-builtins(7)</a>, POSIX Shell Command Language.</p>
 
 </body>
 </html>

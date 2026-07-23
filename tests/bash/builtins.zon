@@ -602,6 +602,68 @@
             .status = 0,
         },
         .{
+            .name = "hash -d and alias -d share named directories",
+            .script =
+            \\hash -d host=/tmp/example///
+            \\alias -d -- host
+            \\alias -d host=/srv/replaced/
+            \\hash -d host
+            \\hash -d root=////
+            \\alias -d root
+            ,
+            .stdout =
+            \\host='/tmp/example'
+            \\host='/srv/replaced'
+            \\root='/'
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "named directories can be removed or reset",
+            .script =
+            \\hash -d one=/one two=/two
+            \\unalias -d one
+            \\hash -d one 2>/dev/null
+            \\printf 'removed=<%s>\n' "$?"
+            \\hash -dr
+            \\alias -d two 2>/dev/null
+            \\printf 'reset=<%s>\n' "$?"
+            \\alias -d keep=/keep discard=/discard
+            \\unalias -da
+            \\hash -d keep 2>/dev/null
+            \\printf 'removed-all=<%s>\n' "$?"
+            ,
+            .stdout =
+            \\removed=<1>
+            \\reset=<1>
+            \\removed-all=<1>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
+            .name = "named directories require valid names and absolute paths",
+            .script =
+            \\hash -d relative=tmp 2>/dev/null
+            \\printf 'relative=<%s>\n' "$?"
+            \\alias -d 'bad/name=/tmp' 2>/dev/null
+            \\printf 'name=<%s>\n' "$?"
+            \\hash -d missing 2>/dev/null
+            \\printf 'missing=<%s>\n' "$?"
+            ,
+            .stdout =
+            \\relative=<1>
+            \\name=<1>
+            \\missing=<1>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "type supports path kind and all-match options",
             .script =
             \\type -t cd

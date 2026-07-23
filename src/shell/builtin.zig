@@ -275,14 +275,27 @@ fn evalExtension(shell: anytype, definition: Definition, args: []const []const u
 }
 
 fn evalAlias(shell: anytype, args: []const []const u8) !result.EvalResult {
+    var index: usize = 1;
+    var named_directories = false;
+    if (index < args.len and std.mem.eql(u8, args[index], "-d")) {
+        if (shell.state.options.mode == .posix) return .{ .status = 2 };
+        named_directories = true;
+        index += 1;
+    }
+    if (index < args.len and std.mem.eql(u8, args[index], "--")) {
+        index += 1;
+    }
+
+    if (named_directories) return evalNamedDirectories(shell, "alias", args[index..]);
+
     var status: result.ExitStatus = 0;
-    if (args.len == 1) {
+    if (index == args.len) {
         var iterator = shell.state.aliases.iterator();
         while (iterator.next()) |entry| try writeAlias(shell, entry.value_ptr.*);
         return .{};
     }
 
-    for (args[1..]) |arg| {
+    for (args[index..]) |arg| {
         if (aliasAssignment(arg)) |assignment| {
             try shell.state.putAlias(.{ .name = assignment.name, .value = assignment.value });
         } else if (shell.state.getAlias(arg)) |alias| {
@@ -308,13 +321,17 @@ fn aliasAssignment(arg: []const u8) ?AliasAssignment {
 }
 
 pub fn writeAlias(shell: anytype, alias: state_mod.Alias) !void {
-    try shell.host.writeAll(.stdout, alias.name);
+    try writeAssignment(shell, alias.name, alias.value);
+}
+
+fn writeAssignment(shell: anytype, name: []const u8, value: []const u8) !void {
+    try shell.host.writeAll(.stdout, name);
     try shell.host.writeAll(.stdout, "='");
-    for (alias.value, 0..) |byte, index| {
+    for (value, 0..) |byte, index| {
         if (byte == '\'') {
             try shell.host.writeAll(.stdout, "'\\''");
         } else {
-            try shell.host.writeAll(.stdout, alias.value[index..][0..1]);
+            try shell.host.writeAll(.stdout, value[index..][0..1]);
         }
     }
     try shell.host.writeAll(.stdout, "'\n");
@@ -322,6 +339,7 @@ pub fn writeAlias(shell: anytype, alias: state_mod.Alias) !void {
 
 fn evalUnalias(shell: anytype, args: []const []const u8) result.EvalResult {
     var all = false;
+    var named_directories = false;
     var index: usize = 1;
     while (index < args.len) : (index += 1) {
         const arg = args[index];
@@ -332,19 +350,31 @@ fn evalUnalias(shell: anytype, args: []const []const u8) result.EvalResult {
         if (arg.len < 2 or arg[0] != '-') break;
         for (arg[1..]) |option| switch (option) {
             'a' => all = true,
+            'd' => {
+                if (shell.state.options.mode == .posix) return .{ .status = 2 };
+                named_directories = true;
+            },
             else => return .{ .status = 2 },
         };
     }
 
     if (all) {
-        shell.state.clearAliases();
+        if (named_directories) {
+            shell.state.clearNamedDirectories();
+        } else {
+            shell.state.clearAliases();
+        }
         return .{};
     }
     if (index >= args.len) return .{ .status = 2 };
 
     var status: result.ExitStatus = 0;
     for (args[index..]) |name| {
-        if (!shell.state.removeAlias(name)) status = 1;
+        const removed = if (named_directories)
+            shell.state.removeNamedDirectory(name)
+        else
+            shell.state.removeAlias(name);
+        if (!removed) status = 1;
     }
     return .{ .status = status };
 }
@@ -484,6 +514,8 @@ fn writeShoptOption(shell: anytype, option: ShoptOption, reusable: bool) bool {
 
 fn evalHash(shell: anytype, args: []const []const u8) !result.EvalResult {
     var index: usize = 1;
+    var named_directories = false;
+    var reset = false;
     while (index < args.len) : (index += 1) {
         const arg = args[index];
         if (std.mem.eql(u8, arg, "--")) {
@@ -492,10 +524,23 @@ fn evalHash(shell: anytype, args: []const []const u8) !result.EvalResult {
         }
         if (arg.len < 2 or arg[0] != '-') break;
         for (arg[1..]) |option| switch (option) {
-            'r' => shell.state.clearCommandHashes(),
+            'd' => {
+                if (shell.state.options.mode == .posix) return .{ .status = 2 };
+                named_directories = true;
+            },
+            'r' => reset = true,
             else => return .{ .status = 2 },
         };
     }
+
+    if (reset) {
+        if (named_directories) {
+            shell.state.clearNamedDirectories();
+        } else {
+            shell.state.clearCommandHashes();
+        }
+    }
+    if (named_directories) return evalNamedDirectories(shell, "hash", args[index..]);
 
     if (index < args.len) {
         var status: result.ExitStatus = 0;
@@ -518,6 +563,40 @@ fn evalHash(shell: anytype, args: []const []const u8) !result.EvalResult {
         try shell.host.writeAll(.stdout, "\n");
     }
     return .{};
+}
+
+fn evalNamedDirectories(shell: anytype, builtin_name: []const u8, operands: []const []const u8) !result.EvalResult {
+    if (operands.len == 0) {
+        var iterator = shell.state.named_directories.iterator();
+        while (iterator.next()) |entry| {
+            try writeAssignment(shell, entry.value_ptr.name, entry.value_ptr.path);
+        }
+        return .{};
+    }
+
+    var status: result.ExitStatus = 0;
+    for (operands) |operand| {
+        if (std.mem.findScalar(u8, operand, '=')) |equal_index| {
+            const name = operand[0..equal_index];
+            const path = operand[equal_index + 1 ..];
+            if (!state_mod.namedDirectoryNameValid(name) or path.len == 0 or path[0] != '/') {
+                try shell.host.writeAll(.stderr, builtin_name);
+                try shell.host.writeAll(.stderr, ": named directories require name=/absolute/path\n");
+                status = 1;
+                continue;
+            }
+            try shell.state.putNamedDirectory(.{ .name = name, .path = path });
+        } else if (shell.state.getNamedDirectory(operand)) |named_directory| {
+            try writeAssignment(shell, named_directory.name, named_directory.path);
+        } else {
+            try shell.host.writeAll(.stderr, builtin_name);
+            try shell.host.writeAll(.stderr, ": ");
+            try shell.host.writeAll(.stderr, operand);
+            try shell.host.writeAll(.stderr, ": named directory not found\n");
+            status = 1;
+        }
+    }
+    return .{ .status = status };
 }
 
 fn findHashPath(shell: anytype, utility: []const u8) !?[]const u8 {

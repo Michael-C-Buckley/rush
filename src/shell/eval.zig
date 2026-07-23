@@ -3574,7 +3574,7 @@ fn staticDeclarationBuiltinName(shell: anytype, word: ast.Word) !?builtin.Id {
     // Plain literal words expand to themselves unless a tilde prefix applies,
     // so skip the expansion machinery on the per-command hot path.
     const name = switch (word.data) {
-        .literal => |literal| if (word.quoted or tildePrefixLen(literal) == null)
+        .literal => |literal| if (!wordExpandsLeadingTilde(shell, word))
             literal
         else
             try expandWordTracking(shell, word, null),
@@ -6058,60 +6058,91 @@ fn expandAssignmentWordTracking(shell: anytype, word: ast.Word, substitution_sta
 }
 
 fn expandAssignmentLiteralTildes(shell: anytype, literal: []const u8) ![]const u8 {
-    const home = homeValue(shell) orelse return literal;
     var output: std.ArrayList(u8) = .empty;
     const allocator = shell.scratchAllocator();
     var index: usize = 0;
     while (index < literal.len) {
-        if ((index == 0 or literal[index - 1] == ':') and assignmentTildePrefixLen(literal[index..]) != null) {
-            try output.appendSlice(allocator, home);
-            index += 1;
-        } else {
-            try output.append(allocator, literal[index]);
-            index += 1;
+        if (index == 0 or literal[index - 1] == ':') {
+            if (tildeExpansion(shell, literal[index..], true, true)) |expansion| {
+                try output.appendSlice(allocator, expansion.value);
+                index += expansion.prefix_len;
+                continue;
+            }
         }
+        try output.append(allocator, literal[index]);
+        index += 1;
     }
     return output.toOwnedSlice(allocator);
 }
 
 fn expandLeadingTilde(shell: anytype, word: ast.Word, expanded: []const u8) ![]const u8 {
     if (word.quoted) return expanded;
-    const literal = switch (word.data) {
-        .literal => |literal| literal,
+    const prefix = switch (word.data) {
+        .literal => |literal| LeadingLiteral{ .text = literal, .complete = true },
         .parts => |parts| if (parts.len != 0) switch (parts[0]) {
-            .literal => |literal| literal,
+            .literal => |literal| LeadingLiteral{ .text = literal, .complete = parts.len == 1 },
             else => return expanded,
         } else return expanded,
         .declaration_array_assignment => return expanded,
     };
-    const prefix_len = tildePrefixLen(literal) orelse return expanded;
-    const home = homeValue(shell) orelse return expanded;
-    return std.fmt.allocPrint(shell.scratchAllocator(), "{s}{s}", .{ home, expanded[prefix_len..] });
+    const expansion = tildeExpansion(shell, prefix.text, false, prefix.complete) orelse return expanded;
+    return std.fmt.allocPrint(
+        shell.scratchAllocator(),
+        "{s}{s}",
+        .{ expansion.value, expanded[expansion.prefix_len..] },
+    );
 }
 
 fn wordExpandsLeadingTilde(shell: anytype, word: ast.Word) bool {
     if (word.quoted) return false;
-    const literal = switch (word.data) {
-        .literal => |literal| literal,
+    const prefix = switch (word.data) {
+        .literal => |literal| LeadingLiteral{ .text = literal, .complete = true },
         .parts => |parts| if (parts.len != 0) switch (parts[0]) {
-            .literal => |literal| literal,
+            .literal => |literal| LeadingLiteral{ .text = literal, .complete = parts.len == 1 },
             else => return false,
         } else return false,
         .declaration_array_assignment => return false,
     };
-    return tildePrefixLen(literal) != null and homeValue(shell) != null;
+    return tildeExpansion(shell, prefix.text, false, prefix.complete) != null;
 }
 
-fn tildePrefixLen(literal: []const u8) ?usize {
+const LeadingLiteral = struct {
+    text: []const u8,
+    complete: bool,
+};
+
+const TildeExpansion = struct {
+    prefix_len: usize,
+    value: []const u8,
+};
+
+fn tildeExpansion(
+    shell: anytype,
+    literal: []const u8,
+    colon_terminates: bool,
+    prefix_complete: bool,
+) ?TildeExpansion {
     if (literal.len == 0 or literal[0] != '~') return null;
-    if (literal.len == 1 or literal[1] == '/') return 1;
-    return null;
+    if (literal.len == 1 or literal[1] == '/' or (colon_terminates and literal[1] == ':')) {
+        return .{ .prefix_len = 1, .value = homeValue(shell) orelse return null };
+    }
+    if (shell.state.options.mode == .posix) return null;
+
+    var end: usize = 1;
+    while (end < literal.len and namedDirectoryCharacter(literal[end])) end += 1;
+    if (end == 1) return null;
+    if (end == literal.len) {
+        if (!prefix_complete) return null;
+    } else if (literal[end] != '/' and !(colon_terminates and literal[end] == ':')) {
+        return null;
+    }
+
+    const named_directory = shell.state.getNamedDirectory(literal[1..end]) orelse return null;
+    return .{ .prefix_len = end, .value = named_directory.path };
 }
 
-fn assignmentTildePrefixLen(literal: []const u8) ?usize {
-    if (literal.len == 0 or literal[0] != '~') return null;
-    if (literal.len == 1 or literal[1] == '/' or literal[1] == ':') return 1;
-    return null;
+fn namedDirectoryCharacter(byte: u8) bool {
+    return std.ascii.isAlphanumeric(byte) or byte == '_' or byte == '-' or byte == '.';
 }
 
 fn homeValue(shell: anytype) ?[]const u8 {

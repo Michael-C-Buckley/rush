@@ -283,6 +283,25 @@ pub const CommandHash = struct {
     }
 };
 
+pub const NamedDirectory = struct {
+    name: []const u8,
+    path: []const u8,
+
+    pub fn validate(self: NamedDirectory) void {
+        std.debug.assert(namedDirectoryNameValid(self.name));
+        std.debug.assert(self.path.len != 0);
+        std.debug.assert(self.path[0] == '/');
+    }
+};
+
+pub fn namedDirectoryNameValid(name: []const u8) bool {
+    if (name.len == 0 or std.mem.eql(u8, name, "-")) return false;
+    for (name) |byte| {
+        if (!std.ascii.isAlphanumeric(byte) and byte != '_' and byte != '-' and byte != '.') return false;
+    }
+    return true;
+}
+
 pub const JobStatus = enum {
     running,
     stopped,
@@ -323,6 +342,7 @@ pub const State = struct {
     function_autoload_states: std.StringHashMapUnmanaged(FunctionAutoloadState) = .empty,
     aliases: std.StringHashMapUnmanaged(Alias) = .empty,
     command_hashes: std.StringHashMapUnmanaged(CommandHash) = .empty,
+    named_directories: std.StringHashMapUnmanaged(NamedDirectory) = .empty,
     signal_traps: std.StringHashMapUnmanaged([]const u8) = .empty,
     pending_traps: std.ArrayListUnmanaged([]const u8) = .empty,
     process_substitutions: std.ArrayListUnmanaged(ProcessSubstitution) = .empty,
@@ -392,6 +412,12 @@ pub const State = struct {
             self.allocator.free(entry.value_ptr.path);
         }
         self.command_hashes.deinit(self.allocator);
+        var named_directory_iterator = self.named_directories.iterator();
+        while (named_directory_iterator.next()) |entry| {
+            self.allocator.free(entry.value_ptr.name);
+            self.allocator.free(entry.value_ptr.path);
+        }
+        self.named_directories.deinit(self.allocator);
         var signal_trap_iterator = self.signal_traps.iterator();
         while (signal_trap_iterator.next()) |entry| self.allocator.free(entry.value_ptr.*);
         self.signal_traps.deinit(self.allocator);
@@ -1095,6 +1121,52 @@ pub const State = struct {
             self.allocator.free(entry.value_ptr.path);
         }
         self.command_hashes.clearRetainingCapacity();
+    }
+
+    pub fn getNamedDirectory(self: State, name: []const u8) ?NamedDirectory {
+        std.debug.assert(name.len != 0);
+        return self.named_directories.get(name);
+    }
+
+    pub fn putNamedDirectory(self: *State, named_directory: NamedDirectory) !void {
+        named_directory.validate();
+        const trimmed_path_len = std.mem.trimEnd(u8, named_directory.path, "/").len;
+        const path_len = @max(trimmed_path_len, 1);
+        const owned_path = try self.allocator.dupe(u8, named_directory.path[0..path_len]);
+        errdefer self.allocator.free(owned_path);
+
+        if (self.named_directories.getPtr(named_directory.name)) |existing| {
+            self.allocator.free(existing.path);
+            existing.path = owned_path;
+            return;
+        }
+
+        const owned_name = try self.allocator.dupe(u8, named_directory.name);
+        errdefer self.allocator.free(owned_name);
+
+        try self.named_directories.put(self.allocator, owned_name, .{
+            .name = owned_name,
+            .path = owned_path,
+        });
+    }
+
+    pub fn removeNamedDirectory(self: *State, name: []const u8) bool {
+        std.debug.assert(name.len != 0);
+        if (self.named_directories.fetchRemove(name)) |entry| {
+            self.allocator.free(entry.value.name);
+            self.allocator.free(entry.value.path);
+            return true;
+        }
+        return false;
+    }
+
+    pub fn clearNamedDirectories(self: *State) void {
+        var iterator = self.named_directories.iterator();
+        while (iterator.next()) |entry| {
+            self.allocator.free(entry.value_ptr.name);
+            self.allocator.free(entry.value_ptr.path);
+        }
+        self.named_directories.clearRetainingCapacity();
     }
 
     pub fn setExitTrap(self: *State, action: []const u8) !void {

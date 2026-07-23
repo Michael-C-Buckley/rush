@@ -517,6 +517,27 @@
             .status = 0,
         },
         .{
+            .name = "named directories expand in words and assignments",
+            .script =
+            \\hash -d host=/tmp/example/// other=/opt/other
+            \\printf 'word=<%s> sub=<%s>\n' ~host ~host/subdir
+            \\printf 'unknown=<%s> quoted=<%s> escaped=<%s>\n' ~missing "~host" \~host
+            \\value=~host/bin:~other:~missing
+            \\printf 'assignment=<%s>\n' "$value"
+            \\hash -d host=/srv/replaced
+            \\printf 'replaced=<%s>\n' ~host
+            ,
+            .stdout =
+            \\word=</tmp/example> sub=</tmp/example/subdir>
+            \\unknown=<~missing> quoted=<~host> escaped=<~host>
+            \\assignment=</tmp/example/bin:/opt/other:~missing>
+            \\replaced=</srv/replaced>
+            \\
+            ,
+            .stderr = "",
+            .status = 0,
+        },
+        .{
             .name = "prompt parameter transformation decodes prompt control sequences",
             .script =
             \\USER=rush
