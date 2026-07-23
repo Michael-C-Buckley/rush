@@ -296,6 +296,8 @@ fn evalExternalPipeline(shell: anytype, pipeline: ast.Pipeline) EvalError!result
     const stages = pipeline.stages;
     std.debug.assert(stages.len > 1);
     const pipefail = shell.state.options.pipefail;
+    notifyForegroundCommand(shell, try pipelineCommandText(shell, pipeline));
+    defer notifyForegroundCommand(shell, null);
     const pids = try spawnPipelineStages(shell, stages, false, shell.state.options.monitor);
     defer shell.allocator.free(pids);
     const foreground_restore_group = giveTerminalToProcessGroup(shell, pids[0]) catch {
@@ -2752,6 +2754,8 @@ fn evalEnvBuiltin(shell: anytype, args: []const []const u8, assignments: []const
         .envp = envp,
         .default_signals = if (shell.state.options.monitor) &job_control_signals else &.{},
     };
+    notifyForegroundCommand(shell, std.fs.path.basename(fields[0]));
+    defer notifyForegroundCommand(shell, null);
     const waited = try shell.host.spawnAndWait(request);
     return .{ .status = waited.shellStatus() };
 }
@@ -4378,6 +4382,8 @@ fn evalEvalBuiltin(shell: anytype, args: []const []const u8) EvalError!result.Ev
 fn evalExecBuiltin(shell: anytype, args: []const []const u8, assignments: []const ast.Assignment) EvalError!result.EvalResult {
     std.debug.assert(args.len > 1);
     const request = try makeExternalSpawnRequest(shell, args[1..], assignments, &.{});
+    notifyForegroundCommand(shell, std.fs.path.basename(args[1]));
+    defer notifyForegroundCommand(shell, null);
     try shell.host.exec(request);
     return .{ .status = 127 };
 }
@@ -7814,6 +7820,8 @@ fn evalExternalWithSearchPath(
         argv,
         command_path,
     );
+    notifyForegroundCommand(shell, std.fs.path.basename(fields[0]));
+    defer notifyForegroundCommand(shell, null);
     const HostType = switch (@typeInfo(@TypeOf(shell.host))) {
         .pointer => |pointer| pointer.child,
         else => @TypeOf(shell.host),
@@ -7848,6 +7856,14 @@ fn evalExternalWithSearchPath(
     restoreVariables(shell, saved);
     restored_assignments = true;
     return .{ .status = status.shellStatus() };
+}
+
+fn notifyForegroundCommand(shell: anytype, command: ?[]const u8) void {
+    const ShellType = switch (@typeInfo(@TypeOf(shell))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell),
+    };
+    if (comptime @hasDecl(ShellType, "notifyForegroundCommand")) shell.notifyForegroundCommand(command);
 }
 
 fn externalCommandText(shell: anytype, fields: []const []const u8) ![]const u8 {

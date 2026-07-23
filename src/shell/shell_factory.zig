@@ -40,6 +40,8 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
         autoloading_function: ?[]const u8 = null,
         directory_change_context: ?*anyopaque = null,
         directory_change_callback: ?*const fn (*anyopaque, []const u8, []const u8) void = null,
+        foreground_command_context: ?*anyopaque = null,
+        foreground_command_callback: ?*const fn (*anyopaque, ?[]const u8) void = null,
 
         const Self = @This();
 
@@ -124,12 +126,32 @@ pub fn ShellWithBuiltins(comptime Host: type, comptime builtin_registry: builtin
             if (std.mem.eql(u8, old_pwd, new_pwd)) return;
             const callback = self.directory_change_callback orelse return;
             const context = self.directory_change_context orelse return;
-            if (self.state.shell_pid) |shell_pid| {
-                if (comptime @hasDecl(Host, "currentProcessId")) {
-                    if (self.host.currentProcessId() != shell_pid) return;
-                }
-            }
+            if (!self.isCurrentShellProcess()) return;
             callback(context, old_pwd, new_pwd);
+        }
+
+        pub fn setForegroundCommandCallback(
+            self: *Self,
+            context: *anyopaque,
+            callback: *const fn (*anyopaque, ?[]const u8) void,
+        ) void {
+            self.foreground_command_context = context;
+            self.foreground_command_callback = callback;
+        }
+
+        pub fn notifyForegroundCommand(self: *Self, command: ?[]const u8) void {
+            if (command) |name| std.debug.assert(name.len != 0);
+            if (self.state.root_source_kind != .interactive) return;
+            const callback = self.foreground_command_callback orelse return;
+            const context = self.foreground_command_context orelse return;
+            if (!self.isCurrentShellProcess()) return;
+            callback(context, command);
+        }
+
+        fn isCurrentShellProcess(self: *Self) bool {
+            const shell_pid = self.state.shell_pid orelse return true;
+            if (comptime !@hasDecl(Host, "currentProcessId")) return true;
+            return self.host.currentProcessId() == shell_pid;
         }
 
         pub fn tryAutoloadFunction(self: *Self, name: []const u8) !bool {
@@ -523,4 +545,49 @@ test "Shell directory change callback reports only current-shell changes" {
     sh.state.shell_pid = 7;
     sh.notifyDirectoryChange("/new", "/other");
     try std.testing.expectEqual(@as(usize, 1), callback_state.count);
+}
+
+test "Shell foreground command callback reports interactive current-shell execution" {
+    const TestHost = struct {
+        pub const Self = @This();
+
+        pid: i32,
+
+        pub fn currentProcessId(self: Self) i32 {
+            return self.pid;
+        }
+    };
+    const CallbackState = struct {
+        const Self = @This();
+
+        count: usize = 0,
+        command: ?[]const u8 = null,
+
+        fn callback(context: *anyopaque, command: ?[]const u8) void {
+            const callback_state: *Self = @ptrCast(@alignCast(context));
+            callback_state.count += 1;
+            callback_state.command = command;
+        }
+    };
+
+    var callback_state: CallbackState = .{};
+    var sh = Shell(TestHost).init(std.testing.allocator, .{ .pid = 42 }, .{});
+    defer sh.deinit();
+    sh.setForegroundCommandCallback(&callback_state, CallbackState.callback);
+
+    sh.notifyForegroundCommand("sleep");
+    try std.testing.expectEqual(@as(usize, 0), callback_state.count);
+
+    sh.state.root_source_kind = .interactive;
+    sh.notifyForegroundCommand("sleep");
+    try std.testing.expectEqual(@as(usize, 1), callback_state.count);
+    try std.testing.expectEqualStrings("sleep", callback_state.command.?);
+
+    sh.notifyForegroundCommand(null);
+    try std.testing.expectEqual(@as(usize, 2), callback_state.count);
+    try std.testing.expectEqual(@as(?[]const u8, null), callback_state.command);
+
+    sh.state.shell_pid = 7;
+    sh.notifyForegroundCommand("other");
+    try std.testing.expectEqual(@as(usize, 2), callback_state.count);
 }

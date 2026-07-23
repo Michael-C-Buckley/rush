@@ -191,6 +191,7 @@ const InteractiveSession = struct {
         self.terminal = &terminal;
         defer self.terminal = null;
         self.sh.setDirectoryChangeCallback(self, onDirectoryChange);
+        self.sh.setForegroundCommandCallback(self, onForegroundCommand);
         self.restore_terminal_pgrp = enableJobControl(self.sh, @enumFromInt(terminal.ttyFd()));
         self.sh.extensions.configurePromptAsync(self.io, terminal.promptRedrawWakeFd(), .{
             .context = self,
@@ -370,9 +371,21 @@ const InteractiveSession = struct {
     }
 
     fn reportWindowTitle(self: *InteractiveSession, terminal: *editor.driver.TerminalSession, cwd: []const u8) !void {
-        const title = try extensions.rush.formatPromptPwdForShell(self.allocator, self.sh, cwd, .{ .dir_length = 1 });
+        const title = try self.formatWindowTitle(cwd, null);
         defer self.allocator.free(title);
         try terminal.reportWindowTitle(title);
+    }
+
+    fn formatWindowTitle(self: *InteractiveSession, cwd: []const u8, command: ?[]const u8) ![]const u8 {
+        const directory = try extensions.rush.formatPromptPwdForShell(
+            self.allocator,
+            self.sh,
+            cwd,
+            .{ .dir_length = 1 },
+        );
+        if (command == null) return directory;
+        defer self.allocator.free(directory);
+        return std.fmt.allocPrint(self.allocator, "{s} {s}", .{ command.?, directory });
     }
 
     fn currentDirectoryForReporting(self: *InteractiveSession) ![]const u8 {
@@ -808,6 +821,17 @@ fn onDirectoryChange(context: *anyopaque, old_pwd: []const u8, new_pwd: []const 
     }
 }
 
+fn onForegroundCommand(context: *anyopaque, command: ?[]const u8) void {
+    const session: *InteractiveSession = @ptrCast(@alignCast(context));
+    const terminal = session.terminal orelse return;
+    const cwd = session.currentDirectoryForReporting() catch return;
+    defer session.allocator.free(cwd);
+    const title = session.formatWindowTitle(cwd, command) catch return;
+    defer session.allocator.free(title);
+    // ziglint-ignore: Z026 best-effort terminal metadata; the next prompt reports it again
+    terminal.reportWindowTitle(title) catch {};
+}
+
 // ziglint-ignore: Z023 parameter order follows method or callback shape; preserve API
 fn runInteractiveHooks(context: *anyopaque, allocator: std.mem.Allocator, io: std.Io) !editor.driver.HookResult {
     const session: *InteractiveSession = @ptrCast(@alignCast(context));
@@ -1158,6 +1182,34 @@ test "interactive history cwd remains valid after prompt read" {
     )) orelse return error.TestExpectedEqual;
     defer entry.deinit(std.testing.allocator);
     try std.testing.expectEqualStrings("echo previous", entry.text);
+}
+
+test "interactive window title prefixes the foreground command" {
+    var sh = RushShell.init(std.testing.allocator, .{}, .{});
+    defer sh.deinit();
+    try sh.state.putVariable(.{ .name = "HOME", .value = "/home/test" });
+
+    var command_history = try history.History.init(std.testing.allocator);
+    defer command_history.deinit();
+    var history_service = history.InteractiveHistoryService.init(&command_history);
+    var source_id: shell.source.SourceId = 1;
+    var session: InteractiveSession = .{
+        .allocator = std.testing.allocator,
+        .io = std.testing.io,
+        .sh = &sh,
+        .source_id = &source_id,
+        .command_history = &command_history,
+        .history_service = &history_service,
+        .events = .{ .sh = &sh },
+    };
+
+    const running = try session.formatWindowTitle("/home/test/repos/rush", "btop");
+    defer std.testing.allocator.free(running);
+    try std.testing.expectEqualStrings("btop ~/r/rush", running);
+
+    const idle = try session.formatWindowTitle("/home/test/repos/rush", null);
+    defer std.testing.allocator.free(idle);
+    try std.testing.expectEqualStrings("~/r/rush", idle);
 }
 
 test "interactive startup dispatch fires directory.change with empty old directory" {

@@ -826,6 +826,8 @@ fn foregroundJob(shell: anytype, job: state_mod.BackgroundJob) !result.EvalResul
     const text = try std.fmt.allocPrint(shell.scratchAllocator(), "{s}\n", .{job.command});
     defer shell.scratchAllocator().free(text);
     try shell.host.writeAll(.stdout, text);
+    notifyForegroundCommand(shell, job.command);
+    defer notifyForegroundCommand(shell, null);
     const foreground_restore_group = giveTerminalToJob(shell, job.process_group) catch return .{ .status = 1 };
     defer if (foreground_restore_group) |process_group| restoreTerminalToShell(shell, process_group);
     sendContinueToJob(shell, job) catch return .{ .status = 1 };
@@ -851,6 +853,14 @@ fn foregroundJob(shell: anytype, job: state_mod.BackgroundJob) !result.EvalResul
         _ = shell.state.removeBackgroundPid(pid);
     }
     return .{ .status = status };
+}
+
+fn notifyForegroundCommand(shell: anytype, command: ?[]const u8) void {
+    const ShellType = switch (@typeInfo(@TypeOf(shell))) {
+        .pointer => |pointer| pointer.child,
+        else => @TypeOf(shell),
+    };
+    if (comptime @hasDecl(ShellType, "notifyForegroundCommand")) shell.notifyForegroundCommand(command);
 }
 
 fn waitForegroundJobPid(shell: anytype, pid: host.Pid) !host.WaitStatus {
