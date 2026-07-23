@@ -296,7 +296,11 @@ fn evalExternalPipeline(shell: anytype, pipeline: ast.Pipeline) EvalError!result
     const stages = pipeline.stages;
     std.debug.assert(stages.len > 1);
     const pipefail = shell.state.options.pipefail;
-    notifyForegroundCommand(shell, try pipelineCommandText(shell, pipeline));
+    {
+        const scratch = try shell.beginScratchScope();
+        defer scratch.end();
+        notifyForegroundCommand(shell, try pipelineCommandText(shell, pipeline));
+    }
     defer notifyForegroundCommand(shell, null);
     const pids = try spawnPipelineStages(shell, stages, false, shell.state.options.monitor);
     defer shell.allocator.free(pids);
